@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.28)
 project(Milestro)
 
 option(MILESTRO_BUILD_SHARED_LIBS "Build shared library" ON)
+option(MILESTRO_ENABLE_CLI "Enable cli" ON)
+option(MILESTRO_ENABLE_TESTS "Enable tests" ON)
+option(MILESTRO_WITH_ADDRESS_SANITIZER "Build with clang address sanitizer" OFF)
+option(MILESTRO_SKIA_LIB_PATH "Skia library path")
+option(MILESTRO_SKIA_INCLUDE_PATH "Skia include path")
 
 set(CMAKE_CXX_STANDARD 20)
 
@@ -16,11 +21,13 @@ set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-#set(CMAKE_CXX_FLAGS_DEBUG "")
-#set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-
-add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>")
-add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
+if (MSVC)
+    add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>")
+    add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
+else ()
+    set(CMAKE_CXX_FLAGS_DEBUG "")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+endif ()
 
 # Keep this option OFF
 # The third-party libraries might decide to build dynamic libraries based on this option,
@@ -141,12 +148,34 @@ add_subdirectory("ext/spdlog" EXCLUDE_FROM_ALL)
 
 add_subdirectory("ext/PluginAPI" EXCLUDE_FROM_ALL)
 
+add_library(skia INTERFACE IMPORTED)
+if (DEFINED MILESTRO_SKIA_LIB_PATH AND DEFINED MILESTRO_SKIA_INCLUDE_PATH)
+    if (MSVC)
+        file(GLOB SKIA_LIB_FILES "${MILESTRO_SKIA_LIB_PATH}/*.lib")
+    else ()
+        file(GLOB SKIA_LIB_FILES "${MILESTRO_SKIA_LIB_PATH}/*.a")
+    endif ()
+
+    if (SKIA_LIB_FILES)
+        set(SKIA_LIB_LIST ${SKIA_LIB_FILES})
+        set(SKIA_INCLUDE_PATH "${MILESTRO_SKIA_INCLUDE_PATH}")
+        target_link_libraries(skia INTERFACE ${SKIA_LIB_LIST})
+        target_include_directories(skia INTERFACE ${SKIA_INCLUDE_PATH})
+    else ()
+        message(FATAL_ERROR "No Skia libraries found in ${MILESTRO_SKIA_LIB_PATH}")
+    endif ()
+else ()
+    message(FATAL_ERROR "No Skia set")
+endif ()
+
 #############################################################
 # Setup Milestro
 set(PROJECT_PLATFORM_DEFINITIONS "MILESTRO_BUILDING_ENV")
 
 set(
         MILESTRO_CORE_FILE
+
+        src/skia/textlayout/TextStyle.cpp
 )
 
 set(
@@ -188,4 +217,5 @@ target_link_libraries(Milestro
         UnityPluginAPI
         PUBLIC
         spdlog::spdlog
+        skia
 )
