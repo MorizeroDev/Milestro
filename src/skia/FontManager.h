@@ -3,27 +3,13 @@
 
 #include <include/core/SkRefCnt.h>
 #include <include/core/SkFontMgr.h>
+#include <include/core/SkTypeface.h>
 #include <Milestro/util/milestro_class.h>
 #include "Milestro/common/milestro_result.h"
 #include <string>
 #include <utility>
 
-#if WIN32
-
-#include "include/ports/SkTypeface_win.h"
-
-#endif
-
 namespace milestro::skia {
-inline sk_sp<SkFontMgr> MakeSkFontMgr() {
-  sk_sp<SkFontMgr> result;
-#if WIN32
-  result = SkFontMgr_New_DirectWrite();
-#else
-#error No SkFontMgr Provider
-#endif
-  return result;
-}
 
 class FontManager {
 public:
@@ -40,7 +26,7 @@ public:
   sk_sp<SkFontMgr> unwrap() {
     return fontMgr;
   }
-  
+
 private:
   sk_sp<SkFontMgr> fontMgr;
 };

@@ -186,6 +186,8 @@ set(
         src/game/milestro_game_plugin_main.cpp
         src/log/log.cpp
         src/log/log_unitylog.cpp
+        src/skia/Unicode.cpp
+        src/skia/Unicode.h
 )
 
 set(PROJECT_PLATFORM_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${CMAKE_CURRENT_BINARY_DIR}/include)

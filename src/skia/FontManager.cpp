@@ -1,7 +1,23 @@
 #include "FontManager.h"
 #include "Milestro/log/log.h"
 
+#if WIN32
+
+#include "include/ports/SkTypeface_win.h"
+
+#endif
+
 namespace milestro::skia {
+
+inline sk_sp<SkFontMgr> MakeSkFontMgr() {
+  sk_sp<SkFontMgr> result;
+#if WIN32
+  result = SkFontMgr_New_DirectWrite();
+#else
+#error No SkFontMgr Provider
+#endif
+  return result;
+}
 
 std::unique_ptr<FontManager> FontManagerInstance = nullptr;
 

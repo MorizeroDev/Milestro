@@ -15,7 +15,7 @@ Result<void, std::string> InitialFontCollection() {
   fontCollection->setDefaultFontManager(fontMgr->unwrap());
 
   if (fontCollection == nullptr) {
-    return Err(std::string("fail to createSkFontMgr"));
+    return Err(std::string("fail to create ::skia::textlayout::FontCollection"));
   }
   FontCollectionInstance = std::make_unique<FontCollection>(std::move(fontCollection));
   return Ok();
