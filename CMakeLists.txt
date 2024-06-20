@@ -176,6 +176,7 @@ set(
         MILESTRO_CORE_FILE
 
         src/skia/textlayout/TextStyle.cpp
+        src/skia/FontManager.cpp
 )
 
 set(
