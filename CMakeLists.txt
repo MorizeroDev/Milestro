@@ -175,19 +175,20 @@ set(PROJECT_PLATFORM_DEFINITIONS "MILESTRO_BUILDING_ENV")
 set(
         MILESTRO_CORE_FILE
 
-        src/skia/textlayout/TextStyle.cpp
+        src/log/log.cpp
+        src/log/log_unitylog.cpp
+
         src/skia/FontManager.cpp
+        src/skia/Unicode.cpp
+        src/skia/textlayout/TextStyle.cpp
         src/skia/textlayout/FontCollection.cpp
+        src/skia/textlayout/ParagraphStyle.cpp
 )
 
 set(
         MILESTRO_APPLICATION_FILE
 
         src/game/milestro_game_plugin_main.cpp
-        src/log/log.cpp
-        src/log/log_unitylog.cpp
-        src/skia/Unicode.cpp
-        src/skia/Unicode.h
 )
 
 set(PROJECT_PLATFORM_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${CMAKE_CURRENT_BINARY_DIR}/include)
