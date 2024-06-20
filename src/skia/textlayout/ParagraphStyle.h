@@ -1,5 +1,5 @@
-#ifndef MILESTRO_TEXTLAYOUT_PARAGRAPHSTYLE_H
-#define MILESTRO_TEXTLAYOUT_PARAGRAPHSTYLE_H
+#ifndef MILESTRO_SKIA_TEXTLAYOUT_PARAGRAPHSTYLE_H
+#define MILESTRO_SKIA_TEXTLAYOUT_PARAGRAPHSTYLE_H
 #include "modules/skparagraph/include/ParagraphStyle.h"
 
 namespace milestro::skia::textlayout {
@@ -31,6 +31,10 @@ class StrutStyle {
 
   void setHalfLeading(bool halfLeading) { style.setHalfLeading(halfLeading); }
   bool getHalfLeading() const { return style.getHalfLeading(); }
+
+  const ::skia::textlayout::StrutStyle &unwrap() {
+    return style;
+  }
 
 private:
   ::skia::textlayout::StrutStyle style;
@@ -82,7 +86,11 @@ class ParagraphStyle {
 
 private:
   ::skia::textlayout::ParagraphStyle style;
+public:
+  const ::skia::textlayout::ParagraphStyle &unwrap() {
+    return style;
+  }
 };
 }
 
-#endif //MILESTRO_TEXTLAYOUT_PARAGRAPHSTYLE_H
+#endif //MILESTRO_TEXTLAYOUT_PARAGRAPHS_H

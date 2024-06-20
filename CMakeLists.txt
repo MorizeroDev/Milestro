@@ -183,6 +183,8 @@ set(
         src/skia/textlayout/TextStyle.cpp
         src/skia/textlayout/FontCollection.cpp
         src/skia/textlayout/ParagraphStyle.cpp
+        src/skia/textlayout/ParagraphBuilder.cpp
+        src/skia/textlayout/ParagraphBuilder.h
 )
 
 set(

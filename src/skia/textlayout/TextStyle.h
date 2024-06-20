@@ -1,10 +1,11 @@
-#ifndef MILESTR_TEXTLAYOUT_TEXTSTYLE
-#define MILESTR_TEXTLAYOUT_TEXTSTYLE
+#ifndef MILESTR_SKIA_TEXTLAYOUT_TEXTSTYLE
+#define MILESTR_SKIA_TEXTLAYOUT_TEXTSTYLE
 
 #include "modules/skparagraph/include/TextStyle.h"
 
 namespace milestro::skia::textlayout {
 class TextStyle {
+public:
   SkColor getColor() const { return textStyle.getColor(); }
 
   void setColor(SkColor color) { textStyle.setColor(color); }
@@ -108,9 +109,13 @@ class TextStyle {
 
   void setPlaceholder() { textStyle.setPlaceholder(); }
 
+  const ::skia::textlayout::TextStyle &unwrap() {
+    return textStyle;
+  }
 private:
   ::skia::textlayout::TextStyle textStyle;
 };
+
 }
 
-#endif //MILESTR_TEXTLAYOUT_TEXTSTYLE
+#endif //MILESTR_TEXTLAYOUT_TEXTILE

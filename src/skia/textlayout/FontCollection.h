@@ -1,5 +1,6 @@
-#ifndef MILESTRO_TEXTLAYOUT_FONTCOLLECTION
-#define MILESTRO_TEXTLAYOUT_FONTCOLLECTION
+#ifndef MILESTRO_SKIA_TEXTLAYOUT_FONTCOLLECTION
+#define MILESTRO_SKIA_TEXTLAYOUT_FONTCOLLECTION
+
 #include "modules/skparagraph/include/FontCollection.h"
 #include "Milestro/util/milestro_class.h"
 
@@ -26,4 +27,4 @@ FontCollection *GetFontCollection();
 
 }
 
-#endif //MILESTRO_SRC_SKIA_TEXT LAYOUT_FONTCOLLECTION_H
+#endif //MILESTRO_SKIA_TEXTLAYOUT_FONTCOLLECTION
