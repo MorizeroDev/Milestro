@@ -8,7 +8,7 @@
 [[maybe_unused]] static int MilestroLoggerInitHelper = ([] {
     milestro::log::MilestroLogger::init();
 }(),
-                                                      0);
+    0);
 
 namespace milestro::log {
 void MilestroLogger::init() {
@@ -17,7 +17,7 @@ void MilestroLogger::init() {
     //    MilestroLogger::getInstance().addFileSink("./milestrolog.txt");
 }
 
-void MilestroLogger::initWithUnity(IUnityLog* log) {
+void MilestroLogger::initWithUnity(IUnityLog *log) {
     MilestroLogger::getInstance().addConsoleSink();
     //    MilestroLogger::getInstance().addFileSink("./milestrolog.txt");
     MilestroLogger::getInstance().addUnityLogSink(log);
@@ -28,7 +28,7 @@ MilestroLogger::MilestroLogger() {
     logger->set_level(spdlog::level::debug);
 }
 
-MilestroLogger& MilestroLogger::getInstance() {
+MilestroLogger &MilestroLogger::getInstance() {
     static MilestroLogger instance;
     return instance;
 }
@@ -41,7 +41,7 @@ void MilestroLogger::addConsoleSink() {
     }
 }
 
-void MilestroLogger::addFileSink(const std::string& filename) {
+void MilestroLogger::addFileSink(const std::string &filename) {
     if (!fileSink) {
         fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(filename, true);
         fileSink->set_level(spdlog::level::trace);
@@ -49,7 +49,7 @@ void MilestroLogger::addFileSink(const std::string& filename) {
     }
 }
 
-void MilestroLogger::addUnityLogSink(IUnityLog* log) {
+void MilestroLogger::addUnityLogSink(IUnityLog *log) {
     if (!unitySink) {
         unitySink = std::make_shared<UnityLogSink_mt>();
         unitySink->init(log);
@@ -74,15 +74,15 @@ void MilestroLogger::setLevel(spdlog::level::level_enum level) {
     logger->set_level(level);
 }
 
-void MilestroLogger::enableSink(const std::shared_ptr<spdlog::sinks::sink>& sink) {
+void MilestroLogger::enableSink(const std::shared_ptr<spdlog::sinks::sink> &sink) {
     sink->set_level(spdlog::level::trace);
 }
 
-void MilestroLogger::disableSink(const std::shared_ptr<spdlog::sinks::sink>& sink) {
+void MilestroLogger::disableSink(const std::shared_ptr<spdlog::sinks::sink> &sink) {
     sink->set_level(spdlog::level::off);
 }
 
-spdlog::logger* MilestroLogger::getLogger() const {
+spdlog::logger *MilestroLogger::getLogger() const {
     return logger.get();
 }
 } // namespace milestro::log

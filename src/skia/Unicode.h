@@ -12,18 +12,18 @@
 namespace milestro::skia {
 class UnicodeProvider {
 public:
-  explicit UnicodeProvider(sk_sp<SkUnicode> skUnicode) {
-    this->skUnicode = std::move(skUnicode);
-  }
+    explicit UnicodeProvider(sk_sp<SkUnicode> skUnicode) {
+        this->skUnicode = std::move(skUnicode);
+    }
 
-  MILESTRO_DECLARE_NON_COPYABLE(UnicodeProvider)
+    MILESTRO_DECLARE_NON_COPYABLE(UnicodeProvider)
 
-  sk_sp<SkUnicode> unwrap() {
-    return skUnicode;
-  }
+    sk_sp<SkUnicode> unwrap() {
+        return skUnicode;
+    }
 
 private:
-  sk_sp<SkUnicode> skUnicode;
+    sk_sp<SkUnicode> skUnicode;
 };
 
 UnicodeProvider *GetUnicodeProvider();

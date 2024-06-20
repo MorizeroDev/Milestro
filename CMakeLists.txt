@@ -180,11 +180,12 @@ set(
 
         src/skia/FontManager.cpp
         src/skia/Unicode.cpp
+        src/skia/Canvas.cpp
         src/skia/textlayout/TextStyle.cpp
         src/skia/textlayout/FontCollection.cpp
         src/skia/textlayout/ParagraphStyle.cpp
         src/skia/textlayout/ParagraphBuilder.cpp
-        src/skia/textlayout/ParagraphBuilder.h
+        src/skia/textlayout/Paragraph.cpp
 )
 
 set(

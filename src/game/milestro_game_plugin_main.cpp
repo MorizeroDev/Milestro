@@ -18,7 +18,7 @@ UnityPluginUnload() {
     unityLogPtr = nullptr;
 }
 
-MILESTRO_API int64_t MilestroGetVersion(int32_t & major, int32_t & minor, int32_t & patch) {
+MILESTRO_API int64_t MilestroGetVersion(int32_t &major, int32_t &minor, int32_t &patch) {
     major = MILESTRO_VERSION_MAJOR;
     minor = MILESTRO_VERSION_MINOR;
     patch = MILESTRO_VERSION_PATCH;

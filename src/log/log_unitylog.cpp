@@ -4,13 +4,13 @@
 
 namespace milestro::log {
 
-template <typename Mutex>
-void UnityLogSink<Mutex>::init(IUnityLog* log) {
+template<typename Mutex>
+void UnityLogSink<Mutex>::init(IUnityLog *log) {
     unityLog = log;
 }
 
-template <typename Mutex>
-void UnityLogSink<Mutex>::sink_it_(const spdlog::details::log_msg& msg) {
+template<typename Mutex>
+void UnityLogSink<Mutex>::sink_it_(const spdlog::details::log_msg &msg) {
     if (unityLog == nullptr) {
         return;
     }
@@ -19,24 +19,20 @@ void UnityLogSink<Mutex>::sink_it_(const spdlog::details::log_msg& msg) {
     std::string message = fmt::to_string(formatted);
 
     switch (msg.level) {
-        case spdlog::level::trace:
-        case spdlog::level::debug:
-        case spdlog::level::info:
-            UNITY_LOG(unityLog, message.c_str());
-            break;
-        case spdlog::level::warn:
-            UNITY_LOG_WARNING(unityLog, message.c_str());
-            break;
-        case spdlog::level::err:
-        case spdlog::level::critical:
-            UNITY_LOG_ERROR(unityLog, message.c_str());
-            break;
-        default:
-            break;
+    case spdlog::level::trace:
+    case spdlog::level::debug:
+    case spdlog::level::info:UNITY_LOG(unityLog, message.c_str());
+        break;
+    case spdlog::level::warn:UNITY_LOG_WARNING(unityLog, message.c_str());
+        break;
+    case spdlog::level::err:
+    case spdlog::level::critical:UNITY_LOG_ERROR(unityLog, message.c_str());
+        break;
+    default:break;
     }
 }
 
-template <typename Mutex>
+template<typename Mutex>
 void UnityLogSink<Mutex>::flush_() {
 }
 

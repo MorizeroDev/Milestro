@@ -9,18 +9,18 @@ namespace milestro::skia::textlayout {
 class FontCollection {
 
 public:
-  explicit FontCollection(sk_sp<::skia::textlayout::FontCollection> fontCollection) {
-    this->fontCollection = std::move(fontCollection);
-  }
+    explicit FontCollection(sk_sp<::skia::textlayout::FontCollection> fontCollection) {
+        this->fontCollection = std::move(fontCollection);
+    }
 
-  MILESTRO_DECLARE_NON_COPYABLE(FontCollection)
+    MILESTRO_DECLARE_NON_COPYABLE(FontCollection)
 
-  sk_sp<::skia::textlayout::FontCollection> unwrap() {
-    return fontCollection;
-  }
+    sk_sp<::skia::textlayout::FontCollection> unwrap() {
+        return fontCollection;
+    }
 
 private:
-  sk_sp<::skia::textlayout::FontCollection> fontCollection;
+    sk_sp<::skia::textlayout::FontCollection> fontCollection;
 };
 
 FontCollection *GetFontCollection();

@@ -13,22 +13,22 @@ namespace milestro::skia {
 
 class FontManager {
 public:
-  explicit FontManager(sk_sp<SkFontMgr> fontMgr) {
-    this->fontMgr = std::move(fontMgr);
-  }
+    explicit FontManager(sk_sp<SkFontMgr> fontMgr) {
+        this->fontMgr = std::move(fontMgr);
+    }
 
-  MILESTRO_DECLARE_NON_COPYABLE(FontManager)
+    MILESTRO_DECLARE_NON_COPYABLE(FontManager)
 
-  void RegisterFont(char *path) {
-    fontMgr->makeFromFile(path);
-  }
+    void RegisterFont(char *path) {
+        fontMgr->makeFromFile(path);
+    }
 
-  sk_sp<SkFontMgr> unwrap() {
-    return fontMgr;
-  }
+    sk_sp<SkFontMgr> unwrap() {
+        return fontMgr;
+    }
 
 private:
-  sk_sp<SkFontMgr> fontMgr;
+    sk_sp<SkFontMgr> fontMgr;
 };
 
 FontManager *GetFontManager();
