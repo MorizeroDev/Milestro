@@ -177,6 +177,7 @@ set(
 
         src/skia/textlayout/TextStyle.cpp
         src/skia/FontManager.cpp
+        src/skia/textlayout/FontCollection.cpp
 )
 
 set(

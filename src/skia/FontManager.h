@@ -15,33 +15,37 @@
 #endif
 
 namespace milestro::skia {
-    inline sk_sp<SkFontMgr> MakeSkFontMgr() {
-        sk_sp<SkFontMgr> result;
+inline sk_sp<SkFontMgr> MakeSkFontMgr() {
+  sk_sp<SkFontMgr> result;
 #if WIN32
-        result = SkFontMgr_New_DirectWrite();
+  result = SkFontMgr_New_DirectWrite();
 #else
 #error No SkFontMgr Provider
 #endif
-        return result;
-    }
+  return result;
+}
 
-    class FontManager {
-    public:
-        explicit FontManager(sk_sp<SkFontMgr> fontMgr) {
-            this->fontMgr = std::move(fontMgr);
-        }
+class FontManager {
+public:
+  explicit FontManager(sk_sp<SkFontMgr> fontMgr) {
+    this->fontMgr = std::move(fontMgr);
+  }
 
-        MILESTRO_DECLARE_NON_COPYABLE(FontManager)
+  MILESTRO_DECLARE_NON_COPYABLE(FontManager)
 
-        void RegisterFont(char *path) {
-            fontMgr->makeFromFile(path);
-        }
+  void RegisterFont(char *path) {
+    fontMgr->makeFromFile(path);
+  }
 
-    private:
-        sk_sp<SkFontMgr> fontMgr;
-    };
+  sk_sp<SkFontMgr> unwrap() {
+    return fontMgr;
+  }
+  
+private:
+  sk_sp<SkFontMgr> fontMgr;
+};
 
-    FontManager *GetFontManager();
+FontManager *GetFontManager();
 }
 
 #endif //MILESTRO_FONTMANAGER_H
