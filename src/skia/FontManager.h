@@ -32,20 +32,16 @@ namespace milestro::skia {
         }
 
         MILESTRO_DECLARE_NON_COPYABLE(FontManager)
+
+        void RegisterFont(char *path) {
+            fontMgr->makeFromFile(path);
+        }
+
     private:
         sk_sp<SkFontMgr> fontMgr;
     };
 
-    extern std::unique_ptr<FontManager> FontManagerInstance = nullptr;
-
-    Result<void, std::string> InitialFontManager() {
-        auto skFontMgr = MakeSkFontMgr();
-        if (skFontMgr == nullptr) {
-            return Err(std::string("fail to createSkFontMgr"));
-        }
-        FontManagerInstance = std::make_unique<FontManager>(std::move(skFontMgr));
-        return Ok();
-    }
+    FontManager *GetFontManager();
 }
 
 #endif //MILESTRO_FONTMANAGER_H
