@@ -43,7 +43,7 @@ public :
     void paint(milestro::skia::Canvas *canvas, SkScalar x, SkScalar y) {
         paragraph->paint(canvas->unwrap(), x, y);
     }
-    
+
     MILESTRO_DECLARE_NON_COPYABLE(Paragraph)
 
 private:

@@ -790,7 +790,7 @@ struct Result {
             return storage().template get<U>();
         }
 
-        std::fprintf(stderr, "Attempting to unwrap an error Result\n");
+        std::fprintf(stderr, "Attempting to spawn an error Result\n");
         std::terminate();
     }
 

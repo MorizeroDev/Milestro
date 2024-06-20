@@ -22,7 +22,7 @@ public:
     MILESTRO_DECLARE_NON_COPYABLE(ParagraphBuilder)
 
     void pushStyle(TextStyle *&style) {
-        builder->pushStyle(style->unwrap());
+        builder->pushStyle(style->spawn());
     };
 
     void pop() {
@@ -33,9 +33,10 @@ public:
         builder->addText(text, len);
     }
 
-    Paragraph build() {
+    Paragraph *build() {
         auto paragraph = builder->Build();
-        return Paragraph(std::move(paragraph));
+        auto ret = new Paragraph(std::move(paragraph));
+        return ret;
     }
 
 private:

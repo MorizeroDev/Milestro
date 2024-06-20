@@ -28,6 +28,198 @@ extern "C" {
 // 返回值为大版本号 major
 MILESTRO_API int64_t MilestroGetVersion(int32_t &major, int32_t &minor, int32_t &patch);
 
+MILESTRO_API int64_t MilestroSkiaFontManagerRegisterFont(uint8_t *path);
+MILESTRO_API int64_t MilestroSkiaCanvasCreate(milestro::skia::Canvas *&ret, int32_t width, int32_t height);
+MILESTRO_API int64_t MilestroSkiaCanvasDestroy(milestro::skia::Canvas *&ret);
+MILESTRO_API int64_t MilestroSkiaCanvasGetTexture(milestro::skia::Canvas *ret, void *targetSpace);
+
+MILESTRO_API int64_t MilestroSkiaFontManagerRegisterFont(uint8_t *path);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphDestroy(milestro::skia::textlayout::Paragraph *&ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphLayout(milestro::skia::textlayout::Paragraph *p, float width);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphPaint(milestro::skia::textlayout::Paragraph *p,
+                                                          milestro::skia::Canvas *canvas,
+                                                          float x, float y);
+
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderCreate(milestro::skia::textlayout::ParagraphBuilder *&ret,
+                                                                  milestro::skia::textlayout::ParagraphStyle *style);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderDestroy(milestro::skia::textlayout::ParagraphBuilder *&ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderPushStyle(milestro::skia::textlayout::ParagraphBuilder *b,
+                                                                     milestro::skia::textlayout::TextStyle *style);
+
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderPop(milestro::skia::textlayout::ParagraphBuilder *b);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderBuild(milestro::skia::textlayout::ParagraphBuilder *b,
+                                                                 milestro::skia::textlayout::Paragraph *&paragraph);
+
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleCreate(milestro::skia::textlayout::ParagraphStyle *&ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleDestroy(milestro::skia::textlayout::ParagraphStyle *&ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetStrutStyle(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                       milestro::skia::textlayout::StrutStyle *&strutStyle);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetStrutStyle(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                       milestro::skia::textlayout::StrutStyle *strutStyle);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetTextStyle(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                      milestro::skia::textlayout::TextStyle *&textStyle);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetTextStyle(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                      milestro::skia::textlayout::TextStyle *textStyle);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetTextDirection(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                          int32_t &direction);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetTextDirection(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                          int32_t direction);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetTextAlign(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                      int32_t &align);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetTextAlign(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                      int32_t align);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetMaxLines(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                     uint64_t &maxLines);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetMaxLines(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                     uint64_t maxLines);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetEllipsis(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                     uint8_t *ellipsis);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetHeight(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                   float &height);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetHeight(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                   float height);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetTextHeightBehavior(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                               int32_t &behavior);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetTextHeightBehavior(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                               int32_t behavior);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleIsUnlimitedLines(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                          int32_t &unlimitedLines);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleIsEllipsized(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                      int32_t &isEllipsized);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetEffectiveAlign(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                           int32_t &effectiveAlign);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleIsHintingOn(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                     int32_t &hintingIsOn);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleTurnHintingOff(milestro::skia::textlayout::ParagraphStyle *s);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetReplaceTabCharacters(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                                 int32_t &v);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetReplaceTabCharacters(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                                 int32_t v);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetApplyRoundingHack(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                              int32_t &v);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetApplyRoundingHack(milestro::skia::textlayout::ParagraphStyle *s,
+                                                                              int32_t v);
+
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleCreate(milestro::skia::textlayout::StrutStyle *&ret);
+
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleDestroy(milestro::skia::textlayout::StrutStyle *&ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleSetFontFamilies(milestro::skia::textlayout::StrutStyle *s,
+                                                                     uint8_t **families,
+                                                                     uint32_t size);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleSetFontStyle(milestro::skia::textlayout::StrutStyle *s,
+                                                                  int32_t weight, int32_t width, int32_t slant);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleGetFontStyle(milestro::skia::textlayout::StrutStyle *s,
+                                                                  int32_t &weight, int32_t &width, int32_t &slant);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleSetFontSize(milestro::skia::textlayout::StrutStyle *s,
+                                                                 float size);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleGetFontSize(milestro::skia::textlayout::StrutStyle *s,
+                                                                 float &size);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleSetHeight(milestro::skia::textlayout::StrutStyle *s,
+                                                               float height);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleGetHeight(milestro::skia::textlayout::StrutStyle *s,
+                                                               float &height);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleSetLeading(milestro::skia::textlayout::StrutStyle *s,
+                                                                float leading);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleGetLeading(milestro::skia::textlayout::StrutStyle *s,
+                                                                float &leading);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleSetStrutEnabled(milestro::skia::textlayout::StrutStyle *s,
+                                                                     int32_t v);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleGetStrutEnabled(milestro::skia::textlayout::StrutStyle *s,
+                                                                     int32_t &v);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleSetForceStrutHeight(milestro::skia::textlayout::StrutStyle *s,
+                                                                         int32_t v);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleGetForceStrutHeight(milestro::skia::textlayout::StrutStyle *s,
+                                                                         int32_t &v);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleSetHeightOverride(milestro::skia::textlayout::StrutStyle *s,
+                                                                       int32_t v);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleGetHeightOverride(milestro::skia::textlayout::StrutStyle *s,
+                                                                       int32_t &v);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleSetHalfLeading(milestro::skia::textlayout::StrutStyle *s,
+                                                                    int32_t halfLeading);
+MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleGetHalfLeading(milestro::skia::textlayout::StrutStyle *s,
+                                                                    int32_t &halfLeading);
+
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleCreate(milestro::skia::textlayout::TextStyle *&ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleDestroy(milestro::skia::textlayout::TextStyle *&ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetColor(milestro::skia::textlayout::TextStyle *s, uint32_t color);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetColor(milestro::skia::textlayout::TextStyle *s, uint32_t &color);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetDecoration(milestro::skia::textlayout::TextStyle *s,
+                                                                  int32_t &decoration);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetDecoration(milestro::skia::textlayout::TextStyle *s,
+                                                                  int32_t decoration);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetDecorationMode(milestro::skia::textlayout::TextStyle *s,
+                                                                      int32_t &decoration);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetDecorationMode(milestro::skia::textlayout::TextStyle *s,
+                                                                      int32_t decorationMode);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetDecorationColor(milestro::skia::textlayout::TextStyle *s,
+                                                                       uint32_t &color);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetDecorationColor(milestro::skia::textlayout::TextStyle *s,
+                                                                       uint32_t color);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetDecorationStyle(milestro::skia::textlayout::TextStyle *s,
+                                                                       int32_t &decorationStyle);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetDecorationStyle(milestro::skia::textlayout::TextStyle *s,
+                                                                       int32_t decorationStyle);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetDecorationThicknessMultiplier(milestro::skia::textlayout::TextStyle *s,
+                                                                                     float &multiplier);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetDecorationThicknessMultiplier(milestro::skia::textlayout::TextStyle *s,
+                                                                                     float multiplier);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetFontStyle(milestro::skia::textlayout::TextStyle *s,
+                                                                 int32_t weight, int32_t width, int32_t slant);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetFontStyle(milestro::skia::textlayout::TextStyle *s,
+                                                                 int32_t &weight, int32_t &width, int32_t &slant);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleAddShadow(milestro::skia::textlayout::TextStyle *s,
+                                                              uint32_t color,
+                                                              float offsetX,
+                                                              float offsetY,
+                                                              double blurSigma);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleResetShadow(milestro::skia::textlayout::TextStyle *s);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetFontFeatureNumber(milestro::skia::textlayout::TextStyle *s,
+                                                                         uint32_t &num);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleAddFontFeature(milestro::skia::textlayout::TextStyle *s,
+                                                                   uint8_t *fontFeature,
+                                                                   int32_t value);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleResetFontFeatures(milestro::skia::textlayout::TextStyle *s);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetFontSize(milestro::skia::textlayout::TextStyle *s,
+                                                                float size);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetFontSize(milestro::skia::textlayout::TextStyle *s,
+                                                                float &size);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetFontFamilies(milestro::skia::textlayout::TextStyle *s,
+                                                                    uint8_t **families,
+                                                                    uint32_t size);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetBaselineShift(milestro::skia::textlayout::TextStyle *s,
+                                                                     float baselineShift);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetBaselineShift(milestro::skia::textlayout::TextStyle *s,
+                                                                     float &baselineShift);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetHeight(milestro::skia::textlayout::TextStyle *s,
+                                                              float height);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetHeight(milestro::skia::textlayout::TextStyle *s,
+                                                              float &height);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetHeightOverride(milestro::skia::textlayout::TextStyle *s,
+                                                                      int32_t v);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetHeightOverride(milestro::skia::textlayout::TextStyle *s,
+                                                                      int32_t &v);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetHalfLeading(milestro::skia::textlayout::TextStyle *s,
+                                                                   int32_t halfLeading);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetHalfLeading(milestro::skia::textlayout::TextStyle *s,
+                                                                   int32_t &halfLeading);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetLetterSpacing(milestro::skia::textlayout::TextStyle *s,
+                                                                     float letterSpacing);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetLetterSpacing(milestro::skia::textlayout::TextStyle *s,
+                                                                     float &letterSpacing);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetWordSpacing(milestro::skia::textlayout::TextStyle *s,
+                                                                   float wordSpacing);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetWordSpacing(milestro::skia::textlayout::TextStyle *s,
+                                                                   float &wordSpacing);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetLocale(milestro::skia::textlayout::TextStyle *s,
+                                                              float wordSpacing);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetTextBaseline(milestro::skia::textlayout::TextStyle *s,
+                                                                    int32_t textBaseline);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetTextBaseline(milestro::skia::textlayout::TextStyle *s,
+                                                                    int32_t &textBaseline);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetPlaceholder(milestro::skia::textlayout::TextStyle *s);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleIsPlaceholder(milestro::skia::textlayout::TextStyle *s,
+                                                                  int32_t &isPlaceholder);
+
 }
 #ifdef __clang__
 #pragma clang diagnostic pop

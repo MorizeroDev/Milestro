@@ -192,6 +192,13 @@ set(
         MILESTRO_APPLICATION_FILE
 
         src/game/milestro_game_plugin_main.cpp
+        src/game/milestro_game_skia_canvas.cpp
+        src/game/milestro_game_skia_fontmanager.cpp
+        src/game/milestro_game_skia_textlayout_paragraph.cpp
+        src/game/milestro_game_skia_textlayout_paragraphbuilder.cpp
+        src/game/milestro_game_skia_textlayout_paragraphstyle.cpp
+        src/game/milestro_game_skia_textlayout_strutstyle.cpp
+        src/game/milestro_game_skia_textlayout_textstyle.cpp
 )
 
 set(PROJECT_PLATFORM_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${CMAKE_CURRENT_BINARY_DIR}/include)

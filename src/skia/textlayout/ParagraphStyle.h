@@ -2,9 +2,16 @@
 #define MILESTRO_SKIA_TEXTLAYOUT_PARAGRAPHSTYLE_H
 
 #include "modules/skparagraph/include/ParagraphStyle.h"
+#include "TextStyle.h"
 
 namespace milestro::skia::textlayout {
 class StrutStyle {
+public:
+    StrutStyle() {}
+
+    explicit StrutStyle(::skia::textlayout::StrutStyle style) {
+        this->style = style;
+    }
 
     const std::vector<SkString> &getFontFamilies() const { return style.getFontFamilies(); }
     void setFontFamilies(std::vector<SkString> families) { style.setFontFamilies(std::move(families)); }
@@ -33,7 +40,7 @@ class StrutStyle {
     void setHalfLeading(bool halfLeading) { style.setHalfLeading(halfLeading); }
     bool getHalfLeading() const { return style.getHalfLeading(); }
 
-    const ::skia::textlayout::StrutStyle &unwrap() {
+    const ::skia::textlayout::StrutStyle spawn() {
         return style;
     }
 
@@ -42,12 +49,12 @@ private:
 };
 
 class ParagraphStyle {
+public:
+    StrutStyle *getStrutStyle() const { return new StrutStyle(style.getStrutStyle()); }
+    void setStrutStyle(StrutStyle *strutStyle) { style.setStrutStyle(strutStyle->spawn()); }
 
-    const ::skia::textlayout::StrutStyle &getStrutStyle() const { return style.getStrutStyle(); }
-    void setStrutStyle(::skia::textlayout::StrutStyle strutStyle) { style.setStrutStyle(std::move(strutStyle)); }
-
-    const ::skia::textlayout::TextStyle &getTextStyle() const { return style.getTextStyle(); }
-    void setTextStyle(const ::skia::textlayout::TextStyle &textStyle) { style.setTextStyle(textStyle); }
+    TextStyle *getTextStyle() const { return new TextStyle(style.getTextStyle()); }
+    void setTextStyle(TextStyle *textStyle) { style.setTextStyle(textStyle->spawn()); }
 
     ::skia::textlayout::TextDirection getTextDirection() const { return style.getTextDirection(); }
     void setTextDirection(::skia::textlayout::TextDirection direction) { style.setTextDirection(direction); }
@@ -59,9 +66,9 @@ class ParagraphStyle {
     void setMaxLines(size_t maxLines) { style.setMaxLines(maxLines); }
 
     SkString getEllipsis() const { return style.getEllipsis(); }
-    std::u16string getEllipsisUtf16() const { return style.getEllipsisUtf16(); }
+//    std::u16string getEllipsisUtf16() const { return style.getEllipsisUtf16(); }
 
-    void setEllipsis(const std::u16string &ellipsis) { style.setEllipsis(ellipsis); }
+//    void setEllipsis(const std::u16string &ellipsis) { style.setEllipsis(ellipsis); }
     void setEllipsis(const SkString &ellipsis) { style.setEllipsis(ellipsis); }
 
     SkScalar getHeight() const { return style.getHeight(); }
@@ -87,6 +94,7 @@ class ParagraphStyle {
 
 private:
     ::skia::textlayout::ParagraphStyle style;
+
 public:
     const ::skia::textlayout::ParagraphStyle &unwrap() {
         return style;
