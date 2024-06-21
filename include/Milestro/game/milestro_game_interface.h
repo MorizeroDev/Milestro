@@ -29,7 +29,12 @@ extern "C" {
 MILESTRO_API int64_t MilestroGetVersion(int32_t &major, int32_t &minor, int32_t &patch);
 
 MILESTRO_API int64_t MilestroSkiaFontManagerRegisterFont(uint8_t *path, milestro::skia::TypeFace *&typeFace);
+
 MILESTRO_API int64_t MilestroSkiaTypeFaceDestroy(milestro::skia::TypeFace *&ret);
+MILESTRO_API int64_t MilestroSkiaTypeFaceGetFamilyNames(milestro::skia::TypeFace *typeFace,
+                                           uint8_t *buffer,
+                                           uint64_t bufferSize,
+                                           uint64_t &needed);
 
 MILESTRO_API int64_t MilestroSkiaCanvasCreate(milestro::skia::Canvas *&ret, int32_t width, int32_t height);
 MILESTRO_API int64_t MilestroSkiaCanvasDestroy(milestro::skia::Canvas *&ret);

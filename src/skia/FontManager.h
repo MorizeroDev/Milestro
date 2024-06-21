@@ -6,25 +6,12 @@
 #include <include/core/SkTypeface.h>
 #include <Milestro/util/milestro_class.h>
 #include "Milestro/common/milestro_result.h"
+#include "Milestro/log/log.h"
+#include "TypeFace.h"
 #include <string>
 #include <utility>
 
 namespace milestro::skia {
-
-class TypeFace {
-public:
-    explicit TypeFace(sk_sp<SkTypeface> typeFace) {
-        this->typeFace = std::move(typeFace);
-    }
-
-    sk_sp<SkTypeface> unwrap() {
-        return typeFace;
-    }
-
-    MILESTRO_DECLARE_NON_COPYABLE(TypeFace)
-private:
-    sk_sp<SkTypeface> typeFace;
-};
 
 class FontManager {
 public:

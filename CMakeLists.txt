@@ -146,6 +146,8 @@ set(SPDLOG_BUILD_PIC ON)
 set(SPDLOG_BUILD_TESTS OFF)
 add_subdirectory("ext/spdlog" EXCLUDE_FROM_ALL)
 
+add_subdirectory("ext/json" EXCLUDE_FROM_ALL)
+
 add_subdirectory("ext/PluginAPI" EXCLUDE_FROM_ALL)
 
 add_library(skia INTERFACE IMPORTED)
@@ -181,6 +183,7 @@ set(
         src/skia/FontManager.cpp
         src/skia/Unicode.cpp
         src/skia/Canvas.cpp
+        src/skia/TypeFace.cpp
         src/skia/textlayout/TextStyle.cpp
         src/skia/textlayout/FontCollection.cpp
         src/skia/textlayout/ParagraphStyle.cpp
@@ -233,6 +236,7 @@ target_link_libraries(Milestro
         PUBLIC
         spdlog::spdlog
         skia
+        nlohmann_json::nlohmann_json
 )
 
 if (MSVC)
