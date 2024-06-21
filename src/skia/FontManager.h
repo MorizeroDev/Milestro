@@ -11,6 +11,21 @@
 
 namespace milestro::skia {
 
+class TypeFace {
+public:
+    explicit TypeFace(sk_sp<SkTypeface> typeFace) {
+        this->typeFace = std::move(typeFace);
+    }
+
+    sk_sp<SkTypeface> unwrap() {
+        return typeFace;
+    }
+
+    MILESTRO_DECLARE_NON_COPYABLE(TypeFace)
+private:
+    sk_sp<SkTypeface> typeFace;
+};
+
 class FontManager {
 public:
     explicit FontManager(sk_sp<SkFontMgr> fontMgr) {
@@ -19,8 +34,10 @@ public:
 
     MILESTRO_DECLARE_NON_COPYABLE(FontManager)
 
-    void RegisterFont(char *path) {
-        fontMgr->makeFromFile(path);
+    TypeFace *RegisterFont(char *path) {
+        auto typeFace = fontMgr->makeFromFile(path);
+        auto ret = new TypeFace(std::move(typeFace));
+        return ret;
     }
 
     sk_sp<SkFontMgr> unwrap() {

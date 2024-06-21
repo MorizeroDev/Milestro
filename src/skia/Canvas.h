@@ -13,7 +13,7 @@ class Canvas {
 public:
     Canvas(int width, int height) {
         imageInfo = SkImageInfo::MakeN32Premul(width, height);
-        bitmap.allocPixels();
+        bitmap.allocPixels(imageInfo);
         canvas = std::make_unique<SkCanvas>(bitmap);
     }
 

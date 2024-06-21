@@ -234,3 +234,19 @@ target_link_libraries(Milestro
         spdlog::spdlog
         skia
 )
+
+if (MSVC)
+#    set_target_properties(Milestro PROPERTIES LIBRARY_OUTPUT_NAME  "libMilestro")
+    set_target_properties(Milestro PROPERTIES RUNTIME_OUTPUT_NAME  "libMilestro")
+#    set_target_properties(Milestro PROPERTIES ARCHIVE_OUTPUT_NAME  "libMilestro")
+endif ()
+
+if (CMAKE_HOST_WIN32)
+    add_custom_target(H2CS
+            COMMAND cd ${PROJECT_SOURCE_DIR}\\apps\\h2cs & cmd /c gradlew.bat run --args "${PROJECT_SOURCE_DIR}/include/Milestro/game/milestro_game_interface.h ${CMAKE_CURRENT_BINARY_DIR}/BindingC.cs ${CMAKE_CURRENT_BINARY_DIR}/FrameworkBinding.cpp"
+    )
+else ()
+    add_custom_target(H2CS
+            COMMAND cd ${PROJECT_SOURCE_DIR}/apps/h2cs && ./gradlew run --args "${PROJECT_SOURCE_DIR}/include/Milestro/game/milestro_game_interface.h ${CMAKE_CURRENT_BINARY_DIR}/BindingC.cs ${CMAKE_CURRENT_BINARY_DIR}/FrameworkBinding.cpp"
+    )
+endif ()

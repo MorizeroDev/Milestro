@@ -39,7 +39,6 @@ public:
 
     size_t getFontFeatureNumber() const { return textStyle.getFontFeatureNumber(); }
     void addFontFeature(const SkString &fontFeature, int value) { textStyle.addFontFeature(fontFeature, value); }
-
     void resetFontFeatures() { textStyle.resetFontFeatures(); }
 
     // getFontArguments

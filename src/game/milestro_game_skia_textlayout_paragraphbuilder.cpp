@@ -21,7 +21,7 @@ int64_t MilestroSkiaTextlayoutParagraphBuilderDestroy(milestro::skia::textlayout
 }
 
 int64_t MilestroSkiaTextlayoutParagraphBuilderPushStyle(milestro::skia::textlayout::ParagraphBuilder *b,
-                                                 milestro::skia::textlayout::TextStyle *style) try {
+                                                        milestro::skia::textlayout::TextStyle *style) try {
     b->pushStyle(style);
     return MILESTRO_API_RET_OK;
 } catch (...) {
@@ -36,8 +36,16 @@ int64_t MilestroSkiaTextlayoutParagraphBuilderPop(milestro::skia::textlayout::Pa
 }
 
 int64_t MilestroSkiaTextlayoutParagraphBuilderBuild(milestro::skia::textlayout::ParagraphBuilder *b,
-                                             milestro::skia::textlayout::Paragraph *&paragraph) try {
+                                                    milestro::skia::textlayout::Paragraph *&paragraph) try {
     paragraph = b->build();
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutParagraphBuilderAddText(milestro::skia::textlayout::ParagraphBuilder *b,
+                                                      uint8_t *text, size_t len) try {
+    b->addText(reinterpret_cast<const char *>(text), len);
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;

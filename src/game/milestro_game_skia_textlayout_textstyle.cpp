@@ -2,6 +2,7 @@
 #include <Milestro/log/log.h>
 #include "milestro_game_retcode.h"
 #include "skia/textlayout/TextStyle.h"
+#include "skia/FontManager.h"
 
 extern "C" {
 int64_t MilestroSkiaTextlayoutTextStyleCreate(milestro::skia::textlayout::TextStyle *&ret) try {
@@ -19,13 +20,25 @@ int64_t MilestroSkiaTextlayoutTextStyleDestroy(milestro::skia::textlayout::TextS
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutTextStyleSetColor(milestro::skia::textlayout::TextStyle *s, uint32_t color) {
-    s->setColor(color);
+int64_t MilestroSkiaTextlayoutTextStyleSetColor(milestro::skia::textlayout::TextStyle *s,
+                                                int32_t r,
+                                                int32_t g,
+                                                int32_t b,
+                                                int32_t a) {
+    s->setColor(SkColorSetARGB(a, r, g, b));
     return MILESTRO_API_RET_OK;
 }
 
-int64_t MilestroSkiaTextlayoutTextStyleGetColor(milestro::skia::textlayout::TextStyle *s, uint32_t &color) {
-    color = s->getColor();
+int64_t MilestroSkiaTextlayoutTextStyleGetColor(milestro::skia::textlayout::TextStyle *s,
+                                                int32_t &r,
+                                                int32_t &g,
+                                                int32_t &b,
+                                                int32_t &a) {
+    auto color = s->getColor();
+    r = SkColorGetR(color);
+    g = SkColorGetG(color);
+    b = SkColorGetB(color);
+    a = SkColorGetA(color);
     return MILESTRO_API_RET_OK;
 }
 
@@ -51,13 +64,25 @@ int64_t MilestroSkiaTextlayoutTextStyleSetDecorationMode(milestro::skia::textlay
     return MILESTRO_API_RET_OK;
 }
 
-int64_t MilestroSkiaTextlayoutTextStyleGetDecorationColor(milestro::skia::textlayout::TextStyle *s, uint32_t &color) {
-    color = s->getDecorationColor();
+int64_t MilestroSkiaTextlayoutTextStyleGetDecorationColor(milestro::skia::textlayout::TextStyle *s,
+                                                          int32_t &r,
+                                                          int32_t &g,
+                                                          int32_t &b,
+                                                          int32_t &a) {
+    auto color = s->getDecorationColor();
+    r = SkColorGetR(color);
+    g = SkColorGetG(color);
+    b = SkColorGetB(color);
+    a = SkColorGetA(color);
     return MILESTRO_API_RET_OK;
 }
 
-int64_t MilestroSkiaTextlayoutTextStyleSetDecorationColor(milestro::skia::textlayout::TextStyle *s, uint32_t color) {
-    s->setDecorationColor(color);
+int64_t MilestroSkiaTextlayoutTextStyleSetDecorationColor(milestro::skia::textlayout::TextStyle *s,
+                                                          int32_t r,
+                                                          int32_t g,
+                                                          int32_t b,
+                                                          int32_t a) {
+    s->setDecorationColor(SkColorSetARGB(a, r, g, b));
     return MILESTRO_API_RET_OK;
 }
 
@@ -102,8 +127,10 @@ int64_t MilestroSkiaTextlayoutTextStyleGetFontStyle(milestro::skia::textlayout::
 }
 
 int64_t MilestroSkiaTextlayoutTextStyleAddShadow(milestro::skia::textlayout::TextStyle *s,
-                                                 uint32_t color, float offsetX, float offsetY, double blurSigma) {
-    s->addShadow(color, {offsetX, offsetY}, blurSigma);
+                                                 int32_t colorR, int32_t colorG, int32_t colorB, int32_t colorA,
+                                                 float offsetX, float offsetY,
+                                                 double blurSigma) {
+    s->addShadow(SkColorSetARGB(colorR, colorG, colorB, colorA), {offsetX, offsetY}, blurSigma);
     return MILESTRO_API_RET_OK;
 }
 
@@ -112,7 +139,7 @@ int64_t MilestroSkiaTextlayoutTextStyleResetShadow(milestro::skia::textlayout::T
     return MILESTRO_API_RET_OK;
 }
 
-int64_t MilestroSkiaTextlayoutTextStyleGetFontFeatureNumber(milestro::skia::textlayout::TextStyle *s, uint32_t &num) {
+int64_t MilestroSkiaTextlayoutTextStyleGetFontFeatureNumber(milestro::skia::textlayout::TextStyle *s, uint64_t &num) {
     num = s->getFontFeatureNumber();
     return MILESTRO_API_RET_OK;
 }
@@ -223,9 +250,15 @@ int64_t MilestroSkiaTextlayoutTextStyleGetWordSpacing(milestro::skia::textlayout
     return MILESTRO_API_RET_OK;
 }
 
+int64_t MilestroSkiaTextlayoutTextStyleSetTypeFace(milestro::skia::textlayout::TextStyle *s,
+                                                   milestro::skia::TypeFace *typeFace) {
+    s->setTypeface(typeFace->unwrap());
+    return MILESTRO_API_RET_OK;
+}
+
 int64_t MilestroSkiaTextlayoutTextStyleSetLocale(milestro::skia::textlayout::TextStyle *s,
-                                                 float wordSpacing) {
-    s->setWordSpacing(wordSpacing);
+                                                 uint8_t *locale) {
+    s->setLocale(SkString(reinterpret_cast<const char *>(locale)));
     return MILESTRO_API_RET_OK;
 }
 
