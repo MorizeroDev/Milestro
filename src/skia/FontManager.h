@@ -27,6 +27,16 @@ public:
         return ret;
     }
 
+    std::vector<std::string> GetFamiliesNames() {
+        std::vector<std::string> ret;
+        for (int i = 0; i < fontMgr->countFamilies(); i++) {
+            SkString famName;
+            fontMgr->getFamilyName(i, &famName);
+            ret.emplace_back(std::string(famName.c_str()));
+        }
+        return ret;
+    }
+
     sk_sp<SkFontMgr> unwrap() {
         return fontMgr;
     }

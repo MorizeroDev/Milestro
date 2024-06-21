@@ -7,8 +7,26 @@
 #include "skia/Unicode.h"
 #include "TextStyle.h"
 #include "skia/Canvas.h"
+#include "Milestro/util/milestro_serializerable.h"
 
 namespace milestro::skia::textlayout {
+class SplittedGlyphInfo : public milestro::util::serialization::serializable {
+public:
+    std::vector<SkRect> bounds;
+    nlohmann::json toJson() override {
+        std::vector<nlohmann::json> jsonBounds;
+        for (const auto &rect : bounds) {
+            jsonBounds.push_back({
+                                     {"left", rect.left()},
+                                     {"top", rect.top()},
+                                     {"right", rect.right()},
+                                     {"bottom", rect.bottom()}
+                                 });
+        }
+        return {{"bounds", jsonBounds}};
+    }
+};
+
 class Paragraph {
 public :
     Paragraph(std::unique_ptr<::skia::textlayout::Paragraph> &&paragraph) {
@@ -19,26 +37,7 @@ public :
         paragraph->layout(width);
     }
 
-    void splitGlyph() {
-        // TODO 整理结果，传回给 Unity
-        paragraph->visit([](int lineNumber, const ::skia::textlayout::Paragraph::VisitorInfo *info) {
-            if (info == nullptr) {
-                std::cout << "Line Number: " << lineNumber << " end" << std::endl;
-                return;
-            }
-            std::cout << "Line Number: " << lineNumber << std::endl;
-            SkPoint origin = info->origin;
-            std::cout << "origin: (" << origin.x() << ", " << origin.y() << ")" << std::endl;
-
-            for (int i = 0; i < info->count; ++i) {
-                uint16_t glyph = info->glyphs[i];
-                SkPoint position = info->positions[i];
-
-                std::cout << "Glyph ID: " << glyph
-                          << " at position (" << position.x() << ", " << position.y() << ")" << std::endl;
-            }
-        });
-    }
+    SplittedGlyphInfo splitGlyph(SkScalar x, SkScalar y);
 
     void paint(milestro::skia::Canvas *canvas, SkScalar x, SkScalar y) {
         paragraph->paint(canvas->unwrap(), x, y);

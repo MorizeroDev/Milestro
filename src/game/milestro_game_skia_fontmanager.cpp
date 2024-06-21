@@ -11,6 +11,16 @@ int64_t MilestroSkiaFontManagerRegisterFont(uint8_t *path, milestro::skia::TypeF
     return MILESTRO_API_RET_OK;
 }
 
+int64_t MilestroSkiaFontManagerGetFontFamilies(uint8_t *buffer,
+                                               uint64_t bufferSize,
+                                               uint64_t &needed) {
+    auto fontMgr = milestro::skia::GetFontManager();
+    auto info = fontMgr->GetFamiliesNames();
+    auto result = milestro::util::serialization::vectorToJson(info).dump();
+    needed = result.size();
+    return static_cast<int64_t>(milestro::util::copyStringToBuffer(result, buffer, bufferSize));
+}
+
 int64_t MilestroSkiaTypeFaceDestroy(milestro::skia::TypeFace *&ret) try {
     delete ret;
     ret = nullptr;
