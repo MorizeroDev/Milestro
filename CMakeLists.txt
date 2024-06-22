@@ -155,7 +155,7 @@ add_subdirectory("ext/cli11" EXCLUDE_FROM_ALL)
 
 add_library(skia INTERFACE IMPORTED)
 if (DEFINED MILESTRO_SKIA_LIB_PATH AND DEFINED MILESTRO_SKIA_INCLUDE_PATH)
-    if (MSVC)
+    if (WIN32)
         file(GLOB SKIA_LIB_FILES "${MILESTRO_SKIA_LIB_PATH}/*.lib")
     else ()
         file(GLOB SKIA_LIB_FILES "${MILESTRO_SKIA_LIB_PATH}/*.a")

@@ -12,7 +12,7 @@
 #include "Milestro/skia/Typeface.h"
 #include <memory>
 
-#if WIN32
+#if _WIN32
 
 #include "include/ports/SkTypeface_win.h"
 
@@ -54,7 +54,7 @@ sk_sp<SkTypeface> MilestroFontStyleSet::matchStyle(const SkFontStyle &pattern) {
 SkString MilestroFontStyleSet::getFamilyName() { return fFamilyName; }
 
 MilestroFontManager::MilestroFontManager() : fDefaultFamily(nullptr) {
-#if WIN32
+#if _WIN32
     backend = SkFontMgr_New_DirectWrite();
 #else
 #error No SkFontMgr Provider
