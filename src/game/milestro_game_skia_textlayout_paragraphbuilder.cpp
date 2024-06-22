@@ -1,7 +1,7 @@
 #include <Milestro/game/milestro_game_interface.h>
 #include <Milestro/log/log.h>
 #include "milestro_game_retcode.h"
-#include "skia/textlayout/ParagraphBuilder.h"
+#include "Milestro/skia/textlayout/ParagraphBuilder.h"
 
 extern "C" {
 int64_t MilestroSkiaTextlayoutParagraphBuilderCreate(milestro::skia::textlayout::ParagraphBuilder *&ret,

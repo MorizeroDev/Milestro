@@ -7,6 +7,7 @@
 #include "include/core/SkString.h"
 #include "include/core/SkTypes.h"
 #include "include/private/base/SkTArray.h"
+#include "Milestro/common/milestro_export_macros.h"
 #include <vector>
 
 class SkData;
@@ -15,7 +16,7 @@ class SkTypeface;
 
 namespace milestro::skia {
 
-class MilestroFontStyleSet : public SkFontStyleSet {
+class MILESTRO_API MilestroFontStyleSet : public SkFontStyleSet {
 public:
     explicit MilestroFontStyleSet(SkString familyName);
 
@@ -34,7 +35,7 @@ private:
     friend class MilestroFontManager;
 };
 
-class MilestroFontManager : public SkFontMgr {
+class MILESTRO_API MilestroFontManager : public SkFontMgr {
 public:
     explicit MilestroFontManager();
     void registerTypeFace(sk_sp<SkTypeface> typeFace);

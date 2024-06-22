@@ -8,8 +8,8 @@
 #include "include/core/SkTypes.h"
 #include "include/private/base/SkTemplates.h"
 #include "src/core/SkFontDescriptor.h"
-#include "MilestroFontManager.h"
-#include "TypeFace.h"
+#include "Milestro/skia/MilestroFontManager.h"
+#include "Milestro/skia/TypeFace.h"
 #include <memory>
 
 #if WIN32
@@ -157,6 +157,8 @@ bool MilestroFontManager::isValidAndUniqueFontName(const SkString name) {
 void MilestroFontManager::registerTypeFace(sk_sp<SkTypeface> typeFace) {
     auto familyNames = typeFace->createFamilyNameIterator();
     SkTypeface::LocalizedString famName;
+    famName.fString = " ";
+    famName.fLanguage = " ";
 
     while (familyNames->next(&famName)) {
         auto name = famName.fString;

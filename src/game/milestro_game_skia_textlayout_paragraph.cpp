@@ -1,7 +1,7 @@
 #include <Milestro/game/milestro_game_interface.h>
 #include <Milestro/log/log.h>
 #include "milestro_game_retcode.h"
-#include "skia/textlayout/Paragraph.h"
+#include "Milestro/skia/textlayout/Paragraph.h"
 #include "nlohmann/json.hpp"
 #include "Milestro/util/milestro_strutil.h"
 

@@ -5,9 +5,10 @@
 #include "Milestro/util/milestro_class.h"
 #include "Milestro/log/log.h"
 #include "Milestro/util/milestro_serializerable.h"
+
 namespace milestro::skia {
 
-class FontFamilyName : public milestro::util::serialization::serializable {
+class MILESTRO_API FontFamilyName : public milestro::util::serialization::serializable {
 public:
     std::string name;
     std::string language;
@@ -20,7 +21,7 @@ public:
     }
 };
 
-class TypeFace {
+class MILESTRO_API TypeFace {
 public:
     explicit TypeFace(sk_sp<SkTypeface> typeFace) {
         this->typeFace = std::move(typeFace);
@@ -35,6 +36,8 @@ public:
 
         auto familyNames = typeFace->createFamilyNameIterator();
         SkTypeface::LocalizedString famName;
+        famName.fString = " ";
+        famName.fLanguage = " ";
         while (familyNames->next(&famName)) {
             FontFamilyName item;
             item.name = std::string(famName.fString.c_str());

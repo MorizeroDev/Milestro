@@ -1,6 +1,6 @@
 #include <Milestro/game/milestro_game_interface.h>
 #include <Milestro/log/log.h>
-#include "skia/Canvas.h"
+#include "Milestro/skia/Canvas.h"
 #include "milestro_game_retcode.h"
 
 extern "C" {

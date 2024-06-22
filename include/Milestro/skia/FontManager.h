@@ -14,7 +14,7 @@
 
 namespace milestro::skia {
 
-class FontManager {
+class MILESTRO_API FontManager {
 public:
     explicit FontManager(sk_sp<MilestroFontManager> fontMgr) {
         this->fontMgr = std::move(fontMgr);
@@ -22,7 +22,7 @@ public:
 
     MILESTRO_DECLARE_NON_COPYABLE(FontManager)
 
-    TypeFace *RegisterFont(char *path) {
+    TypeFace *RegisterFont(char* path) {
         auto typeFace = fontMgr->makeFromFile(path);
         fontMgr->registerTypeFace(typeFace);
         auto ret = new TypeFace(std::move(typeFace));
@@ -47,7 +47,7 @@ private:
     sk_sp<MilestroFontManager> fontMgr;
 };
 
-FontManager *GetFontManager();
+MILESTRO_API FontManager *GetFontManager();
 }
 
 #endif //MILESTRO_FONTMANAGER_H

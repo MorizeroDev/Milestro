@@ -1,7 +1,7 @@
 #include <Milestro/game/milestro_game_interface.h>
 #include <Milestro/log/log.h>
 #include "milestro_game_retcode.h"
-#include "skia/textlayout/ParagraphStyle.h"
+#include "Milestro/skia/textlayout/ParagraphStyle.h"
 
 extern "C" {
 

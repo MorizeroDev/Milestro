@@ -2,9 +2,11 @@
 #define MILESTR_SKIA_TEXTLAYOUT_TEXTSTYLE
 
 #include "modules/skparagraph/include/TextStyle.h"
+#include "Milestro/common/milestro_export_macros.h"
 
 namespace milestro::skia::textlayout {
-class TextStyle {
+
+class MILESTRO_API TextStyle {
 public:
     TextStyle() {}
 

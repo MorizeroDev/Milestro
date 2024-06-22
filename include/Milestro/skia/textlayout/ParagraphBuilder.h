@@ -4,12 +4,13 @@
 #include "modules/skparagraph/include/ParagraphBuilder.h"
 #include "ParagraphStyle.h"
 #include "FontCollection.h"
-#include "skia/Unicode.h"
+#include "Milestro/skia/Unicode.h"
 #include "TextStyle.h"
 #include "Paragraph.h"
 
 namespace milestro::skia::textlayout {
-class ParagraphBuilder {
+
+class MILESTRO_API ParagraphBuilder {
 public:
     explicit ParagraphBuilder(ParagraphStyle *style) {
         auto fontCollection = GetFontCollection();
@@ -21,7 +22,7 @@ public:
 
     MILESTRO_DECLARE_NON_COPYABLE(ParagraphBuilder)
 
-    void pushStyle(TextStyle *&style) {
+    void pushStyle(TextStyle *style) {
         builder->pushStyle(style->spawn());
     };
 

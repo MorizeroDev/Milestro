@@ -1,9 +1,9 @@
 #include <memory>
 #include <string>
-#include "FontCollection.h"
+#include "Milestro/skia/textlayout/FontCollection.h"
 #include "Milestro/common/milestro_result.h"
 #include "Milestro/log/log.h"
-#include "skia/FontManager.h"
+#include "Milestro/skia/FontManager.h"
 
 namespace milestro::skia::textlayout {
 

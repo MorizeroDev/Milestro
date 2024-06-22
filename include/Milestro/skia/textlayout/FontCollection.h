@@ -3,11 +3,11 @@
 
 #include "modules/skparagraph/include/FontCollection.h"
 #include "Milestro/util/milestro_class.h"
+#include "Milestro/common/milestro_export_macros.h"
 
 namespace milestro::skia::textlayout {
 
-class FontCollection {
-
+class MILESTRO_API FontCollection {
 public:
     explicit FontCollection(sk_sp<::skia::textlayout::FontCollection> fontCollection) {
         this->fontCollection = std::move(fontCollection);
@@ -26,7 +26,7 @@ private:
     sk_sp<::skia::textlayout::FontCollection> fontCollection;
 };
 
-FontCollection *GetFontCollection();
+MILESTRO_API FontCollection *GetFontCollection();
 
 }
 

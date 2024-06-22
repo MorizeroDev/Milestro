@@ -150,6 +150,9 @@ add_subdirectory("ext/json" EXCLUDE_FROM_ALL)
 
 add_subdirectory("ext/PluginAPI" EXCLUDE_FROM_ALL)
 
+set(CLI11_PRECOMPILED ON)
+add_subdirectory("ext/cli11" EXCLUDE_FROM_ALL)
+
 add_library(skia INTERFACE IMPORTED)
 if (DEFINED MILESTRO_SKIA_LIB_PATH AND DEFINED MILESTRO_SKIA_INCLUDE_PATH)
     if (MSVC)
@@ -172,7 +175,19 @@ endif ()
 
 #############################################################
 # Setup Milestro
-set(PROJECT_PLATFORM_DEFINITIONS "MILESTRO_BUILDING_ENV")
+set(MILESTRO_DEFINITIONS "MILESTRO_BUILDING_ENV")
+set(MILESTRO_CLI_DEFINITIONS "MILESTRO_BUILDING_ENV")
+
+set(MILESTRO_INCLUDES ${MILESTRO_SKIA_INCLUDE_PATH})
+set(MILESTRO_CLI_INCLUDES ${MILESTRO_SKIA_INCLUDE_PATH} "${PROJECT_SOURCE_DIR}/ext/json/include")
+
+set(MILESTRO_LIBRARIES)
+set(MILESTRO_CLI_LIBRARIES)
+
+if (MILESTRO_ENABLE_CLI)
+    set(MILESTRO_DEFINITIONS ${MILESTRO_DEFINITIONS} "MILESTRO_USE_CLI")
+    set(MILESTRO_CLI_DEFINITIONS ${MILESTRO_CLI_DEFINITIONS} "MILESTRO_USE_CLI")
+endif ()
 
 set(
         MILESTRO_CORE_FILE
@@ -205,7 +220,12 @@ set(
         src/game/milestro_game_skia_textlayout_textstyle.cpp
 )
 
-set(PROJECT_PLATFORM_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${CMAKE_CURRENT_BINARY_DIR}/include)
+set(
+        MILESTRO_CMD_FILE
+        apps/cmd/cli.cpp
+)
+
+set(MILESTRO_INCLUDES ${MILESTRO_INCLUDES} ${CMAKE_CURRENT_BINARY_DIR}/include)
 
 set(
         PUBLIC_GAME_INTERFACE
@@ -221,12 +241,12 @@ else ()
     add_library(Milestro STATIC ${MILESTRO_CORE_FILE} ${MILESTRO_APPLICATION_FILE})
 endif ()
 
-target_compile_definitions(Milestro PUBLIC ${PROJECT_PLATFORM_DEFINITIONS})
+target_compile_definitions(Milestro PUBLIC ${MILESTRO_DEFINITIONS})
 
 target_include_directories(Milestro
         PUBLIC
         include
-        ${PROJECT_PLATFORM_INCLUDES}
+        ${MILESTRO_INCLUDES}
         PRIVATE
         src
 )
@@ -234,6 +254,7 @@ target_include_directories(Milestro
 target_link_libraries(Milestro
         PRIVATE
         UnityPluginAPI
+        ${MILESTRO_LIBRARIES}
         PUBLIC
         spdlog::spdlog
         skia
@@ -241,10 +262,41 @@ target_link_libraries(Milestro
 )
 
 if (MSVC)
-#    set_target_properties(Milestro PROPERTIES LIBRARY_OUTPUT_NAME  "libMilestro")
-    set_target_properties(Milestro PROPERTIES RUNTIME_OUTPUT_NAME  "libMilestro")
-#    set_target_properties(Milestro PROPERTIES ARCHIVE_OUTPUT_NAME  "libMilestro")
+    #    set_target_properties(Milestro PROPERTIES LIBRARY_OUTPUT_NAME  "libMilestro")
+    set_target_properties(Milestro PROPERTIES RUNTIME_OUTPUT_NAME "libMilestro")
+    #    set_target_properties(Milestro PROPERTIES ARCHIVE_OUTPUT_NAME  "libMilestro")
 endif ()
+
+if (MILESTRO_ENABLE_CLI)
+    add_executable(MilestroCli ${MILESTRO_CMD_FILE})
+    target_compile_definitions(MilestroCli PRIVATE Milestro ${MILESTRO_CLI_DEFINITIONS})
+    target_link_libraries(MilestroCli
+            PRIVATE
+            Milestro
+            ${MILESTRO_CLI_LIBRARIES}
+            nlohmann_json::nlohmann_json
+            CLI11::CLI11
+            skia
+    )
+    target_include_directories(MilestroCli PRIVATE ${MILESTRO_CLI_INCLUDES})
+
+    if (WIN32)
+        if (MINGW)
+            target_link_options(MilestroCli BEFORE PRIVATE "-static")
+        endif ()
+    elseif (LINUX)
+        if (NOT ANDROID)
+            # Excluding Android
+            # Android defaults to static linking with libc++, no tinkering needed.
+            target_link_options(MilestroCli BEFORE PRIVATE "-static-libstdc++")
+        endif ()
+        #        elseif (APPLE)
+        #            target_link_options(MilestroCli BEFORE PRIVATE "-static-libgcc -static-libstdc++")
+    endif ()
+
+    install(TARGETS MilestroCli DESTINATION bin)
+endif ()
+
 
 if (CMAKE_HOST_WIN32)
     add_custom_target(H2CS

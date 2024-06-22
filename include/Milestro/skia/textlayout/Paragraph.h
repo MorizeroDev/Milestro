@@ -4,13 +4,14 @@
 #include "modules/skparagraph/include/ParagraphBuilder.h"
 #include "ParagraphStyle.h"
 #include "FontCollection.h"
-#include "skia/Unicode.h"
+#include "Milestro/skia/Unicode.h"
 #include "TextStyle.h"
-#include "skia/Canvas.h"
+#include "Milestro/skia/Canvas.h"
 #include "Milestro/util/milestro_serializerable.h"
 
 namespace milestro::skia::textlayout {
-class SplittedGlyphInfo : public milestro::util::serialization::serializable {
+
+class MILESTRO_API SplittedGlyphInfo : public milestro::util::serialization::serializable {
 public:
     std::vector<SkRect> bounds;
     nlohmann::json toJson() override {
@@ -27,7 +28,7 @@ public:
     }
 };
 
-class Paragraph {
+class MILESTRO_API Paragraph {
 public :
     Paragraph(std::unique_ptr<::skia::textlayout::Paragraph> &&paragraph) {
         this->paragraph = std::move(paragraph);

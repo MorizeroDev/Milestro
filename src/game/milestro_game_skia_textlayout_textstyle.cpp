@@ -1,8 +1,8 @@
 #include <Milestro/game/milestro_game_interface.h>
 #include <Milestro/log/log.h>
 #include "milestro_game_retcode.h"
-#include "skia/textlayout/TextStyle.h"
-#include "skia/FontManager.h"
+#include "Milestro/skia/textlayout/TextStyle.h"
+#include "Milestro/skia/FontManager.h"
 
 extern "C" {
 int64_t MilestroSkiaTextlayoutTextStyleCreate(milestro::skia::textlayout::TextStyle *&ret) try {

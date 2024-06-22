@@ -3,9 +3,11 @@
 
 #include "modules/skparagraph/include/ParagraphStyle.h"
 #include "TextStyle.h"
+#include "Milestro/common/milestro_export_macros.h"
 
 namespace milestro::skia::textlayout {
-class StrutStyle {
+
+class MILESTRO_API StrutStyle {
 public:
     StrutStyle() {}
 
@@ -48,7 +50,7 @@ private:
     ::skia::textlayout::StrutStyle style;
 };
 
-class ParagraphStyle {
+class MILESTRO_API ParagraphStyle {
 public:
     StrutStyle *getStrutStyle() const { return new StrutStyle(style.getStrutStyle()); }
     void setStrutStyle(StrutStyle *strutStyle) { style.setStrutStyle(strutStyle->spawn()); }

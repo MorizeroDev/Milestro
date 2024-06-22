@@ -41,4 +41,10 @@
 #define MILESTRO_API
 #endif // defined(MILESTRO_DLL)
 
+#if MILESTRO_USE_CLI
+#define MILESTROCLI_API MILESTRO_API
+#else
+#define MILESTROCLI_API
+#endif
+
 #endif
