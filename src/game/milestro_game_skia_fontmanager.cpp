@@ -7,6 +7,9 @@ extern "C" {
 int64_t MilestroSkiaFontManagerRegisterFont(uint8_t *path, milestro::skia::Typeface *&typeFace) {
     auto fontMgr = milestro::skia::GetFontManager();
     typeFace = fontMgr->RegisterFont(reinterpret_cast<char *>(path));
+    if (!typeFace) {
+        return MILESTRO_API_RET_FAILED;
+    }
     return MILESTRO_API_RET_OK;
 }
 
