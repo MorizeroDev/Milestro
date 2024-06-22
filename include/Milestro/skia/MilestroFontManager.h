@@ -9,6 +9,7 @@
 #include "include/private/base/SkTArray.h"
 #include "Milestro/common/milestro_export_macros.h"
 #include <vector>
+#include <src/ports/SkTypeface_FreeType.h>
 
 class SkData;
 class SkStreamAsset;
@@ -38,7 +39,7 @@ private:
 class MILESTRO_API MilestroFontManager : public SkFontMgr {
 public:
     explicit MilestroFontManager();
-    void registerTypeface(sk_sp<SkTypeface> typeface);
+    bool registerTypeface(char *path);
 
 protected:
     int onCountFamilies() const override;
@@ -57,11 +58,9 @@ protected:
     sk_sp<SkTypeface> onLegacyMakeTypeface(const char familyName[], SkFontStyle style) const override;
 
 private:
-    bool isValidAndUniqueFontName(SkString name);
-
+    std::unique_ptr<SkFontScanner_FreeType> fScanner;
     std::vector<sk_sp<MilestroFontStyleSet>> fFamilies;
     sk_sp<SkFontStyleSet> fDefaultFamily;
-
     sk_sp<SkFontMgr> backend;
 };
 

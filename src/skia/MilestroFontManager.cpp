@@ -11,6 +11,7 @@
 #include "Milestro/skia/MilestroFontManager.h"
 #include "Milestro/skia/Typeface.h"
 #include <memory>
+#include <src/ports/SkFontMgr_custom.h>
 
 #if _WIN32
 
@@ -22,7 +23,8 @@ class SkData;
 namespace milestro::skia {
 
 MilestroFontStyleSet::MilestroFontStyleSet(SkString familyName)
-    : fFamilyName(std::move(familyName)) {}
+    : fFamilyName(std::move(familyName)) {
+}
 
 void MilestroFontStyleSet::appendTypeface(sk_sp<SkTypeface> typeface) {
     fStyles.emplace_back(std::move(typeface));
@@ -53,7 +55,8 @@ sk_sp<SkTypeface> MilestroFontStyleSet::matchStyle(const SkFontStyle &pattern) {
 
 SkString MilestroFontStyleSet::getFamilyName() { return fFamilyName; }
 
-MilestroFontManager::MilestroFontManager() : fDefaultFamily(nullptr) {
+MilestroFontManager::MilestroFontManager() : fDefaultFamily(nullptr),
+                                             fScanner(std::make_unique<SkFontScanner_FreeType>()) {
 #if _WIN32
     backend = SkFontMgr_New_DirectWrite();
 #else
@@ -133,45 +136,57 @@ sk_sp<SkTypeface> MilestroFontManager::onLegacyMakeTypeface(const char familyNam
     return tf;
 }
 
-bool MilestroFontManager::isValidAndUniqueFontName(const SkString name) {
-    size_t i = 0;
-    for (i = 0; i < name.size(); i++) {
-        auto rune = name[i];
-        if (rune != '_' && rune != ' ' && rune != '!') {
-            break;
-        }
-    }
-    if (i == name.size()) {
+bool MilestroFontManager::registerTypeface(char *path) {
+    SkString filename(path);
+    std::unique_ptr<SkStreamAsset> stream = SkStream::MakeFromFile(filename.c_str());
+    if (!stream) {
+        MILESTROLOG_DEBUG("---- failed to open: {}", filename.c_str());
         return false;
     }
 
-    for (const auto &family : fFamilies) {
-        if (family->getFamilyName() == name) {
-            return false;
-        }
+    int numFaces;
+    if (!fScanner->scanFile(stream.get(), &numFaces)) {
+        MILESTROLOG_DEBUG("---- failed to open file as a fount: {} ", filename.c_str());
+        return false;
     }
 
-    return true;
-}
-
-void MilestroFontManager::registerTypeface(sk_sp<SkTypeface> typeface) {
-    auto familyNames = typeface->createFamilyNameIterator();
-    SkTypeface::LocalizedString famName;
-    famName.fString = " ";
-    famName.fLanguage = " ";
-
-    while (familyNames->next(&famName)) {
-        auto name = famName.fString;
-        if (!isValidAndUniqueFontName(name)) {
+    for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
+        int numInstances;
+        if (!fScanner->scanFace(stream.get(), faceIndex, &numInstances)) {
+            // SkDebugf("---- failed to open <%s> as a font\n", filename.c_str());
             continue;
         }
+        for (int instanceIndex = 0; instanceIndex <= numInstances; ++instanceIndex) {
+            bool isFixedPitch;
+            SkString realname;
+            SkFontStyle style = SkFontStyle(); // avoid uninitialized warning
+            if (!fScanner->scanInstance(stream.get(),
+                                        faceIndex,
+                                        instanceIndex,
+                                        &realname,
+                                        &style,
+                                        &isFixedPitch,
+                                        nullptr)) {
+                SkDebugf("---- failed to open fileface as a font. file:{} face:{}", filename.c_str(), faceIndex);
+                continue;
+            }
 
-        auto family = sk_make_sp<MilestroFontStyleSet>(name);
-        family->appendTypeface(typeface);
-        fFamilies.push_back(family);
+            sk_sp<MilestroFontStyleSet> addTo = nullptr;
+            for (auto item : fFamilies) {
+                if (item->getFamilyName() == realname) {
+                    addTo = item;
+                }
+            }
+            if (!addTo) {
+                addTo = sk_make_sp<MilestroFontStyleSet>(realname);
+                fFamilies.push_back(addTo);
+            }
+            addTo->appendTypeface(sk_make_sp<SkTypeface_File>(
+                style, isFixedPitch, true, realname, filename.c_str(),
+                (instanceIndex << 16) + faceIndex));
+        }
     }
-
-    familyNames->unref();
+    return true;
 }
 
 }

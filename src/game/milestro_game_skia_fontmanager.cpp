@@ -4,10 +4,10 @@
 #include "Milestro/util/milestro_strutil.h"
 
 extern "C" {
-int64_t MilestroSkiaFontManagerRegisterFont(uint8_t *path, milestro::skia::Typeface *&typeFace) {
+int64_t MilestroSkiaFontManagerRegisterFont(uint8_t *path) {
     auto fontMgr = milestro::skia::GetFontManager();
-    typeFace = fontMgr->RegisterFont(reinterpret_cast<char *>(path));
-    if (!typeFace) {
+    auto ok = fontMgr->RegisterFont(reinterpret_cast<char *>(path));
+    if (!ok) {
         return MILESTRO_API_RET_FAILED;
     }
     return MILESTRO_API_RET_OK;

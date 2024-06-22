@@ -23,26 +23,8 @@ public:
 
     MILESTRO_DECLARE_NON_COPYABLE(FontManager)
 
-    Typeface *RegisterFont(char *path) {
-        MILESTROLOG_DEBUG("RegisterFont: Attempting to register font from path: {}", path);
-
-        auto stream = SkStream::MakeFromFile(path);
-        if (!stream) {
-            MILESTROLOG_DEBUG("RegisterFont: Failed to create stream from file: {}", path);
-            return nullptr;
-        }
-
-        auto typeface = fontMgr->makeFromStream(std::move(stream));
-        if (!typeface) {
-            MILESTROLOG_DEBUG("RegisterFont: Failed to create typeface from stream");
-            return nullptr;
-        }
-
-        fontMgr->registerTypeface(typeface);
-        auto ret = new Typeface(std::move(typeface));
-
-        MILESTROLOG_DEBUG("RegisterFont: Successfully registered font from path: {}", path);
-        return ret;
+    bool RegisterFont(char *path) {
+        return fontMgr->registerTypeface(path);
     }
 
     std::vector<std::string> GetFamiliesNames() {
