@@ -28,13 +28,13 @@ extern "C" {
 // 返回值为大版本号 major
 MILESTRO_API int64_t MilestroGetVersion(int32_t &major, int32_t &minor, int32_t &patch);
 
-MILESTRO_API int64_t MilestroSkiaFontManagerRegisterFont(uint8_t *path, milestro::skia::TypeFace *&typeFace);
+MILESTRO_API int64_t MilestroSkiaFontManagerRegisterFont(uint8_t *path, milestro::skia::Typeface *&typeFace);
 MILESTRO_API int64_t MilestroSkiaFontManagerGetFontFamilies(uint8_t *buffer,
                                                             uint64_t bufferSize,
                                                             uint64_t &needed);
 
-MILESTRO_API int64_t MilestroSkiaTypeFaceDestroy(milestro::skia::TypeFace *&ret);
-MILESTRO_API int64_t MilestroSkiaTypeFaceGetFamilyNames(milestro::skia::TypeFace *typeFace,
+MILESTRO_API int64_t MilestroSkiaTypefaceDestroy(milestro::skia::Typeface *&ret);
+MILESTRO_API int64_t MilestroSkiaTypefaceGetFamilyNames(milestro::skia::Typeface *typeFace,
                                                         uint8_t *buffer,
                                                         uint64_t bufferSize,
                                                         uint64_t &needed);
@@ -244,8 +244,8 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetWordSpacing(milestro::ski
                                                                    float wordSpacing);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetWordSpacing(milestro::skia::textlayout::TextStyle *s,
                                                                    float &wordSpacing);
-MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetTypeFace(milestro::skia::textlayout::TextStyle *s,
-                                                                milestro::skia::TypeFace *typeFace);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetTypeface(milestro::skia::textlayout::TextStyle *s,
+                                                                milestro::skia::Typeface *typeFace);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetLocale(milestro::skia::textlayout::TextStyle *s,
                                                               uint8_t *locale);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetTextBaseline(milestro::skia::textlayout::TextStyle *s,

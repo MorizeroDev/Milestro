@@ -199,7 +199,7 @@ set(
         src/skia/MilestroFontManager.cpp
         src/skia/Unicode.cpp
         src/skia/Canvas.cpp
-        src/skia/TypeFace.cpp
+        src/skia/Typeface.cpp
         src/skia/textlayout/TextStyle.cpp
         src/skia/textlayout/FontCollection.cpp
         src/skia/textlayout/ParagraphStyle.cpp

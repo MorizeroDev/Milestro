@@ -21,9 +21,9 @@ public:
     }
 };
 
-class MILESTRO_API TypeFace {
+class MILESTRO_API Typeface {
 public:
-    explicit TypeFace(sk_sp<SkTypeface> typeFace) {
+    explicit Typeface(sk_sp<SkTypeface> typeFace) {
         this->typeFace = std::move(typeFace);
     }
 
@@ -49,7 +49,7 @@ public:
         return std::move(ret);
     }
 
-    MILESTRO_DECLARE_NON_COPYABLE(TypeFace)
+    MILESTRO_DECLARE_NON_COPYABLE(Typeface)
 private:
     sk_sp<SkTypeface> typeFace;
 };

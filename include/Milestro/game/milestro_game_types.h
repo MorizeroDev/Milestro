@@ -14,7 +14,7 @@
 namespace milestro {
 namespace skia {
 class Canvas;
-class TypeFace;
+class Typeface;
 namespace textlayout {
 class Paragraph;
 class ParagraphBuilder;

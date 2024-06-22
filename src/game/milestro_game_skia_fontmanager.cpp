@@ -4,7 +4,7 @@
 #include "Milestro/util/milestro_strutil.h"
 
 extern "C" {
-int64_t MilestroSkiaFontManagerRegisterFont(uint8_t *path, milestro::skia::TypeFace *&typeFace) {
+int64_t MilestroSkiaFontManagerRegisterFont(uint8_t *path, milestro::skia::Typeface *&typeFace) {
     auto fontMgr = milestro::skia::GetFontManager();
     typeFace = fontMgr->RegisterFont(reinterpret_cast<char *>(path));
     return MILESTRO_API_RET_OK;
@@ -20,7 +20,7 @@ int64_t MilestroSkiaFontManagerGetFontFamilies(uint8_t *buffer,
     return static_cast<int64_t>(milestro::util::copyStringToBuffer(result, buffer, bufferSize));
 }
 
-int64_t MilestroSkiaTypeFaceDestroy(milestro::skia::TypeFace *&ret) try {
+int64_t MilestroSkiaTypefaceDestroy(milestro::skia::Typeface *&ret) try {
     delete ret;
     ret = nullptr;
     return MILESTRO_API_RET_OK;
@@ -28,7 +28,7 @@ int64_t MilestroSkiaTypeFaceDestroy(milestro::skia::TypeFace *&ret) try {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTypeFaceGetFamilyNames(milestro::skia::TypeFace *typeFace,
+int64_t MilestroSkiaTypefaceGetFamilyNames(milestro::skia::Typeface *typeFace,
                                            uint8_t *buffer,
                                            uint64_t bufferSize,
                                            uint64_t &needed) try {

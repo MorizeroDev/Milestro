@@ -250,8 +250,8 @@ int64_t MilestroSkiaTextlayoutTextStyleGetWordSpacing(milestro::skia::textlayout
     return MILESTRO_API_RET_OK;
 }
 
-int64_t MilestroSkiaTextlayoutTextStyleSetTypeFace(milestro::skia::textlayout::TextStyle *s,
-                                                   milestro::skia::TypeFace *typeFace) {
+int64_t MilestroSkiaTextlayoutTextStyleSetTypeface(milestro::skia::textlayout::TextStyle *s,
+                                                   milestro::skia::Typeface *typeFace) {
     s->setTypeface(typeFace->unwrap());
     return MILESTRO_API_RET_OK;
 }

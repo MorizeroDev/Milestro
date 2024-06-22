@@ -38,7 +38,7 @@ private:
 class MILESTRO_API MilestroFontManager : public SkFontMgr {
 public:
     explicit MilestroFontManager();
-    void registerTypeFace(sk_sp<SkTypeface> typeFace);
+    void registerTypeface(sk_sp<SkTypeface> typeface);
 
 protected:
     int onCountFamilies() const override;
