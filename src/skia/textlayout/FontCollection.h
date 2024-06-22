@@ -19,6 +19,9 @@ public:
         return fontCollection;
     }
 
+    void foo() {
+    }
+
 private:
     sk_sp<::skia::textlayout::FontCollection> fontCollection;
 };

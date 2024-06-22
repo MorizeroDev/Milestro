@@ -1,21 +1,11 @@
+#include <src/ports/SkFontMgr_custom.h>
 #include "FontManager.h"
 #include "Milestro/log/log.h"
 
-#if WIN32
-
-#include "include/ports/SkTypeface_win.h"
-
-#endif
-
 namespace milestro::skia {
 
-inline sk_sp<SkFontMgr> MakeSkFontMgr() {
-    sk_sp<SkFontMgr> result;
-#if WIN32
-    result = SkFontMgr_New_DirectWrite();
-#else
-#error No SkFontMgr Provider
-#endif
+inline sk_sp<MilestroFontManager> MakeSkFontMgr() {
+    sk_sp<MilestroFontManager> result = sk_make_sp<MilestroFontManager>();
     return result;
 }
 

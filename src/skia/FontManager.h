@@ -8,6 +8,7 @@
 #include "Milestro/common/milestro_result.h"
 #include "Milestro/log/log.h"
 #include "TypeFace.h"
+#include "MilestroFontManager.h"
 #include <string>
 #include <utility>
 
@@ -15,7 +16,7 @@ namespace milestro::skia {
 
 class FontManager {
 public:
-    explicit FontManager(sk_sp<SkFontMgr> fontMgr) {
+    explicit FontManager(sk_sp<MilestroFontManager> fontMgr) {
         this->fontMgr = std::move(fontMgr);
     }
 
@@ -23,6 +24,7 @@ public:
 
     TypeFace *RegisterFont(char *path) {
         auto typeFace = fontMgr->makeFromFile(path);
+        fontMgr->registerTypeFace(typeFace);
         auto ret = new TypeFace(std::move(typeFace));
         return ret;
     }
@@ -32,7 +34,7 @@ public:
         for (int i = 0; i < fontMgr->countFamilies(); i++) {
             SkString famName;
             fontMgr->getFamilyName(i, &famName);
-            ret.emplace_back(std::string(famName.c_str()));
+            ret.emplace_back(famName.c_str());
         }
         return ret;
     }
@@ -42,7 +44,7 @@ public:
     }
 
 private:
-    sk_sp<SkFontMgr> fontMgr;
+    sk_sp<MilestroFontManager> fontMgr;
 };
 
 FontManager *GetFontManager();

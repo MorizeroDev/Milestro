@@ -1,21 +1,12 @@
 #include "Unicode.h"
 #include "Milestro/log/log.h"
-
-#if WIN32
-
 #include <modules/skunicode/include/SkUnicode_icu.h>
-
-#endif
 
 namespace milestro::skia {
 
 inline sk_sp<SkUnicode> MakeSkUnicode() {
     sk_sp<SkUnicode> result;
-#if WIN32
     result = SkUnicodes::ICU::Make();
-#else
-#error No SkUnicode Provider
-#endif
     return result;
 }
 

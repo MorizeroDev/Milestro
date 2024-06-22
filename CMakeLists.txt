@@ -181,6 +181,7 @@ set(
         src/log/log_unitylog.cpp
 
         src/skia/FontManager.cpp
+        src/skia/MilestroFontManager.cpp
         src/skia/Unicode.cpp
         src/skia/Canvas.cpp
         src/skia/TypeFace.cpp
