@@ -20,7 +20,7 @@ private fun List<String>?.typeToCS(): String {
         listOf("double") to "double",
 
         listOf("milestro::skia::Canvas") to "IntPtr",
-        listOf("milestro::skia::TypeFace") to "IntPtr",
+        listOf("milestro::skia::Typeface") to "IntPtr",
         listOf("milestro::skia::textlayout::Paragraph") to "IntPtr",
         listOf("milestro::skia::textlayout::ParagraphBuilder") to "IntPtr",
         listOf("milestro::skia::textlayout::ParagraphStyle") to "IntPtr",
