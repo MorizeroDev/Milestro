@@ -9,11 +9,6 @@ int64_t MilestroSkiaFontManagerRegisterFontFromFile(uint8_t *path) {
     return (int64_t) fontMgr->RegisterFontFromFile(reinterpret_cast<char *>(path));
 }
 
-int64_t MilestroSkiaFontManagerRegisterFontFromMemory(uint8_t *fileName, uint8_t *data, uint64_t length) {
-    auto fontMgr = milestro::skia::GetFontManager();
-    return (int64_t) fontMgr->RegisterFontFromMemory(reinterpret_cast<char *>(fileName), data, length);
-}
-
 int64_t MilestroSkiaFontManagerGetFontFamilies(uint8_t *buffer,
                                                uint64_t bufferSize,
                                                uint64_t &needed) {

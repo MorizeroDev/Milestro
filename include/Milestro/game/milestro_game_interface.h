@@ -29,7 +29,6 @@ extern "C" {
 MILESTRO_API int64_t MilestroGetVersion(int32_t &major, int32_t &minor, int32_t &patch);
 
 MILESTRO_API int64_t MilestroSkiaFontManagerRegisterFontFromFile(uint8_t *path);
-MILESTRO_API int64_t MilestroSkiaFontManagerRegisterFontFromMemory(uint8_t *fileName, uint8_t *data, uint64_t length);
 MILESTRO_API int64_t MilestroSkiaFontManagerGetFontFamilies(uint8_t *buffer,
                                                             uint64_t bufferSize,
                                                             uint64_t &needed);

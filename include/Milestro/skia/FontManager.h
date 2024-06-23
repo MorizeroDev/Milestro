@@ -29,11 +29,6 @@ public:
         return fontMgr->registerFont(std::move(stream), SkString(path));
     }
 
-    MilestroFontManager::RegisterResult RegisterFontFromMemory(char *fileName, void *data, size_t length) {
-        auto stream = std::make_unique<SkMemoryStream>(data, length, true);
-        return fontMgr->registerFont(std::move(stream), SkString(fileName));
-    }
-
     std::vector<std::string> GetFamiliesNames() {
         std::vector<std::string> ret;
         for (int i = 0; i < fontMgr->countFamilies(); i++) {
