@@ -23,8 +23,15 @@ public:
 
     MILESTRO_DECLARE_NON_COPYABLE(FontManager)
 
-    bool RegisterFont(char *path) {
-        return fontMgr->registerTypeface(path);
+    MilestroFontManager::RegisterResult RegisterFontFromFile(char *path) {
+        SkString filename(path);
+        auto stream = SkStream::MakeFromFile(filename.c_str());
+        return fontMgr->registerFont(std::move(stream), SkString(path));
+    }
+
+    MilestroFontManager::RegisterResult RegisterFontFromMemory(char *fileName, void *data, size_t length) {
+        auto stream = std::make_unique<SkMemoryStream>(data, length, true);
+        return fontMgr->registerFont(std::move(stream), SkString(fileName));
     }
 
     std::vector<std::string> GetFamiliesNames() {

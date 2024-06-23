@@ -28,7 +28,8 @@ extern "C" {
 // 返回值为大版本号 major
 MILESTRO_API int64_t MilestroGetVersion(int32_t &major, int32_t &minor, int32_t &patch);
 
-MILESTRO_API int64_t MilestroSkiaFontManagerRegisterFont(uint8_t *path);
+MILESTRO_API int64_t MilestroSkiaFontManagerRegisterFontFromFile(uint8_t *path);
+MILESTRO_API int64_t MilestroSkiaFontManagerRegisterFontFromMemory(uint8_t *fileName, uint8_t *data, uint64_t length);
 MILESTRO_API int64_t MilestroSkiaFontManagerGetFontFamilies(uint8_t *buffer,
                                                             uint64_t bufferSize,
                                                             uint64_t &needed);
@@ -50,10 +51,10 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphPaint(milestro::skia::textla
                                                           milestro::skia::Canvas *canvas,
                                                           float x, float y);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphSplitGlyph(milestro::skia::textlayout::Paragraph *p,
-                                                  float x, float y,
-                                                  uint8_t *buffer,
-                                                  uint64_t bufferSize,
-                                                  uint64_t &needed);
+                                                               float x, float y,
+                                                               uint8_t *buffer,
+                                                               uint64_t bufferSize,
+                                                               uint64_t &needed);
 
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderCreate(milestro::skia::textlayout::ParagraphBuilder *&ret,
                                                                   milestro::skia::textlayout::ParagraphStyle *style);

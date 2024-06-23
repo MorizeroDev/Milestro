@@ -13,12 +13,6 @@
 #include <memory>
 #include <src/ports/SkFontMgr_custom.h>
 
-#if _WIN32
-
-#include "include/ports/SkTypeface_win.h"
-
-#endif
-
 class SkData;
 namespace milestro::skia {
 
@@ -57,11 +51,6 @@ SkString MilestroFontStyleSet::getFamilyName() { return fFamilyName; }
 
 MilestroFontManager::MilestroFontManager() : fDefaultFamily(nullptr),
                                              fScanner(std::make_unique<SkFontScanner_FreeType>()) {
-#if _WIN32
-    backend = SkFontMgr_New_DirectWrite();
-#else
-#error No SkFontMgr Provider
-#endif
 }
 
 int MilestroFontManager::onCountFamilies() const {
@@ -101,25 +90,21 @@ sk_sp<SkTypeface> MilestroFontManager::onMatchFamilyStyleCharacter(
 }
 
 sk_sp<SkTypeface> MilestroFontManager::onMakeFromData(sk_sp<SkData> data, int ttcIndex) const {
-    auto ret = backend->makeFromData(data, ttcIndex);
-    return ret;
+    return nullptr;
 }
 
 sk_sp<SkTypeface> MilestroFontManager::onMakeFromStreamIndex(std::unique_ptr<SkStreamAsset> stream,
                                                              int ttcIndex) const {
-    auto ret = backend->makeFromStream(std::move(stream), ttcIndex);
-    return ret;
+    return nullptr;
 }
 
 sk_sp<SkTypeface> MilestroFontManager::onMakeFromStreamArgs(std::unique_ptr<SkStreamAsset> stream,
                                                             const SkFontArguments &args) const {
-    auto ret = backend->makeFromStream(std::move(stream), args);
-    return ret;
+    return nullptr;
 }
 
 sk_sp<SkTypeface> MilestroFontManager::onMakeFromFile(const char path[], int ttcIndex) const {
-    auto ret = backend->makeFromFile(path, ttcIndex);
-    return ret;
+    return nullptr;
 }
 
 sk_sp<SkTypeface> MilestroFontManager::onLegacyMakeTypeface(const char familyName[],
@@ -136,18 +121,27 @@ sk_sp<SkTypeface> MilestroFontManager::onLegacyMakeTypeface(const char familyNam
     return tf;
 }
 
-bool MilestroFontManager::registerTypeface(char *path) {
-    SkString filename(path);
-    std::unique_ptr<SkStreamAsset> stream = SkStream::MakeFromFile(filename.c_str());
+MilestroFontManager::RegisterResult MilestroFontManager::registerFont(std::unique_ptr<SkStreamAsset> stream,
+                                                                      const SkString &filename) {
+    bool exists =
+        std::any_of(fFontRegistered.begin(), fFontRegistered.end(), [&filename](const SkString &registeredFilename) {
+            return registeredFilename.equals(filename);
+        });
+    if (exists) {
+        MILESTROLOG_DEBUG("---- already exist: {}", filename.c_str());
+        return RegisterResult::Duplicated;
+    }
+    fFontRegistered.push_back(filename);
+
     if (!stream) {
         MILESTROLOG_DEBUG("---- failed to open: {}", filename.c_str());
-        return false;
+        return RegisterResult::Failed;
     }
 
     int numFaces;
     if (!fScanner->scanFile(stream.get(), &numFaces)) {
         MILESTROLOG_DEBUG("---- failed to open file as a fount: {} ", filename.c_str());
-        return false;
+        return RegisterResult::Failed;
     }
 
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
@@ -186,7 +180,8 @@ bool MilestroFontManager::registerTypeface(char *path) {
                 (instanceIndex << 16) + faceIndex));
         }
     }
-    return true;
+//    fStreamHolder.emplace_back(std::move(stream));
+    return RegisterResult::Succeed;
 }
 
 }

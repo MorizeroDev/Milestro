@@ -38,8 +38,15 @@ private:
 
 class MILESTRO_API MilestroFontManager : public SkFontMgr {
 public:
+    enum class RegisterResult : int32_t {
+        Succeed = 0,
+        Duplicated = 1,
+        Failed = -1,
+    };
+
     explicit MilestroFontManager();
-    bool registerTypeface(char *path);
+
+    MilestroFontManager::RegisterResult registerFont(std::unique_ptr<SkStreamAsset> stream, const SkString &filename);
 
 protected:
     int onCountFamilies() const override;
@@ -60,8 +67,9 @@ protected:
 private:
     std::unique_ptr<SkFontScanner_FreeType> fScanner;
     std::vector<sk_sp<MilestroFontStyleSet>> fFamilies;
+    std::vector<SkString> fFontRegistered;
     sk_sp<SkFontStyleSet> fDefaultFamily;
-    sk_sp<SkFontMgr> backend;
+//    std::vector<std::unique_ptr<SkStreamAsset>> fStreamHolder;
 };
 
 }
