@@ -49,8 +49,7 @@ sk_sp<SkTypeface> MilestroFontStyleSet::matchStyle(const SkFontStyle &pattern) {
 
 SkString MilestroFontStyleSet::getFamilyName() { return fFamilyName; }
 
-MilestroFontManager::MilestroFontManager() : fDefaultFamily(nullptr),
-                                             fScanner(std::make_unique<SkFontScanner_FreeType>()) {
+MilestroFontManager::MilestroFontManager() : fScanner(std::make_unique<SkFontScanner_FreeType>()) {
 }
 
 int MilestroFontManager::onCountFamilies() const {
@@ -115,9 +114,6 @@ sk_sp<SkTypeface> MilestroFontManager::onLegacyMakeTypeface(const char familyNam
         tf = this->onMatchFamilyStyle(familyName, style);
     }
 
-    if (!tf && fDefaultFamily) {
-        tf = fDefaultFamily->matchStyle(style);
-    }
     return tf;
 }
 

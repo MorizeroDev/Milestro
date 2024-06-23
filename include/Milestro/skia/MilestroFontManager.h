@@ -68,7 +68,6 @@ private:
     std::unique_ptr<SkFontScanner_FreeType> fScanner;
     std::vector<sk_sp<MilestroFontStyleSet>> fFamilies;
     std::vector<SkString> fFontRegistered;
-    sk_sp<SkFontStyleSet> fDefaultFamily;
 //    std::vector<std::unique_ptr<SkStreamAsset>> fStreamHolder;
 };
 
