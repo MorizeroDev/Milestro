@@ -3,7 +3,7 @@
 using namespace milestro::skia::textlayout;
 
 SplittedGlyphInfo Paragraph::splitGlyph(SkScalar x, SkScalar y) {
-    SkPoint textRenderLeftTop(x, y);
+    SkPoint textRenderLeftTop = SkPoint::Make(x, y);
     std::vector<SkRect> boundList;
     paragraph->extendedVisit([&](int lineNumber, const ::skia::textlayout::Paragraph::ExtendedVisitorInfo *info) {
         if (info == nullptr) {
