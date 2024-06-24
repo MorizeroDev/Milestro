@@ -7,7 +7,7 @@
 
 namespace milestro::skia::textlayout {
 
-std::unique_ptr<FontCollection> FontCollectionInstance = nullptr;
+static std::unique_ptr<FontCollection> FontCollectionInstance = nullptr;
 
 Result<void, std::string> InitialFontCollection() {
     auto fontCollection = sk_make_sp<::skia::textlayout::FontCollection>();
@@ -29,6 +29,7 @@ FontCollection *GetFontCollection() {
         }
     }
 
+    assert(FontCollectionInstance != nullptr && "FontCollectionInstance is null");
     return FontCollectionInstance.get();
 }
 

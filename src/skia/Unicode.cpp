@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include "Milestro/skia/Unicode.h"
 #include "Milestro/log/log.h"
 #include <modules/skunicode/include/SkUnicode_icu.h>
@@ -10,7 +11,7 @@ inline sk_sp<SkUnicode> MakeSkUnicode() {
     return result;
 }
 
-std::unique_ptr<UnicodeProvider> UnicodeProviderInstance = nullptr;
+static std::unique_ptr<UnicodeProvider> UnicodeProviderInstance = nullptr;
 
 Result<void, std::string> InitialUnicodeProvider() {
     auto skFontMgr = MakeSkUnicode();
@@ -29,6 +30,7 @@ UnicodeProvider *GetUnicodeProvider() {
         }
     }
 
+    assert(UnicodeProviderInstance != nullptr && "UnicodeProviderInstance is null");
     return UnicodeProviderInstance.get();
 }
 

@@ -9,7 +9,7 @@ inline sk_sp<MilestroFontManager> MakeSkFontMgr() {
     return result;
 }
 
-std::unique_ptr<FontManager> FontManagerInstance = nullptr;
+static std::unique_ptr<FontManager> FontManagerInstance = nullptr;
 
 Result<void, std::string> InitialFontManager() {
     auto skFontMgr = MakeSkFontMgr();
