@@ -18,7 +18,7 @@ namespace milestro::skia {
 class MILESTRO_API Canvas {
 public:
     Canvas(int width, int height) {
-        imageInfo = SkImageInfo::MakeN32Premul(width, height);
+        imageInfo = SkImageInfo::MakeN32Premul(width, height).makeColorType(kRGBA_8888_SkColorType);
         bitmap.allocPixels(imageInfo);
         canvas = std::make_unique<SkCanvas>(bitmap);
     }
