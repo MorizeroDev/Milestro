@@ -291,6 +291,19 @@ if (MSVC)
     #    set_target_properties(Milestro PROPERTIES ARCHIVE_OUTPUT_NAME  "libMilestro")
 endif ()
 
+if (MILESTRO_ENABLE_TESTS)
+    include(CTest)
+    enable_testing()
+
+    add_subdirectory(ext/googletest EXCLUDE_FROM_ALL)
+    add_subdirectory(tests)
+    message(STATUS "Building with tests")
+else ()
+    message(STATUS "Building without tests")
+endif ()
+
+
+
 if (MILESTRO_ENABLE_CLI)
     add_executable(MilestroCli ${MILESTRO_CMD_FILE})
     target_compile_definitions(MilestroCli PRIVATE Milestro ${MILESTRO_CLI_DEFINITIONS})
