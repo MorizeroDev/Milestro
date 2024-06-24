@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.26)
 project(Milestro)
 
 option(MILESTRO_BUILD_SHARED_LIBS "Build shared library" ON)
@@ -25,7 +25,7 @@ if (MSVC)
     add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>")
     add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 else ()
-    set(CMAKE_CXX_FLAGS_DEBUG "")
+    set(CMAKE_CXX_FLAGS_DEBUG "-g")
     set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 endif ()
 
@@ -45,6 +45,7 @@ endif ()
 if (MILESTRO_WITH_ADDRESS_SANITIZER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls -fsanitize-recover=address")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fno-omit-frame-pointer -fsanitize=address -fsanitize-recover=address")
+    add_link_options(-fno-omit-frame-pointer -fsanitize=address -fsanitize-recover=address)
 endif ()
 
 if (BUILD_SHARED_LIBS)
@@ -132,10 +133,6 @@ if (ANDROID)
     message(STATUS "NDK_SCRIPT_SUFFIX: ${NDK_SCRIPT_SUFFIX}")
 endif ()
 
-if (NOT APPLE)
-    set(MILESTRO_WITH_JAVASCRIPTCORE OFF)
-endif ()
-
 #############################################################
 # Setup external libraries
 include(ExternalProject)
@@ -172,6 +169,33 @@ if (DEFINED MILESTRO_SKIA_LIB_PATH AND DEFINED MILESTRO_SKIA_INCLUDE_PATH)
 else ()
     message(FATAL_ERROR "No Skia set")
 endif ()
+add_compile_definitions(SK_TRIVIAL_ABI=[[clang::trivial_abi]])
+
+set(PROJECT_PLATFORM_LIBRARIES)
+if (DEFINED APPLE)
+    enable_language(Swift)
+    enable_language(OBJC)
+    enable_language(OBJCXX)
+
+    if ("${CMAKE_Swift_COMPILER_VERSION}" VERSION_LESS 5.9)
+        message(FATAL_ERROR "Bidirectional C++ Interop requires Swift 5.9 or greater. Have ${CMAKE_Swift_COMPILER_VERSION}")
+    endif ()
+
+    if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" AND NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
+        message(FATAL_ERROR "Project requires building with Clang. Have ${CMAKE_CXX_COMPILER_ID}")
+    endif ()
+
+    include(InitializeSwift)
+    include(AddSwift)
+
+    find_library(FOUNDATION Foundation)
+    find_library(COREFOUNDATION CoreFoundation)
+    find_library(CORETEXT CoreText)
+    find_library(CORESERVICES CoreServices)
+    find_library(COREGRAPHICS CoreGraphics)
+    set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES}
+            "${FOUNDATION}" "${CoreFoundation}" "${CORETEXT}" "${CORESERVICES}" "${COREGRAPHICS}")
+endif ()
 
 #############################################################
 # Setup Milestro
@@ -181,8 +205,8 @@ set(MILESTRO_CLI_DEFINITIONS "MILESTRO_BUILDING_ENV")
 set(MILESTRO_INCLUDES ${MILESTRO_SKIA_INCLUDE_PATH})
 set(MILESTRO_CLI_INCLUDES ${MILESTRO_SKIA_INCLUDE_PATH} "${PROJECT_SOURCE_DIR}/ext/json/include")
 
-set(MILESTRO_LIBRARIES)
-set(MILESTRO_CLI_LIBRARIES)
+set(MILESTRO_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES})
+set(MILESTRO_CLI_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES})
 
 if (MILESTRO_ENABLE_CLI)
     set(MILESTRO_DEFINITIONS ${MILESTRO_DEFINITIONS} "MILESTRO_USE_CLI")

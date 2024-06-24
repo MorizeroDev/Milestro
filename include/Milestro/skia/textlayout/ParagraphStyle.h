@@ -98,7 +98,7 @@ private:
     ::skia::textlayout::ParagraphStyle style;
 
 public:
-    const ::skia::textlayout::ParagraphStyle &unwrap() {
+    const ::skia::textlayout::ParagraphStyle unwrap() {
         return style;
     }
 };

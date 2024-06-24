@@ -36,8 +36,6 @@ public:
 
         auto familyNames = typeFace->createFamilyNameIterator();
         SkTypeface::LocalizedString famName;
-        famName.fString = " ";
-        famName.fLanguage = " ";
         while (familyNames->next(&famName)) {
             FontFamilyName item;
             item.name = std::string(famName.fString.c_str());

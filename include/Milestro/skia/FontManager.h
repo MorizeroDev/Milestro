@@ -32,7 +32,7 @@ public:
     std::vector<std::string> GetFamiliesNames() {
         std::vector<std::string> ret;
         for (int i = 0; i < fontMgr->countFamilies(); i++) {
-            SkString famName = SkString(" ");
+            SkString famName;
             fontMgr->getFamilyName(i, &famName);
             ret.emplace_back(famName.c_str());
         }

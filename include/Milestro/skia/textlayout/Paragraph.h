@@ -30,7 +30,7 @@ public:
 
 class MILESTRO_API Paragraph {
 public :
-    Paragraph(std::unique_ptr<::skia::textlayout::Paragraph> &&paragraph) {
+    explicit Paragraph(std::unique_ptr<::skia::textlayout::Paragraph> paragraph) {
         this->paragraph = std::move(paragraph);
     }
 
