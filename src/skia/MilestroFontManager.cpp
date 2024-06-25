@@ -136,7 +136,7 @@ MilestroFontManager::RegisterResult MilestroFontManager::registerFont(std::uniqu
 
     int numFaces;
     if (!fScanner->scanFile(stream.get(), &numFaces)) {
-        MILESTROLOG_DEBUG("---- failed to open file as a fount: {} ", filename.c_str());
+        MILESTROLOG_DEBUG("---- failed to open file as a font: {}", filename.c_str());
         return RegisterResult::Failed;
     }
 
