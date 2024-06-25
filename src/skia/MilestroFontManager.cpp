@@ -130,7 +130,7 @@ MilestroFontManager::RegisterResult MilestroFontManager::registerFont(std::uniqu
     fFontRegistered.push_back(filename);
 
     if (!stream) {
-        MILESTROLOG_DEBUG("---- failed to open: {}", filename.c_str());
+        MILESTROLOG_DEBUG("---- stream invalided: {}", filename.c_str());
         return RegisterResult::Failed;
     }
 

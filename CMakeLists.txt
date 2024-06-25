@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.26)
 project(Milestro)
 
 option(MILESTRO_BUILD_SHARED_LIBS "Build shared library" ON)
+option(MILESTRO_BUILD_FRAMEWORK_LIBS "Build framework library" OFF)
 option(MILESTRO_ENABLE_CLI "Enable cli" ON)
 option(MILESTRO_ENABLE_TESTS "Enable tests" ON)
 option(MILESTRO_WITH_ADDRESS_SANITIZER "Build with clang address sanitizer" OFF)
@@ -265,9 +266,20 @@ set(
 
 # We will not use BUILD_SHARED_LIBS, and you can see the above comment for reasons.
 if (MILESTRO_BUILD_SHARED_LIBS)
-    add_library(Milestro SHARED ${MILESTRO_CORE_FILE} ${MILESTRO_APPLICATION_FILE})
+    add_library(Milestro SHARED ${MILESTRO_CORE_FILE} ${MILESTRO_APPLICATION_FILE} ${PUBLIC_GAME_INTERFACE})
 else ()
-    add_library(Milestro STATIC ${MILESTRO_CORE_FILE} ${MILESTRO_APPLICATION_FILE})
+    add_library(Milestro STATIC ${MILESTRO_CORE_FILE} ${MILESTRO_APPLICATION_FILE} ${PUBLIC_GAME_INTERFACE})
+endif ()
+
+# Only Apple Can Do
+if (DEFINED APPLE AND DEFINED IOS AND MILESTRO_BUILD_FRAMEWORK_LIBS)
+    set_target_properties(
+            Milestro PROPERTIES
+            FRAMEWORK TRUE
+            FRAMEWORK_VERSION C
+            MACOSX_FRAMEWORK_INFO_PLIST "${PROJECT_SOURCE_DIR}/Info.plist"
+            PUBLIC_HEADER "${PUBLIC_GAME_INTERFACE}"
+    )
 endif ()
 
 target_compile_definitions(Milestro PUBLIC ${MILESTRO_DEFINITIONS})
