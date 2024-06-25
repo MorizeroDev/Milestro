@@ -32,6 +32,8 @@ protected:
             milestro::util::encoding::WStringToString((imageDir / name).wstring())
         );
         EXPECT_GE(MilestroSkiaImageCreate(img, data.data(), data.size()), 0);
+        data.clear();
+
         EXPECT_GE(MilestroSkiaImageSetColorType(img, 4 /* kRGBA_8888_SkColorType */), 0);
 
         int width;
@@ -41,8 +43,9 @@ protected:
 
         milestro::skia::Canvas canvas(width, height, nullptr);
         EXPECT_GE(MilestroSkiaCanvasDrawImageSimple(&canvas, img, 0, 0), 0);
+#ifdef MILESTRO_USE_CLI
         canvas.SaveToPng((name + ".simple.png").c_str());
-
+#endif
         EXPECT_GE(MilestroSkiaImageDestroy(img), 0);
     }
 
@@ -52,6 +55,8 @@ protected:
             milestro::util::encoding::WStringToString((imageDir / name).wstring())
         );
         EXPECT_GE(MilestroSkiaImageCreate(img, data.data(), data.size()), 0);
+        data.clear();
+
         EXPECT_GE(MilestroSkiaImageSetColorType(img, 4 /* kRGBA_8888_SkColorType */), 0);
 
         int width;
@@ -64,7 +69,9 @@ protected:
                                               0, 0, width, height,
                                               0, 0, width / 2, height / 2
         ), 0);
+#ifdef MILESTRO_USE_CLI
         canvas.SaveToPng((name + ".full.png").c_str());
+#endif
 
         EXPECT_GE(MilestroSkiaImageDestroy(img), 0);
     }
