@@ -44,6 +44,22 @@ MILESTRO_API int64_t MilestroSkiaCanvasCreate(milestro::skia::Canvas *&ret, int3
 MILESTRO_API int64_t MilestroSkiaCanvasDestroy(milestro::skia::Canvas *&ret);
 MILESTRO_API int64_t MilestroSkiaCanvasGetTexture(milestro::skia::Canvas *ret,
                                                   [[milize::CSharpType("void*")]] void *targetSpace);
+MILESTRO_API int64_t MilestroSkiaCanvasDrawImageSimple(milestro::skia::Canvas *ret,
+                                                       milestro::skia::Image *image,
+                                                       float x,
+                                                       float y);
+MILESTRO_API int64_t MilestroSkiaCanvasDrawImage(milestro::skia::Canvas *ret,
+                                                 milestro::skia::Image *image,
+                                                 float srcLeft, float srcTop, float srcRight, float srcBottom,
+                                                 float dstLeft, float dstTop, float dstRight, float dstBottom);
+
+MILESTRO_API int64_t MilestroSkiaImageCreate(milestro::skia::Image *&ret,
+                                             [[milize::CSharpType("void*")]] void *data,
+                                             uint64_t size);
+MILESTRO_API int64_t MilestroSkiaImageSetColorType(milestro::skia::Image *img, int32_t targetColorType);
+MILESTRO_API int64_t MilestroSkiaImageGetWidth(milestro::skia::Image *img, int32_t &width);
+MILESTRO_API int64_t MilestroSkiaImageGetHeight(milestro::skia::Image *img, int32_t &height);
+MILESTRO_API int64_t MilestroSkiaImageDestroy(milestro::skia::Image *&ret);
 
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphDestroy(milestro::skia::textlayout::Paragraph *&ret);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphLayout(milestro::skia::textlayout::Paragraph *p, float width);

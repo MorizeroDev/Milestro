@@ -50,14 +50,14 @@ int registerFontsInDirectory(milestro::skia::FontManager* fontManager, const std
     return successCount;
 }
 
-class FontRegistrationTest : public ::testing::Test {
+class ReadImageTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // 获取 FontManager 实例
         fontManager = milestro::skia::GetFontManager();
 
         // 设置字体目录路径
-        fontDir = fs::current_path() / "data" / "font";
+        imageDir = fs::current_path() / "data" / "font";
     }
 
     void TearDown() override {
@@ -65,10 +65,10 @@ protected:
     }
 
     milestro::skia::FontManager* fontManager{};
-    fs::path fontDir;
+    fs::path imageDir;
 };
 
-TEST_F(FontRegistrationTest, RegistersFontsCorrectly) {
+TEST_F(ReadImageTest, RegistersFontsCorrectly) {
     // 捕获 std::cout 和 std::cerr
     std::stringstream capturedStdout;
     std::stringstream capturedStderr;
@@ -76,7 +76,7 @@ TEST_F(FontRegistrationTest, RegistersFontsCorrectly) {
     std::streambuf* oldCerr = std::cerr.rdbuf(capturedStderr.rdbuf());
 
     // 调用被测试的函数
-    int registeredCount = registerFontsInDirectory(fontManager, fontDir.string());
+    int registeredCount = registerFontsInDirectory(fontManager, imageDir.string());
 
     // 恢复 std::cout 和 std::cerr
     std::cout.rdbuf(oldCout);
@@ -100,7 +100,7 @@ TEST_F(FontRegistrationTest, RegistersFontsCorrectly) {
 
     // 验证注册的字体数量
     int expectedCount = 0;
-    for (const auto& entry : fs::directory_iterator(fontDir)) {
+    for (const auto& entry : fs::directory_iterator(imageDir)) {
         if (entry.path().extension() == ".bytes") {
             expectedCount++;
         }
@@ -108,7 +108,7 @@ TEST_F(FontRegistrationTest, RegistersFontsCorrectly) {
     EXPECT_EQ(registeredCount, expectedCount);
 }
 
-TEST_F(FontRegistrationTest, HandlesNonExistentDirectory) {
+TEST_F(ReadImageTest, HandlesNonExistentDirectory) {
     std::string nonExistentPath = (fs::current_path() / "non_existent_dir").string();
 
     std::stringstream capturedStderr;
@@ -122,7 +122,7 @@ TEST_F(FontRegistrationTest, HandlesNonExistentDirectory) {
     EXPECT_TRUE(capturedStderr.str().find("Font directory does not exist") != std::string::npos);
 }
 
-TEST_F(FontRegistrationTest, HandlesEmptyDirectory) {
+TEST_F(ReadImageTest, HandlesEmptyDirectory) {
     // 创建一个临时的空目录
     fs::path emptyDir = fs::temp_directory_path() / "empty_font_dir";
     fs::create_directory(emptyDir);
@@ -136,7 +136,7 @@ TEST_F(FontRegistrationTest, HandlesEmptyDirectory) {
 }
 
 
-TEST_F(FontRegistrationTest, readfont1) {
+TEST_F(ReadImageTest, readfont1) {
     auto familyNames = fontManager->GetFamiliesNames();
     EXPECT_TRUE(std::find(familyNames.begin(), familyNames.end(), "Source Han Sans VF") != familyNames.end());
 

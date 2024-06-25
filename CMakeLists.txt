@@ -224,12 +224,14 @@ set(
 
         src/log/log.cpp
         src/log/log_unitylog.cpp
+        src/io/milestro_io.cpp
 
         src/skia/FontManager.cpp
         src/skia/MilestroFontManager.cpp
         src/skia/Unicode.cpp
         src/skia/Canvas.cpp
         src/skia/Typeface.cpp
+        src/skia/Image.cpp
         src/skia/textlayout/TextStyle.cpp
         src/skia/textlayout/FontCollection.cpp
         src/skia/textlayout/ParagraphStyle.cpp
@@ -242,6 +244,7 @@ set(
 
         src/game/milestro_game_plugin_main.cpp
         src/game/milestro_game_skia_canvas.cpp
+        src/game/milestro_game_skia_image.cpp
         src/game/milestro_game_skia_fontmanager.cpp
         src/game/milestro_game_skia_textlayout_paragraph.cpp
         src/game/milestro_game_skia_textlayout_paragraphbuilder.cpp

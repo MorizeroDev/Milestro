@@ -7,6 +7,7 @@
 #include "include/core/SkCanvas.h"
 #include "Milestro/util/milestro_class.h"
 #include "Milestro/common/milestro_export_macros.h"
+#include "Image.h"
 
 #ifdef MILESTRO_USE_CLI
 #include "include/encode/SkPngEncoder.h"
@@ -29,6 +30,32 @@ public:
     }
 
     MILESTRO_DECLARE_NON_COPYABLE(Canvas)
+
+    void DrawImageSimple(Image *image, float x, float y) {
+        sk_sp<SkImage> img = image->unwrap();
+        canvas->drawImage(img, x, y);
+    }
+
+    void DrawImage(Image *image,
+                   float srcLeft, float srcTop, float srcRight, float srcBottom,
+                   float dstLeft, float dstTop, float dstRight, float dstBottom
+    ) {
+        sk_sp<SkImage> img = image->unwrap();
+        SkRect src{
+            .fLeft =srcLeft,
+            .fTop = srcTop,
+            .fRight = srcRight,
+            .fBottom = srcBottom,
+        };
+        SkRect dst{
+            .fLeft =dstLeft,
+            .fTop = dstTop,
+            .fRight = dstRight,
+            .fBottom = dstBottom,
+        };
+        SkSamplingOptions sampling(SkCubicResampler::CatmullRom());
+        canvas->drawImageRect(img, src, dst, sampling, nullptr, SkCanvas::SrcRectConstraint::kFast_SrcRectConstraint);
+    }
 
     bool GetTexture(void *targetSpace) {
         return bitmap.readPixels(
