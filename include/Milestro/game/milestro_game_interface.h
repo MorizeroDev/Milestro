@@ -39,7 +39,8 @@ MILESTRO_API int64_t MilestroSkiaTypefaceGetFamilyNames(milestro::skia::Typeface
                                                         uint64_t bufferSize,
                                                         uint64_t &needed);
 
-MILESTRO_API int64_t MilestroSkiaCanvasCreate(milestro::skia::Canvas *&ret, int32_t width, int32_t height);
+MILESTRO_API int64_t MilestroSkiaCanvasCreate(milestro::skia::Canvas *&ret, int32_t width, int32_t height,
+                                              [[milize::CSharpType("void*")]] void *pixels);
 MILESTRO_API int64_t MilestroSkiaCanvasDestroy(milestro::skia::Canvas *&ret);
 MILESTRO_API int64_t MilestroSkiaCanvasGetTexture(milestro::skia::Canvas *ret,
                                                   [[milize::CSharpType("void*")]] void *targetSpace);

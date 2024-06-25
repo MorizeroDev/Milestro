@@ -4,8 +4,8 @@
 #include "milestro_game_retcode.h"
 
 extern "C" {
-int64_t MilestroSkiaCanvasCreate(milestro::skia::Canvas *&ret, int32_t width, int32_t height) try {
-    ret = new milestro::skia::Canvas(width, height);
+int64_t MilestroSkiaCanvasCreate(milestro::skia::Canvas *&ret, int32_t width, int32_t height, void *pixels) try {
+    ret = new milestro::skia::Canvas(width, height, pixels);
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;

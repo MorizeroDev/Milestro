@@ -307,8 +307,6 @@ else ()
     message(STATUS "Building without tests")
 endif ()
 
-
-
 if (MILESTRO_ENABLE_CLI)
     add_executable(MilestroCli ${MILESTRO_CMD_FILE})
     target_compile_definitions(MilestroCli PRIVATE Milestro ${MILESTRO_CLI_DEFINITIONS})
