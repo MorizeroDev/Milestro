@@ -1,19 +1,12 @@
-#include "Milestro/skia/FontManager.h"
 #include "Milestro/skia/textlayout/ParagraphBuilder.h"
-#include "Milestro/skia/textlayout/ParagraphStyle.h"
-#include "Milestro/skia/textlayout/TextStyle.h"
-#include "Milestro/skia/textlayout/TextStyle.h"
 #include "Milestro/game/milestro_game_interface.h"
 #include "Milestro/io/milestro_io.h"
 #include "Milestro/util/milestro_encoding.h"
-#include <chrono>
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <iostream>
-#include <memory>
 #include <string>
 #include <vector>
-#include <gtest/gtest.h>
 
 namespace fs = std::filesystem;
 
