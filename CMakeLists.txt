@@ -136,6 +136,8 @@ if (ANDROID)
 endif ()
 
 #############################################################
+set(PROJECT_PLATFORM_LIBRARIES)
+
 # Setup external libraries
 include(ExternalProject)
 
@@ -152,8 +154,9 @@ add_subdirectory("ext/PluginAPI" EXCLUDE_FROM_ALL)
 set(CLI11_PRECOMPILED ON)
 add_subdirectory("ext/cli11" EXCLUDE_FROM_ALL)
 
-if (MILESTRO_SKIA_CMAKE)
-    add_subdirectory("${MILESTRO_SKIA_CMAKE}" skia EXCLUDE_FROM_ALL)
+if (MILESTRO_SKIA_CMAKE AND MILESTRO_SKIA_INCLUDE_PATH)
+    add_subdirectory("${MILESTRO_SKIA_CMAKE}" "ext/skia" EXCLUDE_FROM_ALL)
+    set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} "modules__skparagraph")
 elseif (MILESTRO_SKIA_LIB_PATH AND MILESTRO_SKIA_INCLUDE_PATH)
     add_library(skia INTERFACE IMPORTED)
     if (WIN32)
@@ -168,7 +171,7 @@ elseif (MILESTRO_SKIA_LIB_PATH AND MILESTRO_SKIA_INCLUDE_PATH)
         target_link_libraries(skia INTERFACE ${SKIA_LIB_LIST})
         target_include_directories(skia INTERFACE ${SKIA_INCLUDE_PATH})
     else ()
-        message(FATAL_ERROR "No Skia libraries found in ${MILESTRO_SKIA_LIB_PATH}")
+        message(FATAL_ERROR "Unknown Skia : ${MILESTRO_SKIA_LIB_PATH}")
     endif ()
 
     if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
@@ -182,7 +185,6 @@ else ()
 endif ()
 
 
-set(PROJECT_PLATFORM_LIBRARIES)
 if (DEFINED APPLE)
     enable_language(Swift)
     enable_language(OBJC)
