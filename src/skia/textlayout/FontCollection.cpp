@@ -22,9 +22,6 @@ Result<void, std::string> InitialFontCollection() {
         fontCollection->setTestFontManager(fontMgr->GetEmptyFontMgr());
     }
 
-    if (fontMgr->IsSystemFontMgrAvailable()) {
-        fontCollection->setDefaultFontManager(fontMgr->GetSystemFontMgr());
-    }
     FontCollectionInstance = std::make_unique<FontCollection>(std::move(fontCollection));
     return Ok();
 }

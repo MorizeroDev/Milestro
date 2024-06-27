@@ -19,14 +19,10 @@ namespace milestro::skia {
 class MILESTRO_API FontManager {
 public:
     explicit FontManager(sk_sp<MilestroFontManager> fontMgr,
-                         sk_sp<MilestroEmptyFontManager> emptyFontMgr,
-                         sk_sp<SkFontMgr> systemFontMgr) {
+                         sk_sp<MilestroEmptyFontManager> emptyFontMgr) {
         this->fontMgr = std::move(fontMgr);
         if (emptyFontMgr) {
             this->emptyFontMgr = std::move(emptyFontMgr);
-        }
-        if (systemFontMgr) {
-            this->systemFontMgr = std::move(systemFontMgr);
         }
     }
 
@@ -56,17 +52,9 @@ public:
         return emptyFontMgr;
     }
 
-    bool IsSystemFontMgrAvailable() {
-        return systemFontMgr != nullptr;
-    }
-    sk_sp<SkFontMgr> GetSystemFontMgr() {
-        return systemFontMgr;
-    }
-
 private:
     sk_sp<MilestroFontManager> fontMgr;
     sk_sp<MilestroEmptyFontManager> emptyFontMgr;
-    sk_sp<SkFontMgr> systemFontMgr;
 };
 
 MILESTRO_API FontManager *GetFontManager();

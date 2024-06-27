@@ -5,33 +5,9 @@
 #include <src/ports/SkFontMgr_custom.h>
 #include "Milestro/common/milestro_platform.h"
 
-#if MILESTRO_PLATFORM_LINUX
-#include "include/ports/SkFontMgr_fontconfig.h"
-#endif
-
-#if MILESTRO_PLATFORM_MAC
-#include "include/ports/SkFontMgr_mac_ct.h"
-#endif
-
-#if MILESTRO_PLATFORM_WINDOWS
-#include "include/ports/SkTypeface_win.h"
-#endif
-
 namespace fs = std::filesystem;
 
 namespace milestro::skia {
-
-inline sk_sp<SkFontMgr> MakeSystemFontMgr() {
-    sk_sp<SkFontMgr> fontMgr = nullptr;
-#if MILESTRO_PLATFORM_LINUX
-    fontMgr = SkFontMgr_New_FontConfig(nullptr);
-#elif MILESTRO_PLATFORM_MAC
-    fontMgr = SkFontMgr_New_CoreText(nullptr);
-#elif MILESTRO_PLATFORM_WINDOWS
-    fontMgr = SkFontMgr_New_DirectWrite();
-#endif
-    return fontMgr;
-}
 
 static std::unique_ptr<FontManager> FontManagerInstance = nullptr;
 
@@ -46,15 +22,9 @@ Result<void, std::string> InitialFontManager() {
         MILESTROLOG_ERROR(std::string("fail to create MilestroEmptyFontManager, skipped"));
     }
 
-    auto systemFontMgr = MakeSystemFontMgr();
-    if (systemFontMgr == nullptr) {
-        MILESTROLOG_ERROR(std::string("fail to create SystemFontManager, skipped"));
-    }
-
     FontManagerInstance = std::make_unique<FontManager>(
         std::move(milestroFontManager),
-        std::move(milestroEmptyFontManager),
-        std::move(systemFontMgr)
+        std::move(milestroEmptyFontManager)
     );
     return Ok();
 }
