@@ -1,25 +1,61 @@
 #include "Milestro/skia/FontManager.h"
 #include "Milestro/log/log.h"
 #include "Milestro/util/milestro_encoding.h"
+#include "Milestro/skia/MilestroEmptyFontManager.h"
 #include <src/ports/SkFontMgr_custom.h>
+#include "Milestro/common/milestro_platform.h"
+
+#if MILESTRO_PLATFORM_LINUX
+#include "include/ports/SkFontMgr_fontconfig.h"
+#endif
+
+#if MILESTRO_PLATFORM_MAC
+#include "include/ports/SkFontMgr_mac_ct.h"
+#endif
+
+#if MILESTRO_PLATFORM_WINDOWS
+#include "include/ports/SkTypeface_win.h"
+#endif
 
 namespace fs = std::filesystem;
 
 namespace milestro::skia {
 
-inline sk_sp<MilestroFontManager> MakeSkFontMgr() {
-    sk_sp<MilestroFontManager> result = sk_make_sp<MilestroFontManager>();
-    return result;
+inline sk_sp<SkFontMgr> MakeSystemFontMgr() {
+    sk_sp<SkFontMgr> fontMgr = nullptr;
+#if MILESTRO_PLATFORM_LINUX
+    fontMgr = SkFontMgr_New_FontConfig(nullptr);
+#elif MILESTRO_PLATFORM_MAC
+    fontMgr = SkFontMgr_New_CoreText(nullptr);
+#elif MILESTRO_PLATFORM_WINDOWS
+    fontMgr = SkFontMgr_New_DirectWrite();
+#endif
+    return fontMgr;
 }
 
 static std::unique_ptr<FontManager> FontManagerInstance = nullptr;
 
 Result<void, std::string> InitialFontManager() {
-    auto skFontMgr = MakeSkFontMgr();
-    if (skFontMgr == nullptr) {
-        return Err(std::string("fail to createSkFontMgr"));
+    auto milestroFontManager = sk_make_sp<MilestroFontManager>();
+    if (milestroFontManager == nullptr) {
+        return Err(std::string("fail to create MilestroFontManager"));
     }
-    FontManagerInstance = std::make_unique<FontManager>(std::move(skFontMgr));
+
+    auto milestroEmptyFontManager = sk_make_sp<MilestroEmptyFontManager>();
+    if (milestroEmptyFontManager == nullptr) {
+        MILESTROLOG_ERROR(std::string("fail to create MilestroEmptyFontManager, skipped"));
+    }
+
+    auto systemFontMgr = MakeSystemFontMgr();
+    if (systemFontMgr == nullptr) {
+        MILESTROLOG_ERROR(std::string("fail to create SystemFontManager, skipped"));
+    }
+
+    FontManagerInstance = std::make_unique<FontManager>(
+        std::move(milestroFontManager),
+        std::move(milestroEmptyFontManager),
+        std::move(systemFontMgr)
+    );
     return Ok();
 }
 
@@ -27,10 +63,11 @@ FontManager *GetFontManager() {
     if (FontManagerInstance == nullptr) {
         auto result = InitialFontManager();
         if (result.isErr()) {
-            MILESTROLOG_ERROR("{}", result.unwrapErr());
+            MILESTROLOG_CRITICAL("{}", result.unwrapErr());
         }
     }
 
+    assert(FontManagerInstance != nullptr && "FontManagerInstance is null");
     return FontManagerInstance.get();
 }
 

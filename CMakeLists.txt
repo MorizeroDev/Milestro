@@ -234,6 +234,7 @@ set(
         src/io/milestro_io.cpp
 
         src/skia/FontManager.cpp
+        src/skia/MilestroEmptyFontManager.cpp
         src/skia/MilestroFontManager.cpp
         src/skia/Unicode.cpp
         src/skia/Canvas.cpp
