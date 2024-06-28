@@ -11,6 +11,7 @@
 #include "Milestro/skia/MilestroEmptyFontManager.h"
 #include "Milestro/skia/Typeface.h"
 #include <memory>
+#include <sstream>
 
 namespace milestro::skia {
 
