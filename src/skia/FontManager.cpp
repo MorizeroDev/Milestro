@@ -1,6 +1,7 @@
 #include "Milestro/skia/FontManager.h"
 #include "Milestro/log/log.h"
 #include "Milestro/util/milestro_encoding.h"
+#include "Milestro/util/milestro_env.h"
 #include "Milestro/skia/MilestroEmptyFontManager.h"
 #include <src/ports/SkFontMgr_custom.h>
 #include "Milestro/common/milestro_platform.h"

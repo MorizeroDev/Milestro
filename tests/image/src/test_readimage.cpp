@@ -10,7 +10,7 @@
 
 namespace fs = std::filesystem;
 
-class ReadImageTest : public ::testing::Test {
+class FontRegistrationTest : public ::testing::Test {
 protected:
     void SetUp() override {
         imageDir = fs::current_path() / "data" / "image";
@@ -72,14 +72,14 @@ protected:
     fs::path imageDir;
 };
 
-TEST_F(ReadImageTest, DrawSimpleImage) {
+TEST_F(FontRegistrationTest, DrawSimpleImage) {
     TestDrawSimpleImage("a_reincarnation_of_a_scattering_spring.jpg");
     TestDrawSimpleImage("bg_day_character.png");
     TestDrawSimpleImage("test-large.avif");
     TestDrawSimpleImage("test-small.avif");
 }
 
-TEST_F(ReadImageTest, DrawSimple) {
+TEST_F(FontRegistrationTest, DrawSimple) {
     TestDrawImage("a_reincarnation_of_a_scattering_spring.jpg");
     TestDrawImage("bg_day_character.png");
     TestDrawImage("test-large.avif");

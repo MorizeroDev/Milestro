@@ -14,7 +14,6 @@ Paragraph::splitGlyph(SkScalar x, SkScalar y,
     }
 
     SkPoint textRenderLeftTop = SkPoint::Make(x, y);
-    std::vector<SkRect> boundList;
     paragraph->extendedVisit([&](int lineNumber, const ::skia::textlayout::Paragraph::ExtendedVisitorInfo *info) {
         if (info == nullptr) {
             return;
@@ -29,7 +28,6 @@ Paragraph::splitGlyph(SkScalar x, SkScalar y,
             auto glyphPosition = position + origin + textRenderLeftTop;
             SkRect bound = info->bounds[i];
             bound = bound.makeOffset(glyphPosition);
-            boundList.emplace_back(bound);
 
             callback(context, glyphId, &font,
                      bound.left(), bound.top(),
@@ -55,7 +53,6 @@ Path *Paragraph::toPath(SkScalar x, SkScalar y) {
 SkPath Paragraph::generateToSkPath(SkScalar x, SkScalar y) {
     SkPath fullPath;
     SkPoint textRenderLeftTop = SkPoint::Make(x, y);
-    std::vector<SkRect> boundList;
     paragraph->extendedVisit([&](int lineNumber, const ::skia::textlayout::Paragraph::ExtendedVisitorInfo *info) {
         if (info == nullptr) {
             return;
@@ -67,9 +64,6 @@ SkPath Paragraph::generateToSkPath(SkScalar x, SkScalar y) {
             SkGlyphID glyphId = info->glyphs[i];
             SkPoint position = info->positions[i];
             auto glyphPosition = position + origin + textRenderLeftTop;
-            SkRect bound = info->bounds[i];
-            bound = bound.makeOffset(glyphPosition);
-            boundList.emplace_back(bound);
 
             SkPath glyphPath;
             if (font.getPath(glyphId, &glyphPath)) {

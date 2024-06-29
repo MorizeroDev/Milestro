@@ -87,7 +87,7 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphPaint(milestro::skia::textla
                                                           milestro::skia::Canvas *canvas,
                                                           float x, float y);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphSplitGlyph(milestro::skia::textlayout::Paragraph *p,
-                                                               [[milize::CSharpType("void*")]] void *context,
+                                                               [[milize::CSharpType("IntPtr")]] void *context,
                                                                float x, float y,
                                                                [[milize::CSharpType("MilestroCTypes.SkiaTextlayoutParagraphSplitGlyphCallback")]] MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphToSDF(milestro::skia::textlayout::Paragraph *p,

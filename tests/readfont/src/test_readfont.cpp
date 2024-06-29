@@ -52,7 +52,27 @@ int registerFontsInDirectory(milestro::skia::FontManager *fontManager, const std
     return successCount;
 }
 
-class ReadImageTest : public ::testing::Test {
+void printVertexData(sk_sp<GrThreadSafeCache::VertexData> vertexData) {
+    std::cout << "numVertices: " << vertexData->numVertices() << std::endl;
+    std::cout << "vertexSize: " << vertexData->vertexSize() << std::endl;
+
+    auto p = vertexData->vertices();
+    for (int i = 0; i < vertexData->numVertices(); i++) {
+        std::cout << std::endl << "b.Add(";
+        for (int j = 0; j < vertexData->vertexSize() / sizeof(float); j++) {
+            if (j != 0) {
+                std::cout << ", ";
+            }
+            std::cout << ((float *) p)[i * 3 + j];
+        }
+        std::cout << ");";
+    }
+    std::cout << std::endl;
+    std::cout << std::endl;
+}
+
+
+class FontRegistrationTest : public ::testing::Test {
 public:
     uint64_t SplitGlyphCallback(uint16_t glyphId, milestro::skia::Font *font, SkRect bound, SkSize advance) {
         milestro::skia::Path *path;
@@ -75,22 +95,7 @@ public:
         std::cout << "trianglesResult: " << trianglesResult << std::endl;
 
         auto vertexData = alloc.detachVertexData();
-        std::cout << "numVertices: " << vertexData->numVertices() << std::endl;
-        std::cout << "vertexSize: " << vertexData->vertexSize() << std::endl;
-
-        auto p = vertexData->vertices();
-        for (int i = 0; i < vertexData->numVertices(); i++) {
-            std::cout << std::endl << "(";
-            for (int j = 0; j < vertexData->vertexSize() / sizeof(float); j++) {
-                if (j != 0) {
-                    std::cout << ", ";
-                }
-                std::cout << ((float *) p)[i * 3 + j];
-            }
-            std::cout << ")";
-        }
-        std::cout << std::endl;
-        std::cout << std::endl;
+//        printVertexData(vertexData);
 
         return 0;
     }
@@ -113,7 +118,7 @@ protected:
     fs::path imageDir;
 };
 
-TEST_F(ReadImageTest, RegistersFontsCorrectly) {
+TEST_F(FontRegistrationTest, RegistersFontsCorrectly) {
     // 捕获 std::cout 和 std::cerr
     std::stringstream capturedStdout;
     std::stringstream capturedStderr;
@@ -153,7 +158,7 @@ TEST_F(ReadImageTest, RegistersFontsCorrectly) {
     EXPECT_EQ(registeredCount, expectedCount);
 }
 
-TEST_F(ReadImageTest, HandlesNonExistentDirectory) {
+TEST_F(FontRegistrationTest, HandlesNonExistentDirectory) {
     std::string nonExistentPath = (fs::current_path() / "non_existent_dir").string();
 
     std::stringstream capturedStderr;
@@ -167,7 +172,7 @@ TEST_F(ReadImageTest, HandlesNonExistentDirectory) {
     EXPECT_TRUE(capturedStderr.str().find("Font directory does not exist") != std::string::npos);
 }
 
-TEST_F(ReadImageTest, HandlesEmptyDirectory) {
+TEST_F(FontRegistrationTest, HandlesEmptyDirectory) {
     // 创建一个临时的空目录
     fs::path emptyDir = fs::temp_directory_path() / "empty_font_dir";
     fs::create_directory(emptyDir);
@@ -181,7 +186,7 @@ TEST_F(ReadImageTest, HandlesEmptyDirectory) {
 }
 
 
-TEST_F(ReadImageTest, readfont1) {
+TEST_F(FontRegistrationTest, splitGlyph) {
     auto familyNames = fontManager->GetFamiliesNames();
     EXPECT_TRUE(std::find(familyNames.begin(), familyNames.end(), "Source Han Sans VF") != familyNames.end());
 
@@ -226,7 +231,7 @@ TEST_F(ReadImageTest, readfont1) {
         auto advance = SkSize();
         advance.fHeight = advanceHeight;
         advance.fWidth = advanceWidth;
-        return ((ReadImageTest *) ctx)->SplitGlyphCallback(glyphId, font, rect, advance);
+        return ((FontRegistrationTest *) ctx)->SplitGlyphCallback(glyphId, font, rect, advance);
     });
 
 #ifdef MILESTRO_USE_CLI
@@ -234,6 +239,46 @@ TEST_F(ReadImageTest, readfont1) {
     paragraph->paint(&canvas, 100, 100);
     canvas.SaveToPng("locale-test.png");
 #endif
+}
+
+
+TEST_F(FontRegistrationTest, paragraphToPath) {
+    auto familyNames = fontManager->GetFamiliesNames();
+    EXPECT_TRUE(std::find(familyNames.begin(), familyNames.end(), "Source Han Sans VF") != familyNames.end());
+
+    auto textStyle = std::make_unique<TextStyle>();
+    std::vector<SkString> fontFamilies;
+    fontFamilies.emplace_back("Source Han Sans VF");
+
+    textStyle->setFontFamilies(fontFamilies);
+    textStyle->setFontSize(72);
+    textStyle->setColor(SK_ColorWHITE);
+
+    auto paragraphStyle = std::make_unique<ParagraphStyle>();
+    paragraphStyle->setTextStyle(textStyle.get());
+    auto paragraphBuilder = std::make_unique<ParagraphBuilder>(paragraphStyle.get());
+
+    textStyle->setLocale(SkString("zh-Hans"));
+    std::string payload("心中有光，闪耀四方。");
+    paragraphBuilder->addText(payload.c_str(), payload.size());
+
+//    std::vector<std::string> locales = {"ko", "ja", "zh-Hant", "zh-Hans"};
+//    for (const auto &locale: locales) {
+//        textStyle->setLocale(SkString(locale.c_str()));
+//        paragraphBuilder->pushStyle(textStyle.get());
+//        std::string payload("曜\n");
+//        paragraphBuilder->addText(payload.c_str(), payload.size());
+//    }
+
+    auto paragraph = paragraphBuilder->build();
+    paragraph->layout(1600);
+    auto path = paragraph->toPath(0, 0);
+    auto bound = path->unwrap().getBounds();
+    std::cout << "bound: (" << bound.left() << ", " << bound.top() << ", " << bound.right()
+              << ", " << bound.bottom() << ")" << std::endl;
+    auto triangles = path->ToAATriangles(0.1);
+    auto vd = triangles->unwrap();
+    printVertexData(vd);
 }
 
 int main(int argc, char **argv) {
