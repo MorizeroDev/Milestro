@@ -1,8 +1,10 @@
 #include <src/gpu/ganesh/GrDistanceFieldGenFromVector.h>
 #include "Milestro/skia/textlayout/Paragraph.h"
 #include "Milestro/skia/Font.h"
+#include "Milestro/skia/Path.h"
 
 using namespace milestro::skia::textlayout;
+using namespace milestro::skia;
 
 uint64_t
 Paragraph::splitGlyph(SkScalar x, SkScalar y,
@@ -39,8 +41,18 @@ Paragraph::splitGlyph(SkScalar x, SkScalar y,
     return 0;
 }
 
-uint64_t
-Paragraph::toSDF(int width, int height, SkScalar x, SkScalar y, uint8_t *distanceField) {
+uint64_t Paragraph::toSDF(int width, int height, SkScalar x, SkScalar y, uint8_t *distanceField) {
+    auto fullPath = generateToSkPath(x, y);
+    SkMatrix drawMatrix;
+    return GrGenerateDistanceFieldFromPath(distanceField, fullPath, drawMatrix, width, height, width) ? 0 : -1;
+}
+
+Path *Paragraph::toPath(SkScalar x, SkScalar y) {
+    auto fullPath = generateToSkPath(x, y);
+    return new Path(std::move(fullPath));
+}
+
+SkPath Paragraph::generateToSkPath(SkScalar x, SkScalar y) {
     SkPath fullPath;
     SkPoint textRenderLeftTop = SkPoint::Make(x, y);
     std::vector<SkRect> boundList;
@@ -50,7 +62,6 @@ Paragraph::toSDF(int width, int height, SkScalar x, SkScalar y, uint8_t *distanc
         }
         SkPoint origin = info->origin;
         auto font = info->font;
-        auto advance = info->advance;
 
         for (int i = 0; i < info->count; ++i) {
             SkGlyphID glyphId = info->glyphs[i];
@@ -66,6 +77,5 @@ Paragraph::toSDF(int width, int height, SkScalar x, SkScalar y, uint8_t *distanc
             }
         }
     });
-    SkMatrix drawMatrix;
-    return GrGenerateDistanceFieldFromPath(distanceField, fullPath, drawMatrix, width, height, width) ? 0 : -1;
+    return fullPath;
 }

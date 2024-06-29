@@ -6,6 +6,7 @@
 #include "FontCollection.h"
 #include "Milestro/skia/Unicode.h"
 #include "TextStyle.h"
+#include "Milestro/skia/Path.h"
 #include "Milestro/skia/Canvas.h"
 #include "Milestro/util/milestro_serializerable.h"
 #include "Milestro/game/milestro_game_types.h"
@@ -27,6 +28,8 @@ public :
 
     uint64_t toSDF(int width, int height, SkScalar x, SkScalar y, uint8_t * distanceField);
 
+    milestro::skia::Path* toPath(SkScalar x, SkScalar y);
+
     void paint(milestro::skia::Canvas *canvas, SkScalar x, SkScalar y) {
         paragraph->paint(canvas->unwrap(), x, y);
     }
@@ -35,6 +38,8 @@ public :
 
 private:
     std::unique_ptr<::skia::textlayout::Paragraph> paragraph;
+
+    SkPath generateToSkPath(SkScalar x, SkScalar y);
 };
 }
 #endif //MILESTRO_SKIA_TEXTLAYOUT_PARAGRAPH_H

@@ -44,6 +44,16 @@ MILESTRO_API int64_t MilestroSkiaFontGetPath(milestro::skia::Font *font,
                                              uint16_t glyphId);
 
 MILESTRO_API int64_t MilestroSkiaPathDestroy(milestro::skia::Path *&ret);
+MILESTRO_API int64_t MilestroSkiaPathToAATriangles(milestro::skia::Path *p,
+                                                   milestro::skia::VertexData *&vertexData, float tolerance);
+
+MILESTRO_API int64_t MilestroSkiaVertexDataDestroy(milestro::skia::VertexData *&ret);
+MILESTRO_API int64_t MilestroSkiaVertexDataGetVertexCount(milestro::skia::VertexData *d,
+                                                          uint64_t &numVertices);
+MILESTRO_API int64_t MilestroSkiaVertexDataGetVertexSize(milestro::skia::VertexData *d,
+                                                         uint64_t &vertexSize);
+MILESTRO_API int64_t MilestroSkiaVertexDataFillData(milestro::skia::VertexData *d,
+                                                    [[milize::CSharpType("void*")]] void *dst);
 
 MILESTRO_API int64_t MilestroSkiaFontCollectionClearCaches();
 MILESTRO_API int64_t MilestroSkiaFontCollectionIsFontFallbackEnabled(int32_t &enabled);
@@ -76,9 +86,19 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphLayout(milestro::skia::textl
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphPaint(milestro::skia::textlayout::Paragraph *p,
                                                           milestro::skia::Canvas *canvas,
                                                           float x, float y);
-MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphSplitGlyph(milestro::skia::textlayout::Paragraph *p, void *context,
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphSplitGlyph(milestro::skia::textlayout::Paragraph *p,
+                                                               [[milize::CSharpType("void*")]] void *context,
                                                                float x, float y,
-                                                               MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback);
+                                                               [[milize::CSharpType("MilestroCTypes.SkiaTextlayoutParagraphSplitGlyphCallback")]] MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphToSDF(milestro::skia::textlayout::Paragraph *p,
+                                                          int32_t width, int32_t height,
+                                                          float x, float y,
+                                                          uint8_t *distanceField
+);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphToPath(milestro::skia::textlayout::Paragraph *p,
+                                                           milestro::skia::Path *&path,
+                                                           float x, float y
+);
 
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderCreate(milestro::skia::textlayout::ParagraphBuilder *&ret,
                                                                   milestro::skia::textlayout::ParagraphStyle *style);

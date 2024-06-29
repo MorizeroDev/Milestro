@@ -3,19 +3,19 @@
 #include "Milestro/skia/textlayout/ParagraphBuilder.h"
 #include "Milestro/skia/textlayout/ParagraphStyle.h"
 #include "Milestro/skia/textlayout/TextStyle.h"
+#include "Milestro/skia/Path.h"
+#include "Milestro/skia/Font.h"
 #include "Milestro/game/milestro_game_interface.h"
 #include <chrono>
 #include <filesystem>
-#include <fstream>
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <iostream>
-#include <locale>
 #include <memory>
 #include <string>
-#include <thread>
 #include <vector>
 #include <src/gpu/ganesh/GrDistanceFieldGenFromVector.h>
+#include <src/gpu/ganesh/geometry/GrAATriangulator.h>
+#include <src/gpu/ganesh/GrEagerVertexAllocator.h>
 
 namespace fs = std::filesystem;
 using namespace milestro::skia::textlayout;
@@ -58,7 +58,41 @@ public:
         milestro::skia::Path *path;
         MilestroSkiaFontGetPath(font, path, glyphId);
 
-        MilestroSkiaPathDestroy(path);
+        SkPath glyphPath;
+        if (!font->unwrap().getPath(glyphId, &glyphPath)) {
+            return -1;
+        }
+
+        std::cout << "bound: (" << bound.left() << ", " << bound.top() << ", " << bound.right()
+                  << ", " << bound.bottom() << ")" << std::endl;
+
+        SkRect clipBounds = glyphPath.getBounds();
+        std::cout << "clipBounds: (" << clipBounds.left() << ", " << clipBounds.top() << ", " << clipBounds.right()
+                  << ", " << clipBounds.bottom() << ")" << std::endl;
+
+        GrCpuVertexAllocator alloc;
+        auto trianglesResult = GrAATriangulator::PathToAATriangles(glyphPath, 0.1, clipBounds, &alloc);
+        std::cout << "trianglesResult: " << trianglesResult << std::endl;
+
+        auto vertexData = alloc.detachVertexData();
+        std::cout << "numVertices: " << vertexData->numVertices() << std::endl;
+        std::cout << "vertexSize: " << vertexData->vertexSize() << std::endl;
+
+        auto p = vertexData->vertices();
+        for (int i = 0; i < vertexData->numVertices(); i++) {
+            std::cout << std::endl << "(";
+            for (int j = 0; j < vertexData->vertexSize() / sizeof(float); j++) {
+                if (j != 0) {
+                    std::cout << ", ";
+                }
+                std::cout << ((float *) p)[i * 3 + j];
+            }
+            std::cout << ")";
+        }
+        std::cout << std::endl;
+        std::cout << std::endl;
+
+        return 0;
     }
 
 protected:

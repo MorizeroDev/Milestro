@@ -1,8 +1,6 @@
 #include <Milestro/game/milestro_game_interface.h>
-#include <Milestro/log/log.h>
 #include "milestro_game_retcode.h"
 #include "Milestro/skia/textlayout/Paragraph.h"
-#include "nlohmann/json.hpp"
 #include "Milestro/util/milestro_strutil.h"
 
 extern "C" {
@@ -36,6 +34,30 @@ int64_t MilestroSkiaTextlayoutParagraphSplitGlyph(milestro::skia::textlayout::Pa
                                                   MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback
 ) try {
     return p->splitGlyph(x, y, context, callback);
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutParagraphToSDF(milestro::skia::textlayout::Paragraph *p,
+                                             int32_t width, int32_t height,
+                                             float x, float y,
+                                             uint8_t *distanceField
+) try {
+    return p->toSDF(width, height, x, y, distanceField);
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutParagraphToPath(milestro::skia::textlayout::Paragraph *p,
+                                              milestro::skia::Path *&path,
+                                              float x, float y
+) try {
+    auto ret = p->toPath(x, y);
+    if (ret == nullptr) {
+        return MILESTRO_API_RET_FAILED;
+    }
+    path = ret;
+    return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }

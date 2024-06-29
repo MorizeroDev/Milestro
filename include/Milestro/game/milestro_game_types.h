@@ -22,6 +22,8 @@ namespace milestro {
         class Font;
 
         class Path;
+
+        class VertexData;
         namespace textlayout {
             class Paragraph;
 

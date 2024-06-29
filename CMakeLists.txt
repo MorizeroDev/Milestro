@@ -245,6 +245,7 @@ set(
         src/skia/Font.cpp
         src/skia/Image.cpp
         src/skia/Path.cpp
+        src/skia/VertexData.cpp
         src/skia/textlayout/TextStyle.cpp
         src/skia/textlayout/FontCollection.cpp
         src/skia/textlayout/ParagraphStyle.cpp
@@ -263,6 +264,7 @@ set(
         src/game/milestro_game_skia_typeface.cpp
         src/game/milestro_game_skia_font.cpp
         src/game/milestro_game_skia_path.cpp
+        src/game/milestro_game_skia_vertexdata.cpp
         src/game/milestro_game_skia_textlayout_paragraph.cpp
         src/game/milestro_game_skia_textlayout_paragraphbuilder.cpp
         src/game/milestro_game_skia_textlayout_paragraphstyle.cpp

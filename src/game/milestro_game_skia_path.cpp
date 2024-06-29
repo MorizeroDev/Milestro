@@ -12,4 +12,16 @@ int64_t MilestroSkiaPathDestroy(milestro::skia::Path *&ret) try {
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
+
+int64_t MilestroSkiaPathToAATriangles(milestro::skia::Path *p,
+                                      milestro::skia::VertexData *&vertexData, float tolerance) try {
+    auto ret = p->ToAATriangles(tolerance);
+    if (ret == nullptr) {
+        return MILESTRO_API_RET_FAILED;
+    }
+    vertexData = ret;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
 }

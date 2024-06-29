@@ -5,9 +5,12 @@
 #include <include/core/SkFont.h>
 #include <include/core/SkPath.h>
 #include <include/core/SkPathMeasure.h>
+#include <src/gpu/ganesh/GrEagerVertexAllocator.h>
+#include <src/gpu/ganesh/geometry/GrAATriangulator.h>
 #include "Milestro/util/milestro_class.h"
 #include "Milestro/log/log.h"
 #include "Milestro/util/milestro_serializerable.h"
+#include "VertexData.h"
 
 namespace milestro::skia {
 
@@ -21,6 +24,16 @@ public:
 
     SkPath unwrap() {
         return path;
+    }
+
+    milestro::skia::VertexData* ToAATriangles(SkScalar tolerance) {
+        GrCpuVertexAllocator alloc;
+        SkRect clipBounds = path.getBounds();
+        auto trianglesResult = GrAATriangulator::PathToAATriangles(path, tolerance, clipBounds, &alloc);
+        if (trianglesResult == 0) {
+            return nullptr;
+        }
+        return new VertexData(alloc.detachVertexData());
     }
 
 private:
