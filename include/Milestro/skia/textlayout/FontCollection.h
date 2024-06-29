@@ -19,8 +19,22 @@ public:
         return fontCollection;
     }
 
-    void foo() {
+    void clearCaches() {
+        fontCollection->clearCaches();
     }
+
+    bool fontFallbackEnabled() {
+        return fontCollection->fontFallbackEnabled();
+    }
+
+    void setFontFallbackEnabled(bool enabled) {
+        if (enabled) {
+            fontCollection->enableFontFallback();
+        } else {
+            fontCollection->disableFontFallback();
+
+        }
+    };
 
 private:
     sk_sp<::skia::textlayout::FontCollection> fontCollection;

@@ -27,6 +27,8 @@ public:
         this->typeFace = std::move(typeFace);
     }
 
+    MILESTRO_DECLARE_NON_COPYABLE(Typeface)
+
     sk_sp<SkTypeface> unwrap() {
         return typeFace;
     }
@@ -47,7 +49,6 @@ public:
         return std::move(ret);
     }
 
-    MILESTRO_DECLARE_NON_COPYABLE(Typeface)
 private:
     sk_sp<SkTypeface> typeFace;
 };

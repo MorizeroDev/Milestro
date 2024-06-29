@@ -8,25 +8,9 @@
 #include "TextStyle.h"
 #include "Milestro/skia/Canvas.h"
 #include "Milestro/util/milestro_serializerable.h"
+#include "Milestro/game/milestro_game_types.h"
 
 namespace milestro::skia::textlayout {
-
-class MILESTRO_API SplittedGlyphInfo : public milestro::util::serialization::serializable {
-public:
-    std::vector<SkRect> bounds;
-    nlohmann::json toJson() override {
-        std::vector<nlohmann::json> jsonBounds;
-        for (const auto &rect : bounds) {
-            jsonBounds.push_back({
-                                     {"left", rect.left()},
-                                     {"top", rect.top()},
-                                     {"right", rect.right()},
-                                     {"bottom", rect.bottom()}
-                                 });
-        }
-        return {{"bounds", jsonBounds}};
-    }
-};
 
 class MILESTRO_API Paragraph {
 public :
@@ -38,7 +22,10 @@ public :
         paragraph->layout(width);
     }
 
-    SplittedGlyphInfo splitGlyph(SkScalar x, SkScalar y);
+    uint64_t splitGlyph(SkScalar x, SkScalar y, void* context,
+                                 MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback = nullptr);
+
+    uint64_t toSDF(int width, int height, SkScalar x, SkScalar y, uint8_t * distanceField);
 
     void paint(milestro::skia::Canvas *canvas, SkScalar x, SkScalar y) {
         paragraph->paint(canvas->unwrap(), x, y);

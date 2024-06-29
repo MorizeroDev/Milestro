@@ -31,15 +31,11 @@ int64_t MilestroSkiaTextlayoutParagraphPaint(milestro::skia::textlayout::Paragra
 }
 
 int64_t MilestroSkiaTextlayoutParagraphSplitGlyph(milestro::skia::textlayout::Paragraph *p,
+                                                  void *context,
                                                   float x, float y,
-                                                  uint8_t *buffer,
-                                                  uint64_t bufferSize,
-                                                  uint64_t &needed
+                                                  MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback
 ) try {
-    auto info = p->splitGlyph(x, y);
-    auto result = info.toJson().dump();
-    needed = result.size();
-    return static_cast<int64_t>(milestro::util::copyStringToBuffer(result, buffer, bufferSize));
+    return p->splitGlyph(x, y, context, callback);
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }

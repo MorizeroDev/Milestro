@@ -139,6 +139,7 @@ endif ()
 
 #############################################################
 set(PROJECT_PLATFORM_LIBRARIES)
+set(PROJECT_PLATFORM_INCLUDES)
 
 # Setup external libraries
 include(ExternalProject)
@@ -217,8 +218,8 @@ endif ()
 set(MILESTRO_DEFINITIONS "MILESTRO_BUILDING_ENV")
 set(MILESTRO_CLI_DEFINITIONS "MILESTRO_BUILDING_ENV")
 
-set(MILESTRO_INCLUDES ${MILESTRO_SKIA_INCLUDE_PATH})
-set(MILESTRO_CLI_INCLUDES ${MILESTRO_SKIA_INCLUDE_PATH} "${PROJECT_SOURCE_DIR}/ext/json/include")
+set(MILESTRO_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${MILESTRO_SKIA_INCLUDE_PATH})
+set(MILESTRO_CLI_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${MILESTRO_SKIA_INCLUDE_PATH} "${PROJECT_SOURCE_DIR}/ext/json/include")
 
 set(MILESTRO_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES})
 set(MILESTRO_CLI_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES})
@@ -241,7 +242,9 @@ set(
         src/skia/Unicode.cpp
         src/skia/Canvas.cpp
         src/skia/Typeface.cpp
+        src/skia/Font.cpp
         src/skia/Image.cpp
+        src/skia/Path.cpp
         src/skia/textlayout/TextStyle.cpp
         src/skia/textlayout/FontCollection.cpp
         src/skia/textlayout/ParagraphStyle.cpp
@@ -256,6 +259,10 @@ set(
         src/game/milestro_game_skia_canvas.cpp
         src/game/milestro_game_skia_image.cpp
         src/game/milestro_game_skia_fontmanager.cpp
+        src/game/milestro_game_skia_fontcollection.cpp
+        src/game/milestro_game_skia_typeface.cpp
+        src/game/milestro_game_skia_font.cpp
+        src/game/milestro_game_skia_path.cpp
         src/game/milestro_game_skia_textlayout_paragraph.cpp
         src/game/milestro_game_skia_textlayout_paragraphbuilder.cpp
         src/game/milestro_game_skia_textlayout_paragraphstyle.cpp

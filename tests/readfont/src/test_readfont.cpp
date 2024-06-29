@@ -3,6 +3,7 @@
 #include "Milestro/skia/textlayout/ParagraphBuilder.h"
 #include "Milestro/skia/textlayout/ParagraphStyle.h"
 #include "Milestro/skia/textlayout/TextStyle.h"
+#include "Milestro/game/milestro_game_interface.h"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -14,6 +15,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <src/gpu/ganesh/GrDistanceFieldGenFromVector.h>
 
 namespace fs = std::filesystem;
 using namespace milestro::skia::textlayout;
@@ -27,22 +29,22 @@ int registerFontsInDirectory(milestro::skia::FontManager *fontManager, const std
         return successCount;
     }
 
-    for (const auto &entry : fs::directory_iterator(fontDir)) {
+    for (const auto &entry: fs::directory_iterator(fontDir)) {
         if (entry.path().extension() == ".bytes") {
             std::string fontPath = entry.path().string();
             auto result = fontManager->RegisterFontFromFile(fontPath.c_str());
 
             switch (result) {
-            case milestro::skia::MilestroFontManager::RegisterResult::Succeed:
-                std::cout << "Successfully registered font: " << fontPath << std::endl;
-                successCount++;
-                break;
-            case milestro::skia::MilestroFontManager::RegisterResult::Duplicated:
-                std::cout << "Font already registered: " << fontPath << std::endl;
-                break;
-            case milestro::skia::MilestroFontManager::RegisterResult::Failed:
-                std::cerr << "Failed to register font: " << fontPath << std::endl;
-                break;
+                case milestro::skia::MilestroFontManager::RegisterResult::Succeed:
+                    std::cout << "Successfully registered font: " << fontPath << std::endl;
+                    successCount++;
+                    break;
+                case milestro::skia::MilestroFontManager::RegisterResult::Duplicated:
+                    std::cout << "Font already registered: " << fontPath << std::endl;
+                    break;
+                case milestro::skia::MilestroFontManager::RegisterResult::Failed:
+                    std::cerr << "Failed to register font: " << fontPath << std::endl;
+                    break;
             }
         }
     }
@@ -51,6 +53,14 @@ int registerFontsInDirectory(milestro::skia::FontManager *fontManager, const std
 }
 
 class ReadImageTest : public ::testing::Test {
+public:
+    uint64_t SplitGlyphCallback(uint16_t glyphId, milestro::skia::Font *font, SkRect bound, SkSize advance) {
+        milestro::skia::Path *path;
+        MilestroSkiaFontGetPath(font, path, glyphId);
+
+        MilestroSkiaPathDestroy(path);
+    }
+
 protected:
     void SetUp() override {
         // 获取 FontManager 实例
@@ -63,6 +73,7 @@ protected:
     void TearDown() override {
         // 如果需要清理，可以在这里添加清理代码
     }
+
 
     milestro::skia::FontManager *fontManager{};
     fs::path imageDir;
@@ -90,7 +101,7 @@ TEST_F(ReadImageTest, RegistersFontsCorrectly) {
     // 验证字体是否真的被注册了
     auto familyNames = fontManager->GetFamiliesNames();
     bool foundNewFont = false;
-    for (const auto &name : familyNames) {
+    for (const auto &name: familyNames) {
         if (name.find("Source Han Sans VF") != std::string::npos) {
             foundNewFont = true;
             break;
@@ -100,7 +111,7 @@ TEST_F(ReadImageTest, RegistersFontsCorrectly) {
 
     // 验证注册的字体数量
     int expectedCount = 0;
-    for (const auto &entry : fs::directory_iterator(imageDir)) {
+    for (const auto &entry: fs::directory_iterator(imageDir)) {
         if (entry.path().extension() == ".bytes") {
             expectedCount++;
         }
@@ -135,6 +146,7 @@ TEST_F(ReadImageTest, HandlesEmptyDirectory) {
     fs::remove(emptyDir);
 }
 
+
 TEST_F(ReadImageTest, readfont1) {
     auto familyNames = fontManager->GetFamiliesNames();
     EXPECT_TRUE(std::find(familyNames.begin(), familyNames.end(), "Source Han Sans VF") != familyNames.end());
@@ -153,7 +165,7 @@ TEST_F(ReadImageTest, readfont1) {
     auto paragraphBuilder = std::make_unique<ParagraphBuilder>(paragraphStyle.get());
 
     std::vector<std::string> locales = {"ko", "ja", "zh-Hant", "zh-Hans"};
-    for (const auto &locale : locales) {
+    for (const auto &locale: locales) {
         textStyle->setLocale(SkString(locale.c_str()));
         paragraphBuilder->pushStyle(textStyle.get());
         std::string payload("曜\n");
@@ -163,8 +175,26 @@ TEST_F(ReadImageTest, readfont1) {
     auto paragraph = paragraphBuilder->build();
     paragraph->layout(1600);
 
-    paragraph->splitGlyph(100, 100);
-    
+    paragraph->splitGlyph(100, 100, (void *) this, [](const void *ctx,
+                                                      uint16_t glyphId,
+                                                      milestro::skia::Font *font,
+
+                                                      float boundLeft, float boundTop,
+                                                      float boundRight, float boundBottom,
+
+                                                      float advanceWidth, float advanceHeight) -> uint64_t {
+        auto rect = SkRect();
+        rect.fLeft = boundLeft;
+        rect.fTop = boundTop;
+        rect.fRight = boundRight;
+        rect.fBottom = boundBottom;
+
+        auto advance = SkSize();
+        advance.fHeight = advanceHeight;
+        advance.fWidth = advanceWidth;
+        return ((ReadImageTest *) ctx)->SplitGlyphCallback(glyphId, font, rect, advance);
+    });
+
 #ifdef MILESTRO_USE_CLI
     milestro::skia::Canvas canvas(1920, 1080, nullptr);
     paragraph->paint(&canvas, 100, 100);
