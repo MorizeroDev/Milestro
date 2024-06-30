@@ -26,7 +26,8 @@ public :
     uint64_t splitGlyph(SkScalar x, SkScalar y, void* context,
                                  MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback = nullptr);
 
-    uint64_t toSDF(int width, int height, SkScalar x, SkScalar y, uint8_t * distanceField);
+    int64_t toSDF(int sdfWidth, int sdfHeight, SkScalar sdfScale,
+                  SkScalar x, SkScalar y, uint8_t *distanceField);
 
     milestro::skia::Path* toPath(SkScalar x, SkScalar y);
 

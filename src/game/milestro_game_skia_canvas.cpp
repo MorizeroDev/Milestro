@@ -4,6 +4,7 @@
 
 extern "C" {
 int64_t MilestroSkiaCanvasCreate(milestro::skia::Canvas *&ret, int32_t width, int32_t height, void *pixels) try {
+    memset(pixels, 0, width * height * 4);
     ret = new milestro::skia::Canvas(width, height, pixels);
     return MILESTRO_API_RET_OK;
 } catch (...) {

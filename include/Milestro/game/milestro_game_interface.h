@@ -91,14 +91,12 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphSplitGlyph(milestro::skia::t
                                                                float x, float y,
                                                                [[milize::CSharpType("MilestroCTypes.SkiaTextlayoutParagraphSplitGlyphCallback")]] MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphToSDF(milestro::skia::textlayout::Paragraph *p,
-                                                          int32_t width, int32_t height,
+                                                          int32_t sdfWidth, int32_t sdfHeight, float sdfScale,
                                                           float x, float y,
-                                                          uint8_t *distanceField
-);
+                                                          uint8_t *distanceField);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphToPath(milestro::skia::textlayout::Paragraph *p,
                                                            milestro::skia::Path *&path,
-                                                           float x, float y
-);
+                                                           float x, float y);
 
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderCreate(milestro::skia::textlayout::ParagraphBuilder *&ret,
                                                                   milestro::skia::textlayout::ParagraphStyle *style);

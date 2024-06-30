@@ -18,10 +18,18 @@ namespace milestro::skia {
 
 class MILESTRO_API Canvas {
 public:
-    Canvas(int width, int height, void *pixels) {
-        imageInfo = SkImageInfo::MakeN32Premul(width, height).makeColorType(kRGBA_8888_SkColorType);
+    Canvas(int width, int height, void *pixels, bool singleChannel = false) {
+        imageInfo = SkImageInfo::MakeN32Premul(width, height);
+//        size_t size = 0;
+        if (singleChannel) {
+            imageInfo = imageInfo.makeColorType(kAlpha_8_SkColorType);
+//            size = width * height * 1;
+        } else {
+            imageInfo = imageInfo.makeColorType(kRGBA_8888_SkColorType);
+//            size = width * height * 4;
+        }
+
         if (pixels != nullptr) {
-            memset(pixels, 0, width * height * 4);
             bitmap.installPixels(imageInfo, pixels, imageInfo.minRowBytes());
         } else {
             bitmap.allocPixels(imageInfo);

@@ -16,6 +16,7 @@
 #include <src/gpu/ganesh/GrDistanceFieldGenFromVector.h>
 #include <src/gpu/ganesh/geometry/GrAATriangulator.h>
 #include <src/gpu/ganesh/GrEagerVertexAllocator.h>
+#include <src/core/SkDistanceFieldGen.h>
 
 namespace fs = std::filesystem;
 using namespace milestro::skia::textlayout;
@@ -241,7 +242,6 @@ TEST_F(FontRegistrationTest, splitGlyph) {
 #endif
 }
 
-
 TEST_F(FontRegistrationTest, paragraphToPath) {
     auto familyNames = fontManager->GetFamiliesNames();
     EXPECT_TRUE(std::find(familyNames.begin(), familyNames.end(), "Source Han Sans VF") != familyNames.end());
@@ -279,6 +279,55 @@ TEST_F(FontRegistrationTest, paragraphToPath) {
     auto triangles = path->ToAATriangles(0.1);
     auto vd = triangles->unwrap();
     printVertexData(vd);
+}
+
+TEST_F(FontRegistrationTest, paragraphToSdf) {
+    auto familyNames = fontManager->GetFamiliesNames();
+    EXPECT_TRUE(std::find(familyNames.begin(), familyNames.end(), "Source Han Sans VF") != familyNames.end());
+
+    auto textStyle = std::make_unique<TextStyle>();
+    std::vector<SkString> fontFamilies;
+    fontFamilies.emplace_back("Source Han Sans VF");
+
+    textStyle->setFontFamilies(fontFamilies);
+    textStyle->setFontSize(144);
+    textStyle->setColor(SK_ColorWHITE);
+
+    auto paragraphStyle = std::make_unique<ParagraphStyle>();
+    paragraphStyle->setTextStyle(textStyle.get());
+
+    auto paragraphBuilder = std::make_unique<ParagraphBuilder>(paragraphStyle.get());
+
+    std::vector<std::string> locales = {"ko", "ja", "zh-Hant", "zh-Hans"};
+    for (const auto &locale: locales) {
+        textStyle->setLocale(SkString(locale.c_str()));
+        paragraphBuilder->pushStyle(textStyle.get());
+        std::string payload = locale + ": 曜\n";
+        paragraphBuilder->addText(payload.c_str(), payload.size());
+    }
+
+    auto paragraph = paragraphBuilder->build();
+    paragraph->layout(1920 - 200);
+
+    auto dfWidth = (1920 *2+ 2 * SK_DistanceFieldPad);
+    auto dfHeight = (1080 *2+ 2 * SK_DistanceFieldPad);
+    std::vector<uint8_t> distanceField(dfWidth * dfHeight);
+    auto err = paragraph->toSDF(1920 * 2, 1080 * 2, 2, 100, 100, distanceField.data());
+    ASSERT_GE(err, 0);
+
+#ifdef MILESTRO_USE_CLI
+    std::vector<uint32_t> bitmap(dfWidth * dfHeight);
+    for (int x = 0; x < dfHeight; x++) {
+        for (int y = 0; y < dfWidth; y++) {
+            auto idx = x * dfWidth + y;
+            auto t = distanceField[idx];
+            bitmap[idx] = t << 24 | t << 16 | t << 8 | t;
+        }
+    }
+
+    milestro::skia::Canvas canvas(dfWidth, dfHeight, bitmap.data());
+    canvas.SaveToPng("sdf-test.png");
+#endif
 }
 
 int main(int argc, char **argv) {

@@ -1,4 +1,5 @@
 #include <src/gpu/ganesh/GrDistanceFieldGenFromVector.h>
+#include <src/core/SkDistanceFieldGen.h>
 #include "Milestro/skia/textlayout/Paragraph.h"
 #include "Milestro/skia/Font.h"
 #include "Milestro/skia/Path.h"
@@ -39,10 +40,28 @@ Paragraph::splitGlyph(SkScalar x, SkScalar y,
     return 0;
 }
 
-uint64_t Paragraph::toSDF(int width, int height, SkScalar x, SkScalar y, uint8_t *distanceField) {
+int64_t Paragraph::toSDF(
+        int sdfWidth, int sdfHeight, SkScalar sdfScale,
+        SkScalar x, SkScalar y, uint8_t *distanceField) {
     auto fullPath = generateToSkPath(x, y);
-    SkMatrix drawMatrix;
-    return GrGenerateDistanceFieldFromPath(distanceField, fullPath, drawMatrix, width, height, width) ? 0 : -1;
+    SkPaint paint;
+
+    SkMatrix dfMatrix = SkMatrix::Scale(sdfScale, sdfScale);
+    SkPath xformPath;
+    fullPath.transform(dfMatrix, &xformPath);
+
+    Canvas canvas(sdfWidth, sdfHeight, nullptr, true);
+    SkCanvas *skCanvas = canvas.unwrap();
+    skCanvas->drawPath(xformPath, paint);
+    SkPixmap pixmap;
+    if (!skCanvas->peekPixels(&pixmap)) {
+        return false;
+    }
+//#ifdef MILESTRO_USE_CLI
+//    canvas.SaveToPng("toSDF.png");
+//#endif
+
+    return SkGenerateDistanceFieldFromA8Image(distanceField, pixmap.addr8(), sdfWidth, sdfHeight, sdfWidth) ? 0 : -1;
 }
 
 Path *Paragraph::toPath(SkScalar x, SkScalar y) {
