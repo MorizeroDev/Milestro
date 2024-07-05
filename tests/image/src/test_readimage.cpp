@@ -1,6 +1,6 @@
-#include "Milestro/skia/textlayout/ParagraphBuilder.h"
 #include "Milestro/game/milestro_game_interface.h"
 #include "Milestro/io/milestro_io.h"
+#include "Milestro/skia/textlayout/ParagraphBuilder.h"
 #include "Milestro/util/milestro_encoding.h"
 #include <filesystem>
 #include <gtest/gtest.h>
@@ -20,10 +20,12 @@ protected:
     }
 
     void TestDrawSimpleImage(std::string name) {
-        milestro::skia::Image *img;
-        auto data = milestro::io::readFile(
-                milestro::util::encoding::WStringToString((imageDir / name).wstring())
-        );
+        milestro::skia::Image* img;
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+        auto data = milestro::io::readFile(milestro::util::encoding::WStringToString((imageDir / name).wstring()));
+#else
+        auto data = milestro::io::readFile(imageDir / name);
+#endif
         EXPECT_GE(MilestroSkiaImageCreate(img, data.data(), data.size()), 0);
         data.clear();
 
@@ -43,10 +45,12 @@ protected:
     }
 
     void TestDrawImage(std::string name) {
-        milestro::skia::Image *img;
-        auto data = milestro::io::readFile(
-                milestro::util::encoding::WStringToString((imageDir / name).wstring())
-        );
+        milestro::skia::Image* img;
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+        auto data = milestro::io::readFile(milestro::util::encoding::WStringToString((imageDir / name).wstring()));
+#else
+        auto data = milestro::io::readFile(imageDir / name);
+#endif
         EXPECT_GE(MilestroSkiaImageCreate(img, data.data(), data.size()), 0);
         data.clear();
 
@@ -58,10 +62,7 @@ protected:
         EXPECT_GE(MilestroSkiaImageGetHeight(img, height), 0);
 
         milestro::skia::Canvas canvas(width / 2, height / 2, nullptr);
-        EXPECT_GE(MilestroSkiaCanvasDrawImage(&canvas, img,
-                                              0, 0, width, height,
-                                              0, 0, width / 2, height / 2
-        ), 0);
+        EXPECT_GE(MilestroSkiaCanvasDrawImage(&canvas, img, 0, 0, width, height, 0, 0, width / 2, height / 2), 0);
 #ifdef MILESTRO_USE_CLI
         canvas.SaveToPng((name + ".full.png").c_str());
 #endif
@@ -71,10 +72,12 @@ protected:
 
 
     void TestDrawSimpleImageYFlipped(std::string name) {
-        milestro::skia::Image *img;
-        auto data = milestro::io::readFile(
-                milestro::util::encoding::WStringToString((imageDir / name).wstring())
-        );
+        milestro::skia::Image* img;
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+        auto data = milestro::io::readFile(milestro::util::encoding::WStringToString((imageDir / name).wstring()));
+#else
+        auto data = milestro::io::readFile(imageDir / name);
+#endif
         EXPECT_GE(MilestroSkiaImageCreate(img, data.data(), data.size()), 0);
         data.clear();
 
@@ -95,10 +98,12 @@ protected:
     }
 
     void TestRenderSvg(std::string name) {
-        auto data = milestro::io::readFile(
-                milestro::util::encoding::WStringToString((imageDir / name).wstring())
-        );
-        milestro::skia::Svg *svg;
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+        auto data = milestro::io::readFile(milestro::util::encoding::WStringToString((imageDir / name).wstring()));
+#else
+        auto data = milestro::io::readFile(imageDir / name);
+#endif
+        milestro::skia::Svg* svg;
         EXPECT_GE(MilestroSkiaSvgCreate(svg, data.data(), data.size()), 0);
         data.clear();
 
@@ -141,7 +146,7 @@ TEST_F(ReadImageTest, RenderSvg) {
     TestRenderSvg("RectSvg.svg");
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
     std::cout << "Milestro Test - Read Image" << std::endl;
 
     testing::InitGoogleTest(&argc, argv);
