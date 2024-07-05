@@ -22,7 +22,7 @@ protected:
     void TestDrawSimpleImage(std::string name) {
         milestro::skia::Image *img;
         auto data = milestro::io::readFile(
-            milestro::util::encoding::WStringToString((imageDir / name).wstring())
+                milestro::util::encoding::WStringToString((imageDir / name).wstring())
         );
         EXPECT_GE(MilestroSkiaImageCreate(img, data.data(), data.size()), 0);
         data.clear();
@@ -45,7 +45,7 @@ protected:
     void TestDrawImage(std::string name) {
         milestro::skia::Image *img;
         auto data = milestro::io::readFile(
-            milestro::util::encoding::WStringToString((imageDir / name).wstring())
+                milestro::util::encoding::WStringToString((imageDir / name).wstring())
         );
         EXPECT_GE(MilestroSkiaImageCreate(img, data.data(), data.size()), 0);
         data.clear();
@@ -94,6 +94,25 @@ protected:
         EXPECT_GE(MilestroSkiaImageDestroy(img), 0);
     }
 
+    void TestRenderSvg(std::string name) {
+        auto data = milestro::io::readFile(
+                milestro::util::encoding::WStringToString((imageDir / name).wstring())
+        );
+        milestro::skia::Svg *svg;
+        EXPECT_GE(MilestroSkiaSvgCreate(svg, data.data(), data.size()), 0);
+        data.clear();
+
+        int width = 1024;
+        int height = 1024;
+        std::vector<uint8_t> pixels(width * height * 4);
+        milestro::skia::Canvas canvas(width, height, pixels.data(), false, true);
+        EXPECT_GE(MilestroSkiaSvgRender(svg, &canvas), 0);
+#ifdef MILESTRO_USE_CLI
+        canvas.SaveToPng((name + ".svg.png").c_str());
+#endif
+        EXPECT_GE(MilestroSkiaSvgDestroy(svg), 0);
+    }
+
     fs::path imageDir;
 };
 
@@ -116,6 +135,10 @@ TEST_F(ReadImageTest, DrawSimpleImageYFlipped) {
     TestDrawSimpleImageYFlipped("bg_day_character.png");
     TestDrawSimpleImageYFlipped("test-large.avif");
     TestDrawSimpleImageYFlipped("test-small.avif");
+}
+
+TEST_F(ReadImageTest, RenderSvg) {
+    TestRenderSvg("RectSvg.svg");
 }
 
 int main(int argc, char **argv) {

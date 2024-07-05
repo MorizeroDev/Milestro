@@ -47,6 +47,11 @@ MILESTRO_API int64_t MilestroSkiaPathDestroy(milestro::skia::Path *&ret);
 MILESTRO_API int64_t MilestroSkiaPathToAATriangles(milestro::skia::Path *p,
                                                    milestro::skia::VertexData *&vertexData, float tolerance);
 
+MILESTRO_API int64_t MilestroSkiaSvgCreate(milestro::skia::Svg *&ret,
+                                           [[milize::CSharpType("void*")]] void *data, uint64_t size);
+MILESTRO_API int64_t MilestroSkiaSvgDestroy(milestro::skia::Svg *&ret);
+MILESTRO_API int64_t MilestroSkiaSvgRender(milestro::skia::Svg *svg, milestro::skia::Canvas *canvas);
+
 MILESTRO_API int64_t MilestroSkiaVertexDataDestroy(milestro::skia::VertexData *&ret);
 MILESTRO_API int64_t MilestroSkiaVertexDataGetVertexCount(milestro::skia::VertexData *d,
                                                           uint64_t &numVertices);

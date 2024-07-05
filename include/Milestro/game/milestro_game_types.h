@@ -23,6 +23,8 @@ namespace milestro {
 
         class Path;
 
+        class Svg;
+
         class VertexData;
         namespace textlayout {
             class Paragraph;

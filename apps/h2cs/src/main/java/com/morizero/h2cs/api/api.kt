@@ -24,6 +24,7 @@ private fun List<String>?.typeToCS(): String {
         listOf("milestro::skia::Typeface") to "IntPtr",
         listOf("milestro::skia::Font") to "IntPtr",
         listOf("milestro::skia::Path") to "IntPtr",
+        listOf("milestro::skia::Svg") to "IntPtr",
         listOf("milestro::skia::VertexData") to "IntPtr",
         listOf("milestro::skia::textlayout::Paragraph") to "IntPtr",
         listOf("milestro::skia::textlayout::ParagraphBuilder") to "IntPtr",

@@ -290,13 +290,28 @@ TEST_F(ReadImageTest, paragraphToSdf) {
     fontFamilies.emplace_back("Source Han Sans VF");
 
     textStyle->setFontFamilies(fontFamilies);
-    textStyle->setFontSize(144);
+    textStyle->setFontSize(72);
     textStyle->setColor(SK_ColorWHITE);
 
     auto paragraphStyle = std::make_unique<ParagraphStyle>();
     paragraphStyle->setTextStyle(textStyle.get());
 
     auto paragraphBuilder = std::make_unique<ParagraphBuilder>(paragraphStyle.get());
+    textStyle->setLocale(SkString("zh-Hans"));
+    paragraphBuilder->pushStyle(textStyle.get());
+    std::string payload = "滴答。\n"
+                          "滴答、滴答、滴答……\n"
+                          "这座城市被滴答声淹没了。\n"
+                          "雨下个不停。\n"
+                          "我站在天台楼梯间的房檐下，无数的雨滴落在地上激起一层层波纹，它们似乎在演奏着一场演出时间为永久的交响乐。\n"
+                          "早在我出生前，这场雨就已经开始了，而且据我上一辈的人说，早在他们出生之前，这场雨也已经在下了。\n"
+                          "雨下个不停，它公平地落下，落在所有地方，带走每一个被它触摸到的人，将人们引入雨的世界。在旁人眼中，这些被雨滴带走的人就像是睡着了一样，做着永远不会结束的梦。\n"
+                          "人们将自己藏在室内，用古老结实的钢筋混凝土铸成庇护所，用厚实防水的尼龙布料制成衣物，为了不陷入永恒的梦。\n"
+                          "我看着人们在雨的世界里惶恐地活着，身边的人们日复一日地做着同样的事:收集食物、缝补衣物、维护房屋……\n"
+                          "我并不知道到底是梦中的世界更加幸福，还是现实的世界更好，我只是静静地听着雨的话语，淅淅沥沥，哗哗啦啦，我静静地听着。\n"
+                          "滴答、滴答、滴答……\n"
+                          "雨说。";
+    paragraphBuilder->addText(payload.c_str(), payload.size());
 
     std::vector<std::string> locales = {"ko", "ja", "zh-Hant", "zh-Hans"};
     for (const auto &locale: locales) {
