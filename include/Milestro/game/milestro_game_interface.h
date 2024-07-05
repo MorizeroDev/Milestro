@@ -59,8 +59,15 @@ MILESTRO_API int64_t MilestroSkiaFontCollectionClearCaches();
 MILESTRO_API int64_t MilestroSkiaFontCollectionIsFontFallbackEnabled(int32_t &enabled);
 MILESTRO_API int64_t MilestroSkiaFontCollectionSetFontFallbackEnabled(int32_t enabled);
 
-MILESTRO_API int64_t MilestroSkiaCanvasCreate(milestro::skia::Canvas *&ret, int32_t width, int32_t height,
-                                              [[milize::CSharpType("void*")]] void *pixels);
+MILESTRO_API int64_t MilestroSkiaCanvasCreate(milestro::skia::Canvas *&ret,
+                                              int32_t width,
+                                              int32_t height);
+MILESTRO_API int64_t MilestroSkiaCanvasCreateWithMemory(milestro::skia::Canvas *&ret,
+                                                        int32_t width,
+                                                        int32_t height,
+                                                        [[milize::CSharpType("void*")]] void *pixels,
+                                                        int64_t verticalFlip,
+                                                        int64_t clearPixels);
 MILESTRO_API int64_t MilestroSkiaCanvasDestroy(milestro::skia::Canvas *&ret);
 MILESTRO_API int64_t MilestroSkiaCanvasGetTexture(milestro::skia::Canvas *ret,
                                                   [[milize::CSharpType("void*")]] void *targetSpace);
@@ -93,7 +100,7 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphSplitGlyph(milestro::skia::t
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphToSDF(milestro::skia::textlayout::Paragraph *p,
                                                           int32_t sdfWidth, int32_t sdfHeight, float sdfScale,
                                                           float x, float y,
-                                                          uint8_t *distanceField);
+                                                          [[milize::CSharpType("void*")]]  void *distanceField);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphToPath(milestro::skia::textlayout::Paragraph *p,
                                                            milestro::skia::Path *&path,
                                                            float x, float y);

@@ -41,9 +41,9 @@ int64_t MilestroSkiaTextlayoutParagraphSplitGlyph(milestro::skia::textlayout::Pa
 int64_t MilestroSkiaTextlayoutParagraphToSDF(milestro::skia::textlayout::Paragraph *p,
                                              int32_t sdfWidth, int32_t sdfHeight, float sdfScale,
                                              float x, float y,
-                                             uint8_t *distanceField
+                                             void *distanceField
 ) try {
-    return p->toSDF(sdfWidth, sdfHeight, sdfScale, x, y, distanceField);
+    return p->toSDF(sdfWidth, sdfHeight, sdfScale, x, y, reinterpret_cast<uint8_t *>(distanceField));
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }

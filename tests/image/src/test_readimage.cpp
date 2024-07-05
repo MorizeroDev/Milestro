@@ -10,7 +10,7 @@
 
 namespace fs = std::filesystem;
 
-class FontRegistrationTest : public ::testing::Test {
+class ReadImageTest : public ::testing::Test {
 protected:
     void SetUp() override {
         imageDir = fs::current_path() / "data" / "image";
@@ -69,21 +69,53 @@ protected:
         EXPECT_GE(MilestroSkiaImageDestroy(img), 0);
     }
 
+
+    void TestDrawSimpleImageYFlipped(std::string name) {
+        milestro::skia::Image *img;
+        auto data = milestro::io::readFile(
+                milestro::util::encoding::WStringToString((imageDir / name).wstring())
+        );
+        EXPECT_GE(MilestroSkiaImageCreate(img, data.data(), data.size()), 0);
+        data.clear();
+
+        EXPECT_GE(MilestroSkiaImageSetColorType(img, 4 /* kRGBA_8888_SkColorType */), 0);
+
+        int width;
+        EXPECT_GE(MilestroSkiaImageGetWidth(img, width), 0);
+        int height;
+        EXPECT_GE(MilestroSkiaImageGetHeight(img, height), 0);
+
+        std::vector<uint8_t> pixels(width * height * 4);
+        milestro::skia::Canvas canvas(width, height, pixels.data(), false, true);
+        EXPECT_GE(MilestroSkiaCanvasDrawImageSimple(&canvas, img, 0, 0), 0);
+#ifdef MILESTRO_USE_CLI
+        canvas.SaveToPng((name + ".simple.yflipped.png").c_str());
+#endif
+        EXPECT_GE(MilestroSkiaImageDestroy(img), 0);
+    }
+
     fs::path imageDir;
 };
 
-TEST_F(FontRegistrationTest, DrawSimpleImage) {
+TEST_F(ReadImageTest, DrawSimpleImage) {
     TestDrawSimpleImage("a_reincarnation_of_a_scattering_spring.jpg");
     TestDrawSimpleImage("bg_day_character.png");
     TestDrawSimpleImage("test-large.avif");
     TestDrawSimpleImage("test-small.avif");
 }
 
-TEST_F(FontRegistrationTest, DrawSimple) {
+TEST_F(ReadImageTest, DrawImage) {
     TestDrawImage("a_reincarnation_of_a_scattering_spring.jpg");
     TestDrawImage("bg_day_character.png");
     TestDrawImage("test-large.avif");
     TestDrawImage("test-small.avif");
+}
+
+TEST_F(ReadImageTest, DrawSimpleImageYFlipped) {
+    TestDrawSimpleImageYFlipped("a_reincarnation_of_a_scattering_spring.jpg");
+    TestDrawSimpleImageYFlipped("bg_day_character.png");
+    TestDrawSimpleImageYFlipped("test-large.avif");
+    TestDrawSimpleImageYFlipped("test-small.avif");
 }
 
 int main(int argc, char **argv) {

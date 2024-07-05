@@ -73,7 +73,7 @@ void printVertexData(sk_sp<GrThreadSafeCache::VertexData> vertexData) {
 }
 
 
-class FontRegistrationTest : public ::testing::Test {
+class ReadImageTest : public ::testing::Test {
 public:
     uint64_t SplitGlyphCallback(uint16_t glyphId, milestro::skia::Font *font, SkRect bound, SkSize advance) {
         milestro::skia::Path *path;
@@ -119,7 +119,7 @@ protected:
     fs::path imageDir;
 };
 
-TEST_F(FontRegistrationTest, RegistersFontsCorrectly) {
+TEST_F(ReadImageTest, RegistersFontsCorrectly) {
     // 捕获 std::cout 和 std::cerr
     std::stringstream capturedStdout;
     std::stringstream capturedStderr;
@@ -159,7 +159,7 @@ TEST_F(FontRegistrationTest, RegistersFontsCorrectly) {
     EXPECT_EQ(registeredCount, expectedCount);
 }
 
-TEST_F(FontRegistrationTest, HandlesNonExistentDirectory) {
+TEST_F(ReadImageTest, HandlesNonExistentDirectory) {
     std::string nonExistentPath = (fs::current_path() / "non_existent_dir").string();
 
     std::stringstream capturedStderr;
@@ -173,7 +173,7 @@ TEST_F(FontRegistrationTest, HandlesNonExistentDirectory) {
     EXPECT_TRUE(capturedStderr.str().find("Font directory does not exist") != std::string::npos);
 }
 
-TEST_F(FontRegistrationTest, HandlesEmptyDirectory) {
+TEST_F(ReadImageTest, HandlesEmptyDirectory) {
     // 创建一个临时的空目录
     fs::path emptyDir = fs::temp_directory_path() / "empty_font_dir";
     fs::create_directory(emptyDir);
@@ -187,7 +187,7 @@ TEST_F(FontRegistrationTest, HandlesEmptyDirectory) {
 }
 
 
-TEST_F(FontRegistrationTest, splitGlyph) {
+TEST_F(ReadImageTest, splitGlyph) {
     auto familyNames = fontManager->GetFamiliesNames();
     EXPECT_TRUE(std::find(familyNames.begin(), familyNames.end(), "Source Han Sans VF") != familyNames.end());
 
@@ -232,7 +232,7 @@ TEST_F(FontRegistrationTest, splitGlyph) {
         auto advance = SkSize();
         advance.fHeight = advanceHeight;
         advance.fWidth = advanceWidth;
-        return ((FontRegistrationTest *) ctx)->SplitGlyphCallback(glyphId, font, rect, advance);
+        return ((ReadImageTest *) ctx)->SplitGlyphCallback(glyphId, font, rect, advance);
     });
 
 #ifdef MILESTRO_USE_CLI
@@ -242,7 +242,7 @@ TEST_F(FontRegistrationTest, splitGlyph) {
 #endif
 }
 
-TEST_F(FontRegistrationTest, paragraphToPath) {
+TEST_F(ReadImageTest, paragraphToPath) {
     auto familyNames = fontManager->GetFamiliesNames();
     EXPECT_TRUE(std::find(familyNames.begin(), familyNames.end(), "Source Han Sans VF") != familyNames.end());
 
@@ -281,7 +281,7 @@ TEST_F(FontRegistrationTest, paragraphToPath) {
     printVertexData(vd);
 }
 
-TEST_F(FontRegistrationTest, paragraphToSdf) {
+TEST_F(ReadImageTest, paragraphToSdf) {
     auto familyNames = fontManager->GetFamiliesNames();
     EXPECT_TRUE(std::find(familyNames.begin(), familyNames.end(), "Source Han Sans VF") != familyNames.end());
 
