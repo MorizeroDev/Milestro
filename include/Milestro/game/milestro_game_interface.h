@@ -319,6 +319,13 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetTextBaseline(milestro::sk
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetPlaceholder(milestro::skia::textlayout::TextStyle *s);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleIsPlaceholder(milestro::skia::textlayout::TextStyle *s,
                                                                   int32_t &isPlaceholder);
+
+MILESTRO_API int64_t MilestroIcuIcuUCollatorCreate(milestro::icu::IcuUCollator *&ret, uint8_t *collation);
+MILESTRO_API int64_t MilestroIcuIcuUCollatorDestroy(milestro::icu::IcuUCollator *&ret);
+MILESTRO_API int64_t MilestroIcuIcuUCollatorCompare(
+        milestro::icu::IcuUCollator *cmp,
+        int32_t &result, uint8_t *a, uint8_t *b
+);
 }
 #ifdef __clang__
 #pragma clang diagnostic pop

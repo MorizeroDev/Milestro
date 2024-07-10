@@ -179,6 +179,7 @@ elseif (MILESTRO_SKIA_LIB_PATH AND MILESTRO_SKIA_INCLUDE_PATH)
 
     if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
         target_compile_definitions(skia INTERFACE SK_TRIVIAL_ABI=[[clang::trivial_abi]])
+        target_compile_definitions(skia INTERFACE U_DISABLE_RENAMING=1)
     else ()
         message(STATUS ${CMAKE_CXX_COMPILER_ID})
         message(FATAL_ERROR "Must use Clang compiler")
@@ -187,6 +188,11 @@ else ()
     message(FATAL_ERROR "No Skia set")
 endif ()
 
+
+set(PROJECT_PLATFORM_INCLUDES ${PROJECT_PLATFORM_INCLUDES}
+        ${SKIA_INCLUDE_PATH}/third_party/externals/icu/source/i18n
+        ${SKIA_INCLUDE_PATH}/third_party/externals/icu/source/common
+)
 
 if (DEFINED APPLE)
     enable_language(Swift)
@@ -252,6 +258,8 @@ set(
         src/skia/textlayout/ParagraphStyle.cpp
         src/skia/textlayout/ParagraphBuilder.cpp
         src/skia/textlayout/Paragraph.cpp
+
+        src/icu/IcuUCCollator.cpp
 )
 
 set(
@@ -272,6 +280,8 @@ set(
         src/game/milestro_game_skia_textlayout_paragraphstyle.cpp
         src/game/milestro_game_skia_textlayout_strutstyle.cpp
         src/game/milestro_game_skia_textlayout_textstyle.cpp
+
+        src/game/milestro_game_icu_icuucollator.cpp
 )
 
 set(

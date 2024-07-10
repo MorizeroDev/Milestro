@@ -1,7 +1,6 @@
 # Milestro
 
-
-
+Milestro (Milthm Maestro), a Skia integration for Unity games.
 
 ## 开发
 
