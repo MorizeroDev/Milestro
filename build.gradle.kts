@@ -1,5 +1,5 @@
 plugins {
-    id("party.para.h2cs") version "1.0.0" apply true
+    id("party.para.h2cs") version "1.0.1" apply true
 }
 
 group = "com.morizero.milestro"
