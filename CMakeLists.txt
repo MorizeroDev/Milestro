@@ -159,7 +159,19 @@ add_subdirectory("ext/cli11" EXCLUDE_FROM_ALL)
 
 if (MILESTRO_SKIA_CMAKE AND MILESTRO_SKIA_INCLUDE_PATH)
     add_subdirectory("${MILESTRO_SKIA_CMAKE}" "ext/skia" EXCLUDE_FROM_ALL)
-    set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} "modules__skparagraph")
+    set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES}
+            "modules__skparagraph"
+            "modules__svg"
+            "third_party__icu"
+    )
+    set(SKIA_INCLUDE_PATH "${MILESTRO_SKIA_INCLUDE_PATH}")
+    target_compile_definitions(third_party__icu INTERFACE
+            U_USING_ICU_NAMESPACE=0
+            U_DISABLE_RENAMING=1
+            U_SHOW_CPLUSPLUS_API=0
+            U_NOEXCEPT=
+            U_STATIC_IMPLEMENTATION
+    )
 elseif (MILESTRO_SKIA_LIB_PATH AND MILESTRO_SKIA_INCLUDE_PATH)
     add_library(skia INTERFACE IMPORTED)
     if (MSVC)
@@ -168,18 +180,24 @@ elseif (MILESTRO_SKIA_LIB_PATH AND MILESTRO_SKIA_INCLUDE_PATH)
         file(GLOB SKIA_LIB_FILES "${MILESTRO_SKIA_LIB_PATH}/*.a")
     endif ()
 
-    if (SKIA_LIB_FILES)
-        set(SKIA_LIB_LIST ${SKIA_LIB_FILES})
-        set(SKIA_INCLUDE_PATH "${MILESTRO_SKIA_INCLUDE_PATH}")
-        target_link_libraries(skia INTERFACE ${SKIA_LIB_LIST})
-        target_include_directories(skia INTERFACE ${SKIA_INCLUDE_PATH})
-    else ()
+    if (NOT SKIA_LIB_FILES)
         message(FATAL_ERROR "Unknown Skia : ${MILESTRO_SKIA_LIB_PATH}")
     endif ()
 
+    set(SKIA_LIB_LIST ${SKIA_LIB_FILES})
+    set(SKIA_INCLUDE_PATH "${MILESTRO_SKIA_INCLUDE_PATH}")
+    target_link_libraries(skia INTERFACE ${SKIA_LIB_LIST})
+    target_include_directories(skia INTERFACE ${SKIA_INCLUDE_PATH})
+    target_compile_definitions(skia INTERFACE
+            U_USING_ICU_NAMESPACE=0
+            U_DISABLE_RENAMING=1
+            U_SHOW_CPLUSPLUS_API=0
+            U_NOEXCEPT=
+            U_STATIC_IMPLEMENTATION
+    )
+
     if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
         target_compile_definitions(skia INTERFACE SK_TRIVIAL_ABI=[[clang::trivial_abi]])
-        target_compile_definitions(skia INTERFACE U_DISABLE_RENAMING=1)
     else ()
         message(STATUS ${CMAKE_CXX_COMPILER_ID})
         message(FATAL_ERROR "Must use Clang compiler")

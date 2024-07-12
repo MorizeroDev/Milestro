@@ -39,6 +39,10 @@ namespace milestro {
         }
     }
 
+    namespace icu {
+        class IcuUCollator;
+    }
+
     namespace cdt {
         class MilestroTriangulation;
     }

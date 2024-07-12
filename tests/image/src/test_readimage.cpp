@@ -2,6 +2,7 @@
 #include "Milestro/io/milestro_io.h"
 #include "Milestro/skia/textlayout/ParagraphBuilder.h"
 #include "Milestro/util/milestro_encoding.h"
+#include "Milestro/util/milestro_time.h"
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <iostream>
@@ -20,7 +21,7 @@ protected:
     }
 
     void TestDrawSimpleImage(std::string name) {
-        milestro::skia::Image* img;
+        milestro::skia::Image *img;
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
         auto data = milestro::io::readFile(milestro::util::encoding::WStringToString((imageDir / name).wstring()));
 #else
@@ -45,7 +46,7 @@ protected:
     }
 
     void TestDrawImage(std::string name) {
-        milestro::skia::Image* img;
+        milestro::skia::Image *img;
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
         auto data = milestro::io::readFile(milestro::util::encoding::WStringToString((imageDir / name).wstring()));
 #else
@@ -72,7 +73,7 @@ protected:
 
 
     void TestDrawSimpleImageYFlipped(std::string name) {
-        milestro::skia::Image* img;
+        milestro::skia::Image *img;
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
         auto data = milestro::io::readFile(milestro::util::encoding::WStringToString((imageDir / name).wstring()));
 #else
@@ -103,7 +104,7 @@ protected:
 #else
         auto data = milestro::io::readFile(imageDir / name);
 #endif
-        milestro::skia::Svg* svg;
+        milestro::skia::Svg *svg;
         EXPECT_GE(MilestroSkiaSvgCreate(svg, data.data(), data.size()), 0);
         data.clear();
 
@@ -142,11 +143,26 @@ TEST_F(ReadImageTest, DrawSimpleImageYFlipped) {
     TestDrawSimpleImageYFlipped("test-small.avif");
 }
 
+TEST_F(ReadImageTest, SpeedCompareTest) {
+    milestro::util::time::StopWatch([&]() {
+        TestDrawSimpleImage("a_reincarnation_of_a_scattering_spring.jpg");
+        TestDrawSimpleImage("bg_day_character.png");
+        TestDrawSimpleImage("test-large.avif");
+        TestDrawSimpleImage("test-small.avif");
+    }, "normal");
+    milestro::util::time::StopWatch([&]() {
+        TestDrawSimpleImageYFlipped("a_reincarnation_of_a_scattering_spring.jpg");
+        TestDrawSimpleImageYFlipped("bg_day_character.png");
+        TestDrawSimpleImageYFlipped("test-large.avif");
+        TestDrawSimpleImageYFlipped("test-small.avif");
+    }, "yflipped");
+}
+
 TEST_F(ReadImageTest, RenderSvg) {
     TestRenderSvg("RectSvg.svg");
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     std::cout << "Milestro Test - Read Image" << std::endl;
 
     testing::InitGoogleTest(&argc, argv);
