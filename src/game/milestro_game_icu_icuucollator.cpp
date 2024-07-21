@@ -29,4 +29,11 @@ int64_t MilestroIcuIcuUCollatorCompare(milestro::icu::IcuUCollator* cmp, int32_t
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
+
+int64_t MilestroIcuIcuUCollatorSetAttribute(milestro::icu::IcuUCollator* collator, int32_t attr, int32_t value) try {
+    collator->setAttribute((UColAttribute)attr, (UColAttributeValue)value);
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
 }

@@ -326,6 +326,10 @@ MILESTRO_API int64_t MilestroIcuIcuUCollatorCompare(
         milestro::icu::IcuUCollator *cmp,
         int32_t &result, uint8_t *a, uint8_t *b
 );
+MILESTRO_API int64_t MilestroIcuIcuUCollatorSetAttribute(
+        milestro::icu::IcuUCollator *collator,
+        int32_t attr, int32_t value
+);
 }
 #ifdef __clang__
 #pragma clang diagnostic pop
