@@ -73,7 +73,7 @@ void printVertexData(sk_sp<GrThreadSafeCache::VertexData> vertexData) {
 }
 
 
-class ReadImageTest : public ::testing::Test {
+class ReadFontTest : public ::testing::Test {
 public:
     uint64_t SplitGlyphCallback(uint16_t glyphId, milestro::skia::Font *font, SkRect bound, SkSize advance) {
         milestro::skia::Path *path;
@@ -108,26 +108,28 @@ protected:
 
         // 设置字体目录路径
         imageDir = fs::current_path() / "data" / "font";
+
+        registeredCount = registerFontsInDirectory(fontManager, imageDir.string());
     }
 
     void TearDown() override {
         // 如果需要清理，可以在这里添加清理代码
     }
 
-
+    // 调用被测试的函数
+    int registeredCount = 0;
     milestro::skia::FontManager *fontManager{};
     fs::path imageDir;
 };
 
-TEST_F(ReadImageTest, RegistersFontsCorrectly) {
+TEST_F(ReadFontTest, RegistersFontsCorrectly) {
     // 捕获 std::cout 和 std::cerr
     std::stringstream capturedStdout;
     std::stringstream capturedStderr;
     std::streambuf *oldCout = std::cout.rdbuf(capturedStdout.rdbuf());
     std::streambuf *oldCerr = std::cerr.rdbuf(capturedStderr.rdbuf());
 
-    // 调用被测试的函数
-    int registeredCount = registerFontsInDirectory(fontManager, imageDir.string());
+
 
     // 恢复 std::cout 和 std::cerr
     std::cout.rdbuf(oldCout);
@@ -159,7 +161,7 @@ TEST_F(ReadImageTest, RegistersFontsCorrectly) {
     EXPECT_EQ(registeredCount, expectedCount);
 }
 
-TEST_F(ReadImageTest, HandlesNonExistentDirectory) {
+TEST_F(ReadFontTest, HandlesNonExistentDirectory) {
     std::string nonExistentPath = (fs::current_path() / "non_existent_dir").string();
 
     std::stringstream capturedStderr;
@@ -173,7 +175,7 @@ TEST_F(ReadImageTest, HandlesNonExistentDirectory) {
     EXPECT_TRUE(capturedStderr.str().find("Font directory does not exist") != std::string::npos);
 }
 
-TEST_F(ReadImageTest, HandlesEmptyDirectory) {
+TEST_F(ReadFontTest, HandlesEmptyDirectory) {
     // 创建一个临时的空目录
     fs::path emptyDir = fs::temp_directory_path() / "empty_font_dir";
     fs::create_directory(emptyDir);
@@ -187,7 +189,7 @@ TEST_F(ReadImageTest, HandlesEmptyDirectory) {
 }
 
 
-TEST_F(ReadImageTest, splitGlyph) {
+TEST_F(ReadFontTest, splitGlyph) {
     auto familyNames = fontManager->GetFamiliesNames();
     EXPECT_TRUE(std::find(familyNames.begin(), familyNames.end(), "Source Han Sans VF") != familyNames.end());
 
@@ -232,7 +234,7 @@ TEST_F(ReadImageTest, splitGlyph) {
         auto advance = SkSize();
         advance.fHeight = advanceHeight;
         advance.fWidth = advanceWidth;
-        return ((ReadImageTest *) ctx)->SplitGlyphCallback(glyphId, font, rect, advance);
+        return ((ReadFontTest *) ctx)->SplitGlyphCallback(glyphId, font, rect, advance);
     });
 
 #ifdef MILESTRO_USE_CLI
@@ -242,7 +244,7 @@ TEST_F(ReadImageTest, splitGlyph) {
 #endif
 }
 
-TEST_F(ReadImageTest, paragraphToPath) {
+TEST_F(ReadFontTest, paragraphToPath) {
     auto familyNames = fontManager->GetFamiliesNames();
     EXPECT_TRUE(std::find(familyNames.begin(), familyNames.end(), "Source Han Sans VF") != familyNames.end());
 
@@ -281,7 +283,7 @@ TEST_F(ReadImageTest, paragraphToPath) {
     printVertexData(vd);
 }
 
-TEST_F(ReadImageTest, paragraphToSdf) {
+TEST_F(ReadFontTest, paragraphToSdf) {
     auto familyNames = fontManager->GetFamiliesNames();
     EXPECT_TRUE(std::find(familyNames.begin(), familyNames.end(), "Source Han Sans VF") != familyNames.end());
 
