@@ -6,9 +6,14 @@ option(MILESTRO_BUILD_FRAMEWORK_LIBS "Build framework library" OFF)
 option(MILESTRO_ENABLE_CLI "Enable cli" ON)
 option(MILESTRO_ENABLE_TESTS "Enable tests" ON)
 option(MILESTRO_WITH_ADDRESS_SANITIZER "Build with clang address sanitizer" OFF)
+option(MILESTRO_ENABLE_RELEASE_SYMBOLS "Build release binaries with debug info for split symbol packages" ON)
+option(MILESTRO_REMAP_SOURCE_PATHS "Remap absolute source and build paths in release debug info" ON)
 option(MILESTRO_SKIA_LIB_PATH "Skia library path")
 option(MILESTRO_SKIA_INCLUDE_PATH "Skia include path")
 option(MILESTRO_SKIA_CMAKE "Skia cmake path")
+
+set(MILESTRO_REMAP_SOURCE_PREFIX "Milestro" CACHE STRING "Logical source root used in release debug info and __FILE__ remapping")
+set(MILESTRO_REMAP_BUILD_PREFIX "MilestroBuild" CACHE STRING "Logical build root used in release debug info and __FILE__ remapping")
 
 set(CMAKE_CXX_STANDARD 20)
 
@@ -29,6 +34,21 @@ if (MSVC)
 else ()
     set(CMAKE_CXX_FLAGS_DEBUG "-g")
     set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+endif ()
+
+if (MILESTRO_ENABLE_RELEASE_SYMBOLS)
+    foreach (MILESTRO_DEBUG_LANG C CXX OBJC OBJCXX)
+        add_compile_options("$<$<AND:$<CONFIG:Release>,$<COMPILE_LANG_AND_ID:${MILESTRO_DEBUG_LANG},GNU,Clang,AppleClang>>:-g>")
+    endforeach ()
+endif ()
+
+if (MILESTRO_REMAP_SOURCE_PATHS)
+    foreach (MILESTRO_REMAP_LANG C CXX OBJC OBJCXX)
+        foreach (MILESTRO_REMAP_FLAG -ffile-prefix-map -fdebug-prefix-map -fmacro-prefix-map)
+            add_compile_options("$<$<COMPILE_LANG_AND_ID:${MILESTRO_REMAP_LANG},GNU,Clang,AppleClang>:${MILESTRO_REMAP_FLAG}=${PROJECT_SOURCE_DIR}=${MILESTRO_REMAP_SOURCE_PREFIX}>")
+            add_compile_options("$<$<COMPILE_LANG_AND_ID:${MILESTRO_REMAP_LANG},GNU,Clang,AppleClang>:${MILESTRO_REMAP_FLAG}=${PROJECT_BINARY_DIR}=${MILESTRO_REMAP_BUILD_PREFIX}>")
+        endforeach ()
+    endforeach ()
 endif ()
 
 # Keep this option OFF
@@ -213,6 +233,14 @@ set(PROJECT_PLATFORM_INCLUDES ${PROJECT_PLATFORM_INCLUDES}
 )
 
 if (DEFINED APPLE)
+    if (MILESTRO_ENABLE_RELEASE_SYMBOLS)
+        string(APPEND CMAKE_Swift_FLAGS " -g")
+    endif ()
+    if (MILESTRO_REMAP_SOURCE_PATHS)
+        string(APPEND CMAKE_Swift_FLAGS " -debug-prefix-map ${PROJECT_SOURCE_DIR}=${MILESTRO_REMAP_SOURCE_PREFIX}")
+        string(APPEND CMAKE_Swift_FLAGS " -debug-prefix-map ${PROJECT_BINARY_DIR}=${MILESTRO_REMAP_BUILD_PREFIX}")
+    endif ()
+
     enable_language(Swift)
     enable_language(OBJC)
     enable_language(OBJCXX)
@@ -353,6 +381,13 @@ target_link_libraries(Milestro
         skia
         nlohmann_json::nlohmann_json
 )
+
+install(TARGETS Milestro
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        FRAMEWORK DESTINATION lib
+        PUBLIC_HEADER DESTINATION include/Milestro/game)
 
 if (MSVC)
     #    set_target_properties(Milestro PROPERTIES LIBRARY_OUTPUT_NAME  "libMilestro")
