@@ -6,12 +6,12 @@ namespace Milestro.Skia
     {
         private void Update()
         {
-            UnityMetalRenderTextureSurface.CollectCompletedEventsFromPump();
+            UnitySkiaRenderTextureSurface.CollectCompletedEventsFromPump();
         }
 
         private void LateUpdate()
         {
-            UnityMetalRenderTextureSurface.CollectCompletedEventsFromPump();
+            UnitySkiaRenderTextureSurface.CollectCompletedEventsFromPump();
         }
     }
 }

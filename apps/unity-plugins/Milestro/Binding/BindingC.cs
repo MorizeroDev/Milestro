@@ -24,6 +24,10 @@ out int patch);
 
             [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetMetalRenderEventId")]
             internal static extern unsafe long UnityRenderGetMetalRenderEventId(out int eventId);
+
+            [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetRenderTextureEventId")]
+            internal static extern unsafe long UnityRenderGetRenderTextureEventId(int graphicsBackend,
+out int eventId);
             
 
 

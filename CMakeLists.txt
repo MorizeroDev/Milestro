@@ -264,6 +264,10 @@ if (DEFINED APPLE)
             "${FOUNDATION}" "${CoreFoundation}" "${CORETEXT}" "${CORESERVICES}" "${COREGRAPHICS}" "${METAL}")
 endif ()
 
+if (WIN32)
+    set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} d3d12 dxgi)
+endif ()
+
 #############################################################
 # Setup Milestro
 set(MILESTRO_DEFINITIONS "MILESTRO_BUILDING_ENV")
@@ -312,6 +316,8 @@ set(
 
         src/game/milestro_game_plugin_main.cpp
         src/game/milestro_game_unity_render.cpp
+        src/unity_render/MilestroUnityRenderDispatcher.cpp
+        src/unity_render/MilestroUnityRenderPayloadDraw.cpp
         src/game/milestro_game_skia_canvas.cpp
         src/game/milestro_game_skia_image.cpp
         src/game/milestro_game_skia_fontmanager.cpp
@@ -332,7 +338,12 @@ set(
 
 if (APPLE)
     list(APPEND MILESTRO_APPLICATION_FILE
-            src/game/milestro_game_unity_render_metal.mm)
+            src/unity_render/MilestroUnityRenderMetalBackend.mm)
+endif ()
+
+if (WIN32)
+    list(APPEND MILESTRO_APPLICATION_FILE
+            src/unity_render/MilestroUnityRenderD3D12Backend.cpp)
 endif ()
 
 set(

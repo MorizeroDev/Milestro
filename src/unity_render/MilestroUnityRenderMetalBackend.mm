@@ -1,19 +1,15 @@
-#include "milestro_game_unity_render.h"
+#include "unity_render/MilestroUnityRenderMetalBackend.h"
 
-#include "milestro_game_retcode.h"
+#include "game/milestro_game_retcode.h"
+#include "unity_render/MilestroUnityRenderPayloadDraw.h"
 
 #include <IUnityGraphicsMetal.h>
 #include <Milestro/log/log.h>
-#include <Milestro/skia/Image.h>
-#include <Milestro/skia/textlayout/Paragraph.h>
 
 #import <Metal/Metal.h>
 
 #include "include/core/SkCanvas.h"
-#include "include/core/SkColor.h"
 #include "include/core/SkColorSpace.h"
-#include "include/core/SkImage.h"
-#include "include/core/SkSamplingOptions.h"
 #include "include/core/SkSurface.h"
 #include "include/gpu/ganesh/GrBackendSurface.h"
 #include "include/gpu/ganesh/GrDirectContext.h"
@@ -23,7 +19,7 @@
 #include "include/gpu/ganesh/mtl/GrMtlDirectContext.h"
 #include "include/gpu/ganesh/mtl/GrMtlTypes.h"
 
-namespace milestro::game::unity_render::metal {
+namespace milestro::unity_render::metal {
 
 namespace {
 
@@ -133,30 +129,6 @@ sk_sp<SkColorSpace> ColorSpaceForTexture(id<MTLTexture> texture, int32_t srgb) {
     return nullptr;
 }
 
-void DrawPayload(SkCanvas *canvas, const MilestroUnityRenderTargetPayload &payload) {
-    if (payload.clearBeforeDraw != 0) {
-        canvas->clear(SK_ColorTRANSPARENT);
-    }
-
-    if (payload.image != nullptr) {
-        sk_sp<SkImage> image = payload.image->unwrap();
-        if (image != nullptr) {
-            const SkSamplingOptions sampling(SkFilterMode::kLinear);
-            if (payload.imageWidth > 0.0f && payload.imageHeight > 0.0f) {
-                SkRect dst = SkRect::MakeXYWH(payload.imageX, payload.imageY,
-                                              payload.imageWidth, payload.imageHeight);
-                canvas->drawImageRect(image, dst, sampling, nullptr);
-            } else {
-                canvas->drawImage(image, payload.imageX, payload.imageY, sampling);
-            }
-        }
-    }
-
-    if (payload.paragraph != nullptr) {
-        payload.paragraph->paint(canvas, payload.paragraphX, payload.paragraphY);
-    }
-}
-
 } // namespace
 
 void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
@@ -220,9 +192,9 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
         return MILESTRO_API_RET_FAILED;
     }
 
-    DrawPayload(surface->getCanvas(), payload);
+    milestro::unity_render::DrawPayload(surface->getCanvas(), payload);
     context->flushAndSubmit(surface.get());
     return MILESTRO_API_RET_OK;
 }
 
-} // namespace milestro::game::unity_render::metal
+} // namespace milestro::unity_render::metal
