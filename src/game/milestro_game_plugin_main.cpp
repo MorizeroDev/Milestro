@@ -2,6 +2,8 @@
 #include <Milestro/game/milestro_game_interface.h>
 #include <Milestro/log/log.h>
 
+#include "milestro_game_unity_render.h"
+
 static IUnityLog *unityLogPtr = nullptr;
 
 extern "C" {
@@ -10,11 +12,13 @@ UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API
 UnityPluginLoad(IUnityInterfaces *unityInterfacesPtr) {
     unityLogPtr = unityInterfacesPtr->Get<IUnityLog>();
     milestro::log::MilestroLogger::initWithUnity(unityLogPtr);
+    milestro::game::unity_render::Load(unityInterfacesPtr);
     MILESTROLOG_DEBUG ("Milestro Launched");
 }
 
 UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API
 UnityPluginUnload() {
+    milestro::game::unity_render::Unload();
     unityLogPtr = nullptr;
 }
 

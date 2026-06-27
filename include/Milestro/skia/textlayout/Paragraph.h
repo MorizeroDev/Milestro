@@ -32,7 +32,11 @@ public :
     milestro::skia::Path* toPath(SkScalar x, SkScalar y);
 
     void paint(milestro::skia::Canvas *canvas, SkScalar x, SkScalar y) {
-        paragraph->paint(canvas->unwrap(), x, y);
+        paint(canvas->unwrap(), x, y);
+    }
+
+    void paint(SkCanvas *canvas, SkScalar x, SkScalar y) {
+        paragraph->paint(canvas, x, y);
     }
 
     MILESTRO_DECLARE_NON_COPYABLE(Paragraph)

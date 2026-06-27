@@ -261,8 +261,9 @@ if (DEFINED APPLE)
     find_library(CORETEXT CoreText)
     find_library(CORESERVICES CoreServices)
     find_library(COREGRAPHICS CoreGraphics)
+    find_library(METAL Metal)
     set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES}
-            "${FOUNDATION}" "${CoreFoundation}" "${CORETEXT}" "${CORESERVICES}" "${COREGRAPHICS}")
+            "${FOUNDATION}" "${CoreFoundation}" "${CORETEXT}" "${CORESERVICES}" "${COREGRAPHICS}" "${METAL}")
 endif ()
 
 #############################################################
@@ -312,6 +313,7 @@ set(
         MILESTRO_APPLICATION_FILE
 
         src/game/milestro_game_plugin_main.cpp
+        src/game/milestro_game_unity_render.cpp
         src/game/milestro_game_skia_canvas.cpp
         src/game/milestro_game_skia_image.cpp
         src/game/milestro_game_skia_fontmanager.cpp
@@ -329,6 +331,11 @@ set(
 
         src/game/milestro_game_icu_icuucollator.cpp
 )
+
+if (APPLE)
+    list(APPEND MILESTRO_APPLICATION_FILE
+            src/game/milestro_game_unity_render_metal.mm)
+endif ()
 
 set(
         MILESTRO_CMD_FILE

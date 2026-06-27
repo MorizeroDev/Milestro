@@ -1,0 +1,228 @@
+#include "milestro_game_unity_render.h"
+
+#include "milestro_game_retcode.h"
+
+#include <IUnityGraphicsMetal.h>
+#include <Milestro/log/log.h>
+#include <Milestro/skia/Image.h>
+#include <Milestro/skia/textlayout/Paragraph.h>
+
+#import <Metal/Metal.h>
+
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkColorSpace.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkSamplingOptions.h"
+#include "include/core/SkSurface.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/SkSurfaceGanesh.h"
+#include "include/gpu/ganesh/mtl/GrMtlBackendContext.h"
+#include "include/gpu/ganesh/mtl/GrMtlBackendSurface.h"
+#include "include/gpu/ganesh/mtl/GrMtlDirectContext.h"
+#include "include/gpu/ganesh/mtl/GrMtlTypes.h"
+
+namespace milestro::game::unity_render::metal {
+
+namespace {
+
+IUnityGraphicsMetalV2 *gMetalV2 = nullptr;
+IUnityGraphicsMetalV1 *gMetalV1 = nullptr;
+sk_sp<GrDirectContext> gDirectContext;
+id<MTLCommandQueue> gDirectContextQueue = nil;
+
+id<MTLDevice> MetalDevice() {
+    if (gMetalV2 != nullptr) {
+        return gMetalV2->MetalDevice();
+    }
+    if (gMetalV1 != nullptr) {
+        return gMetalV1->MetalDevice();
+    }
+    return nil;
+}
+
+id<MTLCommandQueue> CommandQueue() {
+    if (gMetalV2 != nullptr) {
+        return gMetalV2->CommandQueue();
+    }
+
+    id<MTLCommandBuffer> commandBuffer = nil;
+    if (gMetalV1 != nullptr) {
+        commandBuffer = gMetalV1->CurrentCommandBuffer();
+    }
+    return commandBuffer != nil ? commandBuffer.commandQueue : nil;
+}
+
+id<MTLTexture> TextureFromRenderBuffer(void *renderBufferHandle) {
+    if (renderBufferHandle == nullptr) {
+        return nil;
+    }
+
+    if (gMetalV2 != nullptr) {
+        UnityRenderBuffer renderBuffer = gMetalV2->RenderBufferFromHandle(renderBufferHandle);
+        return gMetalV2->TextureFromRenderBuffer(renderBuffer);
+    }
+    if (gMetalV1 != nullptr) {
+        UnityRenderBuffer renderBuffer = gMetalV1->RenderBufferFromHandle(renderBufferHandle);
+        return gMetalV1->TextureFromRenderBuffer(renderBuffer);
+    }
+    return nil;
+}
+
+void EndCurrentCommandEncoder() {
+    if (gMetalV2 != nullptr) {
+        gMetalV2->EndCurrentCommandEncoder();
+        return;
+    }
+    if (gMetalV1 != nullptr) {
+        gMetalV1->EndCurrentCommandEncoder();
+    }
+}
+
+void CommitCurrentCommandBufferIfAvailable() {
+    if (gMetalV2 != nullptr) {
+        gMetalV2->CommitCurrentCommandBuffer();
+    }
+}
+
+GrDirectContext *DirectContext() {
+    id<MTLDevice> device = MetalDevice();
+    id<MTLCommandQueue> queue = CommandQueue();
+    if (device == nil || queue == nil) {
+        MILESTROLOG_ERROR("Unity Metal device or command queue is unavailable.");
+        return nullptr;
+    }
+
+    if (gDirectContext != nullptr && gDirectContextQueue == queue) {
+        return gDirectContext.get();
+    }
+
+    GrMtlBackendContext backendContext;
+    backendContext.fDevice.retain((__bridge GrMTLHandle)device);
+    backendContext.fQueue.retain((__bridge GrMTLHandle)queue);
+
+    gDirectContext = GrDirectContexts::MakeMetal(backendContext);
+    gDirectContextQueue = queue;
+    if (gDirectContext == nullptr) {
+        MILESTROLOG_ERROR("Failed to create Skia Metal direct context.");
+    }
+    return gDirectContext.get();
+}
+
+SkColorType ColorTypeForTexture(id<MTLTexture> texture) {
+    switch (texture.pixelFormat) {
+        case MTLPixelFormatBGRA8Unorm:
+        case MTLPixelFormatBGRA8Unorm_sRGB:
+            return kBGRA_8888_SkColorType;
+        case MTLPixelFormatRGBA8Unorm:
+        case MTLPixelFormatRGBA8Unorm_sRGB:
+            return kRGBA_8888_SkColorType;
+        default:
+            MILESTROLOG_WARN("Unexpected Metal texture format {}; trying BGRA_8888.",
+                             static_cast<unsigned int>(texture.pixelFormat));
+            return kBGRA_8888_SkColorType;
+    }
+}
+
+sk_sp<SkColorSpace> ColorSpaceForTexture(id<MTLTexture> texture, int32_t srgb) {
+    if (srgb != 0 || texture.pixelFormat == MTLPixelFormatBGRA8Unorm_sRGB ||
+        texture.pixelFormat == MTLPixelFormatRGBA8Unorm_sRGB) {
+        return SkColorSpace::MakeSRGB();
+    }
+    return nullptr;
+}
+
+void DrawPayload(SkCanvas *canvas, const MilestroUnityRenderTargetPayload &payload) {
+    if (payload.clearBeforeDraw != 0) {
+        canvas->clear(SK_ColorTRANSPARENT);
+    }
+
+    if (payload.image != nullptr) {
+        sk_sp<SkImage> image = payload.image->unwrap();
+        if (image != nullptr) {
+            const SkSamplingOptions sampling(SkFilterMode::kLinear);
+            if (payload.imageWidth > 0.0f && payload.imageHeight > 0.0f) {
+                SkRect dst = SkRect::MakeXYWH(payload.imageX, payload.imageY,
+                                              payload.imageWidth, payload.imageHeight);
+                canvas->drawImageRect(image, dst, sampling, nullptr);
+            } else {
+                canvas->drawImage(image, payload.imageX, payload.imageY, sampling);
+            }
+        }
+    }
+
+    if (payload.paragraph != nullptr) {
+        payload.paragraph->paint(canvas, payload.paragraphX, payload.paragraphY);
+    }
+}
+
+} // namespace
+
+void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
+                           IUnityInterfaces *unityInterfaces,
+                           UnityGfxRenderer renderer) {
+    if (eventType == kUnityGfxDeviceEventShutdown || renderer != kUnityGfxRendererMetal) {
+        gDirectContext.reset();
+        gDirectContextQueue = nil;
+        gMetalV2 = nullptr;
+        gMetalV1 = nullptr;
+        return;
+    }
+
+    if (eventType != kUnityGfxDeviceEventInitialize || unityInterfaces == nullptr) {
+        return;
+    }
+
+    gMetalV2 = unityInterfaces->Get<IUnityGraphicsMetalV2>();
+    if (gMetalV2 == nullptr) {
+        gMetalV1 = unityInterfaces->Get<IUnityGraphicsMetalV1>();
+    }
+
+    if (gMetalV2 == nullptr && gMetalV1 == nullptr) {
+        MILESTROLOG_ERROR("Unity Metal graphics interface is unavailable.");
+    }
+}
+
+int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
+    if (payload.colorRenderBufferHandle == nullptr || payload.width <= 0 || payload.height <= 0) {
+        MILESTROLOG_ERROR("Invalid Milestro Metal render payload.");
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    GrDirectContext *context = DirectContext();
+    if (context == nullptr) {
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    id<MTLTexture> texture = TextureFromRenderBuffer(payload.colorRenderBufferHandle);
+    if (texture == nil) {
+        MILESTROLOG_ERROR("Failed to resolve Unity RenderBuffer to MTLTexture.");
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    EndCurrentCommandEncoder();
+    CommitCurrentCommandBufferIfAvailable();
+
+    GrMtlTextureInfo textureInfo;
+    textureInfo.fTexture.retain((__bridge GrMTLHandle)texture);
+    GrBackendRenderTarget renderTarget =
+            GrBackendRenderTargets::MakeMtl(payload.width, payload.height, textureInfo);
+
+    sk_sp<SkSurface> surface = SkSurfaces::WrapBackendRenderTarget(context,
+                                                                   renderTarget,
+                                                                   kTopLeft_GrSurfaceOrigin,
+                                                                   ColorTypeForTexture(texture),
+                                                                   ColorSpaceForTexture(texture, payload.srgb),
+                                                                   nullptr);
+    if (surface == nullptr) {
+        MILESTROLOG_ERROR("Failed to wrap Unity MTLTexture as Skia render target.");
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    DrawPayload(surface->getCanvas(), payload);
+    context->flushAndSubmit(surface.get());
+    return MILESTRO_API_RET_OK;
+}
+
+} // namespace milestro::game::unity_render::metal

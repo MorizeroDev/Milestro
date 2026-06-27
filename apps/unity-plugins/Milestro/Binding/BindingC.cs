@@ -18,6 +18,12 @@ namespace Milestro.Binding
             internal static extern unsafe long GetVersion(out int major,
 out int minor,
 out int patch);
+
+            [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetRenderEventAndDataFunc")]
+            internal static extern unsafe IntPtr UnityRenderGetRenderEventAndDataFunc();
+
+            [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetMetalRenderEventId")]
+            internal static extern unsafe long UnityRenderGetMetalRenderEventId(out int eventId);
             
 
 
