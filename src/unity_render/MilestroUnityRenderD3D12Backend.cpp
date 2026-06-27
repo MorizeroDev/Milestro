@@ -37,6 +37,7 @@ ID3D12Device *gDirectContextDevice = nullptr;
 ID3D12CommandQueue *gDirectContextQueue = nullptr;
 
 struct PendingCommandResources {
+    gr_cp<ID3D12Resource> resource;
     gr_cp<ID3D12CommandAllocator> commandAllocator;
     gr_cp<ID3D12GraphicsCommandList> commandList;
     gr_cp<ID3D12Fence> fence;
@@ -109,26 +110,30 @@ void CollectPendingCommandResources() {
     }
 }
 
-void RetainCommandResourcesUntilShutdown(gr_cp<ID3D12CommandAllocator> commandAllocator,
+void RetainCommandResourcesUntilShutdown(ID3D12Resource *resource,
+                                         gr_cp<ID3D12CommandAllocator> commandAllocator,
                                          gr_cp<ID3D12GraphicsCommandList> commandList) {
     PendingCommandResources resources;
+    resources.resource.retain(resource);
     resources.commandAllocator = commandAllocator;
     resources.commandList = commandList;
     gPendingCommandResources.push_back(resources);
 }
 
-bool RetainCommandResources(gr_cp<ID3D12CommandAllocator> commandAllocator,
+bool RetainCommandResources(ID3D12Resource *resource,
+                            gr_cp<ID3D12CommandAllocator> commandAllocator,
                             gr_cp<ID3D12GraphicsCommandList> commandList,
                             uint64_t fenceValue) {
     ID3D12Fence *fence = FrameFence();
     if (fence == nullptr || fenceValue == 0) {
         MILESTROLOG_ERROR("Unity D3D12 frame fence is unavailable for submitted command resources.");
-        RetainCommandResourcesUntilShutdown(commandAllocator, commandList);
+        RetainCommandResourcesUntilShutdown(resource, commandAllocator, commandList);
         return false;
     }
 
     CollectPendingCommandResources();
     PendingCommandResources resources;
+    resources.resource.retain(resource);
     resources.commandAllocator = commandAllocator;
     resources.commandList = commandList;
     resources.fence.retain(fence);
@@ -289,7 +294,8 @@ sk_sp<SkColorSpace> ColorSpaceForFormat(DXGI_FORMAT format, int32_t srgb) {
 bool TransitionResource(ID3D12Device *device,
                         ID3D12Resource *resource,
                         D3D12_RESOURCE_STATES before,
-                        D3D12_RESOURCE_STATES after) {
+                        D3D12_RESOURCE_STATES after,
+                        const char *label) {
     if (before == after) {
         return true;
     }
@@ -298,7 +304,8 @@ bool TransitionResource(ID3D12Device *device,
     HRESULT hr = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
                                                 IID_PPV_ARGS(&commandAllocator));
     if (FAILED(hr)) {
-        MILESTROLOG_ERROR("Failed to create D3D12 command allocator for post-Skia transition: 0x{:08x}.",
+        MILESTROLOG_ERROR("Failed to create D3D12 command allocator for {} transition: 0x{:08x}.",
+                          label,
                           static_cast<unsigned int>(hr));
         return false;
     }
@@ -310,7 +317,8 @@ bool TransitionResource(ID3D12Device *device,
                                    nullptr,
                                    IID_PPV_ARGS(&commandList));
     if (FAILED(hr)) {
-        MILESTROLOG_ERROR("Failed to create D3D12 command list for post-Skia transition: 0x{:08x}.",
+        MILESTROLOG_ERROR("Failed to create D3D12 command list for {} transition: 0x{:08x}.",
+                          label,
                           static_cast<unsigned int>(hr));
         return false;
     }
@@ -326,7 +334,8 @@ bool TransitionResource(ID3D12Device *device,
 
     hr = commandList->Close();
     if (FAILED(hr)) {
-        MILESTROLOG_ERROR("Failed to close D3D12 post-Skia transition command list: 0x{:08x}.",
+        MILESTROLOG_ERROR("Failed to close D3D12 {} transition command list: 0x{:08x}.",
+                          label,
                           static_cast<unsigned int>(hr));
         return false;
     }
@@ -337,11 +346,11 @@ bool TransitionResource(ID3D12Device *device,
     state.current = after;
     uint64_t fenceValue = ExecuteCommandList(commandList.get(), 1, &state);
     if (fenceValue == 0) {
-        MILESTROLOG_ERROR("Unity D3D12 ExecuteCommandList returned no fence for post-Skia transition.");
-        RetainCommandResourcesUntilShutdown(commandAllocator, commandList);
+        MILESTROLOG_ERROR("Unity D3D12 ExecuteCommandList returned no fence for {} transition.", label);
+        RetainCommandResourcesUntilShutdown(resource, commandAllocator, commandList);
         return false;
     }
-    return RetainCommandResources(commandAllocator, commandList, fenceValue);
+    return RetainCommandResources(resource, commandAllocator, commandList, fenceValue);
 }
 
 void ConfigureRenderEvent(int32_t renderEventId) {
@@ -430,6 +439,19 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
         return MILESTRO_API_RET_FAILED;
     }
 
+    gr_cp<ID3D12Resource> resourceRef;
+    resourceRef.retain(resource);
+
+    const D3D12_RESOURCE_STATES displayState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    const D3D12_RESOURCE_STATES skiaRenderState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    if (!TransitionResource(device,
+                            resource,
+                            displayState,
+                            skiaRenderState,
+                            "pre-Skia render target")) {
+        return MILESTRO_API_RET_FAILED;
+    }
+
     D3D12_RESOURCE_DESC desc = resource->GetDesc();
     DXGI_FORMAT format = NormalizeDxgiFormat(desc.Format, payload.srgb, payload.preferredFormat);
     const uint32_t sampleCount = desc.SampleDesc.Count == 0 ? 1 : desc.SampleDesc.Count;
@@ -437,10 +459,9 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
     const unsigned int sampleQuality =
             desc.SampleDesc.Quality == 0 ? DXGI_STANDARD_MULTISAMPLE_QUALITY_PATTERN : desc.SampleDesc.Quality;
 
-    resource->AddRef();
     GrD3DTextureResourceInfo textureInfo(resource,
                                          nullptr,
-                                         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                                         skiaRenderState,
                                          format,
                                          sampleCount,
                                          levelCount,
@@ -456,6 +477,7 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
                                                                    nullptr);
     if (surface == nullptr) {
         MILESTROLOG_ERROR("Failed to wrap Unity ID3D12Resource as Skia render target.");
+        TransitionResource(device, resource, skiaRenderState, displayState, "failed-wrap restore");
         return MILESTRO_API_RET_FAILED;
     }
 
@@ -463,8 +485,7 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
     context->flushAndSubmit(surface.get());
 
     GrD3DTextureResourceInfo finalInfo = GrBackendRenderTargets::GetD3DTextureResourceInfo(renderTarget);
-    const D3D12_RESOURCE_STATES displayState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    if (!TransitionResource(device, resource, finalInfo.fResourceState, displayState)) {
+    if (!TransitionResource(device, resource, finalInfo.fResourceState, displayState, "post-Skia display")) {
         return MILESTRO_API_RET_FAILED;
     }
     GrBackendRenderTargets::SetD3DResourceState(&renderTarget,
