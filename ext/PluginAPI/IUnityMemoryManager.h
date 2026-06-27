@@ -8,6 +8,7 @@
 #include "IUnityInterface.h"
 
 #include <stdint.h>
+#include <stddef.h>
 
 typedef struct PluginAllocator UnityAllocator;
 

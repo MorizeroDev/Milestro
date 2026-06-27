@@ -1,15 +1,16 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 using Milestro.Model;
 using Milestro.Skia.TextLayout;
 using Milestro.Util;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace Milestro.Components
 {
     [RequireComponent(typeof(Image))]
-    public class SkParagraphBitmapTextBox : MonoBehaviour
+    public abstract class SkParagraphBitmapTextBox : UIBehaviour
     {
         public Paragraph Paragraph { get; set; }
 
@@ -17,7 +18,7 @@ namespace Milestro.Components
 
         [SerializeField] public VerticalAlign verticalAlign;
 
-        [NonSerialized] private RectTransform rect;
+        [NonSerialized] protected RectTransform rect;
 
         [NonSerialized] private Texture2D texture;
 
@@ -25,8 +26,11 @@ namespace Milestro.Components
 
         [NonSerialized] private Image img;
 
+        protected bool Inited { get; private set; } = false;
+
         private void OnEnable()
         {
+            Inited = true;
             rect = GetComponent<RectTransform>();
             img = GetComponent<Image>();
         }
@@ -134,5 +138,12 @@ namespace Milestro.Components
             glyphBound.yMin = Math.Min(boundTop, glyphBound.yMin);
             glyphBound.yMax = Math.Max(boundBottom, glyphBound.yMax);
         }
+
+        protected override void OnRectTransformDimensionsChange()
+        {
+            OnRectTransformDimensionsChangeInternal();
+        }
+
+        protected abstract void OnRectTransformDimensionsChangeInternal();
     }
 }

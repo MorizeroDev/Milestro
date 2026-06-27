@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Milestro.Extensions;
 using Milestro.Skia.TextLayout;
@@ -12,6 +12,8 @@ namespace Milestro.Components
 
         [SerializeField] public int layoutWidth = 640;
 
+        [SerializeField] public bool autoLayoutWidth = false;
+
         [SerializeField] public List<string> fontFamilies = new List<string>() { "Source Han Sans VF" };
 
         [SerializeField] public float size = 36;
@@ -22,7 +24,9 @@ namespace Milestro.Components
 
         [NonSerialized] private string cachedContent = "";
 
-        private void Update()
+        [NonSerialized] private Vector2 cachedSize = new Vector2(float.NaN, float.NaN);
+
+        private void UpdateParagraph()
         {
             if (cachedContent == content)
             {
@@ -30,7 +34,7 @@ namespace Milestro.Components
             }
 
             cachedContent = content;
-
+            
             ParagraphStyle paragraphStyle = new ParagraphStyle();
 
             TextStyle textStyle = new TextStyle();
@@ -44,10 +48,24 @@ namespace Milestro.Components
             var segments = parser.ConvertToSegments();
 
             Paragraph = segments.ToParagraph(paragraphStyle, textStyle);
-            Paragraph.Layout(layoutWidth);
-
+            Paragraph.Layout(autoLayoutWidth ? rect.rect.width : layoutWidth);
 
             RenderParagraph();
+        }
+
+        private void Update()
+        {
+            UpdateParagraph();
+        }
+
+        protected override void OnRectTransformDimensionsChangeInternal()
+        {
+            if (!Inited) return;
+            if (cachedSize == rect.rect.size) return;
+
+            cachedSize = rect.rect.size;
+
+            UpdateParagraph();
         }
     }
 }

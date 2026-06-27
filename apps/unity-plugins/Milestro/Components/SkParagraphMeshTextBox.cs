@@ -1,4 +1,4 @@
-﻿using Milestro.Skia.TextLayout;
+using Milestro.Skia.TextLayout;
 using UnityEngine;
 using UnityEngine.UI;
 
