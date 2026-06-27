@@ -1,6 +1,8 @@
 #ifndef MILESTRO_GAME_TYPES_H
 #define MILESTRO_GAME_TYPES_H
 
+#include <stdint.h>
+
 #ifdef MILESTRO_BUILDING_ENV
 
 #include <Milestro/common/milestro_export_macros.h>

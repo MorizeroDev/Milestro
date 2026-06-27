@@ -1,5 +1,6 @@
 #include <src/gpu/ganesh/GrDistanceFieldGenFromVector.h>
 #include <src/core/SkDistanceFieldGen.h>
+#include <include/core/SkPathBuilder.h>
 #include "Milestro/skia/textlayout/Paragraph.h"
 #include "Milestro/skia/Font.h"
 #include "Milestro/skia/Path.h"
@@ -47,8 +48,7 @@ int64_t Paragraph::toSDF(
     SkPaint paint;
 
     SkMatrix dfMatrix = SkMatrix::Scale(sdfScale, sdfScale);
-    SkPath xformPath;
-    fullPath.transform(dfMatrix, &xformPath);
+    SkPath xformPath = fullPath.makeTransform(dfMatrix);
 
     Canvas canvas(sdfWidth, sdfHeight, nullptr, true);
     SkCanvas *skCanvas = canvas.unwrap();
@@ -70,7 +70,7 @@ Path *Paragraph::toPath(SkScalar x, SkScalar y) {
 }
 
 SkPath Paragraph::generateToSkPath(SkScalar x, SkScalar y) {
-    SkPath fullPath;
+    SkPathBuilder fullPath;
     SkPoint textRenderLeftTop = SkPoint::Make(x, y);
     paragraph->extendedVisit([&](int lineNumber, const ::skia::textlayout::Paragraph::ExtendedVisitorInfo *info) {
         if (info == nullptr) {
@@ -84,11 +84,11 @@ SkPath Paragraph::generateToSkPath(SkScalar x, SkScalar y) {
             SkPoint position = info->positions[i];
             auto glyphPosition = position + origin + textRenderLeftTop;
 
-            SkPath glyphPath;
-            if (font.getPath(glyphId, &glyphPath)) {
-                fullPath.addPath(glyphPath, glyphPosition.x(), glyphPosition.y());
+            auto glyphPath = font.getPath(glyphId);
+            if (glyphPath) {
+                fullPath.addPath(*glyphPath, glyphPosition.x(), glyphPosition.y());
             }
         }
     });
-    return fullPath;
+    return fullPath.detach();
 }

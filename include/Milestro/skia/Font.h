@@ -24,12 +24,8 @@ public:
     }
 
     Path* getPath(SkGlyphID glyphID) {
-        SkPath path;
-        if (font.getPath(glyphID, &path)) {
-            return new Path(path);
-        } else {
-            return nullptr;
-        }
+        auto path = font.getPath(glyphID);
+        return path ? new Path(*path) : nullptr;
     }
 
 private:

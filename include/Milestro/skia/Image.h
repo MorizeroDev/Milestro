@@ -16,10 +16,20 @@ namespace milestro::skia {
 class MILESTRO_API Image {
 public:
     Image(void *data, size_t size) {
+        if (data == nullptr || size == 0) {
+            MILESTROLOG_ERROR("fail to create SkImage: empty image data");
+            throw std::invalid_argument("empty image data");
+        }
+
         imageData = std::make_unique<SkMemoryStream>(data, size, true);
         imageSize = size;
 
         auto imageStream = SkData::MakeFromStream(imageData.get(), size);
+        if (!imageStream || imageStream->empty()) {
+            MILESTROLOG_ERROR("fail to create SkImage: failed to read encoded image data");
+            throw std::runtime_error("failed to read encoded image data");
+        }
+
         skImage = SkImages::DeferredFromEncodedData(imageStream, SkAlphaType::kUnpremul_SkAlphaType);
 
         if (!skImage) {
@@ -31,7 +41,11 @@ public:
     MILESTRO_DECLARE_NON_COPYABLE(Image)
 
     void SetColorType(SkColorType targetColorType) {
-        skImage = skImage->makeColorTypeAndColorSpace(nullptr, targetColorType, SkColorSpace::MakeSRGB());
+        skImage = skImage->makeColorTypeAndColorSpace(
+                nullptr,
+                targetColorType,
+                SkColorSpace::MakeSRGB(),
+                SkImage::RequiredProperties{});
         if (!skImage) {
             MILESTROLOG_ERROR("fail to set color type");
             throw std::runtime_error("fail to set color type");

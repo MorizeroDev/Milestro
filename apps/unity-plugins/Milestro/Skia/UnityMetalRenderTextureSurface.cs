@@ -170,7 +170,12 @@ namespace Milestro.Skia
             {
                 Marshal.StructureToPtr(payload, payloadPtr, false);
                 pendingEvent = AddPendingEvent(payloadPtr, RenderTexture, paragraph, image);
-                GL.IssuePluginEventAndData(renderEventFunc, renderEventId, payloadPtr);
+
+                CommandBuffer cmd = new CommandBuffer();
+                cmd.name = "Native Plugin Pass";
+                cmd.IssuePluginEventAndData(renderEventFunc, renderEventId, payloadPtr);
+                Graphics.ExecuteCommandBuffer(cmd);
+                cmd.Release();
             }
             catch
             {

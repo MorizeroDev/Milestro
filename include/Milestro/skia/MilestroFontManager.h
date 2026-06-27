@@ -2,11 +2,11 @@
 #define MILESTRO_MILESTROFONTMANAGER_H
 
 #include "include/core/SkFontMgr.h"
+#include "include/core/SkFontScanner.h"
 #include "include/core/SkFontStyle.h"
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkString.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkTArray.h"
 #include "Milestro/common/milestro_export_macros.h"
 #include <vector>
 #include <src/ports/SkTypeface_FreeType.h>
@@ -65,7 +65,7 @@ protected:
     sk_sp<SkTypeface> onLegacyMakeTypeface(const char familyName[], SkFontStyle style) const override;
 
 private:
-    std::unique_ptr<SkFontScanner_FreeType> fScanner;
+    std::unique_ptr<SkFontScanner> fScanner;
     std::vector<sk_sp<MilestroFontStyleSet>> fFamilies;
     std::vector<SkString> fFontRegistered;
 //    std::vector<std::unique_ptr<SkStreamAsset>> fStreamHolder;

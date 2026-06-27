@@ -216,9 +216,7 @@ elseif (MILESTRO_SKIA_LIB_PATH AND MILESTRO_SKIA_INCLUDE_PATH)
             U_STATIC_IMPLEMENTATION
     )
 
-    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-        target_compile_definitions(skia INTERFACE SK_TRIVIAL_ABI=[[clang::trivial_abi]])
-    else ()
+    if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
         message(STATUS ${CMAKE_CXX_COMPILER_ID})
         message(FATAL_ERROR "Must use Clang compiler")
     endif ()
@@ -253,8 +251,8 @@ if (DEFINED APPLE)
         message(FATAL_ERROR "Project requires building with Clang. Have ${CMAKE_CXX_COMPILER_ID}")
     endif ()
 
-    include(InitializeSwift)
-    include(AddSwift)
+#    include(InitializeSwift)
+#    include(AddSwift)
 
     find_library(FOUNDATION Foundation)
     find_library(COREFOUNDATION CoreFoundation)
@@ -370,6 +368,11 @@ if (DEFINED APPLE AND DEFINED IOS AND MILESTRO_BUILD_FRAMEWORK_LIBS)
 endif ()
 
 target_compile_definitions(Milestro PUBLIC ${MILESTRO_DEFINITIONS})
+
+target_compile_options(Milestro PRIVATE
+        "$<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang,GNU>:-fno-rtti>"
+        "$<$<COMPILE_LANG_AND_ID:OBJCXX,Clang,AppleClang,GNU>:-fno-rtti>"
+)
 
 target_include_directories(Milestro
         PUBLIC

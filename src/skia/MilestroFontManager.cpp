@@ -6,7 +6,7 @@
 #include "include/core/SkString.h"
 #include "include/core/SkTypeface.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkTemplates.h"
+#include "include/ports/SkFontScanner_FreeType.h"
 #include "src/core/SkFontDescriptor.h"
 #include "Milestro/skia/MilestroFontManager.h"
 #include "Milestro/skia/Typeface.h"
@@ -48,7 +48,7 @@ sk_sp<SkTypeface> MilestroFontStyleSet::matchStyle(const SkFontStyle &pattern) {
 
 SkString MilestroFontStyleSet::getFamilyName() { return fFamilyName; }
 
-MilestroFontManager::MilestroFontManager() : fScanner(std::make_unique<SkFontScanner_FreeType>()) {
+MilestroFontManager::MilestroFontManager() : fScanner(SkFontScanner_Make_FreeType()) {
 }
 
 int MilestroFontManager::onCountFamilies() const {
@@ -155,6 +155,7 @@ MilestroFontManager::RegisterResult MilestroFontManager::registerFont(std::uniqu
                                         &realname,
                                         &style,
                                         &isFixedPitch,
+                                        nullptr,
                                         nullptr)) {
                 MILESTROLOG_DEBUG("---- failed to open file face as a font. file:{} face:{}", filename.c_str(), faceIndex);
                 continue;

@@ -6,7 +6,6 @@
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkString.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkTArray.h"
 #include "Milestro/common/milestro_export_macros.h"
 #include <vector>
 #include <src/ports/SkTypeface_FreeType.h>
