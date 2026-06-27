@@ -26,10 +26,6 @@
 #include <dxgi1_4.h>
 #include <IUnityGraphicsD3D12.h>
 
-#ifndef MILESTRO_ENABLE_D3D12_GANESH_QUEUE_EXPERIMENT
-#define MILESTRO_ENABLE_D3D12_GANESH_QUEUE_EXPERIMENT 0
-#endif
-
 namespace milestro::unity_render::d3d12 {
 
 namespace {
@@ -249,7 +245,6 @@ sk_sp<SkColorSpace> ColorSpaceForFormat(DXGI_FORMAT format, int32_t srgb) {
     return nullptr;
 }
 
-#if MILESTRO_ENABLE_D3D12_GANESH_QUEUE_EXPERIMENT
 void RequestResourceState(ID3D12Resource *resource, D3D12_RESOURCE_STATES state) {
     gD3D12v8->RequestResourceState(resource, state);
 }
@@ -257,7 +252,6 @@ void RequestResourceState(ID3D12Resource *resource, D3D12_RESOURCE_STATES state)
 void NotifyResourceState(ID3D12Resource *resource, D3D12_RESOURCE_STATES state) {
     gD3D12v8->NotifyResourceState(resource, state, false);
 }
-#endif
 
 void ConfigureRenderEvent(int32_t renderEventId) {
     if (renderEventId < 0) {
@@ -265,17 +259,10 @@ void ConfigureRenderEvent(int32_t renderEventId) {
     }
 
     UnityD3D12PluginEventConfig config = {};
-#if MILESTRO_ENABLE_D3D12_GANESH_QUEUE_EXPERIMENT
-    // Experimental only: Ganesh D3D builds its context from Unity's queue. This
-    // does not statically satisfy the v8 active-command-list state tracker
-    // contract; keep it behind an explicit build option for Windows validation.
+    // Ganesh D3D builds its context from Unity's queue. This does not
+    // statically satisfy the v8 active-command-list state tracker contract;
+    // Windows debug-layer/reload runtime validation is still required.
     config.graphicsQueueAccess = kUnityD3D12GraphicsQueueAccess_Allow;
-#else
-    // Default builds do not access the Unity command queue. Render() fails fast
-    // until a real active-command-list Skia path exists or the experiment is
-    // explicitly enabled for runtime/debug-layer validation.
-    config.graphicsQueueAccess = kUnityD3D12GraphicsQueueAccess_DontCare;
-#endif
     config.flags = kUnityD3D12EventConfigFlag_FlushCommandBuffers |
                    kUnityD3D12EventConfigFlag_SyncWorkerThreads |
                    kUnityD3D12EventConfigFlag_ModifiesCommandBuffersState;
@@ -332,16 +319,6 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
         return MILESTRO_API_RET_FAILED;
     }
 
-#if !MILESTRO_ENABLE_D3D12_GANESH_QUEUE_EXPERIMENT
-    MILESTROLOG_ERROR(
-            "Milestro D3D12 RenderTexture backend is disabled by default: "
-            "Skia Ganesh D3D requires Unity command queue access, while Unity "
-            "D3D12 v8 RequestResourceState/NotifyResourceState are scoped to "
-            "the active command list. Rebuild with "
-            "MILESTRO_ENABLE_D3D12_GANESH_QUEUE_EXPERIMENT=ON only for "
-            "Windows runtime/debug-layer validation.");
-    return MILESTRO_API_RET_FAILED;
-#else
     ID3D12Device *device = Device();
     GrDirectContext *context = DirectContext();
     if (device == nullptr || context == nullptr) {
@@ -402,7 +379,6 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
     NotifyResourceState(resource, displayState);
     RetainResourceUntilFrameFence(resource);
     return MILESTRO_API_RET_OK;
-#endif
 }
 
 } // namespace milestro::unity_render::d3d12

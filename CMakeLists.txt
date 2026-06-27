@@ -8,7 +8,6 @@ option(MILESTRO_ENABLE_TESTS "Enable tests" ON)
 option(MILESTRO_WITH_ADDRESS_SANITIZER "Build with clang address sanitizer" OFF)
 option(MILESTRO_ENABLE_RELEASE_SYMBOLS "Build release binaries with debug info for split symbol packages" ON)
 option(MILESTRO_REMAP_SOURCE_PATHS "Remap absolute source and build paths in release debug info" ON)
-option(MILESTRO_ENABLE_D3D12_GANESH_QUEUE_EXPERIMENT "Enable experimental D3D12 Ganesh queue RenderTexture path" OFF)
 option(MILESTRO_SKIA_LIB_PATH "Skia library path")
 option(MILESTRO_SKIA_INCLUDE_PATH "Skia include path")
 option(MILESTRO_SKIA_CMAKE "Skia cmake path")
@@ -407,9 +406,6 @@ if (DEFINED APPLE AND DEFINED IOS AND MILESTRO_BUILD_FRAMEWORK_LIBS)
 endif ()
 
 target_compile_definitions(Milestro PUBLIC ${MILESTRO_DEFINITIONS})
-if (MILESTRO_ENABLE_D3D12_GANESH_QUEUE_EXPERIMENT)
-    target_compile_definitions(Milestro PRIVATE MILESTRO_ENABLE_D3D12_GANESH_QUEUE_EXPERIMENT=1)
-endif ()
 
 if (MSVC)
     target_compile_options(Milestro PRIVATE
