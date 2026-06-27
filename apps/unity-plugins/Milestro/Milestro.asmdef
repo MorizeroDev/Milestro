@@ -1,0 +1,16 @@
+{
+    "name": "Milestro",
+    "rootNamespace": "",
+    "references": [
+        "GUID:e772ae114dfc3204b9c52865b488da63"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
