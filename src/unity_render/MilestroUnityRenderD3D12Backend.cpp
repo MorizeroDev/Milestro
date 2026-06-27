@@ -7,10 +7,7 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-#include <d3d12.h>
-#include <dxgi1_4.h>
 
-#include <IUnityGraphicsD3D12.h>
 #include <Milestro/log/log.h>
 
 #include <vector>
@@ -24,6 +21,10 @@
 #include "include/gpu/ganesh/d3d/GrD3DBackendContext.h"
 #include "include/gpu/ganesh/d3d/GrD3DBackendSurface.h"
 #include "include/gpu/ganesh/d3d/GrD3DDirectContext.h"
+
+#include <d3d12.h>
+#include <dxgi1_4.h>
+#include <IUnityGraphicsD3D12.h>
 
 namespace milestro::unity_render::d3d12 {
 

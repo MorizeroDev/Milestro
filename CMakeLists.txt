@@ -36,19 +36,33 @@ else ()
     set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 endif ()
 
-if (MILESTRO_ENABLE_RELEASE_SYMBOLS)
+if (MILESTRO_ENABLE_RELEASE_SYMBOLS AND NOT MSVC)
     foreach (MILESTRO_DEBUG_LANG C CXX OBJC OBJCXX)
         add_compile_options("$<$<AND:$<CONFIG:Release>,$<COMPILE_LANG_AND_ID:${MILESTRO_DEBUG_LANG},GNU,Clang,AppleClang>>:-g>")
     endforeach ()
 endif ()
 
 if (MILESTRO_REMAP_SOURCE_PATHS)
-    foreach (MILESTRO_REMAP_LANG C CXX OBJC OBJCXX)
-        foreach (MILESTRO_REMAP_FLAG -ffile-prefix-map -fdebug-prefix-map -fmacro-prefix-map)
-            add_compile_options("$<$<COMPILE_LANG_AND_ID:${MILESTRO_REMAP_LANG},GNU,Clang,AppleClang>:${MILESTRO_REMAP_FLAG}=${PROJECT_SOURCE_DIR}=${MILESTRO_REMAP_SOURCE_PREFIX}>")
-            add_compile_options("$<$<COMPILE_LANG_AND_ID:${MILESTRO_REMAP_LANG},GNU,Clang,AppleClang>:${MILESTRO_REMAP_FLAG}=${PROJECT_BINARY_DIR}=${MILESTRO_REMAP_BUILD_PREFIX}>")
+    if (MSVC)
+        foreach (MILESTRO_REMAP_LANG C CXX)
+            if (CMAKE_${MILESTRO_REMAP_LANG}_COMPILER_ID STREQUAL "Clang")
+                foreach (MILESTRO_REMAP_FLAG -ffile-prefix-map -fdebug-prefix-map -fmacro-prefix-map)
+                    add_compile_options("$<$<COMPILE_LANGUAGE:${MILESTRO_REMAP_LANG}>:/clang:${MILESTRO_REMAP_FLAG}=${PROJECT_SOURCE_DIR}=${MILESTRO_REMAP_SOURCE_PREFIX}>")
+                    add_compile_options("$<$<COMPILE_LANGUAGE:${MILESTRO_REMAP_LANG}>:/clang:${MILESTRO_REMAP_FLAG}=${PROJECT_BINARY_DIR}=${MILESTRO_REMAP_BUILD_PREFIX}>")
+                endforeach ()
+            elseif (CMAKE_${MILESTRO_REMAP_LANG}_COMPILER_ID STREQUAL "MSVC")
+                add_compile_options("$<$<COMPILE_LANGUAGE:${MILESTRO_REMAP_LANG}>:/pathmap:${PROJECT_SOURCE_DIR}=${MILESTRO_REMAP_SOURCE_PREFIX}>")
+                add_compile_options("$<$<COMPILE_LANGUAGE:${MILESTRO_REMAP_LANG}>:/pathmap:${PROJECT_BINARY_DIR}=${MILESTRO_REMAP_BUILD_PREFIX}>")
+            endif ()
         endforeach ()
-    endforeach ()
+    else ()
+        foreach (MILESTRO_REMAP_LANG C CXX OBJC OBJCXX)
+            foreach (MILESTRO_REMAP_FLAG -ffile-prefix-map -fdebug-prefix-map -fmacro-prefix-map)
+                add_compile_options("$<$<COMPILE_LANG_AND_ID:${MILESTRO_REMAP_LANG},GNU,Clang,AppleClang>:${MILESTRO_REMAP_FLAG}=${PROJECT_SOURCE_DIR}=${MILESTRO_REMAP_SOURCE_PREFIX}>")
+                add_compile_options("$<$<COMPILE_LANG_AND_ID:${MILESTRO_REMAP_LANG},GNU,Clang,AppleClang>:${MILESTRO_REMAP_FLAG}=${PROJECT_BINARY_DIR}=${MILESTRO_REMAP_BUILD_PREFIX}>")
+            endforeach ()
+        endforeach ()
+    endif ()
 endif ()
 
 # Keep this option OFF
@@ -204,7 +218,20 @@ elseif (MILESTRO_SKIA_LIB_PATH AND MILESTRO_SKIA_INCLUDE_PATH)
         message(FATAL_ERROR "Unknown Skia : ${MILESTRO_SKIA_LIB_PATH}")
     endif ()
 
-    set(SKIA_LIB_LIST ${SKIA_LIB_FILES})
+    set(MILESTRO_SKIA_EXCLUDED_LIB_NAMES pathkit)
+    set(SKIA_LIB_LIST)
+    foreach (SKIA_LIB_FILE ${SKIA_LIB_FILES})
+        get_filename_component(SKIA_LIB_NAME "${SKIA_LIB_FILE}" NAME_WE)
+        if (SKIA_LIB_NAME MATCHES "^lib(.+)$")
+            set(SKIA_LIB_NAME "${CMAKE_MATCH_1}")
+        endif ()
+
+        if (SKIA_LIB_NAME IN_LIST MILESTRO_SKIA_EXCLUDED_LIB_NAMES)
+            message(STATUS "Skipping Skia library: ${SKIA_LIB_FILE}")
+        else ()
+            list(APPEND SKIA_LIB_LIST "${SKIA_LIB_FILE}")
+        endif ()
+    endforeach ()
     set(SKIA_INCLUDE_PATH "${MILESTRO_SKIA_INCLUDE_PATH}")
     target_link_libraries(skia INTERFACE ${SKIA_LIB_LIST})
     target_include_directories(skia INTERFACE ${SKIA_INCLUDE_PATH})
@@ -265,7 +292,7 @@ if (DEFINED APPLE)
 endif ()
 
 if (WIN32)
-    set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} d3d12 dxgi)
+    set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} d3d12 dxgi d3dcompiler)
 endif ()
 
 #############################################################
@@ -380,10 +407,16 @@ endif ()
 
 target_compile_definitions(Milestro PUBLIC ${MILESTRO_DEFINITIONS})
 
-target_compile_options(Milestro PRIVATE
-        "$<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang,GNU>:-fno-rtti>"
-        "$<$<COMPILE_LANG_AND_ID:OBJCXX,Clang,AppleClang,GNU>:-fno-rtti>"
-)
+if (MSVC)
+    target_compile_options(Milestro PRIVATE
+            "$<$<COMPILE_LANGUAGE:CXX>:/GR->"
+    )
+else ()
+    target_compile_options(Milestro PRIVATE
+            "$<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang,GNU>:-fno-rtti>"
+            "$<$<COMPILE_LANG_AND_ID:OBJCXX,Clang,AppleClang,GNU>:-fno-rtti>"
+    )
+endif ()
 
 target_include_directories(Milestro
         PUBLIC

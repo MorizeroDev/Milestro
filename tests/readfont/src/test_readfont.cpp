@@ -79,10 +79,11 @@ public:
         milestro::skia::Path *path;
         MilestroSkiaFontGetPath(font, path, glyphId);
 
-        SkPath glyphPath;
-        if (!font->unwrap().getPath(glyphId, &glyphPath)) {
+        auto glyphPathResult = font->unwrap().getPath(glyphId);
+        if (!glyphPathResult) {
             return -1;
         }
+        const auto &glyphPath = *glyphPathResult;
 
         std::cout << "bound: (" << bound.left() << ", " << bound.top() << ", " << bound.right()
                   << ", " << bound.bottom() << ")" << std::endl;
