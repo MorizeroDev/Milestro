@@ -10,6 +10,7 @@
 
 #include <Milestro/log/log.h>
 
+#include <atomic>
 #include <vector>
 
 #include "include/core/SkCanvas.h"
@@ -34,6 +35,7 @@ IUnityGraphicsD3D12v8 *gD3D12v8 = nullptr;
 sk_sp<GrDirectContext> gDirectContext;
 ID3D12Device *gDirectContextDevice = nullptr;
 ID3D12CommandQueue *gDirectContextQueue = nullptr;
+std::atomic<uint64_t> gRenderSerial = 0;
 
 struct PendingResourceRetain {
     gr_cp<ID3D12Resource> resource;
@@ -45,9 +47,7 @@ std::vector<PendingResourceRetain> gPendingResources;
 
 enum class TextureSource {
     None,
-    RenderBuffer,
-    NativeTexture,
-    NativeTextureFallback
+    RenderBuffer
 };
 
 struct TextureLookup {
@@ -59,10 +59,6 @@ const char *TextureSourceName(TextureSource source) {
     switch (source) {
         case TextureSource::RenderBuffer:
             return "RenderBuffer";
-        case TextureSource::NativeTexture:
-            return "NativeTexture";
-        case TextureSource::NativeTextureFallback:
-            return "NativeTextureFallback";
         case TextureSource::None:
         default:
             return "None";
@@ -143,18 +139,6 @@ ID3D12Resource *TextureFromRenderBuffer(void *renderBufferHandle) {
     return nullptr;
 }
 
-ID3D12Resource *TextureFromNativeTexture(void *nativeTextureHandle) {
-    if (nativeTextureHandle == nullptr) {
-        return nullptr;
-    }
-
-    UnityTextureID texture = reinterpret_cast<UnityTextureID>(nativeTextureHandle);
-    if (gD3D12v8 != nullptr) {
-        return gD3D12v8->TextureFromNativeTexture(texture);
-    }
-    return nullptr;
-}
-
 gr_cp<IDXGIAdapter1> AdapterForDevice(ID3D12Device *device) {
     gr_cp<IDXGIFactory4> factory;
     HRESULT hr = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
@@ -222,14 +206,7 @@ TextureLookup TextureFromPayload(const MilestroUnityRenderTargetPayload &payload
 
     if (payload.handleKind == static_cast<int32_t>(MilestroUnityRenderTextureHandleKind::RenderBuffer)) {
         result.resource = TextureFromRenderBuffer(payload.colorRenderBufferHandle);
-        result.source = TextureSource::RenderBuffer;
-        if (result.resource == nullptr) {
-            result.resource = TextureFromNativeTexture(payload.nativeTextureHandle);
-            result.source = result.resource != nullptr ? TextureSource::NativeTextureFallback : TextureSource::None;
-        }
-    } else if (payload.handleKind == static_cast<int32_t>(MilestroUnityRenderTextureHandleKind::NativeTexture)) {
-        result.resource = TextureFromNativeTexture(payload.nativeTextureHandle);
-        result.source = result.resource != nullptr ? TextureSource::NativeTexture : TextureSource::None;
+        result.source = result.resource != nullptr ? TextureSource::RenderBuffer : TextureSource::None;
     }
 
     return result;
@@ -347,8 +324,10 @@ void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
 }
 
 int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
+    const uint64_t renderSerial = gRenderSerial.fetch_add(1, std::memory_order_relaxed) + 1;
+
     if (payload.width <= 0 || payload.height <= 0) {
-        MILESTROLOG_ERROR("Invalid Milestro D3D12 render payload size.");
+        MILESTROLOG_ERROR("Invalid Milestro D3D12 render payload size on event {}.", renderSerial);
         return MILESTRO_API_RET_FAILED;
     }
 
@@ -370,7 +349,8 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
     ID3D12Resource *resource = texture.resource;
     if (resource == nullptr) {
         MILESTROLOG_ERROR(
-                "Failed to resolve Unity RenderTexture to ID3D12Resource. handleKind={}, renderBufferHandle={}, nativeTextureHandle={}.",
+                "Failed to resolve Unity RenderTexture to ID3D12Resource on event {}. D3D12 only supports RenderBuffer handles; handleKind={}, renderBufferHandle={}, nativeTextureHandle={}.",
+                renderSerial,
                 payload.handleKind,
                 payload.colorRenderBufferHandle,
                 payload.nativeTextureHandle);
@@ -402,9 +382,10 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
     const unsigned int sampleQuality = desc.SampleDesc.Quality;
 
     MILESTROLOG_INFO(
-            "Milestro D3D12 wrap target: source={}, resource={}, unityDevice={}, queue={}, payload={}x{}, desc={}x{}, "
+            "Milestro D3D12 wrap target: event={}, source={}, resource={}, unityDevice={}, queue={}, payload={}x{}, desc={}x{}, "
             "dimension={}, format={}, normalizedFormat={}, sampleCount={}, sampleQuality={}, mipLevels={}, flags=0x{:x}, "
-            "srgb={}, preferredFormat={}.",
+            "srgb={}, preferredFormat={}, renderBufferHandle={}, nativeTextureHandle={}.",
+            renderSerial,
             TextureSourceName(texture.source),
             static_cast<void *>(resource),
             static_cast<void *>(device),
@@ -421,7 +402,9 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
             levelCount,
             static_cast<unsigned int>(desc.Flags),
             payload.srgb,
-            payload.preferredFormat);
+            payload.preferredFormat,
+            payload.colorRenderBufferHandle,
+            payload.nativeTextureHandle);
 
     if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D) {
         MILESTROLOG_ERROR("Milestro D3D12 RenderTexture resource must be TEXTURE2D, got dimension {}.",
