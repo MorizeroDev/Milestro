@@ -43,6 +43,32 @@ struct PendingResourceRetain {
 
 std::vector<PendingResourceRetain> gPendingResources;
 
+enum class TextureSource {
+    None,
+    RenderBuffer,
+    NativeTexture,
+    NativeTextureFallback
+};
+
+struct TextureLookup {
+    ID3D12Resource *resource = nullptr;
+    TextureSource source = TextureSource::None;
+};
+
+const char *TextureSourceName(TextureSource source) {
+    switch (source) {
+        case TextureSource::RenderBuffer:
+            return "RenderBuffer";
+        case TextureSource::NativeTexture:
+            return "NativeTexture";
+        case TextureSource::NativeTextureFallback:
+            return "NativeTextureFallback";
+        case TextureSource::None:
+        default:
+            return "None";
+    }
+}
+
 ID3D12Device *Device() {
     if (gD3D12v8 != nullptr) {
         return gD3D12v8->GetDevice();
@@ -191,19 +217,22 @@ GrDirectContext *DirectContext() {
     return gDirectContext.get();
 }
 
-ID3D12Resource *TextureFromPayload(const MilestroUnityRenderTargetPayload &payload) {
-    ID3D12Resource *resource = nullptr;
+TextureLookup TextureFromPayload(const MilestroUnityRenderTargetPayload &payload) {
+    TextureLookup result;
 
     if (payload.handleKind == static_cast<int32_t>(MilestroUnityRenderTextureHandleKind::RenderBuffer)) {
-        resource = TextureFromRenderBuffer(payload.colorRenderBufferHandle);
-        if (resource == nullptr) {
-            resource = TextureFromNativeTexture(payload.nativeTextureHandle);
+        result.resource = TextureFromRenderBuffer(payload.colorRenderBufferHandle);
+        result.source = TextureSource::RenderBuffer;
+        if (result.resource == nullptr) {
+            result.resource = TextureFromNativeTexture(payload.nativeTextureHandle);
+            result.source = result.resource != nullptr ? TextureSource::NativeTextureFallback : TextureSource::None;
         }
     } else if (payload.handleKind == static_cast<int32_t>(MilestroUnityRenderTextureHandleKind::NativeTexture)) {
-        resource = TextureFromNativeTexture(payload.nativeTextureHandle);
+        result.resource = TextureFromNativeTexture(payload.nativeTextureHandle);
+        result.source = result.resource != nullptr ? TextureSource::NativeTexture : TextureSource::None;
     }
 
-    return resource;
+    return result;
 }
 
 DXGI_FORMAT NormalizeDxgiFormat(DXGI_FORMAT format,
@@ -218,6 +247,18 @@ DXGI_FORMAT NormalizeDxgiFormat(DXGI_FORMAT format,
             return preferredFormat == 2 ? DXGI_FORMAT_R8G8B8A8_UNORM : DXGI_FORMAT_B8G8R8A8_UNORM;
         default:
             return format;
+    }
+}
+
+bool IsSupportedDxgiFormat(DXGI_FORMAT format) {
+    switch (format) {
+        case DXGI_FORMAT_B8G8R8A8_UNORM:
+        case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+        case DXGI_FORMAT_R8G8B8A8_UNORM:
+        case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+            return true;
+        default:
+            return false;
     }
 }
 
@@ -325,25 +366,98 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
         return MILESTRO_API_RET_FAILED;
     }
 
-    ID3D12Resource *resource = TextureFromPayload(payload);
+    TextureLookup texture = TextureFromPayload(payload);
+    ID3D12Resource *resource = texture.resource;
     if (resource == nullptr) {
-        MILESTROLOG_ERROR("Failed to resolve Unity RenderTexture to ID3D12Resource.");
+        MILESTROLOG_ERROR(
+                "Failed to resolve Unity RenderTexture to ID3D12Resource. handleKind={}, renderBufferHandle={}, nativeTextureHandle={}.",
+                payload.handleKind,
+                payload.colorRenderBufferHandle,
+                payload.nativeTextureHandle);
         return MILESTRO_API_RET_FAILED;
     }
 
     gr_cp<ID3D12Resource> resourceRef;
     resourceRef.retain(resource);
 
-    const D3D12_RESOURCE_STATES displayState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    const D3D12_RESOURCE_STATES skiaRenderState = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    RequestResourceState(resource, skiaRenderState);
+    gr_cp<ID3D12Device> resourceDevice;
+    HRESULT resourceDeviceResult = resource->GetDevice(IID_PPV_ARGS(&resourceDevice));
+    if (FAILED(resourceDeviceResult) || resourceDevice.get() == nullptr) {
+        MILESTROLOG_ERROR("Failed to read Unity D3D12 RenderTexture resource device: 0x{:08x}.",
+                          static_cast<unsigned int>(resourceDeviceResult));
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    if (resourceDevice.get() != device) {
+        MILESTROLOG_ERROR("Unity D3D12 RenderTexture resource device {} does not match Unity device {}.",
+                          static_cast<void *>(resourceDevice.get()),
+                          static_cast<void *>(device));
+        return MILESTRO_API_RET_FAILED;
+    }
 
     D3D12_RESOURCE_DESC desc = resource->GetDesc();
     DXGI_FORMAT format = NormalizeDxgiFormat(desc.Format, payload.srgb, payload.preferredFormat);
     const uint32_t sampleCount = desc.SampleDesc.Count == 0 ? 1 : desc.SampleDesc.Count;
     const uint32_t levelCount = desc.MipLevels == 0 ? 1 : desc.MipLevels;
-    const unsigned int sampleQuality =
-            desc.SampleDesc.Quality == 0 ? DXGI_STANDARD_MULTISAMPLE_QUALITY_PATTERN : desc.SampleDesc.Quality;
+    const unsigned int sampleQuality = desc.SampleDesc.Quality;
+
+    MILESTROLOG_INFO(
+            "Milestro D3D12 wrap target: source={}, resource={}, unityDevice={}, queue={}, payload={}x{}, desc={}x{}, "
+            "dimension={}, format={}, normalizedFormat={}, sampleCount={}, sampleQuality={}, mipLevels={}, flags=0x{:x}, "
+            "srgb={}, preferredFormat={}.",
+            TextureSourceName(texture.source),
+            static_cast<void *>(resource),
+            static_cast<void *>(device),
+            static_cast<void *>(gDirectContextQueue),
+            payload.width,
+            payload.height,
+            static_cast<unsigned long long>(desc.Width),
+            desc.Height,
+            static_cast<unsigned int>(desc.Dimension),
+            static_cast<unsigned int>(desc.Format),
+            static_cast<unsigned int>(format),
+            sampleCount,
+            sampleQuality,
+            levelCount,
+            static_cast<unsigned int>(desc.Flags),
+            payload.srgb,
+            payload.preferredFormat);
+
+    if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D) {
+        MILESTROLOG_ERROR("Milestro D3D12 RenderTexture resource must be TEXTURE2D, got dimension {}.",
+                          static_cast<unsigned int>(desc.Dimension));
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) == 0) {
+        MILESTROLOG_ERROR("Milestro D3D12 RenderTexture resource is missing D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET.");
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    if (sampleCount != 1) {
+        MILESTROLOG_ERROR("Milestro D3D12 RenderTexture resource MSAA is not implemented yet: {} samples.",
+                          sampleCount);
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    if (!IsSupportedDxgiFormat(format)) {
+        MILESTROLOG_ERROR("Unsupported D3D12 RenderTexture format {} normalized to {}.",
+                          static_cast<unsigned int>(desc.Format),
+                          static_cast<unsigned int>(format));
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    if (payload.width != static_cast<int32_t>(desc.Width) || payload.height != static_cast<int32_t>(desc.Height)) {
+        MILESTROLOG_WARN("Milestro D3D12 payload size {}x{} differs from resource desc {}x{}; using resource desc.",
+                         payload.width,
+                         payload.height,
+                         static_cast<unsigned long long>(desc.Width),
+                         desc.Height);
+    }
+
+    const D3D12_RESOURCE_STATES displayState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    const D3D12_RESOURCE_STATES skiaRenderState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    RequestResourceState(resource, skiaRenderState);
 
     GrD3DTextureResourceInfo textureInfo(resource,
                                          nullptr,
@@ -353,7 +467,7 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
                                          levelCount,
                                          sampleQuality);
     GrBackendRenderTarget renderTarget =
-            GrBackendRenderTargets::MakeD3D(payload.width, payload.height, textureInfo);
+            GrBackendRenderTargets::MakeD3D(static_cast<int>(desc.Width), desc.Height, textureInfo);
 
     sk_sp<SkSurface> surface = SkSurfaces::WrapBackendRenderTarget(context,
                                                                    renderTarget,
