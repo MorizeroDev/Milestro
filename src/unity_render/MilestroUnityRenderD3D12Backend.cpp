@@ -30,116 +30,78 @@ namespace milestro::unity_render::d3d12 {
 
 namespace {
 
-IUnityGraphicsD3D12v7 *gD3D12v7 = nullptr;
-IUnityGraphicsD3D12v6 *gD3D12v6 = nullptr;
-IUnityGraphicsD3D12v5 *gD3D12v5 = nullptr;
+IUnityGraphicsD3D12v8 *gD3D12v8 = nullptr;
 sk_sp<GrDirectContext> gDirectContext;
 ID3D12Device *gDirectContextDevice = nullptr;
 ID3D12CommandQueue *gDirectContextQueue = nullptr;
 
-struct PendingCommandResources {
+struct PendingResourceRetain {
     gr_cp<ID3D12Resource> resource;
-    gr_cp<ID3D12CommandAllocator> commandAllocator;
-    gr_cp<ID3D12GraphicsCommandList> commandList;
     gr_cp<ID3D12Fence> fence;
     uint64_t fenceValue = 0;
 };
 
-std::vector<PendingCommandResources> gPendingCommandResources;
+std::vector<PendingResourceRetain> gPendingResources;
 
 ID3D12Device *Device() {
-    if (gD3D12v7 != nullptr) {
-        return gD3D12v7->GetDevice();
-    }
-    if (gD3D12v6 != nullptr) {
-        return gD3D12v6->GetDevice();
-    }
-    if (gD3D12v5 != nullptr) {
-        return gD3D12v5->GetDevice();
+    if (gD3D12v8 != nullptr) {
+        return gD3D12v8->GetDevice();
     }
     return nullptr;
 }
 
 ID3D12CommandQueue *CommandQueue() {
-    if (gD3D12v7 != nullptr) {
-        return gD3D12v7->GetCommandQueue();
-    }
-    if (gD3D12v6 != nullptr) {
-        return gD3D12v6->GetCommandQueue();
-    }
-    if (gD3D12v5 != nullptr) {
-        return gD3D12v5->GetCommandQueue();
+    if (gD3D12v8 != nullptr) {
+        return gD3D12v8->GetCommandQueue();
     }
     return nullptr;
 }
 
 ID3D12Fence *FrameFence() {
-    if (gD3D12v7 != nullptr) {
-        return gD3D12v7->GetFrameFence();
-    }
-    if (gD3D12v6 != nullptr) {
-        return gD3D12v6->GetFrameFence();
-    }
-    if (gD3D12v5 != nullptr) {
-        return gD3D12v5->GetFrameFence();
+    if (gD3D12v8 != nullptr) {
+        return gD3D12v8->GetFrameFence();
     }
     return nullptr;
 }
 
-uint64_t ExecuteCommandList(ID3D12GraphicsCommandList *commandList,
-                            int stateCount,
-                            UnityGraphicsD3D12ResourceState *states) {
-    if (gD3D12v7 != nullptr) {
-        return gD3D12v7->ExecuteCommandList(commandList, stateCount, states);
-    }
-    if (gD3D12v6 != nullptr) {
-        return gD3D12v6->ExecuteCommandList(commandList, stateCount, states);
-    }
-    if (gD3D12v5 != nullptr) {
-        return gD3D12v5->ExecuteCommandList(commandList, stateCount, states);
+uint64_t NextFrameFenceValue() {
+    if (gD3D12v8 != nullptr) {
+        return gD3D12v8->GetNextFrameFenceValue();
     }
     return 0;
 }
 
-void CollectPendingCommandResources() {
-    for (auto it = gPendingCommandResources.begin(); it != gPendingCommandResources.end();) {
+void CollectPendingResources() {
+    for (auto it = gPendingResources.begin(); it != gPendingResources.end();) {
         if (it->fence.get() != nullptr && it->fence->GetCompletedValue() >= it->fenceValue) {
-            it = gPendingCommandResources.erase(it);
+            it = gPendingResources.erase(it);
         } else {
             ++it;
         }
     }
 }
 
-void RetainCommandResourcesUntilShutdown(ID3D12Resource *resource,
-                                         gr_cp<ID3D12CommandAllocator> commandAllocator,
-                                         gr_cp<ID3D12GraphicsCommandList> commandList) {
-    PendingCommandResources resources;
+void RetainResourceUntilShutdown(ID3D12Resource *resource) {
+    PendingResourceRetain resources;
     resources.resource.retain(resource);
-    resources.commandAllocator = commandAllocator;
-    resources.commandList = commandList;
-    gPendingCommandResources.push_back(resources);
+    gPendingResources.push_back(resources);
 }
 
-bool RetainCommandResources(ID3D12Resource *resource,
-                            gr_cp<ID3D12CommandAllocator> commandAllocator,
-                            gr_cp<ID3D12GraphicsCommandList> commandList,
-                            uint64_t fenceValue) {
+bool RetainResourceUntilFrameFence(ID3D12Resource *resource) {
     ID3D12Fence *fence = FrameFence();
+    uint64_t fenceValue = NextFrameFenceValue();
     if (fence == nullptr || fenceValue == 0) {
-        MILESTROLOG_ERROR("Unity D3D12 frame fence is unavailable for submitted command resources.");
-        RetainCommandResourcesUntilShutdown(resource, commandAllocator, commandList);
+        MILESTROLOG_ERROR("Unity D3D12 frame fence is unavailable for rendered texture resource.");
+        RetainResourceUntilShutdown(resource);
         return false;
     }
 
-    CollectPendingCommandResources();
-    PendingCommandResources resources;
+    CollectPendingResources();
+    PendingResourceRetain resources;
     resources.resource.retain(resource);
-    resources.commandAllocator = commandAllocator;
-    resources.commandList = commandList;
     resources.fence.retain(fence);
     resources.fenceValue = fenceValue;
-    gPendingCommandResources.push_back(resources);
+    gPendingResources.push_back(resources);
     return true;
 }
 
@@ -149,14 +111,8 @@ ID3D12Resource *TextureFromRenderBuffer(void *renderBufferHandle) {
     }
 
     UnityRenderBuffer renderBuffer = reinterpret_cast<UnityRenderBuffer>(renderBufferHandle);
-    if (gD3D12v7 != nullptr) {
-        return gD3D12v7->TextureFromRenderBuffer(renderBuffer);
-    }
-    if (gD3D12v6 != nullptr) {
-        return gD3D12v6->TextureFromRenderBuffer(renderBuffer);
-    }
-    if (gD3D12v5 != nullptr) {
-        return gD3D12v5->TextureFromRenderBuffer(renderBuffer);
+    if (gD3D12v8 != nullptr) {
+        return gD3D12v8->TextureFromRenderBuffer(renderBuffer);
     }
     return nullptr;
 }
@@ -167,11 +123,8 @@ ID3D12Resource *TextureFromNativeTexture(void *nativeTextureHandle) {
     }
 
     UnityTextureID texture = reinterpret_cast<UnityTextureID>(nativeTextureHandle);
-    if (gD3D12v7 != nullptr) {
-        return gD3D12v7->TextureFromNativeTexture(texture);
-    }
-    if (gD3D12v6 != nullptr) {
-        return gD3D12v6->TextureFromNativeTexture(texture);
+    if (gD3D12v8 != nullptr) {
+        return gD3D12v8->TextureFromNativeTexture(texture);
     }
     return nullptr;
 }
@@ -292,66 +245,12 @@ sk_sp<SkColorSpace> ColorSpaceForFormat(DXGI_FORMAT format, int32_t srgb) {
     return nullptr;
 }
 
-bool TransitionResource(ID3D12Device *device,
-                        ID3D12Resource *resource,
-                        D3D12_RESOURCE_STATES before,
-                        D3D12_RESOURCE_STATES after,
-                        const char *label) {
-    if (before == after) {
-        return true;
-    }
+void RequestResourceState(ID3D12Resource *resource, D3D12_RESOURCE_STATES state) {
+    gD3D12v8->RequestResourceState(resource, state);
+}
 
-    gr_cp<ID3D12CommandAllocator> commandAllocator;
-    HRESULT hr = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                                IID_PPV_ARGS(&commandAllocator));
-    if (FAILED(hr)) {
-        MILESTROLOG_ERROR("Failed to create D3D12 command allocator for {} transition: 0x{:08x}.",
-                          label,
-                          static_cast<unsigned int>(hr));
-        return false;
-    }
-
-    gr_cp<ID3D12GraphicsCommandList> commandList;
-    hr = device->CreateCommandList(0,
-                                   D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                   commandAllocator.get(),
-                                   nullptr,
-                                   IID_PPV_ARGS(&commandList));
-    if (FAILED(hr)) {
-        MILESTROLOG_ERROR("Failed to create D3D12 command list for {} transition: 0x{:08x}.",
-                          label,
-                          static_cast<unsigned int>(hr));
-        return false;
-    }
-
-    D3D12_RESOURCE_BARRIER barrier = {};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barrier.Transition.pResource = resource;
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barrier.Transition.StateBefore = before;
-    barrier.Transition.StateAfter = after;
-    commandList->ResourceBarrier(1, &barrier);
-
-    hr = commandList->Close();
-    if (FAILED(hr)) {
-        MILESTROLOG_ERROR("Failed to close D3D12 {} transition command list: 0x{:08x}.",
-                          label,
-                          static_cast<unsigned int>(hr));
-        return false;
-    }
-
-    UnityGraphicsD3D12ResourceState state = {};
-    state.resource = resource;
-    state.expected = before;
-    state.current = after;
-    uint64_t fenceValue = ExecuteCommandList(commandList.get(), 1, &state);
-    if (fenceValue == 0) {
-        MILESTROLOG_ERROR("Unity D3D12 ExecuteCommandList returned no fence for {} transition.", label);
-        RetainCommandResourcesUntilShutdown(resource, commandAllocator, commandList);
-        return false;
-    }
-    return RetainCommandResources(resource, commandAllocator, commandList, fenceValue);
+void NotifyResourceState(ID3D12Resource *resource, D3D12_RESOURCE_STATES state) {
+    gD3D12v8->NotifyResourceState(resource, state, false);
 }
 
 void ConfigureRenderEvent(int32_t renderEventId) {
@@ -360,16 +259,16 @@ void ConfigureRenderEvent(int32_t renderEventId) {
     }
 
     UnityD3D12PluginEventConfig config = {};
+    // Ganesh D3D still builds its context from Unity's queue. v8 is required for
+    // Unity resource-state tracking, but this is not a full active-command-list path.
     config.graphicsQueueAccess = kUnityD3D12GraphicsQueueAccess_Allow;
     config.flags = kUnityD3D12EventConfigFlag_FlushCommandBuffers |
                    kUnityD3D12EventConfigFlag_SyncWorkerThreads |
                    kUnityD3D12EventConfigFlag_ModifiesCommandBuffersState;
     config.ensureActiveRenderTextureIsBound = false;
 
-    if (gD3D12v7 != nullptr) {
-        gD3D12v7->ConfigureEvent(renderEventId, &config);
-    } else if (gD3D12v6 != nullptr) {
-        gD3D12v6->ConfigureEvent(renderEventId, &config);
+    if (gD3D12v8 != nullptr) {
+        gD3D12v8->ConfigureEvent(renderEventId, &config);
     }
 }
 
@@ -380,13 +279,11 @@ void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
                            UnityGfxRenderer renderer,
                            int32_t renderEventId) {
     if (eventType == kUnityGfxDeviceEventShutdown || renderer != kUnityGfxRendererD3D12) {
-        gPendingCommandResources.clear();
+        gPendingResources.clear();
         gDirectContext.reset();
         gDirectContextDevice = nullptr;
         gDirectContextQueue = nullptr;
-        gD3D12v7 = nullptr;
-        gD3D12v6 = nullptr;
-        gD3D12v5 = nullptr;
+        gD3D12v8 = nullptr;
         return;
     }
 
@@ -394,19 +291,12 @@ void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
         return;
     }
 
-    gD3D12v7 = unityInterfaces->Get<IUnityGraphicsD3D12v7>();
-    if (gD3D12v7 == nullptr) {
-        gD3D12v6 = unityInterfaces->Get<IUnityGraphicsD3D12v6>();
-    }
-    if (gD3D12v7 == nullptr && gD3D12v6 == nullptr) {
-        gD3D12v5 = unityInterfaces->Get<IUnityGraphicsD3D12v5>();
-    }
-
-    if (gD3D12v7 == nullptr && gD3D12v6 == nullptr && gD3D12v5 == nullptr) {
+    gD3D12v8 = unityInterfaces->Get<IUnityGraphicsD3D12v8>();
+    if (gD3D12v8 == nullptr) {
         if (unityInterfaces->Get<IUnityGraphicsD3D12>() != nullptr) {
-            MILESTROLOG_ERROR("Unity obsolete IUnityGraphicsD3D12 is unsupported; need v5 or newer.");
+            MILESTROLOG_ERROR("Unity obsolete IUnityGraphicsD3D12 is unsupported; need v8 or newer.");
         } else {
-            MILESTROLOG_ERROR("Unity D3D12 graphics interface is unavailable.");
+            MILESTROLOG_ERROR("Unity D3D12 v8 graphics interface is unavailable.");
         }
         return;
     }
@@ -420,7 +310,7 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
         return MILESTRO_API_RET_FAILED;
     }
 
-    CollectPendingCommandResources();
+    CollectPendingResources();
 
     if (payload.msaaSamples != 1) {
         MILESTROLOG_ERROR("Milestro D3D12 RenderTexture MSAA is not implemented yet: {} samples.",
@@ -445,13 +335,7 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
 
     const D3D12_RESOURCE_STATES displayState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     const D3D12_RESOURCE_STATES skiaRenderState = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    if (!TransitionResource(device,
-                            resource,
-                            displayState,
-                            skiaRenderState,
-                            "pre-Skia render target")) {
-        return MILESTRO_API_RET_FAILED;
-    }
+    RequestResourceState(resource, skiaRenderState);
 
     D3D12_RESOURCE_DESC desc = resource->GetDesc();
     DXGI_FORMAT format = NormalizeDxgiFormat(desc.Format, payload.srgb, payload.preferredFormat);
@@ -478,7 +362,8 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
                                                                    nullptr);
     if (surface == nullptr) {
         MILESTROLOG_ERROR("Failed to wrap Unity ID3D12Resource as Skia render target.");
-        TransitionResource(device, resource, skiaRenderState, displayState, "failed-wrap restore");
+        RequestResourceState(resource, displayState);
+        NotifyResourceState(resource, displayState);
         return MILESTRO_API_RET_FAILED;
     }
 
@@ -486,11 +371,12 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
     context->flushAndSubmit(surface.get());
 
     GrD3DTextureResourceInfo finalInfo = GrBackendRenderTargets::GetD3DTextureResourceInfo(renderTarget);
-    if (!TransitionResource(device, resource, finalInfo.fResourceState, displayState, "post-Skia display")) {
-        return MILESTRO_API_RET_FAILED;
-    }
+    NotifyResourceState(resource, finalInfo.fResourceState);
+    RequestResourceState(resource, displayState);
     GrBackendRenderTargets::SetD3DResourceState(&renderTarget,
                                                 static_cast<GrD3DResourceStateEnum>(displayState));
+    NotifyResourceState(resource, displayState);
+    RetainResourceUntilFrameFence(resource);
     return MILESTRO_API_RET_OK;
 }
 
