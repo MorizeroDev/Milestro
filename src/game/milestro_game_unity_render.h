@@ -24,6 +24,9 @@ struct MilestroUnityRenderTargetPayload {
     float imageY = 0.0f;
     float imageWidth = 0.0f;
     float imageHeight = 0.0f;
+
+    // Written by the render-thread callback so managed code can free the per-event payload.
+    int32_t completed = 0;
 };
 
 namespace milestro::game::unity_render {

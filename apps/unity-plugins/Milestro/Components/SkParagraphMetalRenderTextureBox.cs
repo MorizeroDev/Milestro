@@ -45,10 +45,14 @@ namespace Milestro.Components
 
         private void OnDisable()
         {
+            if (rawImage != null)
+            {
+                rawImage.texture = null;
+            }
+
+            RetireImage();
             surface?.Dispose();
             surface = null;
-            image?.Dispose();
-            image = null;
             paragraph = null;
             cachedContent = null;
             cachedImageAsset = null;
@@ -86,7 +90,7 @@ namespace Milestro.Components
 
             if (forceImage || cachedImageAsset != imageAsset)
             {
-                image?.Dispose();
+                RetireImage();
                 cachedImageAsset = imageAsset;
                 image = imageAsset != null ? MilestroImage.MakeFromTextAsset(imageAsset) : null;
             }
@@ -117,6 +121,25 @@ namespace Milestro.Components
             var result = segments.ToParagraph(paragraphStyle, textStyle);
             result.Layout(layoutWidth);
             return result;
+        }
+
+        private void RetireImage()
+        {
+            if (image == null)
+            {
+                return;
+            }
+
+            if (surface != null)
+            {
+                surface.DisposeResourceAfterPendingDraws(image);
+            }
+            else
+            {
+                image.Dispose();
+            }
+
+            image = null;
         }
     }
 }

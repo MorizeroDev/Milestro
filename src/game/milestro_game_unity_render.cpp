@@ -5,6 +5,8 @@
 #include <Milestro/game/milestro_game_interface.h>
 #include <Milestro/log/log.h>
 
+#include <atomic>
+
 namespace milestro::game::unity_render {
 
 namespace {
@@ -16,6 +18,15 @@ IUnityInterfaces *gUnityInterfaces = nullptr;
 IUnityGraphics *gUnityGraphics = nullptr;
 UnityGfxRenderer gRenderer = kUnityGfxRendererNull;
 int gEventBase = -1;
+
+void MarkPayloadCompleted(MilestroUnityRenderTargetPayload *payload) {
+    if (payload == nullptr) {
+        return;
+    }
+
+    std::atomic_ref<int32_t> completed(payload->completed);
+    completed.store(1, std::memory_order_release);
+}
 
 void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType) {
     if (eventType == kUnityGfxDeviceEventInitialize && gUnityGraphics != nullptr) {
@@ -34,6 +45,7 @@ void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType
 void UNITY_INTERFACE_API OnRenderEvent(int eventId, void *data) {
     if (gEventBase < 0 || eventId != gEventBase + kMetalDrawEventOffset) {
         MILESTROLOG_WARN("Ignoring unknown Milestro Unity render event: {}", eventId);
+        MarkPayloadCompleted(static_cast<MilestroUnityRenderTargetPayload *>(data));
         return;
     }
 
@@ -42,20 +54,22 @@ void UNITY_INTERFACE_API OnRenderEvent(int eventId, void *data) {
         return;
     }
 
+    auto *payload = static_cast<MilestroUnityRenderTargetPayload *>(data);
     if (gRenderer != kUnityGfxRendererMetal) {
         MILESTROLOG_ERROR("Milestro Metal render event invoked while Unity renderer is {}.", static_cast<int>(gRenderer));
+        MarkPayloadCompleted(payload);
         return;
     }
 
-    auto *payload = static_cast<MilestroUnityRenderTargetPayload *>(data);
 #if defined(__APPLE__)
     const auto status = metal::Render(*payload);
     if (status < 0) {
         MILESTROLOG_ERROR("Milestro Metal render event failed: {}", status);
     }
+    MarkPayloadCompleted(payload);
 #else
-    (void)payload;
     MILESTROLOG_ERROR("Milestro Metal render event is only available on Apple platforms.");
+    MarkPayloadCompleted(payload);
 #endif
 }
 
