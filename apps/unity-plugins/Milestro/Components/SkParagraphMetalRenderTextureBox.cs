@@ -30,6 +30,14 @@ namespace Milestro.Components
         [NonSerialized] private string cachedContent;
         [NonSerialized] private TextAsset cachedImageAsset;
         [NonSerialized] private Vector2Int cachedSize;
+        [NonSerialized] private bool cachedSrgb;
+        [NonSerialized] private int cachedLayoutWidth;
+        [NonSerialized] private List<string> cachedFontFamilies;
+        [NonSerialized] private float cachedFontSize;
+        [NonSerialized] private Color cachedColor;
+        [NonSerialized] private string cachedLocale;
+        [NonSerialized] private Vector2 cachedParagraphPosition;
+        [NonSerialized] private Rect cachedImageRect;
 
         private void OnEnable()
         {
@@ -56,6 +64,7 @@ namespace Milestro.Components
             paragraph = null;
             cachedContent = null;
             cachedImageAsset = null;
+            cachedFontFamilies = null;
         }
 
         private void OnRectTransformDimensionsChange()
@@ -68,24 +77,41 @@ namespace Milestro.Components
 
         private void RebuildResources(bool forceText, bool forceImage)
         {
+            var needsDraw = false;
             var sizePixels = CurrentSize();
-            if (surface == null)
+            if (surface == null || cachedSrgb != srgb)
             {
+                if (surface != null)
+                {
+                    RetireImage();
+                    surface.Dispose();
+                    forceImage = true;
+                }
+
                 surface = new UnityMetalRenderTextureSurface(sizePixels.x, sizePixels.y, srgb);
                 rawImage.texture = surface.RenderTexture;
                 cachedSize = sizePixels;
+                cachedSrgb = srgb;
+                needsDraw = true;
             }
             else if (cachedSize != sizePixels)
             {
                 surface.Resize(sizePixels.x, sizePixels.y);
                 rawImage.texture = surface.RenderTexture;
                 cachedSize = sizePixels;
+                needsDraw = true;
             }
 
-            if (forceText || cachedContent != content || paragraph == null)
+            if (forceText || TextInputsChanged())
             {
                 cachedContent = content;
+                cachedLayoutWidth = layoutWidth;
+                cachedFontFamilies = CopyFontFamilies(fontFamilies);
+                cachedFontSize = size;
+                cachedColor = color;
+                cachedLocale = locale;
                 paragraph = BuildParagraph(cachedContent);
+                needsDraw = true;
             }
 
             if (forceImage || cachedImageAsset != imageAsset)
@@ -93,9 +119,20 @@ namespace Milestro.Components
                 RetireImage();
                 cachedImageAsset = imageAsset;
                 image = imageAsset != null ? MilestroImage.MakeFromTextAsset(imageAsset) : null;
+                needsDraw = true;
             }
 
-            surface.Draw(paragraph, image, paragraphPosition, imageRect);
+            if (cachedParagraphPosition != paragraphPosition || cachedImageRect != imageRect)
+            {
+                cachedParagraphPosition = paragraphPosition;
+                cachedImageRect = imageRect;
+                needsDraw = true;
+            }
+
+            if (needsDraw)
+            {
+                surface.Draw(paragraph, image, paragraphPosition, imageRect);
+            }
         }
 
         private Vector2Int CurrentSize()
@@ -121,6 +158,45 @@ namespace Milestro.Components
             var result = segments.ToParagraph(paragraphStyle, textStyle);
             result.Layout(layoutWidth);
             return result;
+        }
+
+        private bool TextInputsChanged()
+        {
+            return paragraph == null ||
+                   cachedContent != content ||
+                   cachedLayoutWidth != layoutWidth ||
+                   cachedFontSize != size ||
+                   cachedColor != color ||
+                   cachedLocale != locale ||
+                   !FontFamiliesEqual(cachedFontFamilies, fontFamilies);
+        }
+
+        private static bool FontFamiliesEqual(IReadOnlyList<string> left, IReadOnlyList<string> right)
+        {
+            if (ReferenceEquals(left, right))
+            {
+                return true;
+            }
+
+            if (left == null || right == null || left.Count != right.Count)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < left.Count; i++)
+            {
+                if (left[i] != right[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static List<string> CopyFontFamilies(List<string> value)
+        {
+            return value != null ? new List<string>(value) : null;
         }
 
         private void RetireImage()

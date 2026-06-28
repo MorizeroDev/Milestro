@@ -32,4 +32,20 @@ MILESTRO_API int64_t MilestroUnityRenderGetRenderTextureEventId(int32_t graphics
     return milestro::unity_render::GetRenderTextureEventIdForExport(graphicsBackend, eventId);
 }
 
+MILESTRO_API int64_t MilestroUnityRenderCreateD3D12ExternalTexture(int32_t width,
+                                                                   int32_t height,
+                                                                   int32_t srgb,
+                                                                   int32_t preferredFormat,
+                                                                   void *&texture) {
+    return milestro::unity_render::CreateD3D12ExternalTextureForExport(width,
+                                                                       height,
+                                                                       srgb,
+                                                                       preferredFormat,
+                                                                       texture);
+}
+
+MILESTRO_API int64_t MilestroUnityRenderDestroyD3D12ExternalTexture(void *&texture) {
+    return milestro::unity_render::DestroyD3D12ExternalTextureForExport(texture);
+}
+
 }

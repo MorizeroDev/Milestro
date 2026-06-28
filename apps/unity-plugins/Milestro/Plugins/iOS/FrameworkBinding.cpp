@@ -19,6 +19,23 @@ int64_t FrameworkBindingMilestroUnityRenderGetMetalRenderEventId(int32_t& eventI
     return MilestroUnityRenderGetMetalRenderEventId(eventId);
 }
 
+int64_t FrameworkBindingMilestroUnityRenderGetRenderTextureEventId(int32_t graphicsBackend, int32_t& eventId) {
+    return MilestroUnityRenderGetRenderTextureEventId(graphicsBackend, eventId);
+}
+
+int64_t FrameworkBindingMilestroUnityRenderCreateD3D12ExternalTexture(int32_t width,
+                                                                      int32_t height,
+                                                                      int32_t srgb,
+                                                                      int32_t preferredFormat,
+                                                                      [[milize::CSharpType("IntPtr")]] void*& texture) {
+    return MilestroUnityRenderCreateD3D12ExternalTexture(width, height, srgb, preferredFormat, texture);
+}
+
+int64_t FrameworkBindingMilestroUnityRenderDestroyD3D12ExternalTexture(
+        [[milize::RefType("ref")]] [[milize::CSharpType("IntPtr")]] void*& texture) {
+    return MilestroUnityRenderDestroyD3D12ExternalTexture(texture);
+}
+
 int64_t FrameworkBindingMilestroSkiaFontManagerRegisterFontFromFile(uint8_t* path) {
     return MilestroSkiaFontManagerRegisterFontFromFile(path);
 }

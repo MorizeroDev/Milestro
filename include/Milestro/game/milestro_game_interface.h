@@ -28,8 +28,16 @@ extern "C" {
 // 返回值为大版本号 major
 MILESTRO_API int64_t MilestroGetVersion(int32_t &major, int32_t &minor, int32_t &patch);
 
-[[milize::CSharpType("void*")]] MILESTRO_API void *MilestroUnityRenderGetRenderEventAndDataFunc();
+[[milize::CSharpType("IntPtr")]] MILESTRO_API void *MilestroUnityRenderGetRenderEventAndDataFunc();
 MILESTRO_API int64_t MilestroUnityRenderGetMetalRenderEventId(int32_t &eventId);
+MILESTRO_API int64_t MilestroUnityRenderGetRenderTextureEventId(int32_t graphicsBackend, int32_t &eventId);
+MILESTRO_API int64_t MilestroUnityRenderCreateD3D12ExternalTexture(int32_t width,
+                                                                   int32_t height,
+                                                                   int32_t srgb,
+                                                                   int32_t preferredFormat,
+                                                                   [[milize::CSharpType("IntPtr")]] void *&texture);
+MILESTRO_API int64_t MilestroUnityRenderDestroyD3D12ExternalTexture(
+        [[milize::RefType("ref")]] [[milize::CSharpType("IntPtr")]] void *&texture);
 
 MILESTRO_API int64_t MilestroSkiaFontManagerRegisterFontFromFile(uint8_t *path);
 MILESTRO_API int64_t MilestroSkiaFontManagerGetFontFamilies(uint8_t *buffer,

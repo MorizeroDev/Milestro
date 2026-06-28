@@ -10,6 +10,7 @@ namespace Milestro.Skia
         private readonly UnitySkiaRenderTextureSurface surface;
 
         public UnitySkiaGraphicsBackend Backend => surface.Backend;
+        public Texture Texture => surface.Texture;
         public RenderTexture RenderTexture => surface.RenderTexture;
 
         public int Width => surface.Width;

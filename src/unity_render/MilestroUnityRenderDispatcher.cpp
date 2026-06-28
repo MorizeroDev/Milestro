@@ -186,6 +186,41 @@ int64_t GetRenderTextureEventIdForExport(int32_t graphicsBackend, int32_t &event
     return RenderTextureEventId(graphicsBackend, eventId);
 }
 
+int64_t CreateD3D12ExternalTextureForExport(int32_t width,
+                                            int32_t height,
+                                            int32_t srgb,
+                                            int32_t preferredFormat,
+                                            void *&texture) {
+#if defined(_WIN32)
+    if (gRenderer != kUnityGfxRendererD3D12) {
+        texture = nullptr;
+        MILESTROLOG_ERROR("Milestro D3D12 external texture requested while Unity renderer is {}.",
+                          static_cast<int>(gRenderer));
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    return d3d12::CreateExternalTexture(width, height, srgb, preferredFormat, texture);
+#else
+    (void)width;
+    (void)height;
+    (void)srgb;
+    (void)preferredFormat;
+    texture = nullptr;
+    MILESTROLOG_ERROR("Milestro D3D12 external texture is only available on Windows.");
+    return MILESTRO_API_RET_FAILED;
+#endif
+}
+
+int64_t DestroyD3D12ExternalTextureForExport(void *&texture) {
+#if defined(_WIN32)
+    return d3d12::DestroyExternalTexture(texture);
+#else
+    texture = nullptr;
+    MILESTROLOG_ERROR("Milestro D3D12 external texture is only available on Windows.");
+    return MILESTRO_API_RET_FAILED;
+#endif
+}
+
 void Load(IUnityInterfaces *unityInterfaces) {
     gUnityInterfaces = unityInterfaces;
     gUnityGraphics = unityInterfaces != nullptr ? unityInterfaces->Get<IUnityGraphics>() : nullptr;

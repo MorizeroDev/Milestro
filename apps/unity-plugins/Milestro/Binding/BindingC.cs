@@ -17,11 +17,24 @@ namespace Milestro.Binding {
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetRenderEventAndDataFunc")]
-        internal static extern unsafe void* UnityRenderGetRenderEventAndDataFunc();
+        internal static extern unsafe IntPtr UnityRenderGetRenderEventAndDataFunc();
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetMetalRenderEventId")]
         internal static extern unsafe long UnityRenderGetMetalRenderEventId(out int eventId);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetRenderTextureEventId")]
+        internal static extern unsafe long UnityRenderGetRenderTextureEventId(int graphicsBackend, out int eventId);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderCreateD3D12ExternalTexture")]
+        internal static extern unsafe long
+        UnityRenderCreateD3D12ExternalTexture(int width, int height, int srgb, int preferredFormat, out IntPtr texture);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderDestroyD3D12ExternalTexture")]
+        internal static extern unsafe long UnityRenderDestroyD3D12ExternalTexture(ref IntPtr texture);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontManagerRegisterFontFromFile")]

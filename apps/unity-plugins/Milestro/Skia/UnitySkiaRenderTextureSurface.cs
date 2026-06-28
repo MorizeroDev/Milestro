@@ -48,13 +48,13 @@ namespace Milestro.Skia
         {
             public long Serial;
             public IntPtr PayloadPtr;
-            public RenderTexture RenderTexture;
+            public Texture Texture;
             public Paragraph Paragraph;
             public MilestroImage Image;
 
             public void KeepAlive()
             {
-                GC.KeepAlive(RenderTexture);
+                GC.KeepAlive(Texture);
                 GC.KeepAlive(Paragraph);
                 GC.KeepAlive(Image);
             }
@@ -76,9 +76,11 @@ namespace Milestro.Skia
         private UnitySkiaRenderTextureDescriptor descriptor;
         private IntPtr renderEventFunc;
         private int renderEventId;
+        private IntPtr d3d12ExternalTexture;
         private bool disposed;
 
         public UnitySkiaGraphicsBackend Backend { get; }
+        public Texture Texture { get; private set; }
         public RenderTexture RenderTexture { get; private set; }
 
         public int Width { get; private set; }
@@ -116,14 +118,20 @@ namespace Milestro.Skia
                 PreferredFormat = descriptor.PreferredFormat
             });
 
-            if (RenderTexture != null && Width == descriptor.Width && Height == descriptor.Height && RenderTexture.IsCreated())
+            if (Texture != null && Width == descriptor.Width && Height == descriptor.Height)
             {
                 return;
             }
 
-            RetireCurrentRenderTexture();
+            RetireCurrentTexture();
             Width = descriptor.Width;
             Height = descriptor.Height;
+
+            if (Backend == UnitySkiaGraphicsBackend.Direct3D12)
+            {
+                CreateD3D12Texture();
+                return;
+            }
 
             var renderTextureDescriptor = new RenderTextureDescriptor(Width, Height, RenderTextureFormat.ARGB32, 0)
             {
@@ -137,6 +145,7 @@ namespace Milestro.Skia
                 name = "Milestro " + Backend + " RenderTexture PoC"
             };
             RenderTexture.Create();
+            Texture = RenderTexture;
         }
 
         /// <summary>
@@ -166,7 +175,7 @@ namespace Milestro.Skia
                 throw new InvalidOperationException("Milestro Unity render event callback is unavailable.");
             }
 
-            if (RenderTexture == null || !RenderTexture.IsCreated())
+            if (Texture == null || (RenderTexture != null && !RenderTexture.IsCreated()))
             {
                 Resize(Width, Height);
             }
@@ -174,9 +183,15 @@ namespace Milestro.Skia
             var payload = new RenderPayload
             {
                 GraphicsBackend = (int)Backend,
-                HandleKind = (int)RenderTextureHandleKind.RenderBuffer,
-                ColorRenderBufferHandle = RenderTexture.colorBuffer.GetNativeRenderBufferPtr(),
-                NativeTextureHandle = RenderTexture.GetNativeTexturePtr(),
+                HandleKind = Backend == UnitySkiaGraphicsBackend.Direct3D12
+                    ? (int)RenderTextureHandleKind.NativeTexture
+                    : (int)RenderTextureHandleKind.RenderBuffer,
+                ColorRenderBufferHandle = RenderTexture != null
+                    ? RenderTexture.colorBuffer.GetNativeRenderBufferPtr()
+                    : IntPtr.Zero,
+                NativeTextureHandle = Backend == UnitySkiaGraphicsBackend.Direct3D12 && d3d12ExternalTexture != IntPtr.Zero
+                    ? d3d12ExternalTexture
+                    : Texture.GetNativeTexturePtr(),
                 Width = Width,
                 Height = Height,
                 Srgb = descriptor.Srgb ? 1 : 0,
@@ -200,7 +215,7 @@ namespace Milestro.Skia
             try
             {
                 Marshal.StructureToPtr(payload, payloadPtr, false);
-                pendingEvent = AddPendingEvent(payloadPtr, RenderTexture, paragraph, image);
+                pendingEvent = AddPendingEvent(payloadPtr, Texture, paragraph, image);
 
                 CommandBuffer cmd = null;
                 try
@@ -237,7 +252,7 @@ namespace Milestro.Skia
             }
 
             disposed = true;
-            RetireCurrentRenderTexture();
+            RetireCurrentTexture();
             CollectCompletedEvents();
         }
 
@@ -251,6 +266,83 @@ namespace Milestro.Skia
                 throw new NotSupportedException("Milestro Unity RenderTexture surface does not support MSAA yet.");
             }
             return descriptor;
+        }
+
+        private void CreateD3D12Texture()
+        {
+            d3d12ExternalTexture = CreateD3D12ExternalTextureHandle(Width,
+                Height,
+                descriptor.Srgb ? 1 : 0,
+                (int)descriptor.PreferredFormat);
+            if (d3d12ExternalTexture == IntPtr.Zero)
+            {
+                throw new InvalidOperationException("Milestro D3D12 external texture creation returned null.");
+            }
+
+            try
+            {
+                Texture = Texture2D.CreateExternalTexture(Width,
+                    Height,
+                    TextureFormatForDescriptor(descriptor),
+                    false,
+                    !descriptor.Srgb,
+                    d3d12ExternalTexture);
+            }
+            catch
+            {
+                var textureToRelease = d3d12ExternalTexture;
+                d3d12ExternalTexture = IntPtr.Zero;
+                DestroyD3D12ExternalTextureHandle(textureToRelease);
+                throw;
+            }
+
+            if (Texture == null)
+            {
+                var textureToRelease = d3d12ExternalTexture;
+                d3d12ExternalTexture = IntPtr.Zero;
+                DestroyD3D12ExternalTextureHandle(textureToRelease);
+                throw new InvalidOperationException("Unity failed to create Milestro D3D12 external texture.");
+            }
+
+            Texture.name = "Milestro " + Backend + " ExternalTexture PoC";
+        }
+
+        private static IntPtr CreateD3D12ExternalTextureHandle(int width, int height, int srgb, int preferredFormat)
+        {
+            IntPtr texture;
+            ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderCreateD3D12ExternalTexture(width,
+                height,
+                srgb,
+                preferredFormat,
+                out texture));
+            return texture;
+        }
+
+        private static void DestroyD3D12ExternalTextureHandle(IntPtr texture)
+        {
+            if (texture == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var textureToRelease = texture;
+            BindingC.UnityRenderDestroyD3D12ExternalTexture(ref textureToRelease);
+        }
+
+        private static TextureFormat TextureFormatForDescriptor(UnitySkiaRenderTextureDescriptor descriptor)
+        {
+            switch (descriptor.PreferredFormat)
+            {
+                case UnitySkiaRenderTextureFormat.Rgba32:
+                    return TextureFormat.RGBA32;
+                case UnitySkiaRenderTextureFormat.Auto:
+                case UnitySkiaRenderTextureFormat.Bgra32:
+                    return TextureFormat.BGRA32;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(descriptor.PreferredFormat),
+                        descriptor.PreferredFormat,
+                        "Unknown Milestro Unity Skia RenderTexture format.");
+            }
         }
 
         private static void EnsureBackendSupported(UnitySkiaGraphicsBackend backend)
@@ -286,18 +378,27 @@ namespace Milestro.Skia
             }
         }
 
-        private void RetireCurrentRenderTexture()
+        private void RetireCurrentTexture()
         {
+            var texture = Texture;
             var renderTexture = RenderTexture;
+            var d3d12Texture = d3d12ExternalTexture;
+            Texture = null;
             RenderTexture = null;
-            if (renderTexture != null)
+            d3d12ExternalTexture = IntPtr.Zero;
+
+            if (d3d12Texture != IntPtr.Zero)
+            {
+                DeferReleaseAfterCurrentEvents(() => ReleaseD3D12Texture(texture, d3d12Texture));
+            }
+            else if (renderTexture != null)
             {
                 DeferReleaseAfterCurrentEvents(() => ReleaseRenderTexture(renderTexture));
             }
         }
 
         private static PendingRenderEvent AddPendingEvent(IntPtr payloadPtr,
-            RenderTexture renderTexture,
+            Texture texture,
             Paragraph paragraph,
             MilestroImage image)
         {
@@ -308,7 +409,7 @@ namespace Milestro.Skia
                 {
                     Serial = ++nextSerial,
                     PayloadPtr = payloadPtr,
-                    RenderTexture = renderTexture,
+                    Texture = texture,
                     Paragraph = paragraph,
                     Image = image
                 };
@@ -451,6 +552,25 @@ namespace Milestro.Skia
             else
             {
                 UnityEngine.Object.DestroyImmediate(renderTexture);
+            }
+        }
+
+        private static void ReleaseD3D12Texture(Texture texture, IntPtr nativeTexture)
+        {
+            DestroyD3D12ExternalTextureHandle(nativeTexture);
+
+            if (texture == null)
+            {
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                UnityEngine.Object.Destroy(texture);
+            }
+            else
+            {
+                UnityEngine.Object.DestroyImmediate(texture);
             }
         }
     }
