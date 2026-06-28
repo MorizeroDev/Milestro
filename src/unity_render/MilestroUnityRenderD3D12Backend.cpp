@@ -656,13 +656,13 @@ CachedRenderTarget *GetOrCreateCachedRenderTarget(GrDirectContext *context,
     created.sampleQuality = sampleQuality;
     created.srgb = srgb;
 
-    GrD3DTextureResourceInfo textureInfo(resource,
-                                         nullptr,
-                                         initialState,
-                                         format,
-                                         sampleCount,
-                                         levelCount,
-                                         sampleQuality);
+    GrD3DTextureResourceInfo textureInfo;
+    textureInfo.fResource.retain(resource);
+    textureInfo.fResourceState = initialState;
+    textureInfo.fFormat = format;
+    textureInfo.fSampleCount = sampleCount;
+    textureInfo.fLevelCount = levelCount;
+    textureInfo.fSampleQualityPattern = sampleQuality;
     created.renderTarget =
             GrBackendRenderTargets::MakeD3D(static_cast<int>(desc.Width), desc.Height, textureInfo);
     created.surface = SkSurfaces::WrapBackendRenderTarget(context,
@@ -822,9 +822,9 @@ int64_t DestroyExternalTexture(void *&texture) {
         return MILESTRO_API_RET_OK;
     }
 
+    RetainResourceUntilFrameFence(resource);
     MILESTROLOG_INFO("Destroying Milestro D3D12 external texture resource={}.", static_cast<void *>(resource));
     ClearCachedRenderTarget(resource);
-    RetainResourceUntilFrameFence(resource);
     resource->Release();
     return MILESTRO_API_RET_OK;
 }
