@@ -1,5 +1,5 @@
 plugins {
-    id("party.para.h2cs") version "1.0.2" apply true
+    id("party.para.h2cs") version "2.0.0" apply true
 }
 
 group = "com.morizero.milestro"
@@ -13,12 +13,16 @@ subprojects {
 
 repositories { repo() }
 
+val h2csSourceFile = file("include/Milestro/game/milestro_game_interface.h")
+val h2csCsharpBindingOutputFile = file("apps/unity-plugins/Milestro/Binding/BindingC.cs")
+val h2csCppFrameworkBindingOutputFile = file("apps/unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp")
+
 tasks {
     h2cs {
         projectName = "Milestro"
-        sourceFilePath = file("include/Milestro/game/milestro_game_interface.h").absolutePath
-        csharpBindingOutputPath = file("apps/unity-plugins/Milestro/Binding/BindingC.cs").absolutePath
-        cppFrameworkBindingOutputPath = file("apps/unity-plugins/Milestro/Plugins/FrameworkBinding.cpp").absolutePath
+        sourceFilePath = h2csSourceFile.absolutePath
+        csharpBindingOutputPath = h2csCsharpBindingOutputFile.absolutePath
+        cppFrameworkBindingOutputPath = h2csCppFrameworkBindingOutputFile.absolutePath
         addTypeMapping(
             listOf("milestro::skia::Canvas") to "IntPtr",
             listOf("milestro::skia::Image") to "IntPtr",
@@ -35,6 +39,28 @@ tasks {
 
             listOf("milestro::icu::IcuUCollator") to "IntPtr",
         )
+
+        doLast {
+            if (!hasClangFormat()) {
+                logger.lifecycle("clang-format not found; skipping generated binding formatting.")
+                return@doLast
+            }
+
+            listOf(h2csCsharpBindingOutputFile, h2csCppFrameworkBindingOutputFile)
+                .filter { it.isFile }
+                .forEach { outputFile ->
+                    val exitCode = ProcessBuilder("clang-format", "-i", outputFile.absolutePath)
+                        .inheritIO()
+                        .start()
+                        .waitFor()
+
+                    if (exitCode == 0) {
+                        logger.lifecycle("Formatted ${outputFile.path} with clang-format.")
+                    } else {
+                        logger.warn("clang-format failed for ${outputFile.path} with exit code $exitCode.")
+                    }
+                }
+        }
     }
 }
 
@@ -43,4 +69,14 @@ fun RepositoryHandler.repo() {
     mavenCentral()
     maven { url = uri("https://plugins.gradle.org/m2/") }
     maven { url = uri("https://maven.para.party") }
+}
+
+fun hasClangFormat(): Boolean {
+    return runCatching {
+        ProcessBuilder("clang-format", "--version")
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
+            .waitFor() == 0
+    }.getOrDefault(false)
 }

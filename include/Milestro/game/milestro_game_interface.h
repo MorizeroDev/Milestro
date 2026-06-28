@@ -28,7 +28,7 @@ extern "C" {
 // 返回值为大版本号 major
 MILESTRO_API int64_t MilestroGetVersion(int32_t &major, int32_t &minor, int32_t &patch);
 
-MILESTRO_API void *MilestroUnityRenderGetRenderEventAndDataFunc();
+[[milize::CSharpType("void*")]] MILESTRO_API void *MilestroUnityRenderGetRenderEventAndDataFunc();
 MILESTRO_API int64_t MilestroUnityRenderGetMetalRenderEventId(int32_t &eventId);
 
 MILESTRO_API int64_t MilestroSkiaFontManagerRegisterFontFromFile(uint8_t *path);

@@ -72,3 +72,6 @@ SpacesInParentheses: false
 SpacesInSquareBrackets: false
 TabWidth: 4
 UseTab: Never
+---
+Language: CSharp
+NamespaceIndentation: All
