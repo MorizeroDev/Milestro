@@ -1,5 +1,4 @@
 using System;
-using Milestro.Skia.TextLayout;
 using UnityEngine;
 
 namespace Milestro.Skia
@@ -30,13 +29,9 @@ namespace Milestro.Skia
             surface.DisposeResourceAfterPendingDraws(resource);
         }
 
-        public void Draw(Paragraph paragraph,
-            MilestroImage image,
-            Vector2 paragraphPosition,
-            Rect imageRect,
-            bool clearBeforeDraw = true)
+        public void Submit(UnitySkiaRenderCommandList commands, bool clearBeforeDraw = true)
         {
-            surface.Draw(paragraph, image, paragraphPosition, imageRect, clearBeforeDraw);
+            surface.Submit(commands, clearBeforeDraw);
         }
 
         public void Dispose()

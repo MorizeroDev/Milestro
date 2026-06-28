@@ -1,7 +1,7 @@
 #include "unity_render/MilestroUnityRenderMetalBackend.h"
 
 #include "game/milestro_game_retcode.h"
-#include "unity_render/MilestroUnityRenderPayloadDraw.h"
+#include "unity_render/MilestroUnityRenderSubmissionDraw.h"
 
 #include <IUnityGraphicsMetal.h>
 #include <Milestro/log/log.h>
@@ -23,8 +23,8 @@ namespace milestro::unity_render::metal {
 
 namespace {
 
-IUnityGraphicsMetalV2 *gMetalV2 = nullptr;
-IUnityGraphicsMetalV1 *gMetalV1 = nullptr;
+IUnityGraphicsMetalV2* gMetalV2 = nullptr;
+IUnityGraphicsMetalV1* gMetalV1 = nullptr;
 sk_sp<GrDirectContext> gDirectContext;
 id<MTLCommandQueue> gDirectContextQueue = nil;
 
@@ -50,7 +50,7 @@ id<MTLCommandQueue> CommandQueue() {
     return commandBuffer != nil ? commandBuffer.commandQueue : nil;
 }
 
-id<MTLTexture> TextureFromRenderBuffer(void *renderBufferHandle) {
+id<MTLTexture> TextureFromRenderBuffer(void* renderBufferHandle) {
     if (renderBufferHandle == nullptr) {
         return nil;
     }
@@ -82,7 +82,7 @@ void CommitCurrentCommandBufferIfAvailable() {
     }
 }
 
-GrDirectContext *DirectContext() {
+GrDirectContext* DirectContext() {
     id<MTLDevice> device = MetalDevice();
     id<MTLCommandQueue> queue = CommandQueue();
     if (device == nil || queue == nil) {
@@ -95,8 +95,8 @@ GrDirectContext *DirectContext() {
     }
 
     GrMtlBackendContext backendContext;
-    backendContext.fDevice.retain((__bridge GrMTLHandle)device);
-    backendContext.fQueue.retain((__bridge GrMTLHandle)queue);
+    backendContext.fDevice.retain((__bridge GrMTLHandle) device);
+    backendContext.fQueue.retain((__bridge GrMTLHandle) queue);
 
     gDirectContext = GrDirectContexts::MakeMetal(backendContext);
     gDirectContextQueue = queue;
@@ -132,7 +132,7 @@ sk_sp<SkColorSpace> ColorSpaceForTexture(id<MTLTexture> texture, int32_t srgb) {
 } // namespace
 
 void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
-                           IUnityInterfaces *unityInterfaces,
+                           IUnityInterfaces* unityInterfaces,
                            UnityGfxRenderer renderer) {
     if (eventType == kUnityGfxDeviceEventShutdown || renderer != kUnityGfxRendererMetal) {
         gDirectContext.reset();
@@ -156,13 +156,15 @@ void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
     }
 }
 
-int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
+int64_t Render(const MilestroUnityRenderSubmission& submission) {
+    const MilestroUnityRenderTargetPayload& payload = submission.target;
+
     if (payload.colorRenderBufferHandle == nullptr || payload.width <= 0 || payload.height <= 0) {
         MILESTROLOG_ERROR("Invalid Milestro Metal render payload.");
         return MILESTRO_API_RET_FAILED;
     }
 
-    GrDirectContext *context = DirectContext();
+    GrDirectContext* context = DirectContext();
     if (context == nullptr) {
         return MILESTRO_API_RET_FAILED;
     }
@@ -177,9 +179,8 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
     CommitCurrentCommandBufferIfAvailable();
 
     GrMtlTextureInfo textureInfo;
-    textureInfo.fTexture.retain((__bridge GrMTLHandle)texture);
-    GrBackendRenderTarget renderTarget =
-            GrBackendRenderTargets::MakeMtl(payload.width, payload.height, textureInfo);
+    textureInfo.fTexture.retain((__bridge GrMTLHandle) texture);
+    GrBackendRenderTarget renderTarget = GrBackendRenderTargets::MakeMtl(payload.width, payload.height, textureInfo);
 
     sk_sp<SkSurface> surface = SkSurfaces::WrapBackendRenderTarget(context,
                                                                    renderTarget,
@@ -192,7 +193,7 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
         return MILESTRO_API_RET_FAILED;
     }
 
-    milestro::unity_render::DrawPayload(surface->getCanvas(), payload);
+    milestro::unity_render::DrawSubmission(surface->getCanvas(), submission);
     context->flushAndSubmit(surface.get());
     return MILESTRO_API_RET_OK;
 }

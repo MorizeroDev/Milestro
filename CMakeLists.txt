@@ -344,7 +344,7 @@ set(
         src/game/milestro_game_plugin_main.cpp
         src/game/milestro_game_unity_render.cpp
         src/unity_render/MilestroUnityRenderDispatcher.cpp
-        src/unity_render/MilestroUnityRenderPayloadDraw.cpp
+        src/unity_render/MilestroUnityRenderSubmissionDraw.cpp
         src/game/milestro_game_skia_canvas.cpp
         src/game/milestro_game_skia_image.cpp
         src/game/milestro_game_skia_fontmanager.cpp

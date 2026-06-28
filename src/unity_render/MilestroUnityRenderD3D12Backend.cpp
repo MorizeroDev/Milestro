@@ -1,7 +1,7 @@
 #include "unity_render/MilestroUnityRenderD3D12Backend.h"
 
 #include "game/milestro_game_retcode.h"
-#include "unity_render/MilestroUnityRenderPayloadDraw.h"
+#include "unity_render/MilestroUnityRenderSubmissionDraw.h"
 #include "unity_render/MilestroUnityRenderTextureHandleKind.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -10,8 +10,8 @@
 
 #include <Milestro/log/log.h>
 
-#include <atomic>
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -26,19 +26,19 @@
 #include "include/gpu/ganesh/d3d/GrD3DBackendSurface.h"
 #include "include/gpu/ganesh/d3d/GrD3DDirectContext.h"
 
+#include <IUnityGraphicsD3D12.h>
 #include <d3d12.h>
 #include <dxgi1_4.h>
-#include <IUnityGraphicsD3D12.h>
 
 namespace milestro::unity_render::d3d12 {
 
 namespace {
 
-IUnityGraphicsD3D12v8 *gD3D12v8 = nullptr;
+IUnityGraphicsD3D12v8* gD3D12v8 = nullptr;
 gr_cp<ID3D12Device> gUnityDevice;
 sk_sp<GrDirectContext> gDirectContext;
-ID3D12Device *gDirectContextDevice = nullptr;
-ID3D12CommandQueue *gDirectContextQueue = nullptr;
+ID3D12Device* gDirectContextDevice = nullptr;
+ID3D12CommandQueue* gDirectContextQueue = nullptr;
 bool gLoggedQueueModeStateApiSkip = false;
 bool gLoggedCommandRecordingProbe = false;
 std::atomic<uint64_t> gRenderSerial = 0;
@@ -64,8 +64,8 @@ struct CachedRenderTarget {
     gr_cp<ID3D12Resource> resource;
     GrBackendRenderTarget renderTarget;
     sk_sp<SkSurface> surface;
-    ID3D12Device *device = nullptr;
-    ID3D12CommandQueue *queue = nullptr;
+    ID3D12Device* device = nullptr;
+    ID3D12CommandQueue* queue = nullptr;
     uint64_t width = 0;
     uint32_t height = 0;
     DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
@@ -79,18 +79,14 @@ std::vector<PendingResourceRetain> gPendingResources;
 std::vector<PendingCommandListRetain> gPendingCommandLists;
 std::vector<CachedRenderTarget> gCachedRenderTargets;
 
-enum class TextureSource {
-    None,
-    RenderBuffer,
-    NativeTexture
-};
+enum class TextureSource { None, RenderBuffer, NativeTexture };
 
 struct TextureLookup {
-    ID3D12Resource *resource = nullptr;
+    ID3D12Resource* resource = nullptr;
     TextureSource source = TextureSource::None;
 };
 
-const char *TextureSourceName(TextureSource source) {
+const char* TextureSourceName(TextureSource source) {
     switch (source) {
         case TextureSource::RenderBuffer:
             return "RenderBuffer";
@@ -112,21 +108,21 @@ std::string FormatLuid(LUID luid) {
     return buffer;
 }
 
-ID3D12Device *Device() {
+ID3D12Device* Device() {
     if (gUnityDevice.get() != nullptr) {
         return gUnityDevice.get();
     }
     return nullptr;
 }
 
-ID3D12CommandQueue *CommandQueue() {
+ID3D12CommandQueue* CommandQueue() {
     if (gD3D12v8 != nullptr) {
         return gD3D12v8->GetCommandQueue();
     }
     return nullptr;
 }
 
-ID3D12Fence *FrameFence() {
+ID3D12Fence* FrameFence() {
     if (gD3D12v8 != nullptr) {
         return gD3D12v8->GetFrameFence();
     }
@@ -147,10 +143,10 @@ void LogCommandRecordingStateProbe() {
 
     UnityGraphicsD3D12RecordingState recordingState = {};
     bool available = gD3D12v8->CommandRecordingState(&recordingState);
-    MILESTROLOG_INFO(
-            "Milestro D3D12 v8 event contract probe: queueAccess=Allow, CommandRecordingState available={}, commandList={}.",
-            available ? 1 : 0,
-            static_cast<void *>(recordingState.commandList));
+    MILESTROLOG_INFO("Milestro D3D12 v8 event contract probe: queueAccess=Allow, CommandRecordingState available={}, "
+                     "commandList={}.",
+                     available ? 1 : 0,
+                     static_cast<void*>(recordingState.commandList));
     gLoggedCommandRecordingProbe = true;
 }
 
@@ -176,27 +172,27 @@ void ClearCachedRenderTargets() {
     gCachedRenderTargets.clear();
 }
 
-void ClearCachedRenderTarget(ID3D12Resource *resource) {
+void ClearCachedRenderTarget(ID3D12Resource* resource) {
     if (resource == nullptr) {
         return;
     }
 
     gCachedRenderTargets.erase(std::remove_if(gCachedRenderTargets.begin(),
                                               gCachedRenderTargets.end(),
-                                              [resource](const CachedRenderTarget &cached) {
+                                              [resource](const CachedRenderTarget& cached) {
                                                   return cached.resource.get() == resource;
                                               }),
                                gCachedRenderTargets.end());
 }
 
-void RetainResourceUntilShutdown(ID3D12Resource *resource) {
+void RetainResourceUntilShutdown(ID3D12Resource* resource) {
     PendingResourceRetain resources;
     resources.resource.retain(resource);
     gPendingResources.push_back(resources);
 }
 
-bool RetainResourceUntilFrameFence(ID3D12Resource *resource) {
-    ID3D12Fence *fence = FrameFence();
+bool RetainResourceUntilFrameFence(ID3D12Resource* resource) {
+    ID3D12Fence* fence = FrameFence();
     uint64_t fenceValue = NextFrameFenceValue();
     if (fence == nullptr || fenceValue == 0) {
         MILESTROLOG_ERROR("Unity D3D12 frame fence is unavailable for rendered texture resource.");
@@ -213,7 +209,7 @@ bool RetainResourceUntilFrameFence(ID3D12Resource *resource) {
     return true;
 }
 
-ID3D12Resource *TextureFromRenderBuffer(void *renderBufferHandle) {
+ID3D12Resource* TextureFromRenderBuffer(void* renderBufferHandle) {
     if (renderBufferHandle == nullptr) {
         return nullptr;
     }
@@ -225,11 +221,11 @@ ID3D12Resource *TextureFromRenderBuffer(void *renderBufferHandle) {
     return nullptr;
 }
 
-ID3D12Resource *TextureFromNativeTexture(void *nativeTextureHandle) {
-    return static_cast<ID3D12Resource *>(nativeTextureHandle);
+ID3D12Resource* TextureFromNativeTexture(void* nativeTextureHandle) {
+    return static_cast<ID3D12Resource*>(nativeTextureHandle);
 }
 
-gr_cp<IDXGIAdapter1> AdapterForDevice(ID3D12Device *device) {
+gr_cp<IDXGIAdapter1> AdapterForDevice(ID3D12Device* device) {
     gr_cp<IDXGIFactory4> factory;
     HRESULT hr = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
     if (FAILED(hr)) {
@@ -250,8 +246,7 @@ gr_cp<IDXGIAdapter1> AdapterForDevice(ID3D12Device *device) {
             continue;
         }
 
-        if (desc.AdapterLuid.HighPart == deviceLuid.HighPart &&
-            desc.AdapterLuid.LowPart == deviceLuid.LowPart) {
+        if (desc.AdapterLuid.HighPart == deviceLuid.HighPart && desc.AdapterLuid.LowPart == deviceLuid.LowPart) {
             return adapter;
         }
     }
@@ -260,9 +255,9 @@ gr_cp<IDXGIAdapter1> AdapterForDevice(ID3D12Device *device) {
     return gr_cp<IDXGIAdapter1>();
 }
 
-GrDirectContext *DirectContext() {
-    ID3D12Device *device = Device();
-    ID3D12CommandQueue *queue = CommandQueue();
+GrDirectContext* DirectContext() {
+    ID3D12Device* device = Device();
+    ID3D12CommandQueue* queue = CommandQueue();
     if (device == nullptr || queue == nullptr) {
         MILESTROLOG_ERROR("Unity D3D12 device or command queue is unavailable.");
         return nullptr;
@@ -270,9 +265,9 @@ GrDirectContext *DirectContext() {
 
     if (gDirectContext != nullptr && gDirectContextDevice == device && gDirectContextQueue == queue) {
         MILESTROLOG_INFO("Reusing Skia D3D12 direct context={}, unityDevice={}, queue={}, adapterLuid={}.",
-                         static_cast<void *>(gDirectContext.get()),
-                         static_cast<void *>(device),
-                         static_cast<void *>(queue),
+                         static_cast<void*>(gDirectContext.get()),
+                         static_cast<void*>(device),
+                         static_cast<void*>(queue),
                          FormatLuid(device->GetAdapterLuid()));
         return gDirectContext.get();
     }
@@ -293,16 +288,16 @@ GrDirectContext *DirectContext() {
 
     DXGI_ADAPTER_DESC1 adapterDesc = {};
     adapter->GetDesc1(&adapterDesc);
-    MILESTROLOG_INFO(
-            "Creating Skia D3D12 direct context: previousContext={}, previousDevice={}, previousQueue={}, unityDevice={}, queue={}, deviceLuid={}, adapter={}, adapterLuid={}.",
-            static_cast<void *>(gDirectContext.get()),
-            static_cast<void *>(gDirectContextDevice),
-            static_cast<void *>(gDirectContextQueue),
-            static_cast<void *>(device),
-            static_cast<void *>(queue),
-            FormatLuid(device->GetAdapterLuid()),
-            static_cast<void *>(adapter.get()),
-            FormatLuid(adapterDesc.AdapterLuid));
+    MILESTROLOG_INFO("Creating Skia D3D12 direct context: previousContext={}, previousDevice={}, previousQueue={}, "
+                     "unityDevice={}, queue={}, deviceLuid={}, adapter={}, adapterLuid={}.",
+                     static_cast<void*>(gDirectContext.get()),
+                     static_cast<void*>(gDirectContextDevice),
+                     static_cast<void*>(gDirectContextQueue),
+                     static_cast<void*>(device),
+                     static_cast<void*>(queue),
+                     FormatLuid(device->GetAdapterLuid()),
+                     static_cast<void*>(adapter.get()),
+                     FormatLuid(adapterDesc.AdapterLuid));
 
     gDirectContext = GrDirectContexts::MakeD3D(backendContext);
     gDirectContextDevice = device;
@@ -310,12 +305,12 @@ GrDirectContext *DirectContext() {
     if (gDirectContext == nullptr) {
         MILESTROLOG_ERROR("Failed to create Skia D3D12 direct context.");
     } else {
-        MILESTROLOG_INFO("Created Skia D3D12 direct context={}.", static_cast<void *>(gDirectContext.get()));
+        MILESTROLOG_INFO("Created Skia D3D12 direct context={}.", static_cast<void*>(gDirectContext.get()));
     }
     return gDirectContext.get();
 }
 
-TextureLookup TextureFromPayload(const MilestroUnityRenderTargetPayload &payload) {
+TextureLookup TextureFromPayload(const MilestroUnityRenderTargetPayload& payload) {
     TextureLookup result;
 
     if (payload.handleKind == static_cast<int32_t>(MilestroUnityRenderTextureHandleKind::RenderBuffer)) {
@@ -329,9 +324,7 @@ TextureLookup TextureFromPayload(const MilestroUnityRenderTargetPayload &payload
     return result;
 }
 
-DXGI_FORMAT NormalizeDxgiFormat(DXGI_FORMAT format,
-                                int32_t srgb,
-                                int32_t preferredFormat) {
+DXGI_FORMAT NormalizeDxgiFormat(DXGI_FORMAT format, int32_t srgb, int32_t preferredFormat) {
     switch (format) {
         case DXGI_FORMAT_B8G8R8A8_TYPELESS:
             return srgb != 0 ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : DXGI_FORMAT_B8G8R8A8_UNORM;
@@ -372,9 +365,7 @@ SkColorType ColorTypeForFormat(DXGI_FORMAT format) {
 }
 
 sk_sp<SkColorSpace> ColorSpaceForFormat(DXGI_FORMAT format, int32_t srgb) {
-    if (srgb != 0 ||
-        format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB ||
-        format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) {
+    if (srgb != 0 || format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB || format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) {
         return SkColorSpace::MakeSRGB();
     }
     return nullptr;
@@ -384,20 +375,19 @@ DXGI_FORMAT PreferredDxgiFormat(int32_t srgb, int32_t preferredFormat) {
     return NormalizeDxgiFormat(DXGI_FORMAT_UNKNOWN, srgb, preferredFormat);
 }
 
-bool CreateD3D12TextureResource(ID3D12Device *device,
+bool CreateD3D12TextureResource(ID3D12Device* device,
                                 int32_t width,
                                 int32_t height,
                                 int32_t srgb,
                                 int32_t preferredFormat,
-                                gr_cp<ID3D12Resource> &resource) {
+                                gr_cp<ID3D12Resource>& resource) {
     if (device == nullptr || width <= 0 || height <= 0) {
         return false;
     }
 
     DXGI_FORMAT format = PreferredDxgiFormat(srgb, preferredFormat);
     if (!IsSupportedDxgiFormat(format)) {
-        MILESTROLOG_ERROR("Unsupported Milestro D3D12 external texture format {}.",
-                          static_cast<unsigned int>(format));
+        MILESTROLOG_ERROR("Unsupported Milestro D3D12 external texture format {}.", static_cast<unsigned int>(format));
         return false;
     }
 
@@ -418,8 +408,7 @@ bool CreateD3D12TextureResource(ID3D12Device *device,
     desc.SampleDesc.Count = 1;
     desc.SampleDesc.Quality = 0;
     desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET |
-                 D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS;
 
     D3D12_CLEAR_VALUE clearValue = {};
     clearValue.Format = format;
@@ -445,8 +434,8 @@ bool CreateD3D12TextureResource(ID3D12Device *device,
 
     MILESTROLOG_INFO(
             "Created Milestro D3D12 external texture resource={}, device={}, size={}x{}, format={}, flags=0x{:x}.",
-            static_cast<void *>(resource.get()),
-            static_cast<void *>(device),
+            static_cast<void*>(resource.get()),
+            static_cast<void*>(device),
             width,
             height,
             static_cast<unsigned int>(format),
@@ -454,8 +443,8 @@ bool CreateD3D12TextureResource(ID3D12Device *device,
     return true;
 }
 
-bool TransitionExternalTextureForUnity(ID3D12Device *device,
-                                       ID3D12Resource *resource,
+bool TransitionExternalTextureForUnity(ID3D12Device* device,
+                                       ID3D12Resource* resource,
                                        D3D12_RESOURCE_STATES before,
                                        D3D12_RESOURCE_STATES after,
                                        uint64_t renderSerial) {
@@ -509,20 +498,21 @@ bool TransitionExternalTextureForUnity(ID3D12Device *device,
     state.expected = before;
     state.current = after;
     UINT64 fenceValue = gD3D12v8->ExecuteCommandList(commandList.get(), 1, &state);
-    MILESTROLOG_INFO(
-            "Submitted Milestro D3D12 external texture transition: event={}, resource={}, before={}, after={}, fenceValue={}.",
-            renderSerial,
-            static_cast<void *>(resource),
-            static_cast<unsigned int>(before),
-            static_cast<unsigned int>(after),
-            static_cast<unsigned long long>(fenceValue));
+    MILESTROLOG_INFO("Submitted Milestro D3D12 external texture transition: event={}, resource={}, before={}, "
+                     "after={}, fenceValue={}.",
+                     renderSerial,
+                     static_cast<void*>(resource),
+                     static_cast<unsigned int>(before),
+                     static_cast<unsigned int>(after),
+                     static_cast<unsigned long long>(fenceValue));
     if (fenceValue == 0) {
         return false;
     }
 
-    ID3D12Fence *fence = FrameFence();
+    ID3D12Fence* fence = FrameFence();
     if (fence == nullptr) {
-        MILESTROLOG_WARN("Unity D3D12 frame fence is unavailable after external texture transition; retaining command list until shutdown.");
+        MILESTROLOG_WARN("Unity D3D12 frame fence is unavailable after external texture transition; retaining command "
+                         "list until shutdown.");
     }
 
     PendingCommandListRetain pending;
@@ -534,7 +524,7 @@ bool TransitionExternalTextureForUnity(ID3D12Device *device,
     return true;
 }
 
-bool ProbeRenderTargetView(ID3D12Device *device, ID3D12Resource *resource, uint64_t renderSerial) {
+bool ProbeRenderTargetView(ID3D12Device* device, ID3D12Resource* resource, uint64_t renderSerial) {
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     heapDesc.NumDescriptors = 1;
@@ -550,54 +540,47 @@ bool ProbeRenderTargetView(ID3D12Device *device, ID3D12Resource *resource, uint6
     }
 
     D3D12_CPU_DESCRIPTOR_HANDLE handle = heap->GetCPUDescriptorHandleForHeapStart();
-    MILESTROLOG_INFO(
-            "Milestro D3D12 direct RTV probe before CreateRenderTargetView: event={}, device={}, resource={}, heap={}, cpuHandle=0x{:x}.",
-            renderSerial,
-            static_cast<void *>(device),
-            static_cast<void *>(resource),
-            static_cast<void *>(heap.get()),
-            static_cast<unsigned long long>(handle.ptr));
+    MILESTROLOG_INFO("Milestro D3D12 direct RTV probe before CreateRenderTargetView: event={}, device={}, resource={}, "
+                     "heap={}, cpuHandle=0x{:x}.",
+                     renderSerial,
+                     static_cast<void*>(device),
+                     static_cast<void*>(resource),
+                     static_cast<void*>(heap.get()),
+                     static_cast<unsigned long long>(handle.ptr));
     device->CreateRenderTargetView(resource, nullptr, handle);
     MILESTROLOG_INFO("Milestro D3D12 direct RTV probe succeeded: event={}, heap={}, cpuHandle=0x{:x}.",
                      renderSerial,
-                     static_cast<void *>(heap.get()),
+                     static_cast<void*>(heap.get()),
                      static_cast<unsigned long long>(handle.ptr));
     return true;
 }
 
-bool CachedRenderTargetMatches(const CachedRenderTarget &cached,
-                               ID3D12Device *device,
-                               ID3D12CommandQueue *queue,
-                               ID3D12Resource *resource,
-                               const D3D12_RESOURCE_DESC &desc,
+bool CachedRenderTargetMatches(const CachedRenderTarget& cached,
+                               ID3D12Device* device,
+                               ID3D12CommandQueue* queue,
+                               ID3D12Resource* resource,
+                               const D3D12_RESOURCE_DESC& desc,
                                DXGI_FORMAT format,
                                uint32_t sampleCount,
                                uint32_t levelCount,
                                unsigned int sampleQuality,
                                int32_t srgb) {
-    return cached.surface != nullptr &&
-           cached.resource.get() == resource &&
-           cached.device == device &&
-           cached.queue == queue &&
-           cached.width == desc.Width &&
-           cached.height == desc.Height &&
-           cached.format == format &&
-           cached.sampleCount == sampleCount &&
-           cached.levelCount == levelCount &&
-           cached.sampleQuality == sampleQuality &&
-           cached.srgb == srgb;
+    return cached.surface != nullptr && cached.resource.get() == resource && cached.device == device &&
+           cached.queue == queue && cached.width == desc.Width && cached.height == desc.Height &&
+           cached.format == format && cached.sampleCount == sampleCount && cached.levelCount == levelCount &&
+           cached.sampleQuality == sampleQuality && cached.srgb == srgb;
 }
 
-CachedRenderTarget *FindCachedRenderTarget(ID3D12Device *device,
-                                           ID3D12CommandQueue *queue,
-                                           ID3D12Resource *resource,
-                                           const D3D12_RESOURCE_DESC &desc,
+CachedRenderTarget* FindCachedRenderTarget(ID3D12Device* device,
+                                           ID3D12CommandQueue* queue,
+                                           ID3D12Resource* resource,
+                                           const D3D12_RESOURCE_DESC& desc,
                                            DXGI_FORMAT format,
                                            uint32_t sampleCount,
                                            uint32_t levelCount,
                                            unsigned int sampleQuality,
                                            int32_t srgb) {
-    for (CachedRenderTarget &cached : gCachedRenderTargets) {
+    for (CachedRenderTarget& cached: gCachedRenderTargets) {
         if (CachedRenderTargetMatches(cached,
                                       device,
                                       queue,
@@ -614,11 +597,11 @@ CachedRenderTarget *FindCachedRenderTarget(ID3D12Device *device,
     return nullptr;
 }
 
-CachedRenderTarget *GetOrCreateCachedRenderTarget(GrDirectContext *context,
-                                                  ID3D12Device *device,
-                                                  ID3D12CommandQueue *queue,
-                                                  ID3D12Resource *resource,
-                                                  const D3D12_RESOURCE_DESC &desc,
+CachedRenderTarget* GetOrCreateCachedRenderTarget(GrDirectContext* context,
+                                                  ID3D12Device* device,
+                                                  ID3D12CommandQueue* queue,
+                                                  ID3D12Resource* resource,
+                                                  const D3D12_RESOURCE_DESC& desc,
                                                   DXGI_FORMAT format,
                                                   uint32_t sampleCount,
                                                   uint32_t levelCount,
@@ -626,25 +609,18 @@ CachedRenderTarget *GetOrCreateCachedRenderTarget(GrDirectContext *context,
                                                   int32_t srgb,
                                                   D3D12_RESOURCE_STATES initialState,
                                                   uint64_t renderSerial) {
-    CachedRenderTarget *cached = FindCachedRenderTarget(device,
-                                                        queue,
-                                                        resource,
-                                                        desc,
-                                                        format,
-                                                        sampleCount,
-                                                        levelCount,
-                                                        sampleQuality,
-                                                        srgb);
+    CachedRenderTarget* cached =
+            FindCachedRenderTarget(device, queue, resource, desc, format, sampleCount, levelCount, sampleQuality, srgb);
     if (cached != nullptr) {
         MILESTROLOG_INFO("Reusing cached Skia D3D12 render target: event={}, resource={}, surface={}.",
                          renderSerial,
-                         static_cast<void *>(resource),
-                         static_cast<void *>(cached->surface.get()));
+                         static_cast<void*>(resource),
+                         static_cast<void*>(cached->surface.get()));
         return cached;
     }
 
     gCachedRenderTargets.emplace_back();
-    CachedRenderTarget &created = gCachedRenderTargets.back();
+    CachedRenderTarget& created = gCachedRenderTargets.back();
     created.resource.retain(resource);
     created.device = device;
     created.queue = queue;
@@ -663,8 +639,7 @@ CachedRenderTarget *GetOrCreateCachedRenderTarget(GrDirectContext *context,
     textureInfo.fSampleCount = sampleCount;
     textureInfo.fLevelCount = levelCount;
     textureInfo.fSampleQualityPattern = sampleQuality;
-    created.renderTarget =
-            GrBackendRenderTargets::MakeD3D(static_cast<int>(desc.Width), desc.Height, textureInfo);
+    created.renderTarget = GrBackendRenderTargets::MakeD3D(static_cast<int>(desc.Width), desc.Height, textureInfo);
     created.surface = SkSurfaces::WrapBackendRenderTarget(context,
                                                           created.renderTarget,
                                                           kTopLeft_GrSurfaceOrigin,
@@ -679,21 +654,21 @@ CachedRenderTarget *GetOrCreateCachedRenderTarget(GrDirectContext *context,
 
     MILESTROLOG_INFO("Created cached Skia D3D12 render target: event={}, resource={}, surface={}, initialState={}.",
                      renderSerial,
-                     static_cast<void *>(resource),
-                     static_cast<void *>(created.surface.get()),
+                     static_cast<void*>(resource),
+                     static_cast<void*>(created.surface.get()),
                      static_cast<unsigned int>(initialState));
     return &created;
 }
 
-void RequestResourceState(ID3D12Resource *resource, D3D12_RESOURCE_STATES state) {
+void RequestResourceState(ID3D12Resource* resource, D3D12_RESOURCE_STATES state) {
     if (gD3D12v8 == nullptr || gD3D12v8->RequestResourceState == nullptr) {
         return;
     }
 
     if (!kUseUnityStateTrackerInQueueMode) {
         if (!gLoggedQueueModeStateApiSkip) {
-            MILESTROLOG_INFO(
-                    "Skipping Unity D3D12 active-command-list resource state APIs in queueAccess=Allow mode; Skia owns queue submission on this path.");
+            MILESTROLOG_INFO("Skipping Unity D3D12 active-command-list resource state APIs in queueAccess=Allow mode; "
+                             "Skia owns queue submission on this path.");
             gLoggedQueueModeStateApiSkip = true;
         }
         return;
@@ -708,7 +683,7 @@ void RequestResourceState(ID3D12Resource *resource, D3D12_RESOURCE_STATES state)
     gD3D12v8->RequestResourceState(resource, state);
 }
 
-void NotifyResourceState(ID3D12Resource *resource, D3D12_RESOURCE_STATES state) {
+void NotifyResourceState(ID3D12Resource* resource, D3D12_RESOURCE_STATES state) {
     if (gD3D12v8 == nullptr || gD3D12v8->NotifyResourceState == nullptr) {
         return;
     }
@@ -730,25 +705,24 @@ void ConfigureRenderEvent(int32_t renderEventId) {
     // statically satisfy the v8 active-command-list state tracker contract;
     // Windows debug-layer/reload runtime validation is still required.
     config.graphicsQueueAccess = kUnityD3D12GraphicsQueueAccess_Allow;
-    config.flags = kUnityD3D12EventConfigFlag_FlushCommandBuffers |
-                   kUnityD3D12EventConfigFlag_SyncWorkerThreads |
+    config.flags = kUnityD3D12EventConfigFlag_FlushCommandBuffers | kUnityD3D12EventConfigFlag_SyncWorkerThreads |
                    kUnityD3D12EventConfigFlag_ModifiesCommandBuffersState;
     config.ensureActiveRenderTextureIsBound = false;
 
     if (gD3D12v8 != nullptr) {
         gD3D12v8->ConfigureEvent(renderEventId, &config);
-        MILESTROLOG_INFO(
-                "Configured Milestro D3D12 render event {}: graphicsQueueAccess=Allow, flags=0x{:x}, ensureActiveRenderTextureIsBound={}.",
-                renderEventId,
-                static_cast<unsigned int>(config.flags),
-                config.ensureActiveRenderTextureIsBound ? 1 : 0);
+        MILESTROLOG_INFO("Configured Milestro D3D12 render event {}: graphicsQueueAccess=Allow, flags=0x{:x}, "
+                         "ensureActiveRenderTextureIsBound={}.",
+                         renderEventId,
+                         static_cast<unsigned int>(config.flags),
+                         config.ensureActiveRenderTextureIsBound ? 1 : 0);
     }
 }
 
 } // namespace
 
 void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
-                           IUnityInterfaces *unityInterfaces,
+                           IUnityInterfaces* unityInterfaces,
                            UnityGfxRenderer renderer,
                            int32_t renderEventId) {
     if (eventType == kUnityGfxDeviceEventShutdown || renderer != kUnityGfxRendererD3D12) {
@@ -788,11 +762,7 @@ void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
     ConfigureRenderEvent(renderEventId);
 }
 
-int64_t CreateExternalTexture(int32_t width,
-                              int32_t height,
-                              int32_t srgb,
-                              int32_t preferredFormat,
-                              void *&texture) {
+int64_t CreateExternalTexture(int32_t width, int32_t height, int32_t srgb, int32_t preferredFormat, void*& texture) {
     texture = nullptr;
 
     if (width <= 0 || height <= 0) {
@@ -800,7 +770,7 @@ int64_t CreateExternalTexture(int32_t width,
         return MILESTRO_API_RET_FAILED;
     }
 
-    ID3D12Device *device = Device();
+    ID3D12Device* device = Device();
     if (device == nullptr) {
         MILESTROLOG_ERROR("Unity D3D12 device is unavailable while creating external texture.");
         return MILESTRO_API_RET_FAILED;
@@ -815,21 +785,22 @@ int64_t CreateExternalTexture(int32_t width,
     return MILESTRO_API_RET_OK;
 }
 
-int64_t DestroyExternalTexture(void *&texture) {
-    ID3D12Resource *resource = static_cast<ID3D12Resource *>(texture);
+int64_t DestroyExternalTexture(void*& texture) {
+    ID3D12Resource* resource = static_cast<ID3D12Resource*>(texture);
     texture = nullptr;
     if (resource == nullptr) {
         return MILESTRO_API_RET_OK;
     }
 
     RetainResourceUntilFrameFence(resource);
-    MILESTROLOG_INFO("Destroying Milestro D3D12 external texture resource={}.", static_cast<void *>(resource));
+    MILESTROLOG_INFO("Destroying Milestro D3D12 external texture resource={}.", static_cast<void*>(resource));
     ClearCachedRenderTarget(resource);
     resource->Release();
     return MILESTRO_API_RET_OK;
 }
 
-int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
+int64_t Render(const MilestroUnityRenderSubmission& submission) {
+    const MilestroUnityRenderTargetPayload& payload = submission.target;
     const uint64_t renderSerial = gRenderSerial.fetch_add(1, std::memory_order_relaxed) + 1;
 
     LogCommandRecordingStateProbe();
@@ -842,26 +813,25 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
     CollectPendingResources();
 
     if (payload.msaaSamples != 1) {
-        MILESTROLOG_ERROR("Milestro D3D12 RenderTexture MSAA is not implemented yet: {} samples.",
-                          payload.msaaSamples);
+        MILESTROLOG_ERROR("Milestro D3D12 RenderTexture MSAA is not implemented yet: {} samples.", payload.msaaSamples);
         return MILESTRO_API_RET_FAILED;
     }
 
-    ID3D12Device *device = Device();
-    GrDirectContext *context = DirectContext();
+    ID3D12Device* device = Device();
+    GrDirectContext* context = DirectContext();
     if (device == nullptr || context == nullptr) {
         return MILESTRO_API_RET_FAILED;
     }
 
     TextureLookup texture = TextureFromPayload(payload);
-    ID3D12Resource *resource = texture.resource;
+    ID3D12Resource* resource = texture.resource;
     if (resource == nullptr) {
-        MILESTROLOG_ERROR(
-                "Failed to resolve Unity texture to ID3D12Resource on event {}. handleKind={}, renderBufferHandle={}, nativeTextureHandle={}.",
-                renderSerial,
-                payload.handleKind,
-                payload.colorRenderBufferHandle,
-                payload.nativeTextureHandle);
+        MILESTROLOG_ERROR("Failed to resolve Unity texture to ID3D12Resource on event {}. handleKind={}, "
+                          "renderBufferHandle={}, nativeTextureHandle={}.",
+                          renderSerial,
+                          payload.handleKind,
+                          payload.colorRenderBufferHandle,
+                          payload.nativeTextureHandle);
         return MILESTRO_API_RET_FAILED;
     }
 
@@ -878,22 +848,22 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
 
     if (resourceDevice.get() != device) {
         MILESTROLOG_ERROR("Unity D3D12 RenderTexture resource device {} does not match Unity device {}.",
-                          static_cast<void *>(resourceDevice.get()),
-                          static_cast<void *>(device));
+                          static_cast<void*>(resourceDevice.get()),
+                          static_cast<void*>(device));
         return MILESTRO_API_RET_FAILED;
     }
 
-    MILESTROLOG_INFO(
-            "Milestro D3D12 resource/context identity: event={}, unityDevice={}, resourceDevice={}, queue={}, skiaContext={}, contextDevice={}, contextQueue={}, deviceLuid={}, resourceDeviceLuid={}.",
-            renderSerial,
-            static_cast<void *>(device),
-            static_cast<void *>(resourceDevice.get()),
-            static_cast<void *>(gDirectContextQueue),
-            static_cast<void *>(context),
-            static_cast<void *>(gDirectContextDevice),
-            static_cast<void *>(gDirectContextQueue),
-            FormatLuid(device->GetAdapterLuid()),
-            FormatLuid(resourceDevice->GetAdapterLuid()));
+    MILESTROLOG_INFO("Milestro D3D12 resource/context identity: event={}, unityDevice={}, resourceDevice={}, queue={}, "
+                     "skiaContext={}, contextDevice={}, contextQueue={}, deviceLuid={}, resourceDeviceLuid={}.",
+                     renderSerial,
+                     static_cast<void*>(device),
+                     static_cast<void*>(resourceDevice.get()),
+                     static_cast<void*>(gDirectContextQueue),
+                     static_cast<void*>(context),
+                     static_cast<void*>(gDirectContextDevice),
+                     static_cast<void*>(gDirectContextQueue),
+                     FormatLuid(device->GetAdapterLuid()),
+                     FormatLuid(resourceDevice->GetAdapterLuid()));
 
     D3D12_RESOURCE_DESC desc = resource->GetDesc();
     DXGI_FORMAT format = NormalizeDxgiFormat(desc.Format, payload.srgb, payload.preferredFormat);
@@ -901,30 +871,31 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
     const uint32_t levelCount = desc.MipLevels == 0 ? 1 : desc.MipLevels;
     const unsigned int sampleQuality = desc.SampleDesc.Quality;
 
-    MILESTROLOG_INFO(
-            "Milestro D3D12 wrap target: event={}, source={}, resource={}, unityDevice={}, queue={}, payload={}x{}, desc={}x{}, "
-            "dimension={}, format={}, normalizedFormat={}, sampleCount={}, sampleQuality={}, mipLevels={}, flags=0x{:x}, "
-            "srgb={}, preferredFormat={}, renderBufferHandle={}, nativeTextureHandle={}.",
-            renderSerial,
-            TextureSourceName(texture.source),
-            static_cast<void *>(resource),
-            static_cast<void *>(device),
-            static_cast<void *>(gDirectContextQueue),
-            payload.width,
-            payload.height,
-            static_cast<unsigned long long>(desc.Width),
-            desc.Height,
-            static_cast<unsigned int>(desc.Dimension),
-            static_cast<unsigned int>(desc.Format),
-            static_cast<unsigned int>(format),
-            sampleCount,
-            sampleQuality,
-            levelCount,
-            static_cast<unsigned int>(desc.Flags),
-            payload.srgb,
-            payload.preferredFormat,
-            payload.colorRenderBufferHandle,
-            payload.nativeTextureHandle);
+    MILESTROLOG_INFO("Milestro D3D12 wrap target: event={}, source={}, resource={}, unityDevice={}, queue={}, "
+                     "payload={}x{}, desc={}x{}, "
+                     "dimension={}, format={}, normalizedFormat={}, sampleCount={}, sampleQuality={}, mipLevels={}, "
+                     "flags=0x{:x}, "
+                     "srgb={}, preferredFormat={}, renderBufferHandle={}, nativeTextureHandle={}.",
+                     renderSerial,
+                     TextureSourceName(texture.source),
+                     static_cast<void*>(resource),
+                     static_cast<void*>(device),
+                     static_cast<void*>(gDirectContextQueue),
+                     payload.width,
+                     payload.height,
+                     static_cast<unsigned long long>(desc.Width),
+                     desc.Height,
+                     static_cast<unsigned int>(desc.Dimension),
+                     static_cast<unsigned int>(desc.Format),
+                     static_cast<unsigned int>(format),
+                     sampleCount,
+                     sampleQuality,
+                     levelCount,
+                     static_cast<unsigned int>(desc.Flags),
+                     payload.srgb,
+                     payload.preferredFormat,
+                     payload.colorRenderBufferHandle,
+                     payload.nativeTextureHandle);
 
     if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D) {
         MILESTROLOG_ERROR("Milestro D3D12 RenderTexture resource must be TEXTURE2D, got dimension {}.",
@@ -966,9 +937,8 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
     const D3D12_RESOURCE_STATES skiaRenderState = D3D12_RESOURCE_STATE_RENDER_TARGET;
     RequestResourceState(resource, skiaRenderState);
 
-    const D3D12_RESOURCE_STATES skiaInitialState =
-            kUseUnityStateTrackerInQueueMode ? skiaRenderState : displayState;
-    CachedRenderTarget *cached = GetOrCreateCachedRenderTarget(context,
+    const D3D12_RESOURCE_STATES skiaInitialState = kUseUnityStateTrackerInQueueMode ? skiaRenderState : displayState;
+    CachedRenderTarget* cached = GetOrCreateCachedRenderTarget(context,
                                                                device,
                                                                gDirectContextQueue,
                                                                resource,
@@ -988,7 +958,7 @@ int64_t Render(const MilestroUnityRenderTargetPayload &payload) {
 
     GrBackendRenderTargets::SetD3DResourceState(&cached->renderTarget,
                                                 static_cast<GrD3DResourceStateEnum>(skiaInitialState));
-    milestro::unity_render::DrawPayload(cached->surface->getCanvas(), payload);
+    milestro::unity_render::DrawSubmission(cached->surface->getCanvas(), submission);
     if (kSyncSkiaSubmitForDiagnostics) {
         context->flushAndSubmit(cached->surface.get(), GrSyncCpu::kYes);
     } else {

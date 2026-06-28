@@ -2,7 +2,7 @@
 
 #include "game/milestro_game_retcode.h"
 #include "unity_render/MilestroUnityGraphicsBackend.h"
-#include "unity_render/MilestroUnityRenderTargetPayload.h"
+#include "unity_render/MilestroUnityRenderSubmission.h"
 
 #include <IUnityGraphics.h>
 #include <Milestro/log/log.h>
@@ -25,17 +25,17 @@ constexpr int kMetalDrawEventOffset = 0;
 constexpr int kD3D12DrawEventOffset = 1;
 constexpr int kReservedEventCount = 2;
 
-IUnityInterfaces *gUnityInterfaces = nullptr;
-IUnityGraphics *gUnityGraphics = nullptr;
+IUnityInterfaces* gUnityInterfaces = nullptr;
+IUnityGraphics* gUnityGraphics = nullptr;
 UnityGfxRenderer gRenderer = kUnityGfxRendererNull;
 int gEventBase = -1;
 
-void MarkPayloadCompleted(MilestroUnityRenderTargetPayload *payload) {
-    if (payload == nullptr) {
+void MarkSubmissionCompleted(MilestroUnityRenderSubmission* submission) {
+    if (submission == nullptr) {
         return;
     }
 
-    std::atomic_ref<int32_t> completed(payload->completed);
+    std::atomic_ref<int32_t> completed(submission->completed);
     completed.store(1, std::memory_order_release);
 }
 
@@ -49,7 +49,7 @@ void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType
 #if defined(__APPLE__)
     metal::OnGraphicsDeviceEvent(eventType, gUnityInterfaces, gRenderer);
 #else
-    (void)eventType;
+    (void) eventType;
 #endif
 
 #if defined(_WIN32)
@@ -60,10 +60,10 @@ void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType
 #endif
 }
 
-void UNITY_INTERFACE_API OnRenderEvent(int eventId, void *data) {
+void UNITY_INTERFACE_API OnRenderEvent(int eventId, void* data) {
     if (gEventBase < 0) {
         MILESTROLOG_WARN("Ignoring unknown Milestro Unity render event: {}", eventId);
-        MarkPayloadCompleted(static_cast<MilestroUnityRenderTargetPayload *>(data));
+        MarkSubmissionCompleted(static_cast<MilestroUnityRenderSubmission*>(data));
         return;
     }
 
@@ -72,71 +72,72 @@ void UNITY_INTERFACE_API OnRenderEvent(int eventId, void *data) {
         return;
     }
 
-    auto *payload = static_cast<MilestroUnityRenderTargetPayload *>(data);
+    auto* submission = static_cast<MilestroUnityRenderSubmission*>(data);
+    const MilestroUnityRenderTargetPayload& target = submission->target;
     const int eventOffset = eventId - gEventBase;
     if (eventOffset == kMetalDrawEventOffset) {
-        if (payload->graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::Metal)) {
-            MILESTROLOG_ERROR("Milestro Metal render event received backend {}.", payload->graphicsBackend);
-            MarkPayloadCompleted(payload);
+        if (target.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::Metal)) {
+            MILESTROLOG_ERROR("Milestro Metal render event received backend {}.", target.graphicsBackend);
+            MarkSubmissionCompleted(submission);
             return;
         }
 
         if (gRenderer != kUnityGfxRendererMetal) {
             MILESTROLOG_ERROR("Milestro Metal render event invoked while Unity renderer is {}.",
                               static_cast<int>(gRenderer));
-            MarkPayloadCompleted(payload);
+            MarkSubmissionCompleted(submission);
             return;
         }
 
 #if defined(__APPLE__)
-        const auto status = metal::Render(*payload);
+        const auto status = metal::Render(*submission);
         if (status < 0) {
             MILESTROLOG_ERROR("Milestro Metal render event failed: {}", status);
         }
-        MarkPayloadCompleted(payload);
+        MarkSubmissionCompleted(submission);
 #else
         MILESTROLOG_ERROR("Milestro Metal render event is only available on Apple platforms.");
-        MarkPayloadCompleted(payload);
+        MarkSubmissionCompleted(submission);
 #endif
         return;
     }
 
     if (eventOffset == kD3D12DrawEventOffset) {
-        if (payload->graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::Direct3D12)) {
-            MILESTROLOG_ERROR("Milestro D3D12 render event received backend {}.", payload->graphicsBackend);
-            MarkPayloadCompleted(payload);
+        if (target.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::Direct3D12)) {
+            MILESTROLOG_ERROR("Milestro D3D12 render event received backend {}.", target.graphicsBackend);
+            MarkSubmissionCompleted(submission);
             return;
         }
 
         if (gRenderer != kUnityGfxRendererD3D12) {
             MILESTROLOG_ERROR("Milestro D3D12 render event invoked while Unity renderer is {}.",
                               static_cast<int>(gRenderer));
-            MarkPayloadCompleted(payload);
+            MarkSubmissionCompleted(submission);
             return;
         }
 
 #if defined(_WIN32)
-        const auto status = d3d12::Render(*payload);
+        const auto status = d3d12::Render(*submission);
         if (status < 0) {
             MILESTROLOG_ERROR("Milestro D3D12 render event failed: {}", status);
         }
-        MarkPayloadCompleted(payload);
+        MarkSubmissionCompleted(submission);
 #else
         MILESTROLOG_ERROR("Milestro D3D12 render event is only available on Windows.");
-        MarkPayloadCompleted(payload);
+        MarkSubmissionCompleted(submission);
 #endif
         return;
     }
 
     MILESTROLOG_WARN("Ignoring unknown Milestro Unity render event: {}", eventId);
-    MarkPayloadCompleted(payload);
+    MarkSubmissionCompleted(submission);
 }
 
-void *RenderEventFunc() {
-    return reinterpret_cast<void *>(&OnRenderEvent);
+void* RenderEventFunc() {
+    return reinterpret_cast<void*>(&OnRenderEvent);
 }
 
-int64_t MetalRenderEventId(int32_t &eventId) {
+int64_t MetalRenderEventId(int32_t& eventId) {
     if (gEventBase < 0) {
         eventId = -1;
         return MILESTRO_API_RET_FAILED;
@@ -146,7 +147,7 @@ int64_t MetalRenderEventId(int32_t &eventId) {
     return MILESTRO_API_RET_OK;
 }
 
-int64_t RenderTextureEventId(int32_t graphicsBackend, int32_t &eventId) {
+int64_t RenderTextureEventId(int32_t graphicsBackend, int32_t& eventId) {
     if (gEventBase < 0) {
         eventId = -1;
         return MILESTRO_API_RET_FAILED;
@@ -174,15 +175,15 @@ int64_t RenderTextureEventId(int32_t graphicsBackend, int32_t &eventId) {
 
 } // namespace
 
-void *GetRenderEventFuncForExport() {
+void* GetRenderEventFuncForExport() {
     return RenderEventFunc();
 }
 
-int64_t GetMetalRenderEventIdForExport(int32_t &eventId) {
+int64_t GetMetalRenderEventIdForExport(int32_t& eventId) {
     return MetalRenderEventId(eventId);
 }
 
-int64_t GetRenderTextureEventIdForExport(int32_t graphicsBackend, int32_t &eventId) {
+int64_t GetRenderTextureEventIdForExport(int32_t graphicsBackend, int32_t& eventId) {
     return RenderTextureEventId(graphicsBackend, eventId);
 }
 
@@ -190,7 +191,7 @@ int64_t CreateD3D12ExternalTextureForExport(int32_t width,
                                             int32_t height,
                                             int32_t srgb,
                                             int32_t preferredFormat,
-                                            void *&texture) {
+                                            void*& texture) {
 #if defined(_WIN32)
     if (gRenderer != kUnityGfxRendererD3D12) {
         texture = nullptr;
@@ -201,17 +202,17 @@ int64_t CreateD3D12ExternalTextureForExport(int32_t width,
 
     return d3d12::CreateExternalTexture(width, height, srgb, preferredFormat, texture);
 #else
-    (void)width;
-    (void)height;
-    (void)srgb;
-    (void)preferredFormat;
+    (void) width;
+    (void) height;
+    (void) srgb;
+    (void) preferredFormat;
     texture = nullptr;
     MILESTROLOG_ERROR("Milestro D3D12 external texture is only available on Windows.");
     return MILESTRO_API_RET_FAILED;
 #endif
 }
 
-int64_t DestroyD3D12ExternalTextureForExport(void *&texture) {
+int64_t DestroyD3D12ExternalTextureForExport(void*& texture) {
 #if defined(_WIN32)
     return d3d12::DestroyExternalTexture(texture);
 #else
@@ -221,7 +222,7 @@ int64_t DestroyD3D12ExternalTextureForExport(void *&texture) {
 #endif
 }
 
-void Load(IUnityInterfaces *unityInterfaces) {
+void Load(IUnityInterfaces* unityInterfaces) {
     gUnityInterfaces = unityInterfaces;
     gUnityGraphics = unityInterfaces != nullptr ? unityInterfaces->Get<IUnityGraphics>() : nullptr;
     if (gUnityGraphics == nullptr) {

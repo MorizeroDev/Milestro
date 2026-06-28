@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Milestro.Binding;
-using Milestro.Skia.TextLayout;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -17,7 +16,7 @@ namespace Milestro.Skia
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct RenderPayload
+        private struct RenderTargetPayload
         {
             public int GraphicsBackend;
             public int HandleKind;
@@ -30,33 +29,48 @@ namespace Milestro.Skia
             public int MsaaSamples;
             public int ResolveStrategy;
             public int PreferredFormat;
+        }
 
-            public IntPtr Paragraph;
-            public float ParagraphX;
-            public float ParagraphY;
+        [StructLayout(LayoutKind.Sequential)]
+        private struct DrawCommandPayload
+        {
+            public int Kind;
+            public IntPtr Resource;
+            public float X;
+            public float Y;
+            public float Width;
+            public float Height;
+        }
 
-            public IntPtr Image;
-            public float ImageX;
-            public float ImageY;
-            public float ImageWidth;
-            public float ImageHeight;
-
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RenderSubmissionPayload
+        {
+            public RenderTargetPayload Target;
+            public IntPtr Commands;
+            public int CommandCount;
             public int Completed;
         }
 
         private sealed class PendingRenderEvent
         {
             public long Serial;
-            public IntPtr PayloadPtr;
+            public IntPtr SubmissionPtr;
+            public IntPtr CommandsPtr;
             public Texture Texture;
-            public Paragraph Paragraph;
-            public MilestroImage Image;
+            public object[] Resources;
 
             public void KeepAlive()
             {
                 GC.KeepAlive(Texture);
-                GC.KeepAlive(Paragraph);
-                GC.KeepAlive(Image);
+                if (Resources == null)
+                {
+                    return;
+                }
+
+                foreach (var resource in Resources)
+                {
+                    GC.KeepAlive(resource);
+                }
             }
         }
 
@@ -69,7 +83,8 @@ namespace Milestro.Skia
         private static readonly object PendingLock = new object();
         private static readonly List<PendingRenderEvent> PendingEvents = new List<PendingRenderEvent>();
         private static readonly List<DeferredRelease> DeferredReleases = new List<DeferredRelease>();
-        private static readonly int CompletedOffset = (int)Marshal.OffsetOf<RenderPayload>(nameof(RenderPayload.Completed));
+        private static readonly int CompletedOffset =
+            (int)Marshal.OffsetOf<RenderSubmissionPayload>(nameof(RenderSubmissionPayload.Completed));
         private static long nextSerial;
         private static MilestroRenderEventLifetimePump lifetimePump;
 
@@ -162,14 +177,15 @@ namespace Milestro.Skia
             DeferReleaseAfterCurrentEvents(resource.Dispose);
         }
 
-        public void Draw(Paragraph paragraph,
-            MilestroImage image,
-            Vector2 paragraphPosition,
-            Rect imageRect,
-            bool? clearBeforeDraw = null)
+        public void Submit(UnitySkiaRenderCommandList commands, bool? clearBeforeDraw = null)
         {
             ThrowIfDisposed();
             CollectCompletedEvents();
+
+            if (commands == null)
+            {
+                throw new ArgumentNullException(nameof(commands));
+            }
 
             if (renderEventFunc == IntPtr.Zero)
             {
@@ -181,7 +197,7 @@ namespace Milestro.Skia
                 Resize(Width, Height);
             }
 
-            var payload = new RenderPayload
+            var target = new RenderTargetPayload
             {
                 GraphicsBackend = (int)Backend,
                 HandleKind = Backend == UnitySkiaGraphicsBackend.Direct3D12
@@ -199,31 +215,33 @@ namespace Milestro.Skia
                 ClearBeforeDraw = (clearBeforeDraw ?? descriptor.ClearBeforeDraw) ? 1 : 0,
                 MsaaSamples = descriptor.MsaaSamples,
                 ResolveStrategy = (int)descriptor.ResolveStrategy,
-                PreferredFormat = (int)descriptor.PreferredFormat,
-                Paragraph = paragraph?.Ptr ?? IntPtr.Zero,
-                ParagraphX = paragraphPosition.x,
-                ParagraphY = paragraphPosition.y,
-                Image = image?.Ptr ?? IntPtr.Zero,
-                ImageX = imageRect.x,
-                ImageY = imageRect.y,
-                ImageWidth = imageRect.width,
-                ImageHeight = imageRect.height,
-                Completed = 0
+                PreferredFormat = (int)descriptor.PreferredFormat
             };
 
-            var payloadPtr = Marshal.AllocHGlobal(Marshal.SizeOf<RenderPayload>());
+            var submissionPtr = IntPtr.Zero;
+            var commandsPtr = IntPtr.Zero;
             PendingRenderEvent pendingEvent = null;
             try
             {
-                Marshal.StructureToPtr(payload, payloadPtr, false);
-                pendingEvent = AddPendingEvent(payloadPtr, Texture, paragraph, image);
+                commandsPtr = MarshalCommands(commands);
+                var submission = new RenderSubmissionPayload
+                {
+                    Target = target,
+                    Commands = commandsPtr,
+                    CommandCount = commands.Count,
+                    Completed = 0
+                };
+
+                submissionPtr = Marshal.AllocHGlobal(Marshal.SizeOf<RenderSubmissionPayload>());
+                Marshal.StructureToPtr(submission, submissionPtr, false);
+                pendingEvent = AddPendingEvent(submissionPtr, commandsPtr, Texture, SnapshotResources(commands));
 
                 CommandBuffer cmd = null;
                 try
                 {
                     cmd = new CommandBuffer();
                     cmd.name = "Milestro " + Backend + " Native Plugin Pass";
-                    cmd.IssuePluginEventAndData(renderEventFunc, renderEventId, payloadPtr);
+                    cmd.IssuePluginEventAndData(renderEventFunc, renderEventId, submissionPtr);
                     Graphics.ExecuteCommandBuffer(cmd);
                 }
                 finally
@@ -239,7 +257,7 @@ namespace Milestro.Skia
                 }
                 else
                 {
-                    Marshal.FreeHGlobal(payloadPtr);
+                    FreeSubmission(submissionPtr, commandsPtr);
                 }
                 throw;
             }
@@ -255,6 +273,72 @@ namespace Milestro.Skia
             disposed = true;
             RetireCurrentTexture();
             CollectCompletedEvents();
+        }
+
+        private static IntPtr MarshalCommands(UnitySkiaRenderCommandList commandList)
+        {
+            if (commandList.Count == 0)
+            {
+                return IntPtr.Zero;
+            }
+
+            var commandSize = Marshal.SizeOf<DrawCommandPayload>();
+            var commandsPtr = Marshal.AllocHGlobal(commandSize * commandList.Count);
+            try
+            {
+                var commands = commandList.Commands;
+                for (var i = 0; i < commands.Count; ++i)
+                {
+                    var command = commands[i];
+                    var payload = new DrawCommandPayload
+                    {
+                        Kind = (int)command.Kind,
+                        Resource = command.Resource,
+                        X = command.X,
+                        Y = command.Y,
+                        Width = command.Width,
+                        Height = command.Height
+                    };
+                    Marshal.StructureToPtr(payload, IntPtr.Add(commandsPtr, i * commandSize), false);
+                }
+            }
+            catch
+            {
+                Marshal.FreeHGlobal(commandsPtr);
+                throw;
+            }
+
+            return commandsPtr;
+        }
+
+        private static object[] SnapshotResources(UnitySkiaRenderCommandList commandList)
+        {
+            if (commandList.Count == 0)
+            {
+                return Array.Empty<object>();
+            }
+
+            var resources = new object[commandList.Count];
+            var commands = commandList.Commands;
+            for (var i = 0; i < commands.Count; ++i)
+            {
+                resources[i] = commands[i].KeepAlive;
+            }
+
+            return resources;
+        }
+
+        private static void FreeSubmission(IntPtr submissionPtr, IntPtr commandsPtr)
+        {
+            if (commandsPtr != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(commandsPtr);
+            }
+
+            if (submissionPtr != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(submissionPtr);
+            }
         }
 
         private static UnitySkiaRenderTextureDescriptor NormalizeDescriptor(UnitySkiaRenderTextureDescriptor descriptor)
@@ -398,10 +482,10 @@ namespace Milestro.Skia
             }
         }
 
-        private static PendingRenderEvent AddPendingEvent(IntPtr payloadPtr,
+        private static PendingRenderEvent AddPendingEvent(IntPtr submissionPtr,
+            IntPtr commandsPtr,
             Texture texture,
-            Paragraph paragraph,
-            MilestroImage image)
+            object[] resources)
         {
             EnsureLifetimePump();
             lock (PendingLock)
@@ -409,10 +493,10 @@ namespace Milestro.Skia
                 var pendingEvent = new PendingRenderEvent
                 {
                     Serial = ++nextSerial,
-                    PayloadPtr = payloadPtr,
+                    SubmissionPtr = submissionPtr,
+                    CommandsPtr = commandsPtr,
                     Texture = texture,
-                    Paragraph = paragraph,
-                    Image = image
+                    Resources = resources
                 };
                 PendingEvents.Add(pendingEvent);
                 return pendingEvent;
@@ -429,7 +513,7 @@ namespace Milestro.Skia
 
             if (removed)
             {
-                Marshal.FreeHGlobal(pendingEvent.PayloadPtr);
+                FreeSubmission(pendingEvent.SubmissionPtr, pendingEvent.CommandsPtr);
                 pendingEvent.KeepAlive();
             }
         }
@@ -472,12 +556,12 @@ namespace Milestro.Skia
                 for (var i = PendingEvents.Count - 1; i >= 0; i--)
                 {
                     var pendingEvent = PendingEvents[i];
-                    if (Marshal.ReadInt32(pendingEvent.PayloadPtr, CompletedOffset) == 0)
+                    if (Marshal.ReadInt32(pendingEvent.SubmissionPtr, CompletedOffset) == 0)
                     {
                         continue;
                     }
 
-                    Marshal.FreeHGlobal(pendingEvent.PayloadPtr);
+                    FreeSubmission(pendingEvent.SubmissionPtr, pendingEvent.CommandsPtr);
                     pendingEvent.KeepAlive();
                     PendingEvents.RemoveAt(i);
                 }

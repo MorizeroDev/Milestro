@@ -246,7 +246,7 @@ namespace Milestro.Components
 
             if (needsDraw)
             {
-                surface.Draw(paragraph, image, paragraphPosition, imageRect);
+                surface.Submit(BuildRenderCommands());
             }
 
             m_havePropertiesChanged = false;
@@ -275,6 +275,14 @@ namespace Milestro.Components
             var result = segments.ToParagraph(paragraphStyle, textStyle);
             result.Layout(layoutWidth);
             return result;
+        }
+
+        private UnitySkiaRenderCommandList BuildRenderCommands()
+        {
+            var commands = new UnitySkiaRenderCommandList();
+            commands.DrawImage(image, imageRect);
+            commands.DrawParagraph(paragraph, paragraphPosition);
+            return commands;
         }
 
         private void RetireImage()
