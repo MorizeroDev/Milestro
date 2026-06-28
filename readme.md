@@ -1,33 +1,85 @@
 # Milestro
 
-Milestro (Milthm Maestro), a Skia integration for Unity games.
+Milestro is a native text rendering plugin for Unity.
 
-## 开发
+The goal of this project is to bypass Unity's built-in text rendering pipeline and render text directly with Skia. Milestro gives Unity projects a lower-level path for text layout, glyph processing, rasterization, and render target output while keeping a C# API available inside Unity.
 
-### 环境配置
+## What This Project Does
 
-windows: 支持MSVC和Clang
+Milestro provides:
 
-windows 安卓交叉编译: 使用`unity 2022.3.8f1`自带的`NDK r23`
+- A native C++ library built around Skia text layout and rendering.
+- Unity C# bindings for the native Milestro API.
+- Unity components for rendering Skia paragraphs through bitmap textures, render textures, mesh geometry, and SDF data.
+- Rich text parsing helpers for converting styled markup into paragraph payloads.
+- Font registration and font family access through the native layer.
+- Glyph extraction utilities for paths, vertices, bounds, and custom rendering workflows.
+- Unity native rendering integration for platform graphics backends.
 
-注意，请确保工具链路径中没有空格和中文
+In short: Milestro lets Unity ask Skia to shape and render text, instead of relying on Unity's normal text rendering stack.
 
-cmake参考：
+## Why
+
+Unity's built-in text path is convenient, but it can be limiting when a project needs direct control over:
+
+- Text shaping and paragraph layout.
+- Font fallback and font registration.
+- Rendering text into custom textures or render targets.
+- Converting text to paths, meshes, or SDF data.
+
+Milestro exists to make those workflows available from Unity.
+
+## Architecture
+
+Milestro is split into a native layer and a Unity layer.
+
+### Native Layer
+
+The native layer is written in C++ and exposes a C-compatible interface for Unity and generated bindings.
+
+Main areas:
+
+- `src/skia/` and `include/Milestro/skia/`: Skia wrappers for canvas, images, fonts, typefaces, paths, SVG, vertex data, and text layout.
+- `src/icu/` and `include/Milestro/icu/`: ICU-related helpers.
+- `src/game/` and `include/Milestro/game/`: exported plugin API used by Unity/C#.
+- `src/unity_render/`: Unity native rendering integration.
+
+### Unity Layer
+
+The Unity layer lives under `apps/unity-plugins/Milestro/`.
+
+Main areas:
+
+- `Binding/`: C# bindings to the exported native API.
+- `Skia/`: managed wrappers for native Skia objects.
+- `Skia/TextLayout/`: paragraph, paragraph builder, paragraph style, text style, and font collection APIs.
+- `Components/`: Unity components for rendering paragraphs.
+- `RichTextParser/`: markup parsing into styled text payloads.
+- `Model/`: shared text and rendering data models.
+- `ColorUniverse/`: color conversion and parsing helpers.
+
+## Repository Layout
+
+```text
+apps/
+  cmd/                  Native CLI entry point
+  unity-plugins/        Unity C# plugin code
+cmake/                  CMake helper modules
+docs/                   Project documentation
+ext/                    Vendored third-party dependencies
+include/Milestro/       Public native headers
+scripts/                Release and maintenance scripts
+src/                    Native implementation
+tests/                  Native tests and test data
 ```
--GNinja
--DCMAKE_TOOLCHAIN_FILE="C:\Unity\Editor\2022.3.8f1\Editor\Data\PlaybackEngines\AndroidPlayer\NDK\build\cmake\android.toolchain.cmake"
--DCMAKE_SYSTEM_NAME=Android
--DANDROID_ABI=arm64-v8a
--DCMAKE_ANDROID_NDK="C:\Unity\Editor\2022.3.8f1\Editor\Data\PlaybackEngines\AndroidPlayer\NDK"
--DANDROID_PLATFORM=android-24
--DCMAKE_ANDROID_NDK_TOOLCHAIN_VERSION=clang
-```
 
-## skia
+## Supported Platforms
 
-安卓参考命令：
-```
-gn gen out/android-arm64 --args='ndk="C:\Unity\Editor\2022.3.8f1\Editor\Data\PlaybackEngines\AndroidPlayer\NDK" target_cpu="arm64" is_official_build=false is_debug=true skia_enable_skparagraph=true skia_enable_skshaper=true skia_enable_skunicode=true skia_use_harfbuzz=true skia_enable_fontmgr_custom_empty=true skia_use_freetype=true skia_use_system_freetype2=false'
+Milestro is currently in the proof-of-concept stage.
 
-ninja -C out/android-arm64
-```
+The target Unity graphics backends are:
+
+- Metal
+- Direct3D 12
+- Vulkan
+- OpenGL

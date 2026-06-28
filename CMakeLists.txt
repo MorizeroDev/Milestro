@@ -493,10 +493,10 @@ endif ()
 
 if (CMAKE_HOST_WIN32)
     add_custom_target(H2CS
-            COMMAND cd ${PROJECT_SOURCE_DIR} & cmd /c gradlew.bat h2cs -DsourceFilePath="${PROJECT_SOURCE_DIR}/include/Milestro/game/milestro_game_interface.h" -DcsharpBindingOutputPath="${CMAKE_CURRENT_BINARY_DIR}/BindingC.cs" -DcppFrameworkBindingOutputPath="${CMAKE_CURRENT_BINARY_DIR}/FrameworkBinding.cpp"
+            COMMAND cd ${PROJECT_SOURCE_DIR} & cmd /c gradlew.bat h2cs
     )
 else ()
     add_custom_target(H2CS
-            COMMAND cd ${PROJECT_SOURCE_DIR} && ./gradlew h2cs -DsourceFilePath="${PROJECT_SOURCE_DIR}/include/Milestro/game/milestro_game_interface.h" -DcsharpBindingOutputPath="${CMAKE_CURRENT_BINARY_DIR}/BindingC.cs" -DcppFrameworkBindingOutputPath="${CMAKE_CURRENT_BINARY_DIR}/FrameworkBinding.cpp"
+            COMMAND cd ${PROJECT_SOURCE_DIR} && ./gradlew h2cs
     )
 endif ()

@@ -1,5 +1,5 @@
 plugins {
-    id("party.para.h2cs") version "1.0.1" apply true
+    id("party.para.h2cs") version "1.0.2" apply true
 }
 
 group = "com.morizero.milestro"
@@ -16,12 +16,9 @@ repositories { repo() }
 tasks {
     h2cs {
         projectName = "Milestro"
-        sourceFilePath = System.getProperty("sourceFilePath")
-            ?: throw Exception("No source files given")
-        csharpBindingOutputPath = System.getProperty("csharpBindingOutputPath")
-            ?: throw Exception("No csharp binding output path given")
-        cppFrameworkBindingOutputPath = System.getProperty("cppFrameworkBindingOutputPath")
-            ?: throw Exception("No cpp binding output path given")
+        sourceFilePath = file("include/Milestro/game/milestro_game_interface.h").absolutePath
+        csharpBindingOutputPath = file("apps/unity-plugins/Milestro/Binding/BindingC.cs").absolutePath
+        cppFrameworkBindingOutputPath = file("apps/unity-plugins/Milestro/Plugins/FrameworkBinding.cpp").absolutePath
         addTypeMapping(
             listOf("milestro::skia::Canvas") to "IntPtr",
             listOf("milestro::skia::Image") to "IntPtr",
