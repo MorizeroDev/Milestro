@@ -4,6 +4,7 @@ using Milestro.Extensions;
 using Milestro.Skia;
 using Milestro.Skia.TextLayout;
 using UnityEngine;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 namespace Milestro.Components
@@ -11,33 +12,153 @@ namespace Milestro.Components
     [RequireComponent(typeof(RawImage))]
     public class SkParagraphGLRenderTextureBox : MonoBehaviour
     {
-        [TextArea(3, 10)] [SerializeField] public string content = "";
-        [SerializeField] public TextAsset imageAsset;
-        [SerializeField] public Rect imageRect = new Rect(0, 0, 128, 128);
-        [SerializeField] public Vector2 paragraphPosition = new Vector2(0, 144);
-        [SerializeField] public int layoutWidth = 640;
-        [SerializeField] public List<string> fontFamilies = new List<string>() { "Source Han Sans VF" };
-        [SerializeField] public float size = 36;
-        [SerializeField] public Color color = Color.white;
-        [SerializeField] public string locale = "zh-Hans";
-        [SerializeField] public bool srgb = true;
+        [TextArea(3, 10)]
+        [SerializeField]
+        [FormerlySerializedAs("content")]
+        private string m_content = "";
+
+        [SerializeField]
+        [FormerlySerializedAs("imageAsset")]
+        private TextAsset m_imageAsset;
+
+        [SerializeField]
+        [FormerlySerializedAs("imageRect")]
+        private Rect m_imageRect = new Rect(0, 0, 128, 128);
+
+        [SerializeField]
+        [FormerlySerializedAs("paragraphPosition")]
+        private Vector2 m_paragraphPosition = new Vector2(0, 144);
+
+        [SerializeField]
+        [FormerlySerializedAs("layoutWidth")]
+        private int m_layoutWidth = 640;
+
+        [SerializeField]
+        [FormerlySerializedAs("fontFamilies")]
+        private List<string> m_fontFamilies = new List<string>() { "Source Han Sans VF" };
+
+        [SerializeField]
+        [FormerlySerializedAs("size")]
+        private float m_size = 36;
+
+        [SerializeField]
+        [FormerlySerializedAs("color")]
+        private Color m_color = Color.white;
+
+        [SerializeField]
+        [FormerlySerializedAs("locale")]
+        private string m_locale = "zh-Hans";
+
+        [SerializeField]
+        [FormerlySerializedAs("srgb")]
+        private bool m_srgb = true;
 
         [NonSerialized] private RawImage rawImage;
         [NonSerialized] private RectTransform rectTransform;
         [NonSerialized] private UnityAutoRenderTextureSurface surface;
         [NonSerialized] private Paragraph paragraph;
         [NonSerialized] private MilestroImage image;
-        [NonSerialized] private string cachedContent;
-        [NonSerialized] private TextAsset cachedImageAsset;
-        [NonSerialized] private Vector2Int cachedSize;
-        [NonSerialized] private bool cachedSrgb;
-        [NonSerialized] private int cachedLayoutWidth;
-        [NonSerialized] private List<string> cachedFontFamilies;
-        [NonSerialized] private float cachedFontSize;
-        [NonSerialized] private Color cachedColor;
-        [NonSerialized] private string cachedLocale;
-        [NonSerialized] private Vector2 cachedParagraphPosition;
-        [NonSerialized] private Rect cachedImageRect;
+        [NonSerialized] private bool m_havePropertiesChanged = true;
+
+        public string content
+        {
+            get => m_content;
+            set
+            {
+                m_content = value;
+                m_havePropertiesChanged = true;
+            }
+        }
+
+        public TextAsset imageAsset
+        {
+            get => m_imageAsset;
+            set
+            {
+                m_imageAsset = value;
+                m_havePropertiesChanged = true;
+            }
+        }
+
+        public Rect imageRect
+        {
+            get => m_imageRect;
+            set
+            {
+                m_imageRect = value;
+                m_havePropertiesChanged = true;
+            }
+        }
+
+        public Vector2 paragraphPosition
+        {
+            get => m_paragraphPosition;
+            set
+            {
+                m_paragraphPosition = value;
+                m_havePropertiesChanged = true;
+            }
+        }
+
+        public int layoutWidth
+        {
+            get => m_layoutWidth;
+            set
+            {
+                m_layoutWidth = value;
+                m_havePropertiesChanged = true;
+            }
+        }
+
+        public List<string> fontFamilies
+        {
+            get => m_fontFamilies;
+            set
+            {
+                m_fontFamilies = value;
+                m_havePropertiesChanged = true;
+            }
+        }
+
+        public float size
+        {
+            get => m_size;
+            set
+            {
+                m_size = value;
+                m_havePropertiesChanged = true;
+            }
+        }
+
+        public Color color
+        {
+            get => m_color;
+            set
+            {
+                m_color = value;
+                m_havePropertiesChanged = true;
+            }
+        }
+
+        public string locale
+        {
+            get => m_locale;
+            set
+            {
+                m_locale = value;
+                m_havePropertiesChanged = true;
+            }
+        }
+
+        public bool srgb
+        {
+            get => m_srgb;
+            set
+            {
+                m_srgb = value;
+                m_havePropertiesChanged = true;
+            }
+        }
 
         private void OnEnable()
         {
@@ -62,10 +183,15 @@ namespace Milestro.Components
             surface?.Dispose();
             surface = null;
             paragraph = null;
-            cachedContent = null;
-            cachedImageAsset = null;
-            cachedFontFamilies = null;
+            m_havePropertiesChanged = true;
         }
+
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            m_havePropertiesChanged = true;
+        }
+#endif
 
         private void OnRectTransformDimensionsChange()
         {
@@ -79,7 +205,8 @@ namespace Milestro.Components
         {
             var needsDraw = false;
             var sizePixels = CurrentSize();
-            if (surface == null || cachedSrgb != srgb)
+            var propertiesChanged = m_havePropertiesChanged;
+            if (surface == null || surface.Srgb != srgb)
             {
                 if (surface != null)
                 {
@@ -90,42 +217,30 @@ namespace Milestro.Components
 
                 surface = new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, srgb);
                 rawImage.texture = surface.Texture;
-                cachedSize = sizePixels;
-                cachedSrgb = srgb;
                 needsDraw = true;
             }
-            else if (cachedSize != sizePixels)
+            else if (surface.Width != sizePixels.x || surface.Height != sizePixels.y)
             {
                 surface.Resize(sizePixels.x, sizePixels.y);
                 rawImage.texture = surface.Texture;
-                cachedSize = sizePixels;
                 needsDraw = true;
             }
 
-            if (forceText || TextInputsChanged())
+            if (forceText || paragraph == null || propertiesChanged)
             {
-                cachedContent = content;
-                cachedLayoutWidth = layoutWidth;
-                cachedFontFamilies = CopyFontFamilies(fontFamilies);
-                cachedFontSize = size;
-                cachedColor = color;
-                cachedLocale = locale;
-                paragraph = BuildParagraph(cachedContent);
+                paragraph = BuildParagraph(content);
                 needsDraw = true;
             }
 
-            if (forceImage || cachedImageAsset != imageAsset)
+            if (forceImage || propertiesChanged)
             {
                 RetireImage();
-                cachedImageAsset = imageAsset;
                 image = imageAsset != null ? MilestroImage.MakeFromTextAsset(imageAsset) : null;
                 needsDraw = true;
             }
 
-            if (cachedParagraphPosition != paragraphPosition || cachedImageRect != imageRect)
+            if (propertiesChanged)
             {
-                cachedParagraphPosition = paragraphPosition;
-                cachedImageRect = imageRect;
                 needsDraw = true;
             }
 
@@ -133,6 +248,8 @@ namespace Milestro.Components
             {
                 surface.Draw(paragraph, image, paragraphPosition, imageRect);
             }
+
+            m_havePropertiesChanged = false;
         }
 
         private Vector2Int CurrentSize()
@@ -158,45 +275,6 @@ namespace Milestro.Components
             var result = segments.ToParagraph(paragraphStyle, textStyle);
             result.Layout(layoutWidth);
             return result;
-        }
-
-        private bool TextInputsChanged()
-        {
-            return paragraph == null ||
-                   cachedContent != content ||
-                   cachedLayoutWidth != layoutWidth ||
-                   cachedFontSize != size ||
-                   cachedColor != color ||
-                   cachedLocale != locale ||
-                   !FontFamiliesEqual(cachedFontFamilies, fontFamilies);
-        }
-
-        private static bool FontFamiliesEqual(IReadOnlyList<string> left, IReadOnlyList<string> right)
-        {
-            if (ReferenceEquals(left, right))
-            {
-                return true;
-            }
-
-            if (left == null || right == null || left.Count != right.Count)
-            {
-                return false;
-            }
-
-            for (var i = 0; i < left.Count; i++)
-            {
-                if (left[i] != right[i])
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static List<string> CopyFontFamilies(List<string> value)
-        {
-            return value != null ? new List<string>(value) : null;
         }
 
         private void RetireImage()

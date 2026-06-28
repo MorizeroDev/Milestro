@@ -80,6 +80,7 @@ namespace Milestro.Skia
         private bool disposed;
 
         public UnitySkiaGraphicsBackend Backend { get; }
+        public bool Srgb => descriptor.Srgb;
         public Texture Texture { get; private set; }
         public RenderTexture RenderTexture { get; private set; }
 
