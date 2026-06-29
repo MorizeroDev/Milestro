@@ -37,12 +37,12 @@ namespace Milestro.Binding {
         internal static extern unsafe long UnityRenderDestroyD3D12ExternalTexture(ref IntPtr texture);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontManagerRegisterFontFromFile")]
-        internal static extern unsafe long SkiaFontManagerRegisterFontFromFile(byte[] path);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontRegistryRegisterFontFromFile")]
+        internal static extern unsafe long SkiaFontRegistryRegisterFontFromFile(byte[] path);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontManagerGetFontFamilyList")]
-        internal static extern unsafe long SkiaFontManagerGetFontFamilyList(out IntPtr ret);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontRegistryGetRegisteredFontFamilyList")]
+        internal static extern unsafe long SkiaFontRegistryGetRegisteredFontFamilyList(out IntPtr ret);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFamilyListDestroy")]
@@ -69,8 +69,8 @@ namespace Milestro.Binding {
         internal static extern unsafe long SkiaFontFamilyInfoGetName(IntPtr ret, out IntPtr ptr, out ulong size);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontManagerGetFontFaceList")]
-        internal static extern unsafe long SkiaFontManagerGetFontFaceList(out IntPtr ret);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontRegistryGetRegisteredFontFaceList")]
+        internal static extern unsafe long SkiaFontRegistryGetRegisteredFontFaceList(out IntPtr ret);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFaceListDestroy")]

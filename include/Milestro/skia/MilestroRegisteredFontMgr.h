@@ -1,5 +1,5 @@
-#ifndef MILESTRO_MILESTROFONTMANAGER_H
-#define MILESTRO_MILESTROFONTMANAGER_H
+#ifndef MILESTRO_MILESTROREGISTEREDFONTMGR_H
+#define MILESTRO_MILESTROREGISTEREDFONTMGR_H
 
 #include "include/core/SkFontMgr.h"
 #include "include/core/SkFontScanner.h"
@@ -61,9 +61,9 @@ private:
     std::vector<MilestroFontFaceInfo> data;
 };
 
-class MILESTRO_API MilestroFontStyleSet : public SkFontStyleSet {
+class MILESTRO_API MilestroRegisteredFontStyleSet : public SkFontStyleSet {
 public:
-    explicit MilestroFontStyleSet(SkString familyName);
+    explicit MilestroRegisteredFontStyleSet(SkString familyName);
 
     /** Should only be called during the initial build phase. */
     void appendTypeface(sk_sp<SkTypeface> typeface);
@@ -77,10 +77,13 @@ private:
     skia_private::TArray<sk_sp<SkTypeface>> fStyles;
     SkString fFamilyName;
 
-    friend class MilestroFontManager;
+    friend class MilestroRegisteredFontMgr;
 };
 
-class MILESTRO_API MilestroFontManager : public SkFontMgr {
+// SkFontMgr for fonts explicitly registered from Milestro asset files.
+// It intentionally keeps the FreeType scanner/typeface path because it preserves
+// TTC face indices and named variable-font instances across platforms.
+class MILESTRO_API MilestroRegisteredFontMgr : public SkFontMgr {
 public:
     enum class RegisterResult : int32_t {
         Succeed = 0,
@@ -88,9 +91,9 @@ public:
         Failed = -1,
     };
 
-    explicit MilestroFontManager();
+    explicit MilestroRegisteredFontMgr();
 
-    MilestroFontManager::RegisterResult registerFont(std::unique_ptr<SkStreamAsset> stream, const SkString &filename);
+    MilestroRegisteredFontMgr::RegisterResult registerFont(std::unique_ptr<SkStreamAsset> stream, const SkString &filename);
     std::vector<MilestroFontFaceInfo> getFontFaces() const;
 
 protected:
@@ -111,7 +114,7 @@ protected:
 
 private:
     std::unique_ptr<SkFontScanner> fScanner;
-    std::vector<sk_sp<MilestroFontStyleSet>> fFamilies;
+    std::vector<sk_sp<MilestroRegisteredFontStyleSet>> fFamilies;
     std::vector<MilestroFontFaceInfo> fFaces;
     std::vector<SkString> fFontRegistered;
 //    std::vector<std::unique_ptr<SkStreamAsset>> fStreamHolder;
@@ -119,4 +122,4 @@ private:
 
 }
 
-#endif
+#endif //MILESTRO_MILESTROREGISTEREDFONTMGR_H

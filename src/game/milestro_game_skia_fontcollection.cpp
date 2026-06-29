@@ -1,5 +1,5 @@
 #include <Milestro/game/milestro_game_interface.h>
-#include "Milestro/skia/FontManager.h"
+#include "Milestro/skia/FontRegistry.h"
 #include "milestro_game_retcode.h"
 #include "Milestro/util/milestro_strutil.h"
 #include "Milestro/skia/textlayout/FontCollection.h"

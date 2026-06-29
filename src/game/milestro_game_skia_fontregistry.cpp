@@ -1,17 +1,17 @@
 #include <Milestro/game/milestro_game_interface.h>
-#include "Milestro/skia/FontManager.h"
+#include "Milestro/skia/FontRegistry.h"
 #include "milestro_game_retcode.h"
 #include "Milestro/skia/textlayout/FontCollection.h"
 
 extern "C" {
-int64_t MilestroSkiaFontManagerRegisterFontFromFile(uint8_t *path) {
-    auto fontMgr = milestro::skia::GetFontManager();
-    return (int64_t) fontMgr->RegisterFontFromFile(reinterpret_cast<char *>(path));
+int64_t MilestroSkiaFontRegistryRegisterFontFromFile(uint8_t *path) {
+    auto fontRegistry = milestro::skia::GetFontRegistry();
+    return (int64_t) fontRegistry->RegisterFontFromFile(reinterpret_cast<char *>(path));
 }
 
-int64_t MilestroSkiaFontManagerGetFontFamilyList(milestro::skia::MilestroFontFamilyList *&ret) {
-    auto fontMgr = milestro::skia::GetFontManager();
-    ret = new milestro::skia::MilestroFontFamilyList(fontMgr->GetFontFamilies());
+int64_t MilestroSkiaFontRegistryGetRegisteredFontFamilyList(milestro::skia::MilestroFontFamilyList *&ret) {
+    auto fontRegistry = milestro::skia::GetFontRegistry();
+    ret = new milestro::skia::MilestroFontFamilyList(fontRegistry->GetRegisteredFontFamilies());
     return MILESTRO_API_RET_OK;
 }
 
@@ -61,9 +61,9 @@ int64_t MilestroSkiaFontFamilyInfoGetName(milestro::skia::MilestroFontFamilyInfo
     return MILESTRO_API_RET_OK;
 }
 
-int64_t MilestroSkiaFontManagerGetFontFaceList(milestro::skia::MilestroFontFaceList *&ret) {
-    auto fontMgr = milestro::skia::GetFontManager();
-    ret = new milestro::skia::MilestroFontFaceList(fontMgr->GetFontFaces());
+int64_t MilestroSkiaFontRegistryGetRegisteredFontFaceList(milestro::skia::MilestroFontFaceList *&ret) {
+    auto fontRegistry = milestro::skia::GetFontRegistry();
+    ret = new milestro::skia::MilestroFontFaceList(fontRegistry->GetRegisteredFontFaces());
     return MILESTRO_API_RET_OK;
 }
 

@@ -39,8 +39,8 @@ MILESTRO_API int64_t MilestroUnityRenderCreateD3D12ExternalTexture(int32_t width
 MILESTRO_API int64_t MilestroUnityRenderDestroyD3D12ExternalTexture(
         [[milize::RefType("ref")]] [[milize::CSharpType("IntPtr")]] void *&texture);
 
-MILESTRO_API int64_t MilestroSkiaFontManagerRegisterFontFromFile(uint8_t *path);
-MILESTRO_API int64_t MilestroSkiaFontManagerGetFontFamilyList(milestro::skia::MilestroFontFamilyList *&ret);
+MILESTRO_API int64_t MilestroSkiaFontRegistryRegisterFontFromFile(uint8_t *path);
+MILESTRO_API int64_t MilestroSkiaFontRegistryGetRegisteredFontFamilyList(milestro::skia::MilestroFontFamilyList *&ret);
 MILESTRO_API int64_t MilestroSkiaFontFamilyListDestroy(
         [[milize::RefType("ref")]] milestro::skia::MilestroFontFamilyList *&ret);
 MILESTRO_API int64_t MilestroSkiaFontFamilyListGetSize(milestro::skia::MilestroFontFamilyList *list,
@@ -57,7 +57,7 @@ MILESTRO_API int64_t MilestroSkiaFontFamilyInfoGetName(milestro::skia::MilestroF
                                                        [[milize::CSharpType("IntPtr")]] uint8_t *&ptr,
                                                        uint64_t &size);
 
-MILESTRO_API int64_t MilestroSkiaFontManagerGetFontFaceList(milestro::skia::MilestroFontFaceList *&ret);
+MILESTRO_API int64_t MilestroSkiaFontRegistryGetRegisteredFontFaceList(milestro::skia::MilestroFontFaceList *&ret);
 MILESTRO_API int64_t MilestroSkiaFontFaceListDestroy(
         [[milize::RefType("ref")]] milestro::skia::MilestroFontFaceList *&ret);
 MILESTRO_API int64_t MilestroSkiaFontFaceListGetSize(milestro::skia::MilestroFontFaceList *list,

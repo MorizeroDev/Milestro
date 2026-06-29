@@ -288,11 +288,11 @@ if (DEFINED APPLE)
     find_library(COREGRAPHICS CoreGraphics)
     find_library(METAL Metal)
     set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES}
-            "${FOUNDATION}" "${CoreFoundation}" "${CORETEXT}" "${CORESERVICES}" "${COREGRAPHICS}" "${METAL}")
+            "${FOUNDATION}" "${COREFOUNDATION}" "${CORETEXT}" "${CORESERVICES}" "${COREGRAPHICS}" "${METAL}")
 endif ()
 
 if (WIN32)
-    set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} d3d12 dxgi d3dcompiler)
+    set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} d3d12 dxgi d3dcompiler dwrite gdi32 ole32 uuid)
 endif ()
 
 #############################################################
@@ -318,9 +318,8 @@ set(
         src/log/log_unitylog.cpp
         src/io/milestro_io.cpp
 
-        src/skia/FontManager.cpp
-        src/skia/MilestroEmptyFontManager.cpp
-        src/skia/MilestroFontManager.cpp
+        src/skia/FontRegistry.cpp
+        src/skia/MilestroRegisteredFontMgr.cpp
         src/skia/Unicode.cpp
         src/skia/Canvas.cpp
         src/skia/Typeface.cpp
@@ -347,7 +346,7 @@ set(
         src/unity_render/MilestroUnityRenderSubmissionDraw.cpp
         src/game/milestro_game_skia_canvas.cpp
         src/game/milestro_game_skia_image.cpp
-        src/game/milestro_game_skia_fontmanager.cpp
+        src/game/milestro_game_skia_fontregistry.cpp
         src/game/milestro_game_skia_fontcollection.cpp
         src/game/milestro_game_skia_typeface.cpp
         src/game/milestro_game_skia_font.cpp

@@ -7,20 +7,20 @@ using Milestro.Native;
 
 namespace Milestro.Skia
 {
-    public static class FontManager
+    public static class FontRegistry
     {
         public static void RegisterFontFromPath(string path)
         {
             var dat = path.CStr();
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontManagerRegisterFontFromFile(dat));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontRegistryRegisterFontFromFile(dat));
         }
 
-        public static List<string> GetFontFamilyNames()
+        public static List<string> GetRegisteredFontFamilyNames()
         {
             var list = IntPtr.Zero;
             try
             {
-                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontManagerGetFontFamilyList(out list));
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontRegistryGetRegisteredFontFamilyList(out list));
                 ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFamilyListGetSize(list, out var size));
 
                 var fontFamilyNames = new List<string>(ToListCapacity(size));
@@ -44,12 +44,12 @@ namespace Milestro.Skia
             }
         }
 
-        public static List<FontFaceInfo> GetFontFaces()
+        public static List<FontFaceInfo> GetRegisteredFontFaces()
         {
             var list = IntPtr.Zero;
             try
             {
-                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontManagerGetFontFaceList(out list));
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontRegistryGetRegisteredFontFaceList(out list));
                 ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFaceListGetSize(list, out var size));
 
                 var fontFaces = new List<FontFaceInfo>(ToListCapacity(size));

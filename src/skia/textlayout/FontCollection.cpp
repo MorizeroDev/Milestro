@@ -3,7 +3,7 @@
 #include "Milestro/skia/textlayout/FontCollection.h"
 #include "Milestro/common/milestro_result.h"
 #include "Milestro/log/log.h"
-#include "Milestro/skia/FontManager.h"
+#include "Milestro/skia/FontRegistry.h"
 
 namespace milestro::skia::textlayout {
 
@@ -15,11 +15,13 @@ Result<void, std::string> InitialFontCollection() {
         return Err(std::string("fail to create ::skia::textlayout::FontCollection"));
     }
 
-    auto fontMgr = milestro::skia::GetFontManager();
-    fontCollection->setAssetFontManager(fontMgr->GetFontMgr());
+    auto fontRegistry = milestro::skia::GetFontRegistry();
+    fontCollection->setAssetFontManager(fontRegistry->GetRegisteredFontMgr());
 
-    if (fontMgr->IsEmptyFontMgrAvailable()) {
-        fontCollection->setTestFontManager(fontMgr->GetEmptyFontMgr());
+    if (fontRegistry->IsSystemFontMgrAvailable()) {
+        fontCollection->setDefaultFontManager(fontRegistry->GetSystemFontMgr());
+    } else {
+        fontCollection->setDefaultFontManager(SkFontMgr::RefEmpty());
     }
 
     FontCollectionInstance = std::make_unique<FontCollection>(std::move(fontCollection));

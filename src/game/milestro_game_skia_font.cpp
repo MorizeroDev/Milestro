@@ -1,4 +1,4 @@
-#include "Milestro/skia/FontManager.h"
+#include "Milestro/skia/FontRegistry.h"
 #include "milestro_game_retcode.h"
 #include "Milestro/skia/Font.h"
 #include <Milestro/game/milestro_game_interface.h>

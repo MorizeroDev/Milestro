@@ -36,13 +36,13 @@ int64_t FrameworkBindingMilestroUnityRenderDestroyD3D12ExternalTexture(
     return MilestroUnityRenderDestroyD3D12ExternalTexture(texture);
 }
 
-int64_t FrameworkBindingMilestroSkiaFontManagerRegisterFontFromFile(uint8_t* path) {
-    return MilestroSkiaFontManagerRegisterFontFromFile(path);
+int64_t FrameworkBindingMilestroSkiaFontRegistryRegisterFontFromFile(uint8_t* path) {
+    return MilestroSkiaFontRegistryRegisterFontFromFile(path);
 }
 
-int64_t FrameworkBindingMilestroSkiaFontManagerGetFontFamilyList(
+int64_t FrameworkBindingMilestroSkiaFontRegistryGetRegisteredFontFamilyList(
         milestro::skia::MilestroFontFamilyList*& ret) {
-    return MilestroSkiaFontManagerGetFontFamilyList(ret);
+    return MilestroSkiaFontRegistryGetRegisteredFontFamilyList(ret);
 }
 
 int64_t FrameworkBindingMilestroSkiaFontFamilyListDestroy(
@@ -80,8 +80,8 @@ int64_t FrameworkBindingMilestroSkiaFontFamilyInfoGetName(milestro::skia::Milest
     return MilestroSkiaFontFamilyInfoGetName(ret, ptr, size);
 }
 
-int64_t FrameworkBindingMilestroSkiaFontManagerGetFontFaceList(milestro::skia::MilestroFontFaceList*& ret) {
-    return MilestroSkiaFontManagerGetFontFaceList(ret);
+int64_t FrameworkBindingMilestroSkiaFontRegistryGetRegisteredFontFaceList(milestro::skia::MilestroFontFaceList*& ret) {
+    return MilestroSkiaFontRegistryGetRegisteredFontFaceList(ret);
 }
 
 int64_t FrameworkBindingMilestroSkiaFontFaceListDestroy(

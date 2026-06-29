@@ -7,7 +7,7 @@
 #include "Milestro/util/milestro_serializerable.h"
 #include "Milestro/common/milestro_export_macros.h"
 #include "Canvas.h"
-#include "FontManager.h"
+#include "FontRegistry.h"
 
 namespace milestro::skia {
 
@@ -15,7 +15,7 @@ class MILESTRO_API Svg {
 public:
     explicit Svg(std::unique_ptr<SkMemoryStream> data) {
         this->data = std::move(data);
-        auto fontMgr= GetFontManager()->GetFontMgr();
+        auto fontMgr = GetFontRegistry()->GetRegisteredFontMgr();
         this->svg = SkSVGDOM::Builder()
                 .setFontManager(fontMgr)
                 .make(*this->data);

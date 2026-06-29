@@ -5,26 +5,26 @@ using Newtonsoft.Json;
 using UnityEditor;
 using UnityEngine;
 
-public static class MilestroFontmanagerEditor
+public static class MilestroFontRegistryEditor
 {
-    [MenuItem("Milestro/Font Manager/Load Fonts")]
+    [MenuItem("Milestro/Font Registry/Load Fonts")]
     public static void RegisterFonts()
     {
         FontAssetsManager.LoadFonts();
         ListFonts();
     }
 
-    [MenuItem("Milestro/Font Manager/List Loaded Fonts")]
+    [MenuItem("Milestro/Font Registry/List Registered Font Families")]
     public static void ListFonts()
     {
-        var statistic = FontManager.GetFontFamilyNames();
+        var statistic = FontRegistry.GetRegisteredFontFamilyNames();
         Debug.Log(JsonConvert.SerializeObject(statistic, Formatting.Indented));
     }
 
-    [MenuItem("Milestro/Font Manager/List Loaded Font Faces")]
+    [MenuItem("Milestro/Font Registry/List Registered Font Faces")]
     public static void ListFontFaces()
     {
-        var statistic = FontManager.GetFontFaces();
+        var statistic = FontRegistry.GetRegisteredFontFaces();
         Debug.Log(JsonConvert.SerializeObject(statistic, Formatting.Indented));
     }
 }

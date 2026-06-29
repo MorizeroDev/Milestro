@@ -1,4 +1,4 @@
-#include "Milestro/skia/FontManager.h"
+#include "Milestro/skia/FontRegistry.h"
 #include "Milestro/skia/textlayout/Paragraph.h"
 #include "Milestro/skia/textlayout/ParagraphBuilder.h"
 #include "Milestro/skia/textlayout/ParagraphStyle.h"
@@ -21,7 +21,7 @@
 namespace fs = std::filesystem;
 using namespace milestro::skia::textlayout;
 
-int registerFontsInDirectory(milestro::skia::FontManager *fontManager, const std::string &dirPath) {
+int registerFontsInDirectory(milestro::skia::FontRegistry *fontRegistry, const std::string &dirPath) {
     int successCount = 0;
     fs::path fontDir(dirPath);
 
@@ -33,17 +33,17 @@ int registerFontsInDirectory(milestro::skia::FontManager *fontManager, const std
     for (const auto &entry: fs::directory_iterator(fontDir)) {
         if (entry.path().extension() == ".bytes") {
             std::string fontPath = entry.path().string();
-            auto result = fontManager->RegisterFontFromFile(fontPath.c_str());
+            auto result = fontRegistry->RegisterFontFromFile(fontPath.c_str());
 
             switch (result) {
-                case milestro::skia::MilestroFontManager::RegisterResult::Succeed:
+                case milestro::skia::MilestroRegisteredFontMgr::RegisterResult::Succeed:
                     std::cout << "Successfully registered font: " << fontPath << std::endl;
                     successCount++;
                     break;
-                case milestro::skia::MilestroFontManager::RegisterResult::Duplicated:
+                case milestro::skia::MilestroRegisteredFontMgr::RegisterResult::Duplicated:
                     std::cout << "Font already registered: " << fontPath << std::endl;
                     break;
-                case milestro::skia::MilestroFontManager::RegisterResult::Failed:
+                case milestro::skia::MilestroRegisteredFontMgr::RegisterResult::Failed:
                     std::cerr << "Failed to register font: " << fontPath << std::endl;
                     break;
             }
@@ -104,13 +104,13 @@ public:
 
 protected:
     void SetUp() override {
-        // 获取 FontManager 实例
-        fontManager = milestro::skia::GetFontManager();
+        // 获取 FontRegistry 实例
+        fontRegistry = milestro::skia::GetFontRegistry();
 
         // 设置字体目录路径
         imageDir = fs::current_path() / "data" / "font";
 
-        registeredCount = registerFontsInDirectory(fontManager, imageDir.string());
+        registeredCount = registerFontsInDirectory(fontRegistry, imageDir.string());
     }
 
     void TearDown() override {
@@ -119,7 +119,7 @@ protected:
 
     // 调用被测试的函数
     int registeredCount = 0;
-    milestro::skia::FontManager *fontManager{};
+    milestro::skia::FontRegistry *fontRegistry{};
     fs::path imageDir;
 };
 
@@ -142,7 +142,7 @@ TEST_F(ReadFontTest, RegistersFontsCorrectly) {
     EXPECT_TRUE(capturedStderr.str().empty());
 
     // 验证字体是否真的被注册了
-    auto familyNames = fontManager->GetFamiliesNames();
+    auto familyNames = fontRegistry->GetRegisteredFontFamilyNames();
     bool foundNewFont = false;
     for (const auto &name: familyNames) {
         if (name.find("Source Han Sans VF") != std::string::npos) {
@@ -152,7 +152,7 @@ TEST_F(ReadFontTest, RegistersFontsCorrectly) {
     }
     EXPECT_TRUE(foundNewFont);
 
-    auto fontFaces = fontManager->GetFontFaces();
+    auto fontFaces = fontRegistry->GetRegisteredFontFaces();
     EXPECT_GT(fontFaces.size(), 0);
     bool foundNewFontFace = false;
     for (const auto &face: fontFaces) {
@@ -183,7 +183,7 @@ TEST_F(ReadFontTest, HandlesNonExistentDirectory) {
     std::stringstream capturedStderr;
     std::streambuf *oldCerr = std::cerr.rdbuf(capturedStderr.rdbuf());
 
-    int registeredCount = registerFontsInDirectory(fontManager, nonExistentPath);
+    int registeredCount = registerFontsInDirectory(fontRegistry, nonExistentPath);
 
     std::cerr.rdbuf(oldCerr);
 
@@ -196,7 +196,7 @@ TEST_F(ReadFontTest, HandlesEmptyDirectory) {
     fs::path emptyDir = fs::temp_directory_path() / "empty_font_dir";
     fs::create_directory(emptyDir);
 
-    int registeredCount = registerFontsInDirectory(fontManager, emptyDir.string());
+    int registeredCount = registerFontsInDirectory(fontRegistry, emptyDir.string());
 
     EXPECT_EQ(registeredCount, 0);
 
@@ -206,7 +206,7 @@ TEST_F(ReadFontTest, HandlesEmptyDirectory) {
 
 
 TEST_F(ReadFontTest, splitGlyph) {
-    auto familyNames = fontManager->GetFamiliesNames();
+    auto familyNames = fontRegistry->GetRegisteredFontFamilyNames();
     EXPECT_TRUE(std::find(familyNames.begin(), familyNames.end(), "Source Han Sans VF") != familyNames.end());
 
     auto textStyle = std::make_unique<TextStyle>();
@@ -261,7 +261,7 @@ TEST_F(ReadFontTest, splitGlyph) {
 }
 
 TEST_F(ReadFontTest, paragraphToPath) {
-    auto familyNames = fontManager->GetFamiliesNames();
+    auto familyNames = fontRegistry->GetRegisteredFontFamilyNames();
     EXPECT_TRUE(std::find(familyNames.begin(), familyNames.end(), "Source Han Sans VF") != familyNames.end());
 
     auto textStyle = std::make_unique<TextStyle>();
@@ -300,7 +300,7 @@ TEST_F(ReadFontTest, paragraphToPath) {
 }
 
 TEST_F(ReadFontTest, paragraphToSdf) {
-    auto familyNames = fontManager->GetFamiliesNames();
+    auto familyNames = fontRegistry->GetRegisteredFontFamilyNames();
     EXPECT_TRUE(std::find(familyNames.begin(), familyNames.end(), "Source Han Sans VF") != familyNames.end());
 
     auto textStyle = std::make_unique<TextStyle>();
