@@ -96,6 +96,7 @@ namespace Milestro.Skia
 
         public UnitySkiaGraphicsBackend Backend { get; }
         public bool Srgb => descriptor.Srgb;
+        public Rect DisplayUvRect => DisplayUvRectForBackend(Backend);
         public Texture Texture { get; private set; }
         public RenderTexture RenderTexture { get; private set; }
 
@@ -162,6 +163,7 @@ namespace Milestro.Skia
             {
                 name = "Milestro " + Backend + " RenderTexture PoC"
             };
+            ConfigureDisplayTexture(RenderTexture);
             RenderTexture.Create();
             Texture = RenderTexture;
         }
@@ -378,6 +380,21 @@ namespace Milestro.Skia
             return descriptor;
         }
 
+        private static Rect DisplayUvRectForBackend(UnitySkiaGraphicsBackend backend)
+        {
+            return new Rect(0f, 1f, 1f, -1f);
+        }
+
+        private static void ConfigureDisplayTexture(Texture texture)
+        {
+            if (texture == null)
+            {
+                return;
+            }
+
+            texture.wrapMode = TextureWrapMode.Clamp;
+        }
+
         private void CreateD3D12Texture()
         {
             d3d12ExternalTexture = CreateD3D12ExternalTextureHandle(Width,
@@ -397,6 +414,7 @@ namespace Milestro.Skia
                     false,
                     !descriptor.Srgb,
                     d3d12ExternalTexture);
+                ConfigureDisplayTexture(Texture);
             }
             catch
             {

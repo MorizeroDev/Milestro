@@ -8,6 +8,7 @@ namespace Milestro.Skia
         private readonly UnitySkiaRenderTextureSurface surface;
 
         public bool Srgb => surface.Srgb;
+        public Rect DisplayUvRect => surface.DisplayUvRect;
         public Texture Texture => surface.Texture;
         public RenderTexture RenderTexture => surface.RenderTexture;
 

@@ -185,13 +185,13 @@ namespace Milestro.Components
                 surface?.Dispose();
 
                 surface = new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, surfaceSrgb);
-                Texture = surface.Texture;
+                ApplySurfaceToRawImage();
                 needsDraw = true;
             }
             else if (surface.Width != sizePixels.x || surface.Height != sizePixels.y)
             {
                 surface.Resize(sizePixels.x, sizePixels.y);
-                Texture = surface.Texture;
+                ApplySurfaceToRawImage();
                 needsDraw = true;
             }
 
@@ -266,6 +266,12 @@ namespace Milestro.Components
             paragraphPosition = new Vector2(m_margin.left, m_margin.top);
             commands.DrawParagraph(paragraph, paragraphPosition);
             return commands;
+        }
+
+        private void ApplySurfaceToRawImage()
+        {
+            Texture = surface.Texture;
+            UvRect = surface.DisplayUvRect;
         }
     }
 }
