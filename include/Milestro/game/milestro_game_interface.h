@@ -40,9 +40,56 @@ MILESTRO_API int64_t MilestroUnityRenderDestroyD3D12ExternalTexture(
         [[milize::RefType("ref")]] [[milize::CSharpType("IntPtr")]] void *&texture);
 
 MILESTRO_API int64_t MilestroSkiaFontManagerRegisterFontFromFile(uint8_t *path);
-MILESTRO_API int64_t MilestroSkiaFontManagerGetFontFamilies(uint8_t *buffer,
-                                                            uint64_t bufferSize,
-                                                            uint64_t &needed);
+MILESTRO_API int64_t MilestroSkiaFontManagerGetFontFamilyList(milestro::skia::MilestroFontFamilyList *&ret);
+MILESTRO_API int64_t MilestroSkiaFontFamilyListDestroy(
+        [[milize::RefType("ref")]] milestro::skia::MilestroFontFamilyList *&ret);
+MILESTRO_API int64_t MilestroSkiaFontFamilyListGetSize(milestro::skia::MilestroFontFamilyList *list,
+                                                       uint64_t &size);
+MILESTRO_API int64_t MilestroSkiaFontFamilyListRefElementAt(milestro::skia::MilestroFontFamilyList *list,
+                                                            milestro::skia::MilestroFontFamilyInfo *&ret,
+                                                            uint64_t index);
+MILESTRO_API int64_t MilestroSkiaFontFamilyListGetElementAt(milestro::skia::MilestroFontFamilyList *list,
+                                                            milestro::skia::MilestroFontFamilyInfo *&ret,
+                                                            uint64_t index);
+MILESTRO_API int64_t MilestroSkiaFontFamilyInfoDestroy(
+        [[milize::RefType("ref")]] milestro::skia::MilestroFontFamilyInfo *&ret);
+MILESTRO_API int64_t MilestroSkiaFontFamilyInfoGetName(milestro::skia::MilestroFontFamilyInfo *ret,
+                                                       [[milize::CSharpType("IntPtr")]] uint8_t *&ptr,
+                                                       uint64_t &size);
+
+MILESTRO_API int64_t MilestroSkiaFontManagerGetFontFaceList(milestro::skia::MilestroFontFaceList *&ret);
+MILESTRO_API int64_t MilestroSkiaFontFaceListDestroy(
+        [[milize::RefType("ref")]] milestro::skia::MilestroFontFaceList *&ret);
+MILESTRO_API int64_t MilestroSkiaFontFaceListGetSize(milestro::skia::MilestroFontFaceList *list,
+                                                     uint64_t &size);
+MILESTRO_API int64_t MilestroSkiaFontFaceListRefElementAt(milestro::skia::MilestroFontFaceList *list,
+                                                          milestro::skia::MilestroFontFaceInfo *&ret,
+                                                          uint64_t index);
+MILESTRO_API int64_t MilestroSkiaFontFaceListGetElementAt(milestro::skia::MilestroFontFaceList *list,
+                                                          milestro::skia::MilestroFontFaceInfo *&ret,
+                                                          uint64_t index);
+MILESTRO_API int64_t MilestroSkiaFontFaceInfoDestroy(
+        [[milize::RefType("ref")]] milestro::skia::MilestroFontFaceInfo *&ret);
+MILESTRO_API int64_t MilestroSkiaFontFaceInfoGetSourcePath(milestro::skia::MilestroFontFaceInfo *ret,
+                                                           [[milize::CSharpType("IntPtr")]] uint8_t *&ptr,
+                                                           uint64_t &size);
+MILESTRO_API int64_t MilestroSkiaFontFaceInfoGetFamilyName(milestro::skia::MilestroFontFaceInfo *ret,
+                                                           [[milize::CSharpType("IntPtr")]] uint8_t *&ptr,
+                                                           uint64_t &size);
+MILESTRO_API int64_t MilestroSkiaFontFaceInfoGetFaceIndex(milestro::skia::MilestroFontFaceInfo *ret,
+                                                          int32_t &value);
+MILESTRO_API int64_t MilestroSkiaFontFaceInfoGetInstanceIndex(milestro::skia::MilestroFontFaceInfo *ret,
+                                                              int32_t &value);
+MILESTRO_API int64_t MilestroSkiaFontFaceInfoGetPackedIndex(milestro::skia::MilestroFontFaceInfo *ret,
+                                                            int32_t &value);
+MILESTRO_API int64_t MilestroSkiaFontFaceInfoGetWeight(milestro::skia::MilestroFontFaceInfo *ret,
+                                                       int32_t &value);
+MILESTRO_API int64_t MilestroSkiaFontFaceInfoGetWidth(milestro::skia::MilestroFontFaceInfo *ret,
+                                                      int32_t &value);
+MILESTRO_API int64_t MilestroSkiaFontFaceInfoGetSlant(milestro::skia::MilestroFontFaceInfo *ret,
+                                                      int32_t &value);
+MILESTRO_API int64_t MilestroSkiaFontFaceInfoGetFixedPitch(milestro::skia::MilestroFontFaceInfo *ret,
+                                                           int32_t &value);
 
 MILESTRO_API int64_t MilestroSkiaTypefaceDestroy(milestro::skia::Typeface *&ret);
 MILESTRO_API int64_t MilestroSkiaTypefaceGetFamilyNames(milestro::skia::Typeface *typeFace,

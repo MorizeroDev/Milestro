@@ -41,9 +41,92 @@ namespace Milestro.Binding {
         internal static extern unsafe long SkiaFontManagerRegisterFontFromFile(byte[] path);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontManagerGetFontFamilies")]
-        internal static extern unsafe long
-        SkiaFontManagerGetFontFamilies(byte[] buffer, ulong bufferSize, out ulong needed);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontManagerGetFontFamilyList")]
+        internal static extern unsafe long SkiaFontManagerGetFontFamilyList(out IntPtr ret);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFamilyListDestroy")]
+        internal static extern unsafe long SkiaFontFamilyListDestroy(ref IntPtr ret);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFamilyListGetSize")]
+        internal static extern unsafe long SkiaFontFamilyListGetSize(IntPtr list, out ulong size);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFamilyListRefElementAt")]
+        internal static extern unsafe long SkiaFontFamilyListRefElementAt(IntPtr list, out IntPtr ret, ulong index);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFamilyListGetElementAt")]
+        internal static extern unsafe long SkiaFontFamilyListGetElementAt(IntPtr list, out IntPtr ret, ulong index);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFamilyInfoDestroy")]
+        internal static extern unsafe long SkiaFontFamilyInfoDestroy(ref IntPtr ret);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFamilyInfoGetName")]
+        internal static extern unsafe long SkiaFontFamilyInfoGetName(IntPtr ret, out IntPtr ptr, out ulong size);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontManagerGetFontFaceList")]
+        internal static extern unsafe long SkiaFontManagerGetFontFaceList(out IntPtr ret);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFaceListDestroy")]
+        internal static extern unsafe long SkiaFontFaceListDestroy(ref IntPtr ret);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFaceListGetSize")]
+        internal static extern unsafe long SkiaFontFaceListGetSize(IntPtr list, out ulong size);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFaceListRefElementAt")]
+        internal static extern unsafe long SkiaFontFaceListRefElementAt(IntPtr list, out IntPtr ret, ulong index);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFaceListGetElementAt")]
+        internal static extern unsafe long SkiaFontFaceListGetElementAt(IntPtr list, out IntPtr ret, ulong index);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFaceInfoDestroy")]
+        internal static extern unsafe long SkiaFontFaceInfoDestroy(ref IntPtr ret);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFaceInfoGetSourcePath")]
+        internal static extern unsafe long SkiaFontFaceInfoGetSourcePath(IntPtr ret, out IntPtr ptr, out ulong size);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFaceInfoGetFamilyName")]
+        internal static extern unsafe long SkiaFontFaceInfoGetFamilyName(IntPtr ret, out IntPtr ptr, out ulong size);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFaceInfoGetFaceIndex")]
+        internal static extern unsafe long SkiaFontFaceInfoGetFaceIndex(IntPtr ret, out int value);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFaceInfoGetInstanceIndex")]
+        internal static extern unsafe long SkiaFontFaceInfoGetInstanceIndex(IntPtr ret, out int value);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFaceInfoGetPackedIndex")]
+        internal static extern unsafe long SkiaFontFaceInfoGetPackedIndex(IntPtr ret, out int value);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFaceInfoGetWeight")]
+        internal static extern unsafe long SkiaFontFaceInfoGetWeight(IntPtr ret, out int value);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFaceInfoGetWidth")]
+        internal static extern unsafe long SkiaFontFaceInfoGetWidth(IntPtr ret, out int value);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFaceInfoGetSlant")]
+        internal static extern unsafe long SkiaFontFaceInfoGetSlant(IntPtr ret, out int value);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFaceInfoGetFixedPitch")]
+        internal static extern unsafe long SkiaFontFaceInfoGetFixedPitch(IntPtr ret, out int value);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTypefaceDestroy")]

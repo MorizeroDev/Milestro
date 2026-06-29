@@ -40,8 +40,122 @@ int64_t FrameworkBindingMilestroSkiaFontManagerRegisterFontFromFile(uint8_t* pat
     return MilestroSkiaFontManagerRegisterFontFromFile(path);
 }
 
-int64_t FrameworkBindingMilestroSkiaFontManagerGetFontFamilies(uint8_t* buffer, uint64_t bufferSize, uint64_t& needed) {
-    return MilestroSkiaFontManagerGetFontFamilies(buffer, bufferSize, needed);
+int64_t FrameworkBindingMilestroSkiaFontManagerGetFontFamilyList(
+        milestro::skia::MilestroFontFamilyList*& ret) {
+    return MilestroSkiaFontManagerGetFontFamilyList(ret);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFamilyListDestroy(
+        [[milize::RefType("ref")]] milestro::skia::MilestroFontFamilyList*& ret) {
+    return MilestroSkiaFontFamilyListDestroy(ret);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFamilyListGetSize(milestro::skia::MilestroFontFamilyList* list,
+                                                          uint64_t& size) {
+    return MilestroSkiaFontFamilyListGetSize(list, size);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFamilyListRefElementAt(
+        milestro::skia::MilestroFontFamilyList* list,
+        milestro::skia::MilestroFontFamilyInfo*& ret,
+        uint64_t index) {
+    return MilestroSkiaFontFamilyListRefElementAt(list, ret, index);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFamilyListGetElementAt(
+        milestro::skia::MilestroFontFamilyList* list,
+        milestro::skia::MilestroFontFamilyInfo*& ret,
+        uint64_t index) {
+    return MilestroSkiaFontFamilyListGetElementAt(list, ret, index);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFamilyInfoDestroy(
+        [[milize::RefType("ref")]] milestro::skia::MilestroFontFamilyInfo*& ret) {
+    return MilestroSkiaFontFamilyInfoDestroy(ret);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFamilyInfoGetName(milestro::skia::MilestroFontFamilyInfo* ret,
+                                                          [[milize::CSharpType("IntPtr")]] uint8_t*& ptr,
+                                                          uint64_t& size) {
+    return MilestroSkiaFontFamilyInfoGetName(ret, ptr, size);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontManagerGetFontFaceList(milestro::skia::MilestroFontFaceList*& ret) {
+    return MilestroSkiaFontManagerGetFontFaceList(ret);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFaceListDestroy(
+        [[milize::RefType("ref")]] milestro::skia::MilestroFontFaceList*& ret) {
+    return MilestroSkiaFontFaceListDestroy(ret);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFaceListGetSize(milestro::skia::MilestroFontFaceList* list,
+                                                        uint64_t& size) {
+    return MilestroSkiaFontFaceListGetSize(list, size);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFaceListRefElementAt(milestro::skia::MilestroFontFaceList* list,
+                                                             milestro::skia::MilestroFontFaceInfo*& ret,
+                                                             uint64_t index) {
+    return MilestroSkiaFontFaceListRefElementAt(list, ret, index);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFaceListGetElementAt(milestro::skia::MilestroFontFaceList* list,
+                                                             milestro::skia::MilestroFontFaceInfo*& ret,
+                                                             uint64_t index) {
+    return MilestroSkiaFontFaceListGetElementAt(list, ret, index);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFaceInfoDestroy(
+        [[milize::RefType("ref")]] milestro::skia::MilestroFontFaceInfo*& ret) {
+    return MilestroSkiaFontFaceInfoDestroy(ret);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetSourcePath(milestro::skia::MilestroFontFaceInfo* ret,
+                                                              [[milize::CSharpType("IntPtr")]] uint8_t*& ptr,
+                                                              uint64_t& size) {
+    return MilestroSkiaFontFaceInfoGetSourcePath(ret, ptr, size);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetFamilyName(milestro::skia::MilestroFontFaceInfo* ret,
+                                                              [[milize::CSharpType("IntPtr")]] uint8_t*& ptr,
+                                                              uint64_t& size) {
+    return MilestroSkiaFontFaceInfoGetFamilyName(ret, ptr, size);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetFaceIndex(milestro::skia::MilestroFontFaceInfo* ret,
+                                                             int32_t& value) {
+    return MilestroSkiaFontFaceInfoGetFaceIndex(ret, value);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetInstanceIndex(milestro::skia::MilestroFontFaceInfo* ret,
+                                                                 int32_t& value) {
+    return MilestroSkiaFontFaceInfoGetInstanceIndex(ret, value);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetPackedIndex(milestro::skia::MilestroFontFaceInfo* ret,
+                                                               int32_t& value) {
+    return MilestroSkiaFontFaceInfoGetPackedIndex(ret, value);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetWeight(milestro::skia::MilestroFontFaceInfo* ret,
+                                                          int32_t& value) {
+    return MilestroSkiaFontFaceInfoGetWeight(ret, value);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetWidth(milestro::skia::MilestroFontFaceInfo* ret,
+                                                         int32_t& value) {
+    return MilestroSkiaFontFaceInfoGetWidth(ret, value);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetSlant(milestro::skia::MilestroFontFaceInfo* ret,
+                                                         int32_t& value) {
+    return MilestroSkiaFontFaceInfoGetSlant(ret, value);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetFixedPitch(milestro::skia::MilestroFontFaceInfo* ret,
+                                                              int32_t& value) {
+    return MilestroSkiaFontFaceInfoGetFixedPitch(ret, value);
 }
 
 int64_t FrameworkBindingMilestroSkiaTypefaceDestroy(milestro::skia::Typeface*& ret) {

@@ -2,6 +2,9 @@
 #define MILESTRO_SERIALIZERABLE_H
 
 #include <nlohmann/json.hpp>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 namespace milestro::util::serialization {
 
@@ -11,7 +14,7 @@ public:
 };
 
 template <typename T>
-concept IsSerializable = std::is_assignable_v<serializable, T>;
+concept IsSerializable = std::is_base_of_v<serializable, T>;
 
 template <IsSerializable T>
 inline nlohmann::json vectorToJson(std::vector<T> arr) {

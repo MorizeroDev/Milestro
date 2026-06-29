@@ -10,10 +10,45 @@
 #include "src/core/SkFontDescriptor.h"
 #include "Milestro/skia/MilestroFontManager.h"
 #include "Milestro/skia/Typeface.h"
+#include <algorithm>
 #include <memory>
+#include <utility>
+#include <vector>
 #include <src/ports/SkFontMgr_custom.h>
 
 namespace milestro::skia {
+
+MilestroFontFamilyList::MilestroFontFamilyList(std::vector<MilestroFontFamilyInfo> data)
+    : data(std::move(data)) {
+}
+
+MilestroFontFamilyInfo *MilestroFontFamilyList::At(size_t position) {
+    return &data[position];
+}
+
+MilestroFontFamilyInfo MilestroFontFamilyList::Get(size_t position) const {
+    return data[position];
+}
+
+size_t MilestroFontFamilyList::Size() const {
+    return data.size();
+}
+
+MilestroFontFaceList::MilestroFontFaceList(std::vector<MilestroFontFaceInfo> data)
+    : data(std::move(data)) {
+}
+
+MilestroFontFaceInfo *MilestroFontFaceList::At(size_t position) {
+    return &data[position];
+}
+
+MilestroFontFaceInfo MilestroFontFaceList::Get(size_t position) const {
+    return data[position];
+}
+
+size_t MilestroFontFaceList::Size() const {
+    return data.size();
+}
 
 MilestroFontStyleSet::MilestroFontStyleSet(SkString familyName)
     : fFamilyName(std::move(familyName)) {
@@ -77,6 +112,9 @@ sk_sp<SkFontStyleSet> MilestroFontManager::onMatchFamily(const char familyName[]
 sk_sp<SkTypeface> MilestroFontManager::onMatchFamilyStyle(const char familyName[],
                                                           const SkFontStyle &fontStyle) const {
     sk_sp<SkFontStyleSet> sset(this->matchFamily(familyName));
+    if (!sset) {
+        return nullptr;
+    }
     return sset->matchStyle(fontStyle);
 }
 
@@ -116,6 +154,10 @@ sk_sp<SkTypeface> MilestroFontManager::onLegacyMakeTypeface(const char familyNam
     return tf;
 }
 
+std::vector<MilestroFontFaceInfo> MilestroFontManager::getFontFaces() const {
+    return fFaces;
+}
+
 MilestroFontManager::RegisterResult MilestroFontManager::registerFont(std::unique_ptr<SkStreamAsset> stream,
                                                                       const SkString &filename) {
     bool exists =
@@ -126,7 +168,6 @@ MilestroFontManager::RegisterResult MilestroFontManager::registerFont(std::uniqu
         MILESTROLOG_DEBUG("---- already exist: {}", filename.c_str());
         return RegisterResult::Duplicated;
     }
-    fFontRegistered.push_back(filename);
 
     if (!stream) {
         MILESTROLOG_DEBUG("---- stream invalided: {}", filename.c_str());
@@ -138,6 +179,14 @@ MilestroFontManager::RegisterResult MilestroFontManager::registerFont(std::uniqu
         MILESTROLOG_DEBUG("---- failed to open file as a font: {}", filename.c_str());
         return RegisterResult::Failed;
     }
+
+    struct PendingTypeface {
+        SkString familyName;
+        sk_sp<SkTypeface> typeface;
+        MilestroFontFaceInfo info;
+    };
+
+    std::vector<PendingTypeface> pendingTypefaces;
 
     for (int faceIndex = 0; faceIndex < numFaces; ++faceIndex) {
         int numInstances;
@@ -161,20 +210,48 @@ MilestroFontManager::RegisterResult MilestroFontManager::registerFont(std::uniqu
                 continue;
             }
 
-            sk_sp<MilestroFontStyleSet> addTo = nullptr;
-            for (auto item : fFamilies) {
-                if (item->getFamilyName() == realname) {
-                    addTo = item;
-                }
-            }
-            if (!addTo) {
-                addTo = sk_make_sp<MilestroFontStyleSet>(realname);
-                fFamilies.push_back(addTo);
-            }
-            addTo->appendTypeface(sk_make_sp<SkTypeface_File>(
-                style, isFixedPitch, true, realname, filename.c_str(),
-                (instanceIndex << 16) + faceIndex));
+            const int packedIndex = (instanceIndex << 16) + faceIndex;
+
+            MilestroFontFaceInfo info;
+            info.sourcePath = filename.c_str();
+            info.familyName = realname.c_str();
+            info.faceIndex = faceIndex;
+            info.instanceIndex = instanceIndex;
+            info.packedIndex = packedIndex;
+            info.weight = style.weight();
+            info.width = style.width();
+            info.slant = style.slant();
+            info.fixedPitch = isFixedPitch;
+
+            pendingTypefaces.push_back(PendingTypeface{
+                realname,
+                sk_make_sp<SkTypeface_File>(
+                    style, isFixedPitch, true, realname, filename.c_str(), packedIndex),
+                std::move(info),
+            });
         }
+    }
+    if (pendingTypefaces.empty()) {
+        MILESTROLOG_DEBUG("---- no usable font faces in file: {}", filename.c_str());
+        return RegisterResult::Failed;
+    }
+
+    fFontRegistered.push_back(filename);
+
+    for (auto &pending : pendingTypefaces) {
+        sk_sp<MilestroFontStyleSet> addTo = nullptr;
+        for (auto &item : fFamilies) {
+            if (item->getFamilyName() == pending.familyName) {
+                addTo = item;
+                break;
+            }
+        }
+        if (!addTo) {
+            addTo = sk_make_sp<MilestroFontStyleSet>(pending.familyName);
+            fFamilies.push_back(addTo);
+        }
+        addTo->appendTypeface(std::move(pending.typeface));
+        fFaces.emplace_back(std::move(pending.info));
     }
 //    fStreamHolder.emplace_back(std::move(stream));
     return RegisterResult::Succeed;

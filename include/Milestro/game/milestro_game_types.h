@@ -28,6 +28,15 @@ namespace milestro {
         class Svg;
 
         class VertexData;
+
+        class MilestroFontFamilyInfo;
+
+        class MilestroFontFamilyList;
+
+        class MilestroFontFaceInfo;
+
+        class MilestroFontFaceList;
+
         namespace textlayout {
             class Paragraph;
 

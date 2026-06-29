@@ -40,6 +40,20 @@ public:
         return ret;
     }
 
+    std::vector<MilestroFontFamilyInfo> GetFontFamilies() {
+        std::vector<MilestroFontFamilyInfo> ret;
+        for (auto &name: GetFamiliesNames()) {
+            MilestroFontFamilyInfo item;
+            item.name = std::move(name);
+            ret.emplace_back(std::move(item));
+        }
+        return ret;
+    }
+
+    std::vector<MilestroFontFaceInfo> GetFontFaces() {
+        return fontMgr->getFontFaces();
+    }
+
     sk_sp<SkFontMgr> GetFontMgr() {
         return fontMgr;
     }

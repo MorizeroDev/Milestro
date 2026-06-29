@@ -152,6 +152,21 @@ TEST_F(ReadFontTest, RegistersFontsCorrectly) {
     }
     EXPECT_TRUE(foundNewFont);
 
+    auto fontFaces = fontManager->GetFontFaces();
+    EXPECT_GT(fontFaces.size(), 0);
+    bool foundNewFontFace = false;
+    for (const auto &face: fontFaces) {
+        if (face.familyName.find("Source Han Sans VF") != std::string::npos) {
+            foundNewFontFace = true;
+            EXPECT_GE(face.faceIndex, 0);
+            EXPECT_GE(face.instanceIndex, 0);
+            EXPECT_GT(face.weight, 0);
+            EXPECT_GT(face.width, 0);
+            break;
+        }
+    }
+    EXPECT_TRUE(foundNewFontFace);
+
     // 验证注册的字体数量
     int expectedCount = 0;
     for (const auto &entry: fs::directory_iterator(imageDir)) {

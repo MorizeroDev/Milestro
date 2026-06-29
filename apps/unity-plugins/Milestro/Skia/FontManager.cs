@@ -1,10 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 using System.Text;
 using Milestro.Binding;
 using Milestro.Native;
-using Newtonsoft.Json;
 
 namespace Milestro.Skia
 {
@@ -16,47 +15,111 @@ namespace Milestro.Skia
             ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontManagerRegisterFontFromFile(dat));
         }
 
-        private static bool GetFontFamilyNamesImpl(ulong bufferSize,
-            [MaybeNullWhen(false)] out List<string> fontFamilyNames)
-        {
-            var ret = new byte[bufferSize];
-            ulong needed;
-            var err = BindingC.SkiaFontManagerGetFontFamilies(ret, bufferSize, out needed);
-            if (err < 0)
-            {
-                throw new Exception("SkiaFontManagerGetFontFamilies Error");
-            }
-
-            bool enoughSpace = bufferSize >= needed;
-            if (enoughSpace)
-            {
-                var s = Encoding.UTF8.GetString(ret).TrimEnd('\0');
-                fontFamilyNames = JsonConvert.DeserializeObject<List<string>>(s) ?? new List<string>();
-            }
-            else
-            {
-                fontFamilyNames = new List<string>();
-            }
-
-            return enoughSpace;
-        }
-
         public static List<string> GetFontFamilyNames()
         {
-            ulong maxSize = 1024 * 1024; // 1 MB
-            ulong size = 4096;
-
-            while (size <= maxSize)
+            var list = IntPtr.Zero;
+            try
             {
-                if (GetFontFamilyNamesImpl(size, out var fontFamilyNames))
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontManagerGetFontFamilyList(out list));
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFamilyListGetSize(list, out var size));
+
+                var fontFamilyNames = new List<string>(ToListCapacity(size));
+                for (ulong i = 0; i < size; i++)
                 {
-                    return fontFamilyNames;
+                    ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFamilyListRefElementAt(list, out var familyInfo, i));
+                    ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFamilyInfoGetName(familyInfo,
+                        out var namePtr,
+                        out var nameSize));
+                    fontFamilyNames.Add(ReadNativeUtf8(namePtr, nameSize));
                 }
 
-                size *= 2;
+                return fontFamilyNames;
+            }
+            finally
+            {
+                if (list != IntPtr.Zero)
+                {
+                    ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFamilyListDestroy(ref list));
+                }
+            }
+        }
+
+        public static List<FontFaceInfo> GetFontFaces()
+        {
+            var list = IntPtr.Zero;
+            try
+            {
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontManagerGetFontFaceList(out list));
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFaceListGetSize(list, out var size));
+
+                var fontFaces = new List<FontFaceInfo>(ToListCapacity(size));
+                for (ulong i = 0; i < size; i++)
+                {
+                    ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFaceListRefElementAt(list, out var faceInfo, i));
+                    fontFaces.Add(ReadFontFaceInfo(faceInfo));
+                }
+
+                return fontFaces;
+            }
+            finally
+            {
+                if (list != IntPtr.Zero)
+                {
+                    ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFaceListDestroy(ref list));
+                }
+            }
+        }
+
+        private static FontFaceInfo ReadFontFaceInfo(IntPtr faceInfo)
+        {
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFaceInfoGetSourcePath(faceInfo,
+                out var sourcePathPtr,
+                out var sourcePathSize));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFaceInfoGetFamilyName(faceInfo,
+                out var familyNamePtr,
+                out var familyNameSize));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFaceInfoGetFaceIndex(faceInfo, out var faceIndex));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFaceInfoGetInstanceIndex(faceInfo, out var instanceIndex));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFaceInfoGetPackedIndex(faceInfo, out var packedIndex));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFaceInfoGetWeight(faceInfo, out var weight));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFaceInfoGetWidth(faceInfo, out var width));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFaceInfoGetSlant(faceInfo, out var slant));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFaceInfoGetFixedPitch(faceInfo, out var fixedPitch));
+
+            return new FontFaceInfo
+            {
+                SourcePath = ReadNativeUtf8(sourcePathPtr, sourcePathSize),
+                FamilyName = ReadNativeUtf8(familyNamePtr, familyNameSize),
+                FaceIndex = faceIndex,
+                InstanceIndex = instanceIndex,
+                PackedIndex = packedIndex,
+                Weight = weight,
+                Width = width,
+                Slant = slant,
+                FixedPitch = fixedPitch != 0,
+            };
+        }
+
+        private static string ReadNativeUtf8(IntPtr ptr, ulong size)
+        {
+            if (ptr == IntPtr.Zero || size == 0)
+            {
+                return string.Empty;
             }
 
-            throw new Exception("Buffer size exceeded the maximum limit of 1 MB.");
+            if (size > int.MaxValue)
+            {
+                throw new Exception("Native UTF-8 string is too large.");
+            }
+
+            var bytes = new byte[(int)size];
+            Marshal.Copy(ptr, bytes, 0, bytes.Length);
+            return Encoding.UTF8.GetString(bytes);
+        }
+
+        private static int ToListCapacity(ulong size)
+        {
+            return size > int.MaxValue ? int.MaxValue : (int)size;
         }
     }
 }

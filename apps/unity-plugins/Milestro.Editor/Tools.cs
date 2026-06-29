@@ -20,5 +20,12 @@ public static class MilestroFontmanagerEditor
         var statistic = FontManager.GetFontFamilyNames();
         Debug.Log(JsonConvert.SerializeObject(statistic, Formatting.Indented));
     }
+
+    [MenuItem("Milestro/Font Manager/List Loaded Font Faces")]
+    public static void ListFontFaces()
+    {
+        var statistic = FontManager.GetFontFaces();
+        Debug.Log(JsonConvert.SerializeObject(statistic, Formatting.Indented));
+    }
 }
 #endif
