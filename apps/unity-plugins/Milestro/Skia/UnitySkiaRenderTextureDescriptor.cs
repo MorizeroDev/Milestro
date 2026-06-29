@@ -1,3 +1,5 @@
+using UnityEngine;
+
 namespace Milestro.Skia
 {
     public struct UnitySkiaRenderTextureDescriptor
@@ -10,7 +12,14 @@ namespace Milestro.Skia
         public UnitySkiaRenderTextureResolveStrategy ResolveStrategy;
         public UnitySkiaRenderTextureFormat PreferredFormat;
 
-        public UnitySkiaRenderTextureDescriptor(int width, int height, bool srgb = true)
+        public static bool DefaultSrgb => QualitySettings.activeColorSpace == ColorSpace.Linear;
+
+        public UnitySkiaRenderTextureDescriptor(int width, int height)
+            : this(width, height, DefaultSrgb)
+        {
+        }
+
+        public UnitySkiaRenderTextureDescriptor(int width, int height, bool srgb)
         {
             Width = width;
             Height = height;

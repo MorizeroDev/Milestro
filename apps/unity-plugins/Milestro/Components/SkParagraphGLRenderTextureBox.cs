@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Milestro.Extensions;
 using Milestro.Model;
@@ -38,14 +38,12 @@ namespace Milestro.Components
         [SerializeField] [FormerlySerializedAs("locale")]
         private string m_locale = "zh-Hans";
 
-        [SerializeField] [FormerlySerializedAs("srgb")]
-        private bool m_srgb = true;
-
 
         [NonSerialized] private RectTransform rectTransform;
         [NonSerialized] private UnityAutoRenderTextureSurface surface;
         [NonSerialized] private Paragraph paragraph;
         [NonSerialized] private MilestroImage image;
+        [NonSerialized] private bool? m_srgbOverride;
         [NonSerialized] private bool m_havePropertiesChanged = true;
         [NonSerialized] private int layoutWidth = 640;
         [NonSerialized] private Vector2 paragraphPosition = new Vector2(640, 640);
@@ -132,10 +130,10 @@ namespace Milestro.Components
 
         public bool srgb
         {
-            get => m_srgb;
+            get => SurfaceSrgb();
             set
             {
-                m_srgb = value;
+                m_srgbOverride = value;
                 m_havePropertiesChanged = true;
             }
         }
@@ -181,11 +179,12 @@ namespace Milestro.Components
             var needsDraw = false;
             var sizePixels = CurrentSize();
             var propertiesChanged = m_havePropertiesChanged;
-            if (surface == null || surface.Srgb != srgb)
+            var surfaceSrgb = SurfaceSrgb();
+            if (surface == null || surface.Srgb != surfaceSrgb)
             {
                 surface?.Dispose();
 
-                surface = new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, srgb);
+                surface = new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, surfaceSrgb);
                 Texture = surface.Texture;
                 needsDraw = true;
             }
@@ -218,6 +217,11 @@ namespace Milestro.Components
             var rect = rectTransform.rect;
             return new Vector2Int(Mathf.Max(1, Mathf.CeilToInt(rect.width)),
                 Mathf.Max(1, Mathf.CeilToInt(rect.height)));
+        }
+
+        private bool SurfaceSrgb()
+        {
+            return m_srgbOverride ?? UnitySkiaRenderTextureDescriptor.DefaultSrgb;
         }
 
         private Paragraph BuildParagraph(string text)
