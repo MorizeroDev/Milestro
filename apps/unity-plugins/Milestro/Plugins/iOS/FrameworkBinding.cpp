@@ -40,8 +40,8 @@ int64_t FrameworkBindingMilestroSkiaFontRegistryRegisterFontFromFile(uint8_t* pa
     return MilestroSkiaFontRegistryRegisterFontFromFile(path);
 }
 
-int64_t FrameworkBindingMilestroSkiaFontRegistryGetRegisteredFontFamilyList(
-        milestro::skia::MilestroFontFamilyList*& ret) {
+int64_t
+FrameworkBindingMilestroSkiaFontRegistryGetRegisteredFontFamilyList(milestro::skia::MilestroFontFamilyList*& ret) {
     return MilestroSkiaFontRegistryGetRegisteredFontFamilyList(ret);
 }
 
@@ -55,17 +55,15 @@ int64_t FrameworkBindingMilestroSkiaFontFamilyListGetSize(milestro::skia::Milest
     return MilestroSkiaFontFamilyListGetSize(list, size);
 }
 
-int64_t FrameworkBindingMilestroSkiaFontFamilyListRefElementAt(
-        milestro::skia::MilestroFontFamilyList* list,
-        milestro::skia::MilestroFontFamilyInfo*& ret,
-        uint64_t index) {
+int64_t FrameworkBindingMilestroSkiaFontFamilyListRefElementAt(milestro::skia::MilestroFontFamilyList* list,
+                                                               milestro::skia::MilestroFontFamilyInfo*& ret,
+                                                               uint64_t index) {
     return MilestroSkiaFontFamilyListRefElementAt(list, ret, index);
 }
 
-int64_t FrameworkBindingMilestroSkiaFontFamilyListGetElementAt(
-        milestro::skia::MilestroFontFamilyList* list,
-        milestro::skia::MilestroFontFamilyInfo*& ret,
-        uint64_t index) {
+int64_t FrameworkBindingMilestroSkiaFontFamilyListGetElementAt(milestro::skia::MilestroFontFamilyList* list,
+                                                               milestro::skia::MilestroFontFamilyInfo*& ret,
+                                                               uint64_t index) {
     return MilestroSkiaFontFamilyListGetElementAt(list, ret, index);
 }
 
@@ -84,13 +82,12 @@ int64_t FrameworkBindingMilestroSkiaFontRegistryGetRegisteredFontFaceList(milest
     return MilestroSkiaFontRegistryGetRegisteredFontFaceList(ret);
 }
 
-int64_t FrameworkBindingMilestroSkiaFontFaceListDestroy(
-        [[milize::RefType("ref")]] milestro::skia::MilestroFontFaceList*& ret) {
+int64_t
+FrameworkBindingMilestroSkiaFontFaceListDestroy([[milize::RefType("ref")]] milestro::skia::MilestroFontFaceList*& ret) {
     return MilestroSkiaFontFaceListDestroy(ret);
 }
 
-int64_t FrameworkBindingMilestroSkiaFontFaceListGetSize(milestro::skia::MilestroFontFaceList* list,
-                                                        uint64_t& size) {
+int64_t FrameworkBindingMilestroSkiaFontFaceListGetSize(milestro::skia::MilestroFontFaceList* list, uint64_t& size) {
     return MilestroSkiaFontFaceListGetSize(list, size);
 }
 
@@ -106,8 +103,8 @@ int64_t FrameworkBindingMilestroSkiaFontFaceListGetElementAt(milestro::skia::Mil
     return MilestroSkiaFontFaceListGetElementAt(list, ret, index);
 }
 
-int64_t FrameworkBindingMilestroSkiaFontFaceInfoDestroy(
-        [[milize::RefType("ref")]] milestro::skia::MilestroFontFaceInfo*& ret) {
+int64_t
+FrameworkBindingMilestroSkiaFontFaceInfoDestroy([[milize::RefType("ref")]] milestro::skia::MilestroFontFaceInfo*& ret) {
     return MilestroSkiaFontFaceInfoDestroy(ret);
 }
 
@@ -138,18 +135,15 @@ int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetPackedIndex(milestro::skia::M
     return MilestroSkiaFontFaceInfoGetPackedIndex(ret, value);
 }
 
-int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetWeight(milestro::skia::MilestroFontFaceInfo* ret,
-                                                          int32_t& value) {
+int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetWeight(milestro::skia::MilestroFontFaceInfo* ret, int32_t& value) {
     return MilestroSkiaFontFaceInfoGetWeight(ret, value);
 }
 
-int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetWidth(milestro::skia::MilestroFontFaceInfo* ret,
-                                                         int32_t& value) {
+int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetWidth(milestro::skia::MilestroFontFaceInfo* ret, int32_t& value) {
     return MilestroSkiaFontFaceInfoGetWidth(ret, value);
 }
 
-int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetSlant(milestro::skia::MilestroFontFaceInfo* ret,
-                                                         int32_t& value) {
+int64_t FrameworkBindingMilestroSkiaFontFaceInfoGetSlant(milestro::skia::MilestroFontFaceInfo* ret, int32_t& value) {
     return MilestroSkiaFontFaceInfoGetSlant(ret, value);
 }
 

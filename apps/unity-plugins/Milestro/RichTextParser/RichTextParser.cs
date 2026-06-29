@@ -108,7 +108,11 @@ namespace Milestro.RichTextParser
 
         private void ParseXml(Stream stream)
         {
-            var settings = new XmlReaderSettings();
+            var settings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Parse,
+                ConformanceLevel = ConformanceLevel.Fragment
+            };
 
             using var reader = XmlReader.Create(stream, settings);
 
@@ -205,6 +209,8 @@ namespace Milestro.RichTextParser
             }
             else if (node.Tag == "p")
             {
+                StartParagraph(ctx, state);
+
                 if (node.Attributes.TryGetValue("align", out var alignDirection))
                 {
                     try
@@ -217,6 +223,11 @@ namespace Milestro.RichTextParser
                         // ignored
                     }
                 }
+            }
+            else if (node.Tag == "br")
+            {
+                AddText(ctx, state, "\n");
+                return;
             }
             else if (node.Tag == "root")
             {
@@ -237,9 +248,22 @@ namespace Milestro.RichTextParser
                 }
                 else if (child is XmlTextNode textNode)
                 {
-                    ctx.Result.Body.Add(TextSegment.MakeText(state, textNode.Text));
+                    AddText(ctx, state, textNode.Text);
                 }
             }
+        }
+
+        private static void StartParagraph(Context ctx, TextStyleState state)
+        {
+            if (ctx.Result.Body.Count > 0)
+            {
+                AddText(ctx, state, "\n\n");
+            }
+        }
+
+        private static void AddText(Context ctx, TextStyleState state, string text)
+        {
+            ctx.Result.Body.Add(TextSegment.MakeText(state, text));
         }
 
         private static readonly CultureInfo ParseCulture = CultureInfo.GetCultureInfo("en");
