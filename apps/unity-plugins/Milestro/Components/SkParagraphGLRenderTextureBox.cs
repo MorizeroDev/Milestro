@@ -1,64 +1,54 @@
 ﻿using System;
 using System.Collections.Generic;
 using Milestro.Extensions;
+using Milestro.Model;
 using Milestro.Skia;
 using Milestro.Skia.TextLayout;
 using UnityEngine;
 using UnityEngine.Serialization;
-using UnityEngine.UI;
 
 namespace Milestro.Components
 {
-    [RequireComponent(typeof(RawImage))]
-    public class SkParagraphGLRenderTextureBox : MonoBehaviour
+    public class SkParagraphGLRenderTextureBox : SkiaRenderTextureGraphic
     {
-        [TextArea(3, 10)]
-        [SerializeField]
-        [FormerlySerializedAs("content")]
+        [TextArea(3, 10)] [SerializeField] [FormerlySerializedAs("content")]
         private string m_content = "";
 
-        [SerializeField]
-        [FormerlySerializedAs("imageAsset")]
-        private TextAsset m_imageAsset;
+        [SerializeField] [FormerlySerializedAs("margin")]
+        private RectOffset m_margin = new RectOffset();
 
-        [SerializeField]
-        [FormerlySerializedAs("imageRect")]
-        private Rect m_imageRect = new Rect(0, 0, 128, 128);
+        // [SerializeField] [FormerlySerializedAs("paragraphPosition")]
+        // private Vector2 m_paragraphPosition = new Vector2(0, 144);
+        //
+        // [SerializeField] [FormerlySerializedAs("layoutWidth")]
+        // private int m_layoutWidth = 640;
 
-        [SerializeField]
-        [FormerlySerializedAs("paragraphPosition")]
-        private Vector2 m_paragraphPosition = new Vector2(0, 144);
-
-        [SerializeField]
-        [FormerlySerializedAs("layoutWidth")]
-        private int m_layoutWidth = 640;
-
-        [SerializeField]
-        [FormerlySerializedAs("fontFamilies")]
+        [SerializeField] [FormerlySerializedAs("fontFamilies")]
         private List<string> m_fontFamilies = new List<string>() { "Source Han Sans VF" };
+        
+        [SerializeField] [FormerlySerializedAs("textAlign")]
+        private TextAlign m_textAlign = TextAlign.Left;
 
-        [SerializeField]
-        [FormerlySerializedAs("size")]
+        [SerializeField] [FormerlySerializedAs("size")]
         private float m_size = 36;
 
-        [SerializeField]
-        [FormerlySerializedAs("color")]
+        [SerializeField] [FormerlySerializedAs("color")]
         private Color m_color = Color.white;
 
-        [SerializeField]
-        [FormerlySerializedAs("locale")]
+        [SerializeField] [FormerlySerializedAs("locale")]
         private string m_locale = "zh-Hans";
 
-        [SerializeField]
-        [FormerlySerializedAs("srgb")]
+        [SerializeField] [FormerlySerializedAs("srgb")]
         private bool m_srgb = true;
 
-        [NonSerialized] private RawImage rawImage;
+
         [NonSerialized] private RectTransform rectTransform;
         [NonSerialized] private UnityAutoRenderTextureSurface surface;
         [NonSerialized] private Paragraph paragraph;
         [NonSerialized] private MilestroImage image;
         [NonSerialized] private bool m_havePropertiesChanged = true;
+        [NonSerialized] private int layoutWidth = 640;
+        [NonSerialized] private Vector2 paragraphPosition = new Vector2(640, 640);
 
         public string content
         {
@@ -70,45 +60,25 @@ namespace Milestro.Components
             }
         }
 
-        public TextAsset imageAsset
-        {
-            get => m_imageAsset;
-            set
-            {
-                m_imageAsset = value;
-                m_havePropertiesChanged = true;
-            }
-        }
-
-        public Rect imageRect
-        {
-            get => m_imageRect;
-            set
-            {
-                m_imageRect = value;
-                m_havePropertiesChanged = true;
-            }
-        }
-
-        public Vector2 paragraphPosition
-        {
-            get => m_paragraphPosition;
-            set
-            {
-                m_paragraphPosition = value;
-                m_havePropertiesChanged = true;
-            }
-        }
-
-        public int layoutWidth
-        {
-            get => m_layoutWidth;
-            set
-            {
-                m_layoutWidth = value;
-                m_havePropertiesChanged = true;
-            }
-        }
+        // public Vector2 paragraphPosition
+        // {
+        //     get => m_paragraphPosition;
+        //     set
+        //     {
+        //         m_paragraphPosition = value;
+        //         m_havePropertiesChanged = true;
+        //     }
+        // }
+        //
+        // public int layoutWidth
+        // {
+        //     get => m_layoutWidth;
+        //     set
+        //     {
+        //         m_layoutWidth = value;
+        //         m_havePropertiesChanged = true;
+        //     }
+        // }
 
         public List<string> fontFamilies
         {
@@ -116,6 +86,16 @@ namespace Milestro.Components
             set
             {
                 m_fontFamilies = value;
+                m_havePropertiesChanged = true;
+            }
+        }
+
+        public TextAlign textAlign
+        {
+            get => m_textAlign;
+            set
+            {
+                m_textAlign = value;
                 m_havePropertiesChanged = true;
             }
         }
@@ -162,24 +142,18 @@ namespace Milestro.Components
 
         private void OnEnable()
         {
-            rawImage = GetComponent<RawImage>();
             rectTransform = GetComponent<RectTransform>();
-            RebuildResources(forceText: true, forceImage: true);
+            RebuildResources(forceText: true);
         }
 
         private void Update()
         {
-            RebuildResources(forceText: false, forceImage: false);
+            RebuildResources(forceText: false);
         }
 
         private void OnDisable()
         {
-            if (rawImage != null)
-            {
-                rawImage.texture = null;
-            }
-
-            RetireImage();
+            Texture = null;
             surface?.Dispose();
             surface = null;
             paragraph = null;
@@ -189,6 +163,7 @@ namespace Milestro.Components
 #if UNITY_EDITOR
         private void OnValidate()
         {
+            if (surface != null) UvRect = surface.DisplayUvRect;
             m_havePropertiesChanged = true;
         }
 #endif
@@ -197,32 +172,27 @@ namespace Milestro.Components
         {
             if (isActiveAndEnabled)
             {
-                RebuildResources(forceText: false, forceImage: false);
+                RebuildResources(forceText: false);
             }
         }
 
-        private void RebuildResources(bool forceText, bool forceImage)
+        private void RebuildResources(bool forceText)
         {
             var needsDraw = false;
             var sizePixels = CurrentSize();
             var propertiesChanged = m_havePropertiesChanged;
             if (surface == null || surface.Srgb != srgb)
             {
-                if (surface != null)
-                {
-                    RetireImage();
-                    surface.Dispose();
-                    forceImage = true;
-                }
+                surface?.Dispose();
 
                 surface = new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, srgb);
-                rawImage.texture = surface.Texture;
+                Texture = surface.Texture;
                 needsDraw = true;
             }
             else if (surface.Width != sizePixels.x || surface.Height != sizePixels.y)
             {
                 surface.Resize(sizePixels.x, sizePixels.y);
-                rawImage.texture = surface.Texture;
+                Texture = surface.Texture;
                 needsDraw = true;
             }
 
@@ -232,20 +202,11 @@ namespace Milestro.Components
                 needsDraw = true;
             }
 
-            if (forceImage || propertiesChanged)
-            {
-                RetireImage();
-                image = imageAsset != null ? MilestroImage.MakeFromTextAsset(imageAsset) : null;
-                needsDraw = true;
-            }
-
-            if (propertiesChanged)
-            {
-                needsDraw = true;
-            }
-
             if (needsDraw)
             {
+                UvRect = surface.DisplayUvRect;
+                ValidateMargin();
+                ResizeParagraph(paragraph);
                 surface.Submit(BuildRenderCommands());
             }
 
@@ -262,6 +223,7 @@ namespace Milestro.Components
         private Paragraph BuildParagraph(string text)
         {
             ParagraphStyle paragraphStyle = new ParagraphStyle();
+            paragraphStyle.TextAlign = (int) textAlign;
 
             TextStyle textStyle = new TextStyle();
             textStyle.SetFontFamilies(fontFamilies);
@@ -273,35 +235,33 @@ namespace Milestro.Components
             parser.ParseText(text ?? "");
             var segments = parser.ConvertToSegments();
             var result = segments.ToParagraph(paragraphStyle, textStyle);
-            result.Layout(layoutWidth);
+            ResizeParagraph(result, true);
             return result;
+        }
+
+        private void ValidateMargin()
+        {
+            if (m_margin.left < 0) m_margin.left = 0;
+            if (m_margin.top < 0) m_margin.top = 0;
+            if (m_margin.right < 0) m_margin.right = 0;
+            if (m_margin.bottom < 0) m_margin.bottom = 0;
+        }
+
+        private void ResizeParagraph(Paragraph paragraph, bool force = false)
+        {
+            var newLayoutWidth =
+                Math.Max(1, Mathf.CeilToInt(rectTransform.rect.width) - m_margin.horizontal);
+            if (newLayoutWidth == layoutWidth && !force) return;
+            layoutWidth = newLayoutWidth;
+            paragraph.Layout(layoutWidth);
         }
 
         private UnitySkiaRenderCommandList BuildRenderCommands()
         {
             var commands = new UnitySkiaRenderCommandList();
-            commands.DrawImage(image, imageRect);
+            paragraphPosition = new Vector2(m_margin.left, m_margin.top);
             commands.DrawParagraph(paragraph, paragraphPosition);
             return commands;
-        }
-
-        private void RetireImage()
-        {
-            if (image == null)
-            {
-                return;
-            }
-
-            if (surface != null)
-            {
-                surface.DisposeResourceAfterPendingDraws(image);
-            }
-            else
-            {
-                image.Dispose();
-            }
-
-            image = null;
         }
     }
 }
