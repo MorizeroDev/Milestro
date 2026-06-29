@@ -8,6 +8,7 @@ option(MILESTRO_ENABLE_TESTS "Enable tests" ON)
 option(MILESTRO_WITH_ADDRESS_SANITIZER "Build with clang address sanitizer" OFF)
 option(MILESTRO_ENABLE_RELEASE_SYMBOLS "Build release binaries with debug info for split symbol packages" ON)
 option(MILESTRO_REMAP_SOURCE_PATHS "Remap absolute source and build paths in release debug info" ON)
+option(MILESTRO_ENABLE_DESKTOP_OPENGL_RENDER "Enable experimental Unity OpenGLCore RenderTexture backend" OFF)
 option(MILESTRO_SKIA_LIB_PATH "Skia library path")
 option(MILESTRO_SKIA_INCLUDE_PATH "Skia include path")
 option(MILESTRO_SKIA_CMAKE "Skia cmake path")
@@ -295,6 +296,28 @@ if (WIN32)
     set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} d3d12 dxgi d3dcompiler dwrite gdi32 ole32 uuid)
 endif ()
 
+set(MILESTRO_ENABLE_UNITY_GL_RENDER OFF)
+if (ANDROID)
+    find_library(MILESTRO_ANDROID_GLESV3_LIBRARY GLESv3)
+    find_library(MILESTRO_ANDROID_EGL_LIBRARY EGL)
+    if (MILESTRO_ANDROID_GLESV3_LIBRARY AND MILESTRO_ANDROID_EGL_LIBRARY)
+        set(MILESTRO_ENABLE_UNITY_GL_RENDER ON)
+        set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES}
+                ${MILESTRO_ANDROID_GLESV3_LIBRARY}
+                ${MILESTRO_ANDROID_EGL_LIBRARY})
+    else ()
+        message(WARNING "Milestro Unity GL render backend disabled: Android GLESv3/EGL libraries not found")
+    endif ()
+elseif (MILESTRO_ENABLE_DESKTOP_OPENGL_RENDER AND UNIX AND NOT APPLE)
+    find_package(OpenGL QUIET)
+    if (OpenGL_FOUND)
+        set(MILESTRO_ENABLE_UNITY_GL_RENDER ON)
+        set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} OpenGL::GL)
+    else ()
+        message(STATUS "Milestro Unity GL render backend disabled: OpenGL package not found")
+    endif ()
+endif ()
+
 #############################################################
 # Setup Milestro
 set(MILESTRO_DEFINITIONS "MILESTRO_BUILDING_ENV")
@@ -370,6 +393,12 @@ endif ()
 if (WIN32)
     list(APPEND MILESTRO_APPLICATION_FILE
             src/unity_render/MilestroUnityRenderD3D12Backend.cpp)
+endif ()
+
+if (MILESTRO_ENABLE_UNITY_GL_RENDER)
+    set(MILESTRO_DEFINITIONS ${MILESTRO_DEFINITIONS} "MILESTRO_ENABLE_UNITY_GL_RENDER")
+    list(APPEND MILESTRO_APPLICATION_FILE
+            src/unity_render/MilestroUnityRenderGLBackend.cpp)
 endif ()
 
 set(

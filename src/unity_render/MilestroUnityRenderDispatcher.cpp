@@ -17,13 +17,18 @@
 #include "unity_render/MilestroUnityRenderD3D12Backend.h"
 #endif
 
+#if defined(MILESTRO_ENABLE_UNITY_GL_RENDER)
+#include "unity_render/MilestroUnityRenderGLBackend.h"
+#endif
+
 namespace milestro::unity_render {
 
 namespace {
 
 constexpr int kMetalDrawEventOffset = 0;
 constexpr int kD3D12DrawEventOffset = 1;
-constexpr int kReservedEventCount = 2;
+constexpr int kGLDrawEventOffset = 2;
+constexpr int kReservedEventCount = 3;
 
 IUnityInterfaces* gUnityInterfaces = nullptr;
 IUnityGraphics* gUnityGraphics = nullptr;
@@ -57,6 +62,10 @@ void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType
                                  gUnityInterfaces,
                                  gRenderer,
                                  gEventBase >= 0 ? gEventBase + kD3D12DrawEventOffset : -1);
+#endif
+
+#if defined(MILESTRO_ENABLE_UNITY_GL_RENDER)
+    gl::OnGraphicsDeviceEvent(eventType, gUnityInterfaces, gRenderer);
 #endif
 }
 
@@ -129,6 +138,45 @@ void UNITY_INTERFACE_API OnRenderEvent(int eventId, void* data) {
         return;
     }
 
+    if (eventOffset == kGLDrawEventOffset) {
+        if (target.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::OpenGL) &&
+            target.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::OpenGLES)) {
+            MILESTROLOG_ERROR("Milestro GL render event received backend {}.", target.graphicsBackend);
+            MarkSubmissionCompleted(submission);
+            return;
+        }
+
+        if (gRenderer != kUnityGfxRendererOpenGLES30 && gRenderer != kUnityGfxRendererOpenGLCore) {
+            MILESTROLOG_ERROR("Milestro GL render event invoked while Unity renderer is {}.",
+                              static_cast<int>(gRenderer));
+            MarkSubmissionCompleted(submission);
+            return;
+        }
+
+        if ((target.graphicsBackend == static_cast<int32_t>(MilestroUnityGraphicsBackend::OpenGLES) &&
+             gRenderer != kUnityGfxRendererOpenGLES30) ||
+            (target.graphicsBackend == static_cast<int32_t>(MilestroUnityGraphicsBackend::OpenGL) &&
+             gRenderer != kUnityGfxRendererOpenGLCore)) {
+            MILESTROLOG_ERROR("Milestro GL render event backend {} does not match Unity renderer {}.",
+                              target.graphicsBackend,
+                              static_cast<int>(gRenderer));
+            MarkSubmissionCompleted(submission);
+            return;
+        }
+
+#if defined(MILESTRO_ENABLE_UNITY_GL_RENDER)
+        const auto status = gl::Render(*submission, gRenderer);
+        if (status < 0) {
+            MILESTROLOG_ERROR("Milestro GL render event failed: {}", status);
+        }
+        MarkSubmissionCompleted(submission);
+#else
+        MILESTROLOG_ERROR("Milestro GL render event is not enabled in this Milestro build.");
+        MarkSubmissionCompleted(submission);
+#endif
+        return;
+    }
+
     MILESTROLOG_WARN("Ignoring unknown Milestro Unity render event: {}", eventId);
     MarkSubmissionCompleted(submission);
 }
@@ -160,9 +208,17 @@ int64_t RenderTextureEventId(int32_t graphicsBackend, int32_t& eventId) {
         case MilestroUnityGraphicsBackend::Direct3D12:
             eventId = gEventBase + kD3D12DrawEventOffset;
             return MILESTRO_API_RET_OK;
-        case MilestroUnityGraphicsBackend::Vulkan:
         case MilestroUnityGraphicsBackend::OpenGL:
         case MilestroUnityGraphicsBackend::OpenGLES:
+#if defined(MILESTRO_ENABLE_UNITY_GL_RENDER)
+            eventId = gEventBase + kGLDrawEventOffset;
+            return MILESTRO_API_RET_OK;
+#else
+            eventId = -1;
+            MILESTROLOG_ERROR("Milestro Unity GL render backend {} is not enabled in this build.", graphicsBackend);
+            return MILESTRO_API_RET_FAILED;
+#endif
+        case MilestroUnityGraphicsBackend::Vulkan:
             eventId = -1;
             MILESTROLOG_ERROR("Milestro Unity render backend {} is reserved but not implemented.", graphicsBackend);
             return MILESTRO_API_RET_FAILED;

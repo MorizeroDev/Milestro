@@ -197,18 +197,24 @@ namespace Milestro.Skia
                 Resize(Width, Height);
             }
 
+            var handleKind = HandleKindForBackend(Backend);
+            var colorRenderBufferHandle = handleKind == RenderTextureHandleKind.RenderBuffer && RenderTexture != null
+                ? RenderTexture.colorBuffer.GetNativeRenderBufferPtr()
+                : IntPtr.Zero;
+            var nativeTextureHandle = IntPtr.Zero;
+            if (handleKind == RenderTextureHandleKind.NativeTexture)
+            {
+                nativeTextureHandle = Backend == UnitySkiaGraphicsBackend.Direct3D12 && d3d12ExternalTexture != IntPtr.Zero
+                    ? d3d12ExternalTexture
+                    : Texture.GetNativeTexturePtr();
+            }
+
             var target = new RenderTargetPayload
             {
                 GraphicsBackend = (int)Backend,
-                HandleKind = Backend == UnitySkiaGraphicsBackend.Direct3D12
-                    ? (int)RenderTextureHandleKind.NativeTexture
-                    : (int)RenderTextureHandleKind.RenderBuffer,
-                ColorRenderBufferHandle = RenderTexture != null
-                    ? RenderTexture.colorBuffer.GetNativeRenderBufferPtr()
-                    : IntPtr.Zero,
-                NativeTextureHandle = Backend == UnitySkiaGraphicsBackend.Direct3D12 && d3d12ExternalTexture != IntPtr.Zero
-                    ? d3d12ExternalTexture
-                    : Texture.GetNativeTexturePtr(),
+                HandleKind = (int)handleKind,
+                ColorRenderBufferHandle = colorRenderBufferHandle,
+                NativeTextureHandle = nativeTextureHandle,
                 Width = Width,
                 Height = Height,
                 Srgb = descriptor.Srgb ? 1 : 0,
@@ -273,6 +279,23 @@ namespace Milestro.Skia
             disposed = true;
             RetireCurrentTexture();
             CollectCompletedEvents();
+        }
+
+        private static RenderTextureHandleKind HandleKindForBackend(UnitySkiaGraphicsBackend backend)
+        {
+            switch (backend)
+            {
+                case UnitySkiaGraphicsBackend.Metal:
+                    return RenderTextureHandleKind.RenderBuffer;
+                case UnitySkiaGraphicsBackend.Direct3D12:
+                case UnitySkiaGraphicsBackend.OpenGL:
+                case UnitySkiaGraphicsBackend.OpenGLES:
+                    return RenderTextureHandleKind.NativeTexture;
+                case UnitySkiaGraphicsBackend.Vulkan:
+                    throw new NotSupportedException("Milestro Unity Skia RenderTexture backend is reserved but not implemented: " + backend);
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(backend), backend, "Unknown Milestro Unity Skia RenderTexture backend.");
+            }
         }
 
         private static IntPtr MarshalCommands(UnitySkiaRenderCommandList commandList)
@@ -446,9 +469,19 @@ namespace Milestro.Skia
                         throw new NotSupportedException("Milestro Unity Skia RenderTexture Direct3D12 backend requires Unity D3D12.");
                     }
                     return;
-                case UnitySkiaGraphicsBackend.Vulkan:
                 case UnitySkiaGraphicsBackend.OpenGL:
+                    if (SystemInfo.graphicsDeviceType != GraphicsDeviceType.OpenGLCore)
+                    {
+                        throw new NotSupportedException("Milestro Unity Skia RenderTexture OpenGL backend requires Unity OpenGLCore.");
+                    }
+                    return;
                 case UnitySkiaGraphicsBackend.OpenGLES:
+                    if (SystemInfo.graphicsDeviceType != GraphicsDeviceType.OpenGLES3)
+                    {
+                        throw new NotSupportedException("Milestro Unity Skia RenderTexture OpenGLES backend requires Unity OpenGLES3.");
+                    }
+                    return;
+                case UnitySkiaGraphicsBackend.Vulkan:
                     throw new NotSupportedException("Milestro Unity Skia RenderTexture backend is reserved but not implemented: " + backend);
                 default:
                     throw new ArgumentOutOfRangeException(nameof(backend), backend, "Unknown Milestro Unity Skia RenderTexture backend.");
