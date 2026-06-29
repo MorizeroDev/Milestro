@@ -331,7 +331,10 @@ DXGI_FORMAT NormalizeDxgiFormat(DXGI_FORMAT format, int32_t srgb, int32_t prefer
         case DXGI_FORMAT_R8G8B8A8_TYPELESS:
             return srgb != 0 ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
         case DXGI_FORMAT_UNKNOWN:
-            return preferredFormat == 2 ? DXGI_FORMAT_R8G8B8A8_UNORM : DXGI_FORMAT_B8G8R8A8_UNORM;
+            if (preferredFormat == 2) {
+                return srgb != 0 ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
+            }
+            return srgb != 0 ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : DXGI_FORMAT_B8G8R8A8_UNORM;
         default:
             return format;
     }

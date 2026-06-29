@@ -102,10 +102,12 @@ namespace Milestro.Skia
         public int Width { get; private set; }
         public int Height { get; private set; }
 
-        public UnitySkiaRenderTextureSurface(UnitySkiaGraphicsBackend backend,
-            int width,
-            int height,
-            bool srgb = true)
+        public UnitySkiaRenderTextureSurface(UnitySkiaGraphicsBackend backend, int width, int height)
+            : this(backend, new UnitySkiaRenderTextureDescriptor(width, height))
+        {
+        }
+
+        public UnitySkiaRenderTextureSurface(UnitySkiaGraphicsBackend backend, int width, int height, bool srgb)
             : this(backend, new UnitySkiaRenderTextureDescriptor(width, height, srgb))
         {
         }

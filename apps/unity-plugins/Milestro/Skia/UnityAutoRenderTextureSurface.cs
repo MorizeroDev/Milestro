@@ -16,7 +16,12 @@ namespace Milestro.Skia
         public int Width => surface.Width;
         public int Height => surface.Height;
 
-        public UnityAutoRenderTextureSurface(int width, int height, bool srgb = true)
+        public UnityAutoRenderTextureSurface(int width, int height)
+        {
+            surface = new UnitySkiaRenderTextureSurface(SelectBackendForCurrentGraphicsDevice(), width, height);
+        }
+
+        public UnityAutoRenderTextureSurface(int width, int height, bool srgb)
         {
             surface = new UnitySkiaRenderTextureSurface(SelectBackendForCurrentGraphicsDevice(), width, height, srgb);
         }
