@@ -28,7 +28,7 @@ namespace Milestro.Components
 
         [SerializeField] [FormerlySerializedAs("fontFamilies")]
         private List<string> m_fontFamilies = new List<string>() { "Source Han Sans VF" };
-        
+
         [SerializeField] [FormerlySerializedAs("textAlign")]
         private TextAlign m_textAlign = TextAlign.Left;
 
@@ -144,8 +144,9 @@ namespace Milestro.Components
             }
         }
 
-        private void OnEnable()
+        protected override void OnEnable()
         {
+            base.OnEnable();
             rectTransform = GetComponent<RectTransform>();
             RebuildResources(forceText: true);
         }
@@ -155,8 +156,9 @@ namespace Milestro.Components
             RebuildResources(forceText: false);
         }
 
-        private void OnDisable()
+        protected override void OnDisable()
         {
+            base.OnDisable();
             Texture = null;
             surface?.Dispose();
             surface = null;
@@ -237,7 +239,6 @@ namespace Milestro.Components
 
             if (needsDraw)
             {
-                UvRect = surface.DisplayUvRect;
                 ValidateMargin();
                 ResizeParagraph(paragraph);
                 if (!surface.TrySubmit(BuildRenderCommands()))
@@ -262,10 +263,10 @@ namespace Milestro.Components
             return m_colorSpaceOverride ?? UnitySkiaRenderTextureDescriptor.DefaultColorSpace;
         }
 
-        private Paragraph BuildParagraph(string text)
+        protected virtual Paragraph BuildParagraph(string text)
         {
             ParagraphStyle paragraphStyle = new ParagraphStyle();
-            paragraphStyle.TextAlign = (int) textAlign;
+            paragraphStyle.TextAlign = (int)textAlign;
 
             TextStyle textStyle = new TextStyle();
             textStyle.SetFontFamilies(fontFamilies);
