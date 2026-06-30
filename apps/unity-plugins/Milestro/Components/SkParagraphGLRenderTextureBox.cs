@@ -43,7 +43,7 @@ namespace Milestro.Components
         [NonSerialized] private UnityAutoRenderTextureSurface surface;
         [NonSerialized] private Paragraph paragraph;
         [NonSerialized] private MilestroImage image;
-        [NonSerialized] private bool? m_srgbOverride;
+        [NonSerialized] private ColorSpace? m_colorSpaceOverride;
         [NonSerialized] private bool m_havePropertiesChanged = true;
         [NonSerialized] private int layoutWidth = 640;
         [NonSerialized] private Vector2 paragraphPosition = new Vector2(640, 640);
@@ -130,10 +130,10 @@ namespace Milestro.Components
 
         public bool srgb
         {
-            get => SurfaceSrgb();
+            get => SurfaceColorSpace() == ColorSpace.Linear;
             set
             {
-                m_srgbOverride = value;
+                m_colorSpaceOverride = value ? ColorSpace.Linear : ColorSpace.Gamma;
                 m_havePropertiesChanged = true;
             }
         }
@@ -179,12 +179,12 @@ namespace Milestro.Components
             var needsDraw = false;
             var sizePixels = CurrentSize();
             var propertiesChanged = m_havePropertiesChanged;
-            var surfaceSrgb = SurfaceSrgb();
-            if (surface == null || surface.Srgb != surfaceSrgb)
+            var surfaceColorSpace = SurfaceColorSpace();
+            if (surface == null || surface.ColorSpace != surfaceColorSpace)
             {
                 surface?.Dispose();
 
-                surface = new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, surfaceSrgb);
+                surface = new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, surfaceColorSpace);
                 ApplySurfaceToRawImage();
                 needsDraw = true;
             }
@@ -219,9 +219,9 @@ namespace Milestro.Components
                 Mathf.Max(1, Mathf.CeilToInt(rect.height)));
         }
 
-        private bool SurfaceSrgb()
+        private ColorSpace SurfaceColorSpace()
         {
-            return m_srgbOverride ?? UnitySkiaRenderTextureDescriptor.DefaultSrgb;
+            return m_colorSpaceOverride ?? UnitySkiaRenderTextureDescriptor.DefaultColorSpace;
         }
 
         private Paragraph BuildParagraph(string text)

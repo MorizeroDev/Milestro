@@ -72,7 +72,8 @@ struct CachedRenderTarget {
     uint32_t sampleCount = 1;
     uint32_t levelCount = 1;
     unsigned int sampleQuality = 0;
-    int32_t srgb = 0;
+    int32_t colorSpace = 0;
+    int32_t storageSrgb = 0;
 };
 
 std::vector<PendingResourceRetain> gPendingResources;
@@ -324,17 +325,26 @@ TextureLookup TextureFromPayload(const MilestroUnityRenderTargetPayload& payload
     return result;
 }
 
-DXGI_FORMAT NormalizeDxgiFormat(DXGI_FORMAT format, int32_t srgb, int32_t preferredFormat) {
+constexpr int32_t kUnityColorSpaceLinear = 1;
+
+sk_sp<SkColorSpace> ColorSpaceForUnityColorSpace(int32_t colorSpace) {
+    if (colorSpace == kUnityColorSpaceLinear) {
+        return SkColorSpace::MakeSRGBLinear();
+    }
+    return SkColorSpace::MakeSRGB();
+}
+
+DXGI_FORMAT NormalizeDxgiFormat(DXGI_FORMAT format, int32_t storageSrgb, int32_t preferredFormat) {
     switch (format) {
         case DXGI_FORMAT_B8G8R8A8_TYPELESS:
-            return srgb != 0 ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : DXGI_FORMAT_B8G8R8A8_UNORM;
+            return storageSrgb != 0 ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : DXGI_FORMAT_B8G8R8A8_UNORM;
         case DXGI_FORMAT_R8G8B8A8_TYPELESS:
-            return srgb != 0 ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
+            return storageSrgb != 0 ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
         case DXGI_FORMAT_UNKNOWN:
             if (preferredFormat == 2) {
-                return srgb != 0 ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
+                return storageSrgb != 0 ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
             }
-            return srgb != 0 ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : DXGI_FORMAT_B8G8R8A8_UNORM;
+            return storageSrgb != 0 ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : DXGI_FORMAT_B8G8R8A8_UNORM;
         default:
             return format;
     }
@@ -367,28 +377,28 @@ SkColorType ColorTypeForFormat(DXGI_FORMAT format) {
     }
 }
 
-sk_sp<SkColorSpace> ColorSpaceForFormat(DXGI_FORMAT format, int32_t srgb) {
-    if (srgb != 0 || format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB || format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) {
+sk_sp<SkColorSpace> ColorSpaceForFormat(DXGI_FORMAT format, int32_t colorSpace) {
+    if (format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB || format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) {
         return SkColorSpace::MakeSRGB();
     }
-    return nullptr;
+    return ColorSpaceForUnityColorSpace(colorSpace);
 }
 
-DXGI_FORMAT PreferredDxgiFormat(int32_t srgb, int32_t preferredFormat) {
-    return NormalizeDxgiFormat(DXGI_FORMAT_UNKNOWN, srgb, preferredFormat);
+DXGI_FORMAT PreferredDxgiFormat(int32_t storageSrgb, int32_t preferredFormat) {
+    return NormalizeDxgiFormat(DXGI_FORMAT_UNKNOWN, storageSrgb, preferredFormat);
 }
 
 bool CreateD3D12TextureResource(ID3D12Device* device,
                                 int32_t width,
                                 int32_t height,
-                                int32_t srgb,
+                                int32_t storageSrgb,
                                 int32_t preferredFormat,
                                 gr_cp<ID3D12Resource>& resource) {
     if (device == nullptr || width <= 0 || height <= 0) {
         return false;
     }
 
-    DXGI_FORMAT format = PreferredDxgiFormat(srgb, preferredFormat);
+    DXGI_FORMAT format = PreferredDxgiFormat(storageSrgb, preferredFormat);
     if (!IsSupportedDxgiFormat(format)) {
         MILESTROLOG_ERROR("Unsupported Milestro D3D12 external texture format {}.", static_cast<unsigned int>(format));
         return false;
@@ -567,11 +577,13 @@ bool CachedRenderTargetMatches(const CachedRenderTarget& cached,
                                uint32_t sampleCount,
                                uint32_t levelCount,
                                unsigned int sampleQuality,
-                               int32_t srgb) {
+                               int32_t colorSpace,
+                               int32_t storageSrgb) {
     return cached.surface != nullptr && cached.resource.get() == resource && cached.device == device &&
            cached.queue == queue && cached.width == desc.Width && cached.height == desc.Height &&
            cached.format == format && cached.sampleCount == sampleCount && cached.levelCount == levelCount &&
-           cached.sampleQuality == sampleQuality && cached.srgb == srgb;
+           cached.sampleQuality == sampleQuality && cached.colorSpace == colorSpace &&
+           cached.storageSrgb == storageSrgb;
 }
 
 CachedRenderTarget* FindCachedRenderTarget(ID3D12Device* device,
@@ -582,7 +594,8 @@ CachedRenderTarget* FindCachedRenderTarget(ID3D12Device* device,
                                            uint32_t sampleCount,
                                            uint32_t levelCount,
                                            unsigned int sampleQuality,
-                                           int32_t srgb) {
+                                           int32_t colorSpace,
+                                           int32_t storageSrgb) {
     for (CachedRenderTarget& cached: gCachedRenderTargets) {
         if (CachedRenderTargetMatches(cached,
                                       device,
@@ -593,7 +606,8 @@ CachedRenderTarget* FindCachedRenderTarget(ID3D12Device* device,
                                       sampleCount,
                                       levelCount,
                                       sampleQuality,
-                                      srgb)) {
+                                      colorSpace,
+                                      storageSrgb)) {
             return &cached;
         }
     }
@@ -609,11 +623,20 @@ CachedRenderTarget* GetOrCreateCachedRenderTarget(GrDirectContext* context,
                                                   uint32_t sampleCount,
                                                   uint32_t levelCount,
                                                   unsigned int sampleQuality,
-                                                  int32_t srgb,
+                                                  int32_t colorSpace,
+                                                  int32_t storageSrgb,
                                                   D3D12_RESOURCE_STATES initialState,
                                                   uint64_t renderSerial) {
-    CachedRenderTarget* cached =
-            FindCachedRenderTarget(device, queue, resource, desc, format, sampleCount, levelCount, sampleQuality, srgb);
+    CachedRenderTarget* cached = FindCachedRenderTarget(device,
+                                                        queue,
+                                                        resource,
+                                                        desc,
+                                                        format,
+                                                        sampleCount,
+                                                        levelCount,
+                                                        sampleQuality,
+                                                        colorSpace,
+                                                        storageSrgb);
     if (cached != nullptr) {
         MILESTROLOG_INFO("Reusing cached Skia D3D12 render target: event={}, resource={}, surface={}.",
                          renderSerial,
@@ -633,7 +656,8 @@ CachedRenderTarget* GetOrCreateCachedRenderTarget(GrDirectContext* context,
     created.sampleCount = sampleCount;
     created.levelCount = levelCount;
     created.sampleQuality = sampleQuality;
-    created.srgb = srgb;
+    created.colorSpace = colorSpace;
+    created.storageSrgb = storageSrgb;
 
     GrD3DTextureResourceInfo textureInfo;
     textureInfo.fResource.retain(resource);
@@ -647,7 +671,7 @@ CachedRenderTarget* GetOrCreateCachedRenderTarget(GrDirectContext* context,
                                                           created.renderTarget,
                                                           kTopLeft_GrSurfaceOrigin,
                                                           ColorTypeForFormat(format),
-                                                          ColorSpaceForFormat(format, srgb),
+                                                          ColorSpaceForFormat(format, colorSpace),
                                                           nullptr);
     if (created.surface == nullptr) {
         MILESTROLOG_ERROR("Failed to wrap Unity ID3D12Resource as Skia render target.");
@@ -765,7 +789,11 @@ void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
     ConfigureRenderEvent(renderEventId);
 }
 
-int64_t CreateExternalTexture(int32_t width, int32_t height, int32_t srgb, int32_t preferredFormat, void*& texture) {
+int64_t CreateExternalTexture(int32_t width,
+                              int32_t height,
+                              int32_t storageSrgb,
+                              int32_t preferredFormat,
+                              void*& texture) {
     texture = nullptr;
 
     if (width <= 0 || height <= 0) {
@@ -780,7 +808,7 @@ int64_t CreateExternalTexture(int32_t width, int32_t height, int32_t srgb, int32
     }
 
     gr_cp<ID3D12Resource> resource;
-    if (!CreateD3D12TextureResource(device, width, height, srgb, preferredFormat, resource)) {
+    if (!CreateD3D12TextureResource(device, width, height, storageSrgb, preferredFormat, resource)) {
         return MILESTRO_API_RET_FAILED;
     }
 
@@ -869,7 +897,7 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
                      FormatLuid(resourceDevice->GetAdapterLuid()));
 
     D3D12_RESOURCE_DESC desc = resource->GetDesc();
-    DXGI_FORMAT format = NormalizeDxgiFormat(desc.Format, payload.srgb, payload.preferredFormat);
+    DXGI_FORMAT format = NormalizeDxgiFormat(desc.Format, payload.storageSrgb, payload.preferredFormat);
     const uint32_t sampleCount = desc.SampleDesc.Count == 0 ? 1 : desc.SampleDesc.Count;
     const uint32_t levelCount = desc.MipLevels == 0 ? 1 : desc.MipLevels;
     const unsigned int sampleQuality = desc.SampleDesc.Quality;
@@ -878,7 +906,7 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
                      "payload={}x{}, desc={}x{}, "
                      "dimension={}, format={}, normalizedFormat={}, sampleCount={}, sampleQuality={}, mipLevels={}, "
                      "flags=0x{:x}, "
-                     "srgb={}, preferredFormat={}, renderBufferHandle={}, nativeTextureHandle={}.",
+                     "colorSpace={}, storageSrgb={}, preferredFormat={}, renderBufferHandle={}, nativeTextureHandle={}.",
                      renderSerial,
                      TextureSourceName(texture.source),
                      static_cast<void*>(resource),
@@ -895,7 +923,8 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
                      sampleQuality,
                      levelCount,
                      static_cast<unsigned int>(desc.Flags),
-                     payload.srgb,
+                     payload.colorSpace,
+                     payload.storageSrgb,
                      payload.preferredFormat,
                      payload.colorRenderBufferHandle,
                      payload.nativeTextureHandle);
@@ -950,7 +979,8 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
                                                                sampleCount,
                                                                levelCount,
                                                                sampleQuality,
-                                                               payload.srgb,
+                                                               payload.colorSpace,
+                                                               payload.storageSrgb,
                                                                skiaInitialState,
                                                                renderSerial);
     if (cached == nullptr || cached->surface == nullptr) {

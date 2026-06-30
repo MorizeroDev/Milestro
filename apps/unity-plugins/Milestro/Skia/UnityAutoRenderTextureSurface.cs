@@ -9,7 +9,9 @@ namespace Milestro.Skia
         private readonly UnitySkiaRenderTextureSurface surface;
 
         public UnitySkiaGraphicsBackend Backend => surface.Backend;
-        public bool Srgb => surface.Srgb;
+        public UnityEngine.ColorSpace ColorSpace => surface.ColorSpace;
+        public bool UseSrgbStorage => surface.UseSrgbStorage;
+
         public Rect DisplayUvRect => surface.DisplayUvRect;
         public Texture Texture => surface.Texture;
         public RenderTexture RenderTexture => surface.RenderTexture;
@@ -25,6 +27,11 @@ namespace Milestro.Skia
         public UnityAutoRenderTextureSurface(int width, int height, bool srgb)
         {
             surface = new UnitySkiaRenderTextureSurface(SelectBackendForCurrentGraphicsDevice(), width, height, srgb);
+        }
+
+        public UnityAutoRenderTextureSurface(int width, int height, UnityEngine.ColorSpace colorSpace)
+        {
+            surface = new UnitySkiaRenderTextureSurface(SelectBackendForCurrentGraphicsDevice(), width, height, colorSpace);
         }
 
         public static UnitySkiaGraphicsBackend SelectBackendForCurrentGraphicsDevice()

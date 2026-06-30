@@ -28,6 +28,8 @@ IUnityGraphicsMetalV1* gMetalV1 = nullptr;
 sk_sp<GrDirectContext> gDirectContext;
 id<MTLCommandQueue> gDirectContextQueue = nil;
 
+constexpr int32_t kUnityColorSpaceLinear = 1;
+
 id<MTLDevice> MetalDevice() {
     if (gMetalV2 != nullptr) {
         return gMetalV2->MetalDevice();
@@ -121,12 +123,14 @@ SkColorType ColorTypeForTexture(id<MTLTexture> texture) {
     }
 }
 
-sk_sp<SkColorSpace> ColorSpaceForTexture(id<MTLTexture> texture, int32_t srgb) {
-    if (srgb != 0 || texture.pixelFormat == MTLPixelFormatBGRA8Unorm_sRGB ||
-        texture.pixelFormat == MTLPixelFormatRGBA8Unorm_sRGB) {
+sk_sp<SkColorSpace> ColorSpaceForTexture(id<MTLTexture> texture, int32_t colorSpace) {
+    if (texture.pixelFormat == MTLPixelFormatBGRA8Unorm_sRGB || texture.pixelFormat == MTLPixelFormatRGBA8Unorm_sRGB) {
         return SkColorSpace::MakeSRGB();
     }
-    return nullptr;
+    if (colorSpace == kUnityColorSpaceLinear) {
+        return SkColorSpace::MakeSRGBLinear();
+    }
+    return SkColorSpace::MakeSRGB();
 }
 
 } // namespace
@@ -186,7 +190,7 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
                                                                    renderTarget,
                                                                    kTopLeft_GrSurfaceOrigin,
                                                                    ColorTypeForTexture(texture),
-                                                                   ColorSpaceForTexture(texture, payload.srgb),
+                                                                   ColorSpaceForTexture(texture, payload.colorSpace),
                                                                    nullptr);
     if (surface == nullptr) {
         MILESTROLOG_ERROR("Failed to wrap Unity MTLTexture as Skia render target.");

@@ -25,10 +25,10 @@ int64_t FrameworkBindingMilestroUnityRenderGetRenderTextureEventId(int32_t graph
 
 int64_t FrameworkBindingMilestroUnityRenderCreateD3D12ExternalTexture(int32_t width,
                                                                       int32_t height,
-                                                                      int32_t srgb,
+                                                                      int32_t storageSrgb,
                                                                       int32_t preferredFormat,
                                                                       [[milize::CSharpType("IntPtr")]] void*& texture) {
-    return MilestroUnityRenderCreateD3D12ExternalTexture(width, height, srgb, preferredFormat, texture);
+    return MilestroUnityRenderCreateD3D12ExternalTexture(width, height, storageSrgb, preferredFormat, texture);
 }
 
 int64_t FrameworkBindingMilestroUnityRenderDestroyD3D12ExternalTexture(

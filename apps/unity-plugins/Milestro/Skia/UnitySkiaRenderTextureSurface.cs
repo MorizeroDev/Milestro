@@ -24,7 +24,8 @@ namespace Milestro.Skia
             public IntPtr NativeTextureHandle;
             public int Width;
             public int Height;
-            public int Srgb;
+            public int ColorSpace;
+            public int StorageSrgb;
             public int ClearBeforeDraw;
             public int MsaaSamples;
             public int ResolveStrategy;
@@ -95,7 +96,9 @@ namespace Milestro.Skia
         private bool disposed;
 
         public UnitySkiaGraphicsBackend Backend { get; }
-        public bool Srgb => descriptor.Srgb;
+        public UnityEngine.ColorSpace ColorSpace => descriptor.ColorSpace;
+        public bool UseSrgbStorage => descriptor.UseSrgbStorage;
+
         public Rect DisplayUvRect => DisplayUvRectForBackend(Backend);
         public Texture Texture { get; private set; }
         public RenderTexture RenderTexture { get; private set; }
@@ -110,6 +113,14 @@ namespace Milestro.Skia
 
         public UnitySkiaRenderTextureSurface(UnitySkiaGraphicsBackend backend, int width, int height, bool srgb)
             : this(backend, new UnitySkiaRenderTextureDescriptor(width, height, srgb))
+        {
+        }
+
+        public UnitySkiaRenderTextureSurface(UnitySkiaGraphicsBackend backend,
+            int width,
+            int height,
+            UnityEngine.ColorSpace colorSpace)
+            : this(backend, new UnitySkiaRenderTextureDescriptor(width, height, colorSpace))
         {
         }
 
@@ -129,8 +140,9 @@ namespace Milestro.Skia
             ThrowIfDisposed();
             CollectCompletedEvents();
 
-            descriptor = NormalizeDescriptor(new UnitySkiaRenderTextureDescriptor(width, height, descriptor.Srgb)
+            descriptor = NormalizeDescriptor(new UnitySkiaRenderTextureDescriptor(width, height, descriptor.ColorSpace)
             {
+                UseSrgbStorage = descriptor.UseSrgbStorage,
                 ClearBeforeDraw = descriptor.ClearBeforeDraw,
                 MsaaSamples = descriptor.MsaaSamples,
                 ResolveStrategy = descriptor.ResolveStrategy,
@@ -157,7 +169,7 @@ namespace Milestro.Skia
                 msaaSamples = 1,
                 useMipMap = false,
                 autoGenerateMips = false,
-                sRGB = descriptor.Srgb
+                sRGB = descriptor.UseSrgbStorage
             };
             RenderTexture = new RenderTexture(renderTextureDescriptor)
             {
@@ -221,7 +233,8 @@ namespace Milestro.Skia
                 NativeTextureHandle = nativeTextureHandle,
                 Width = Width,
                 Height = Height,
-                Srgb = descriptor.Srgb ? 1 : 0,
+                ColorSpace = (int)descriptor.ColorSpace,
+                StorageSrgb = descriptor.UseSrgbStorage ? 1 : 0,
                 ClearBeforeDraw = (clearBeforeDraw ?? descriptor.ClearBeforeDraw) ? 1 : 0,
                 MsaaSamples = descriptor.MsaaSamples,
                 ResolveStrategy = (int)descriptor.ResolveStrategy,
@@ -399,7 +412,7 @@ namespace Milestro.Skia
         {
             d3d12ExternalTexture = CreateD3D12ExternalTextureHandle(Width,
                 Height,
-                descriptor.Srgb ? 1 : 0,
+                descriptor.UseSrgbStorage ? 1 : 0,
                 (int)descriptor.PreferredFormat);
             if (d3d12ExternalTexture == IntPtr.Zero)
             {
@@ -412,7 +425,7 @@ namespace Milestro.Skia
                     Height,
                     TextureFormatForDescriptor(descriptor),
                     false,
-                    !descriptor.Srgb,
+                    !descriptor.UseSrgbStorage,
                     d3d12ExternalTexture);
                 ConfigureDisplayTexture(Texture);
             }
@@ -435,12 +448,12 @@ namespace Milestro.Skia
             Texture.name = "Milestro " + Backend + " ExternalTexture PoC";
         }
 
-        private static IntPtr CreateD3D12ExternalTextureHandle(int width, int height, int srgb, int preferredFormat)
+        private static IntPtr CreateD3D12ExternalTextureHandle(int width, int height, int storageSrgb, int preferredFormat)
         {
             IntPtr texture;
             ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderCreateD3D12ExternalTexture(width,
                 height,
-                srgb,
+                storageSrgb,
                 preferredFormat,
                 out texture));
             return texture;

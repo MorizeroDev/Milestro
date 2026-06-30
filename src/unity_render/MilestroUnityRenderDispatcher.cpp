@@ -245,7 +245,7 @@ int64_t GetRenderTextureEventIdForExport(int32_t graphicsBackend, int32_t& event
 
 int64_t CreateD3D12ExternalTextureForExport(int32_t width,
                                             int32_t height,
-                                            int32_t srgb,
+                                            int32_t storageSrgb,
                                             int32_t preferredFormat,
                                             void*& texture) {
 #if defined(_WIN32)
@@ -256,11 +256,11 @@ int64_t CreateD3D12ExternalTextureForExport(int32_t width,
         return MILESTRO_API_RET_FAILED;
     }
 
-    return d3d12::CreateExternalTexture(width, height, srgb, preferredFormat, texture);
+    return d3d12::CreateExternalTexture(width, height, storageSrgb, preferredFormat, texture);
 #else
     (void) width;
     (void) height;
-    (void) srgb;
+    (void) storageSrgb;
     (void) preferredFormat;
     texture = nullptr;
     MILESTROLOG_ERROR("Milestro D3D12 external texture is only available on Windows.");

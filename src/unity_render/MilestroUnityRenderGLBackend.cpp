@@ -54,6 +54,7 @@ namespace {
 constexpr int32_t kRenderTextureFormatAuto = 0;
 constexpr int32_t kRenderTextureFormatBgra32 = 1;
 constexpr int32_t kRenderTextureFormatRgba32 = 2;
+constexpr int32_t kUnityColorSpaceLinear = 1;
 
 sk_sp<GrDirectContext> gDirectContext;
 uint64_t gRenderSerial = 0;
@@ -190,7 +191,7 @@ bool FormatForPayload(const MilestroUnityRenderTargetPayload& payload, GrGLenum&
     switch (payload.preferredFormat) {
         case kRenderTextureFormatAuto:
         case kRenderTextureFormatRgba32:
-            format = payload.srgb != 0 ? GL_SRGB8_ALPHA8 : GL_RGBA8;
+            format = payload.storageSrgb != 0 ? GL_SRGB8_ALPHA8 : GL_RGBA8;
             colorType = kRGBA_8888_SkColorType;
             return true;
         case kRenderTextureFormatBgra32:
@@ -203,10 +204,13 @@ bool FormatForPayload(const MilestroUnityRenderTargetPayload& payload, GrGLenum&
 }
 
 sk_sp<SkColorSpace> ColorSpaceForPayload(const MilestroUnityRenderTargetPayload& payload) {
-    if (payload.srgb != 0) {
+    if (payload.storageSrgb != 0) {
         return SkColorSpace::MakeSRGB();
     }
-    return nullptr;
+    if (payload.colorSpace == kUnityColorSpaceLinear) {
+        return SkColorSpace::MakeSRGBLinear();
+    }
+    return SkColorSpace::MakeSRGB();
 }
 
 class GLStateGuard {
@@ -442,7 +446,7 @@ int64_t Render(const MilestroUnityRenderSubmission& submission, UnityGfxRenderer
     }
 
     MILESTROLOG_INFO("Milestro GL wrap target: event={}, renderer={}, texture={}, fbo={}, size={}x{}, "
-                     "format=0x{:x}, srgb={}, preferredFormat={}.",
+                     "format=0x{:x}, colorSpace={}, storageSrgb={}, preferredFormat={}.",
                      renderSerial,
                      RendererName(renderer),
                      textureName,
@@ -450,7 +454,8 @@ int64_t Render(const MilestroUnityRenderSubmission& submission, UnityGfxRenderer
                      payload.width,
                      payload.height,
                      static_cast<unsigned int>(format),
-                     payload.srgb,
+                     payload.colorSpace,
+                     payload.storageSrgb,
                      payload.preferredFormat);
 
     milestro::unity_render::DrawSubmission(surface->getCanvas(), submission);

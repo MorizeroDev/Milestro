@@ -29,8 +29,11 @@ namespace Milestro.Binding {
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderCreateD3D12ExternalTexture")]
-        internal static extern unsafe long
-        UnityRenderCreateD3D12ExternalTexture(int width, int height, int srgb, int preferredFormat, out IntPtr texture);
+        internal static extern unsafe long UnityRenderCreateD3D12ExternalTexture(int width,
+                                                                                 int height,
+                                                                                 int storageSrgb,
+                                                                                 int preferredFormat,
+                                                                                 out IntPtr texture);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderDestroyD3D12ExternalTexture")]

@@ -10,7 +10,8 @@ struct MilestroUnityRenderTargetPayload {
     void* nativeTextureHandle = nullptr;
     int32_t width = 0;
     int32_t height = 0;
-    int32_t srgb = 0;
+    int32_t colorSpace = 0;
+    int32_t storageSrgb = 0;
     int32_t clearBeforeDraw = 1;
     int32_t msaaSamples = 1;
     int32_t resolveStrategy = 0;

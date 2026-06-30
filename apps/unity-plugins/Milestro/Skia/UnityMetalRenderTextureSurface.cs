@@ -7,7 +7,9 @@ namespace Milestro.Skia
     {
         private readonly UnitySkiaRenderTextureSurface surface;
 
-        public bool Srgb => surface.Srgb;
+        public UnityEngine.ColorSpace ColorSpace => surface.ColorSpace;
+        public bool UseSrgbStorage => surface.UseSrgbStorage;
+
         public Rect DisplayUvRect => surface.DisplayUvRect;
         public Texture Texture => surface.Texture;
         public RenderTexture RenderTexture => surface.RenderTexture;
@@ -23,6 +25,11 @@ namespace Milestro.Skia
         public UnityMetalRenderTextureSurface(int width, int height, bool srgb)
         {
             surface = new UnitySkiaRenderTextureSurface(UnitySkiaGraphicsBackend.Metal, width, height, srgb);
+        }
+
+        public UnityMetalRenderTextureSurface(int width, int height, UnityEngine.ColorSpace colorSpace)
+        {
+            surface = new UnitySkiaRenderTextureSurface(UnitySkiaGraphicsBackend.Metal, width, height, colorSpace);
         }
 
         public void Resize(int width, int height)

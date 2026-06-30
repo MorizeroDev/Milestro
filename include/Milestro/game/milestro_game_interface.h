@@ -33,7 +33,7 @@ MILESTRO_API int64_t MilestroUnityRenderGetMetalRenderEventId(int32_t &eventId);
 MILESTRO_API int64_t MilestroUnityRenderGetRenderTextureEventId(int32_t graphicsBackend, int32_t &eventId);
 MILESTRO_API int64_t MilestroUnityRenderCreateD3D12ExternalTexture(int32_t width,
                                                                    int32_t height,
-                                                                   int32_t srgb,
+                                                                   int32_t storageSrgb,
                                                                    int32_t preferredFormat,
                                                                    [[milize::CSharpType("IntPtr")]] void *&texture);
 MILESTRO_API int64_t MilestroUnityRenderDestroyD3D12ExternalTexture(
