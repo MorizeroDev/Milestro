@@ -307,11 +307,10 @@ namespace Milestro.Skia
                 case UnitySkiaGraphicsBackend.Metal:
                     return RenderTextureHandleKind.RenderBuffer;
                 case UnitySkiaGraphicsBackend.Direct3D12:
+                case UnitySkiaGraphicsBackend.Vulkan:
                 case UnitySkiaGraphicsBackend.OpenGL:
                 case UnitySkiaGraphicsBackend.OpenGLES:
                     return RenderTextureHandleKind.NativeTexture;
-                case UnitySkiaGraphicsBackend.Vulkan:
-                    throw new NotSupportedException("Milestro Unity Skia RenderTexture backend is reserved but not implemented: " + backend);
                 default:
                     throw new ArgumentOutOfRangeException(nameof(backend), backend, "Unknown Milestro Unity Skia RenderTexture backend.");
             }
@@ -573,7 +572,11 @@ namespace Milestro.Skia
                     }
                     return;
                 case UnitySkiaGraphicsBackend.Vulkan:
-                    throw new NotSupportedException("Milestro Unity Skia RenderTexture backend is reserved but not implemented: " + backend);
+                    if (SystemInfo.graphicsDeviceType != GraphicsDeviceType.Vulkan)
+                    {
+                        throw new NotSupportedException("Milestro Unity Skia RenderTexture Vulkan backend requires Unity Vulkan.");
+                    }
+                    return;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(backend), backend, "Unknown Milestro Unity Skia RenderTexture backend.");
             }

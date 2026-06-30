@@ -21,6 +21,10 @@
 #include "unity_render/MilestroUnityRenderGLBackend.h"
 #endif
 
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+#include "unity_render/MilestroUnityRenderVulkanBackend.h"
+#endif
+
 namespace milestro::unity_render {
 
 namespace {
@@ -28,7 +32,8 @@ namespace {
 constexpr int kMetalDrawEventOffset = 0;
 constexpr int kD3D12DrawEventOffset = 1;
 constexpr int kGLDrawEventOffset = 2;
-constexpr int kReservedEventCount = 3;
+constexpr int kVulkanDrawEventOffset = 3;
+constexpr int kReservedEventCount = 4;
 
 IUnityInterfaces* gUnityInterfaces = nullptr;
 IUnityGraphics* gUnityGraphics = nullptr;
@@ -66,6 +71,13 @@ void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType
 
 #if defined(MILESTRO_ENABLE_UNITY_GL_RENDER)
     gl::OnGraphicsDeviceEvent(eventType, gUnityInterfaces, gRenderer);
+#endif
+
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    vulkan::OnGraphicsDeviceEvent(eventType,
+                                  gUnityInterfaces,
+                                  gRenderer,
+                                  gEventBase >= 0 ? gEventBase + kVulkanDrawEventOffset : -1);
 #endif
 }
 
@@ -177,6 +189,33 @@ void UNITY_INTERFACE_API OnRenderEvent(int eventId, void* data) {
         return;
     }
 
+    if (eventOffset == kVulkanDrawEventOffset) {
+        if (target.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan)) {
+            MILESTROLOG_ERROR("Milestro Vulkan render event received backend {}.", target.graphicsBackend);
+            MarkSubmissionCompleted(submission);
+            return;
+        }
+
+        if (gRenderer != kUnityGfxRendererVulkan) {
+            MILESTROLOG_ERROR("Milestro Vulkan render event invoked while Unity renderer is {}.",
+                              static_cast<int>(gRenderer));
+            MarkSubmissionCompleted(submission);
+            return;
+        }
+
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+        const auto status = vulkan::Render(*submission);
+        if (status < 0) {
+            MILESTROLOG_ERROR("Milestro Vulkan render event failed: {}", status);
+        }
+        MarkSubmissionCompleted(submission);
+#else
+        MILESTROLOG_ERROR("Milestro Vulkan render backend is not enabled in this Milestro build.");
+        MarkSubmissionCompleted(submission);
+#endif
+        return;
+    }
+
     MILESTROLOG_WARN("Ignoring unknown Milestro Unity render event: {}", eventId);
     MarkSubmissionCompleted(submission);
 }
@@ -219,9 +258,14 @@ int64_t RenderTextureEventId(int32_t graphicsBackend, int32_t& eventId) {
             return MILESTRO_API_RET_FAILED;
 #endif
         case MilestroUnityGraphicsBackend::Vulkan:
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+            eventId = gEventBase + kVulkanDrawEventOffset;
+            return MILESTRO_API_RET_OK;
+#else
             eventId = -1;
-            MILESTROLOG_ERROR("Milestro Unity render backend {} is reserved but not implemented.", graphicsBackend);
+            MILESTROLOG_ERROR("Milestro Unity Vulkan render backend is not enabled in this build.");
             return MILESTRO_API_RET_FAILED;
+#endif
         default:
             eventId = -1;
             MILESTROLOG_ERROR("Milestro Unity render backend {} is unknown.", graphicsBackend);
