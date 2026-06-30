@@ -110,7 +110,7 @@ namespace Milestro.RichTextParser
         {
             var settings = new XmlReaderSettings
             {
-                DtdProcessing = DtdProcessing.Parse,
+                DtdProcessing = DtdProcessing.Prohibit,
                 ConformanceLevel = ConformanceLevel.Fragment
             };
 

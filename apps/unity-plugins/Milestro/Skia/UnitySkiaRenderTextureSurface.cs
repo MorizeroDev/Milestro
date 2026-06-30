@@ -433,11 +433,18 @@ namespace Milestro.Skia
                 return false;
             }
 
-            nativeTextureHandle = Backend == UnitySkiaGraphicsBackend.Direct3D12 && d3d12ExternalTexture != IntPtr.Zero
-                ? d3d12ExternalTexture
-                : Texture != null
-                    ? Texture.GetNativeTexturePtr()
-                    : IntPtr.Zero;
+            if (Backend == UnitySkiaGraphicsBackend.Direct3D12 && d3d12ExternalTexture != IntPtr.Zero)
+            {
+                nativeTextureHandle = d3d12ExternalTexture;
+            }
+            else if (Texture != null)
+            {
+                nativeTextureHandle = Texture.GetNativeTexturePtr();
+            }
+            else
+            {
+                nativeTextureHandle = IntPtr.Zero;
+            }
             if (nativeTextureHandle != IntPtr.Zero)
             {
                 return true;
