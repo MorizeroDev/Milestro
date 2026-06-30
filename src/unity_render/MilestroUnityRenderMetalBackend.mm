@@ -2,6 +2,7 @@
 
 #include "game/milestro_game_retcode.h"
 #include "unity_render/MilestroUnityRenderSubmissionDraw.h"
+#include "unity_render/MilestroUnityRenderTextureHandleKind.h"
 
 #include <IUnityGraphicsMetal.h>
 #include <Milestro/log/log.h>
@@ -65,6 +66,25 @@ id<MTLTexture> TextureFromRenderBuffer(void* renderBufferHandle) {
         UnityRenderBuffer renderBuffer = gMetalV1->RenderBufferFromHandle(renderBufferHandle);
         return gMetalV1->TextureFromRenderBuffer(renderBuffer);
     }
+    return nil;
+}
+
+id<MTLTexture> TextureFromNativeTexture(void* nativeTextureHandle) {
+    if (nativeTextureHandle == nullptr) {
+        return nil;
+    }
+
+    return (__bridge id<MTLTexture>) nativeTextureHandle;
+}
+
+id<MTLTexture> TextureFromPayload(const MilestroUnityRenderTargetPayload& payload) {
+    if (payload.handleKind == static_cast<int32_t>(MilestroUnityRenderTextureHandleKind::RenderBuffer)) {
+        return TextureFromRenderBuffer(payload.colorRenderBufferHandle);
+    }
+    if (payload.handleKind == static_cast<int32_t>(MilestroUnityRenderTextureHandleKind::NativeTexture)) {
+        return TextureFromNativeTexture(payload.nativeTextureHandle);
+    }
+
     return nil;
 }
 
@@ -163,8 +183,8 @@ void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
 int64_t Render(const MilestroUnityRenderSubmission& submission) {
     const MilestroUnityRenderTargetPayload& payload = submission.target;
 
-    if (payload.colorRenderBufferHandle == nullptr || payload.width <= 0 || payload.height <= 0) {
-        MILESTROLOG_ERROR("Invalid Milestro Metal render payload.");
+    if (payload.width <= 0 || payload.height <= 0) {
+        MILESTROLOG_ERROR("Negative or zero width or height provided.");
         return MILESTRO_API_RET_FAILED;
     }
 
@@ -173,9 +193,13 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
         return MILESTRO_API_RET_FAILED;
     }
 
-    id<MTLTexture> texture = TextureFromRenderBuffer(payload.colorRenderBufferHandle);
+    id<MTLTexture> texture = TextureFromPayload(payload);
     if (texture == nil) {
-        MILESTROLOG_ERROR("Failed to resolve Unity RenderBuffer to MTLTexture.");
+        MILESTROLOG_ERROR("Failed to resolve Unity Metal texture. handleKind={}, renderBufferHandle={}, "
+                          "nativeTextureHandle={}.",
+                          payload.handleKind,
+                          payload.colorRenderBufferHandle,
+                          payload.nativeTextureHandle);
         return MILESTRO_API_RET_FAILED;
     }
 

@@ -4,6 +4,9 @@ using Milestro.Extensions;
 using Milestro.Model;
 using Milestro.Skia;
 using Milestro.Skia.TextLayout;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -45,6 +48,9 @@ namespace Milestro.Components
         [NonSerialized] private MilestroImage image;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
         [NonSerialized] private bool m_havePropertiesChanged = true;
+#if UNITY_EDITOR
+        [NonSerialized] private bool m_editorRebuildQueued;
+#endif
         [NonSerialized] private int layoutWidth = 640;
         [NonSerialized] private Vector2 paragraphPosition = new Vector2(640, 640);
 
@@ -170,9 +176,37 @@ namespace Milestro.Components
         {
             if (isActiveAndEnabled)
             {
-                RebuildResources(forceText: false);
+                m_havePropertiesChanged = true;
+                SetVerticesDirty();
+#if UNITY_EDITOR
+                QueueEditorRebuild();
+#endif
             }
         }
+
+#if UNITY_EDITOR
+        private void QueueEditorRebuild()
+        {
+            if (Application.isPlaying || m_editorRebuildQueued)
+            {
+                return;
+            }
+
+            m_editorRebuildQueued = true;
+            EditorApplication.delayCall += RebuildResourcesFromEditorDelayCall;
+        }
+
+        private void RebuildResourcesFromEditorDelayCall()
+        {
+            m_editorRebuildQueued = false;
+            if (!this || !isActiveAndEnabled)
+            {
+                return;
+            }
+
+            RebuildResources(forceText: false);
+        }
+#endif
 
         private void RebuildResources(bool forceText)
         {
@@ -206,7 +240,11 @@ namespace Milestro.Components
                 UvRect = surface.DisplayUvRect;
                 ValidateMargin();
                 ResizeParagraph(paragraph);
-                surface.Submit(BuildRenderCommands());
+                if (!surface.TrySubmit(BuildRenderCommands()))
+                {
+                    m_havePropertiesChanged = true;
+                    return;
+                }
             }
 
             m_havePropertiesChanged = false;

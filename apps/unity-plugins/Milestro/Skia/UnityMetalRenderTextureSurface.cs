@@ -47,6 +47,11 @@ namespace Milestro.Skia
             surface.Submit(commands, clearBeforeDraw);
         }
 
+        public bool TrySubmit(UnitySkiaRenderCommandList commands, bool clearBeforeDraw = true)
+        {
+            return surface.TrySubmit(commands, clearBeforeDraw);
+        }
+
         public void Dispose()
         {
             surface.Dispose();

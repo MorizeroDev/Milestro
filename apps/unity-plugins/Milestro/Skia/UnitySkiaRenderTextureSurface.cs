@@ -93,6 +93,7 @@ namespace Milestro.Skia
         private IntPtr renderEventFunc;
         private int renderEventId;
         private IntPtr d3d12ExternalTexture;
+        private bool warnedMissingNativeTarget;
         private bool disposed;
 
         public UnitySkiaGraphicsBackend Backend { get; }
@@ -195,6 +196,11 @@ namespace Milestro.Skia
 
         public void Submit(UnitySkiaRenderCommandList commands, bool? clearBeforeDraw = null)
         {
+            TrySubmit(commands, clearBeforeDraw);
+        }
+
+        public bool TrySubmit(UnitySkiaRenderCommandList commands, bool? clearBeforeDraw = null)
+        {
             ThrowIfDisposed();
             CollectCompletedEvents();
 
@@ -213,17 +219,11 @@ namespace Milestro.Skia
                 Resize(Width, Height);
             }
 
-            var handleKind = HandleKindForBackend(Backend);
-            var colorRenderBufferHandle = handleKind == RenderTextureHandleKind.RenderBuffer && RenderTexture != null
-                ? RenderTexture.colorBuffer.GetNativeRenderBufferPtr()
-                : IntPtr.Zero;
-            var nativeTextureHandle = IntPtr.Zero;
-            if (handleKind == RenderTextureHandleKind.NativeTexture)
+            if (!TryGetNativeTargetHandles(out var handleKind, out var colorRenderBufferHandle, out var nativeTextureHandle))
             {
-                nativeTextureHandle = Backend == UnitySkiaGraphicsBackend.Direct3D12 && d3d12ExternalTexture != IntPtr.Zero
-                    ? d3d12ExternalTexture
-                    : Texture.GetNativeTexturePtr();
+                return false;
             }
+            warnedMissingNativeTarget = false;
 
             var target = new RenderTargetPayload
             {
@@ -284,6 +284,8 @@ namespace Milestro.Skia
                 }
                 throw;
             }
+
+            return true;
         }
 
         public void Dispose()
@@ -406,6 +408,55 @@ namespace Milestro.Skia
             }
 
             texture.wrapMode = TextureWrapMode.Clamp;
+        }
+
+        private bool TryGetNativeTargetHandles(out RenderTextureHandleKind handleKind,
+            out IntPtr colorRenderBufferHandle,
+            out IntPtr nativeTextureHandle)
+        {
+            handleKind = HandleKindForBackend(Backend);
+            colorRenderBufferHandle = IntPtr.Zero;
+            nativeTextureHandle = IntPtr.Zero;
+
+            if (handleKind == RenderTextureHandleKind.RenderBuffer)
+            {
+                if (RenderTexture != null)
+                {
+                    colorRenderBufferHandle = RenderTexture.colorBuffer.GetNativeRenderBufferPtr();
+                    if (colorRenderBufferHandle != IntPtr.Zero)
+                    {
+                        return true;
+                    }
+                }
+
+                WarnMissingNativeTarget();
+                return false;
+            }
+
+            nativeTextureHandle = Backend == UnitySkiaGraphicsBackend.Direct3D12 && d3d12ExternalTexture != IntPtr.Zero
+                ? d3d12ExternalTexture
+                : Texture != null
+                    ? Texture.GetNativeTexturePtr()
+                    : IntPtr.Zero;
+            if (nativeTextureHandle != IntPtr.Zero)
+            {
+                return true;
+            }
+
+            WarnMissingNativeTarget();
+            return false;
+        }
+
+        private void WarnMissingNativeTarget()
+        {
+            if (warnedMissingNativeTarget)
+            {
+                return;
+            }
+
+            warnedMissingNativeTarget = true;
+            Debug.LogWarning(
+                "Milestro skipped a RenderTexture draw because Unity did not expose a native render target handle for the current RenderTexture yet.");
         }
 
         private void CreateD3D12Texture()
