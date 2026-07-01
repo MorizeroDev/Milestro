@@ -1,8 +1,8 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace Milestro.ColorUniverse
 {
-    public   class ColorUtils
+    public class ColorUtils
     {
         public static string SerializeColor(Color color)
         {

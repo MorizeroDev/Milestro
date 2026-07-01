@@ -1,8 +1,10 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace Milestro.Binding {
-    public class BindingC {
+namespace Milestro.Binding
+{
+    public class BindingC
+    {
 #if UNITY_IOS && !UNITY_EDITOR
         private const string dllName = "__Internal";
         private const string EntryPointPrefix = "FrameworkBinding";

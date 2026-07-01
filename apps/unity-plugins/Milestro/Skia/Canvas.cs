@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Milestro.Binding;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;

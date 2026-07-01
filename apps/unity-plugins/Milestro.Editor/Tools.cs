@@ -1,31 +1,24 @@
-﻿#if UNITY_EDITOR
-using DefaultNamespace;
 using Milestro.Skia;
 using Newtonsoft.Json;
 using UnityEditor;
 using UnityEngine;
 
-public static class MilestroFontRegistryEditor
+namespace Milestro.Editor
 {
-    [MenuItem("Milestro/Font Registry/Load Fonts")]
-    public static void RegisterFonts()
+    public static class MilestroFontRegistryEditor
     {
-        FontAssetsManager.LoadFonts();
-        ListFonts();
-    }
+        [MenuItem("Milestro/Font Registry/List Registered Font Families")]
+        public static void ListFonts()
+        {
+            var statistic = FontRegistry.GetRegisteredFontFamilyNames();
+            Debug.Log(JsonConvert.SerializeObject(statistic, Formatting.Indented));
+        }
 
-    [MenuItem("Milestro/Font Registry/List Registered Font Families")]
-    public static void ListFonts()
-    {
-        var statistic = FontRegistry.GetRegisteredFontFamilyNames();
-        Debug.Log(JsonConvert.SerializeObject(statistic, Formatting.Indented));
-    }
-
-    [MenuItem("Milestro/Font Registry/List Registered Font Faces")]
-    public static void ListFontFaces()
-    {
-        var statistic = FontRegistry.GetRegisteredFontFaces();
-        Debug.Log(JsonConvert.SerializeObject(statistic, Formatting.Indented));
+        [MenuItem("Milestro/Font Registry/List Registered Font Faces")]
+        public static void ListFontFaces()
+        {
+            var statistic = FontRegistry.GetRegisteredFontFaces();
+            Debug.Log(JsonConvert.SerializeObject(statistic, Formatting.Indented));
+        }
     }
 }
-#endif

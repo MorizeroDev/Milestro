@@ -1,4 +1,4 @@
-﻿namespace Milestro.RichTextParser
+namespace Milestro.RichTextParser
 {
     public class TextSegment
     {

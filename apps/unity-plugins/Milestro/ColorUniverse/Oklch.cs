@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using UnityEngine;
 
@@ -73,7 +73,7 @@ namespace Milestro.ColorUniverse
 
         internal static Oklch ParseOklch(string ssrc)
         {
-            var src = ssrc[OklchPrefixLength ..^OklchSuffixLength];
+            var src = ssrc[OklchPrefixLength..^OklchSuffixLength];
             if (string.IsNullOrWhiteSpace(src))
             {
                 Tools.LogError($"empty Oklch: {ssrc}");

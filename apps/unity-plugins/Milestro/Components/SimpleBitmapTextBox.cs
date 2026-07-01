@@ -124,7 +124,7 @@ namespace Milestro.Components
             {
                 return;
             }
-            
+
             ParagraphStyle paragraphStyle = new ParagraphStyle();
 
             TextStyle textStyle = new TextStyle();

@@ -1,4 +1,4 @@
-﻿using Milestro.Binding;
+using Milestro.Binding;
 
 namespace Milestro.Skia.TextLayout
 {

@@ -101,8 +101,16 @@ namespace Milestro.Skia
         public bool UseSrgbStorage => descriptor.UseSrgbStorage;
 
         public Rect DisplayUvRect => DisplayUvRectForBackend(Backend);
-        public Texture Texture { get; private set; }
-        public RenderTexture RenderTexture { get; private set; }
+
+        /// <summary>
+        /// Assigned by Resize before construction returns, and null after Dispose or while rebuilding the target.
+        /// </summary>
+        public Texture? Texture { get; private set; }
+
+        /// <summary>
+        /// Null on Direct3D12, which uses an external Texture2D; non-null on Metal, Vulkan, OpenGL, and OpenGLES.
+        /// </summary>
+        public RenderTexture? RenderTexture { get; private set; }
 
         public int Width { get; private set; }
         public int Height { get; private set; }
@@ -150,7 +158,7 @@ namespace Milestro.Skia
                 PreferredFormat = descriptor.PreferredFormat
             });
 
-            if (Texture != null && Width == descriptor.Width && Height == descriptor.Height)
+            if (HasUsableTexture() && Width == descriptor.Width && Height == descriptor.Height)
             {
                 return;
             }
@@ -214,7 +222,7 @@ namespace Milestro.Skia
                 throw new InvalidOperationException("Milestro Unity render event callback is unavailable.");
             }
 
-            if (Texture == null || (RenderTexture != null && !RenderTexture.IsCreated()))
+            if (!HasUsableTexture())
             {
                 Resize(Width, Height);
             }
@@ -243,7 +251,7 @@ namespace Milestro.Skia
 
             var submissionPtr = IntPtr.Zero;
             var commandsPtr = IntPtr.Zero;
-            PendingRenderEvent pendingEvent = null;
+            PendingRenderEvent? pendingEvent = null;
             try
             {
                 commandsPtr = MarshalCommands(commands);
@@ -257,9 +265,11 @@ namespace Milestro.Skia
 
                 submissionPtr = Marshal.AllocHGlobal(Marshal.SizeOf<RenderSubmissionPayload>());
                 Marshal.StructureToPtr(submission, submissionPtr, false);
-                pendingEvent = AddPendingEvent(submissionPtr, commandsPtr, Texture, SnapshotResources(commands));
 
-                CommandBuffer cmd = null;
+                // HasUsableTexture and TryGetNativeTargetHandles above guarantee a live target texture here.
+                pendingEvent = AddPendingEvent(submissionPtr, commandsPtr, Texture!, SnapshotResources(commands));
+
+                CommandBuffer? cmd = null;
                 try
                 {
                     cmd = new CommandBuffer();
@@ -397,6 +407,11 @@ namespace Milestro.Skia
         private static Rect DisplayUvRectForBackend(UnitySkiaGraphicsBackend backend)
         {
             return new Rect(0f, 1f, 1f, -1f);
+        }
+
+        private bool HasUsableTexture()
+        {
+            return Texture != null && (RenderTexture == null || RenderTexture.IsCreated());
         }
 
         private static void ConfigureDisplayTexture(Texture texture)
@@ -676,7 +691,7 @@ namespace Milestro.Skia
 
         private static void CollectCompletedEvents()
         {
-            List<Action> releases = null;
+            List<Action>? releases = null;
 
             lock (PendingLock)
             {
@@ -767,7 +782,7 @@ namespace Milestro.Skia
             }
         }
 
-        private static void ReleaseD3D12Texture(Texture texture, IntPtr nativeTexture)
+        private static void ReleaseD3D12Texture(Texture? texture, IntPtr nativeTexture)
         {
             DestroyD3D12ExternalTextureHandle(nativeTexture);
 

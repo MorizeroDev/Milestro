@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Milestro.Binding;
@@ -33,7 +33,7 @@ namespace Milestro.Skia
             }
 
             var s = Encoding.UTF8.GetString(ret).TrimEnd('\0');
-            return JsonConvert.DeserializeObject<List<FontFamilyName>>(s);
+            return JsonConvert.DeserializeObject<List<FontFamilyName>>(s) ?? new List<FontFamilyName>();
         }
     }
 }

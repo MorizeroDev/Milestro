@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Milestro.Skia.TextLayout;
 using UnityEngine;
 
@@ -6,8 +6,8 @@ namespace Milestro.Components
 {
     public class SimpleMeshTextBox : SkParagraphMeshTextBox
     {
-        [TextArea(3, 10)] [SerializeField] string content = "";
-        
+        [TextArea(3, 10)][SerializeField] string content = "";
+
         [SerializeField] List<string> fontFamilies = new List<string>() { "Source Han Sans VF" };
         [SerializeField] float size = 36;
         [SerializeField] string locale = "zh-Hans";

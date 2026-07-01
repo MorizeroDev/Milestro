@@ -6,9 +6,9 @@ namespace Milestro.Components
 {
     public class SkParagraphMeshTextBox : MaskableGraphic
     {
-        private Paragraph paragraphField = null;
+        private Paragraph? paragraphField = null;
 
-        public Paragraph Paragraph
+        public Paragraph? Paragraph
         {
             set
             {
@@ -22,7 +22,7 @@ namespace Milestro.Components
 
         [SerializeField] public float tolerance = 0.25f;
 
-        [SerializeField] public Color color = Color.white;
+        [SerializeField] public Color textColor = Color.white;
 
         protected override void OnPopulateMesh(VertexHelper vh)
         {
@@ -40,7 +40,7 @@ namespace Milestro.Components
             vh.Clear();
             var count = vertexList.Length;
             UIVertex vert = UIVertex.simpleVert;
-            vert.color = color;
+            vert.color = textColor;
             for (int i = 0; i < count / 3 / 3; i++)
             {
                 vert.position = new Vector3(vertexList[i * 9 + 0], vertexList[i * 9 + 1], vertexList[i * 9 + 2]);

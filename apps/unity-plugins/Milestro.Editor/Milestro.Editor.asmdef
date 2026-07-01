@@ -1,9 +1,12 @@
 {
-    "name": "Milestro",
+    "name": "Milestro.Editor",
     "rootNamespace": "",
     "references": [
+        "GUID:d01a98664c1a13443b72be6ce6d0bbb1"
     ],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": true,
     "overrideReferences": false,

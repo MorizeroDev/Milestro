@@ -8,7 +8,7 @@ namespace Milestro.Components
     [RequireComponent(typeof(CanvasRenderer))]
     public abstract class SkiaRenderTextureGraphic : MaskableGraphic
     {
-        [NonSerialized] private Texture texture;
+        [NonSerialized] private Texture? texture;
         [NonSerialized] private Rect uvRect = new Rect(0, 0, 1, 1);
         [NonSerialized] private bool warnedSiblingGraphic;
 
@@ -17,7 +17,7 @@ namespace Milestro.Components
             useLegacyMeshGeneration = false;
         }
 
-        public Texture Texture
+        public Texture? Texture
         {
             get => texture;
             set

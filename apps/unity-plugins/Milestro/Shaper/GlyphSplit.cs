@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Milestro.Model;
 using Milestro.Skia.TextLayout;
 using UnityEngine;

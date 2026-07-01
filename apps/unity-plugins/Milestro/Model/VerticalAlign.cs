@@ -1,4 +1,4 @@
-﻿namespace Milestro.Model
+namespace Milestro.Model
 {
     public enum VerticalAlign
     {

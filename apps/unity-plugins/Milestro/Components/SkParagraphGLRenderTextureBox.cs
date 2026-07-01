@@ -14,10 +14,13 @@ namespace Milestro.Components
 {
     public class SkParagraphGLRenderTextureBox : SkiaRenderTextureGraphic
     {
-        [TextArea(3, 10)] [SerializeField] [FormerlySerializedAs("content")]
+        [TextArea(3, 10)]
+        [SerializeField]
+        [FormerlySerializedAs("content")]
         private string m_content = "";
 
-        [SerializeField] [FormerlySerializedAs("margin")]
+        [SerializeField]
+        [FormerlySerializedAs("margin")]
         private RectOffset m_margin = new RectOffset();
 
         // [SerializeField] [FormerlySerializedAs("paragraphPosition")]
@@ -26,25 +29,30 @@ namespace Milestro.Components
         // [SerializeField] [FormerlySerializedAs("layoutWidth")]
         // private int m_layoutWidth = 640;
 
-        [SerializeField] [FormerlySerializedAs("fontFamilies")]
+        [SerializeField]
+        [FormerlySerializedAs("fontFamilies")]
         private List<string> m_fontFamilies = new List<string>() { "Source Han Sans VF" };
 
-        [SerializeField] [FormerlySerializedAs("textAlign")]
+        [SerializeField]
+        [FormerlySerializedAs("textAlign")]
         private TextAlign m_textAlign = TextAlign.Left;
 
-        [SerializeField] [FormerlySerializedAs("size")]
+        [SerializeField]
+        [FormerlySerializedAs("size")]
         private float m_size = 36;
 
-        [SerializeField] [FormerlySerializedAs("color")]
-        private Color m_color = Color.white;
+        [SerializeField]
+        [FormerlySerializedAs("color")]
+        private Color m_textColor = Color.white;
 
-        [SerializeField] [FormerlySerializedAs("locale")]
+        [SerializeField]
+        [FormerlySerializedAs("locale")]
         private string m_locale = "zh-Hans";
 
 
         [NonSerialized] private RectTransform rectTransform;
-        [NonSerialized] private UnityAutoRenderTextureSurface surface;
-        [NonSerialized] private Paragraph paragraph;
+        [NonSerialized] private UnityAutoRenderTextureSurface? surface;
+        [NonSerialized] private Paragraph? paragraph;
         [NonSerialized] private MilestroImage image;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
         [NonSerialized] private bool m_havePropertiesChanged = true;
@@ -63,26 +71,6 @@ namespace Milestro.Components
                 m_havePropertiesChanged = true;
             }
         }
-
-        // public Vector2 paragraphPosition
-        // {
-        //     get => m_paragraphPosition;
-        //     set
-        //     {
-        //         m_paragraphPosition = value;
-        //         m_havePropertiesChanged = true;
-        //     }
-        // }
-        //
-        // public int layoutWidth
-        // {
-        //     get => m_layoutWidth;
-        //     set
-        //     {
-        //         m_layoutWidth = value;
-        //         m_havePropertiesChanged = true;
-        //     }
-        // }
 
         public List<string> fontFamilies
         {
@@ -114,12 +102,12 @@ namespace Milestro.Components
             }
         }
 
-        public Color color
+        public Color textColor
         {
-            get => m_color;
+            get => m_textColor;
             set
             {
-                m_color = value;
+                m_textColor = value;
                 m_havePropertiesChanged = true;
             }
         }
@@ -167,15 +155,17 @@ namespace Milestro.Components
         }
 
 #if UNITY_EDITOR
-        private void OnValidate()
+        protected override void OnValidate()
         {
+            base.OnValidate();
             if (surface != null) UvRect = surface.DisplayUvRect;
             m_havePropertiesChanged = true;
         }
 #endif
 
-        private void OnRectTransformDimensionsChange()
+        protected override void OnRectTransformDimensionsChange()
         {
+            base.OnRectTransformDimensionsChange();
             if (isActiveAndEnabled)
             {
                 m_havePropertiesChanged = true;
@@ -272,7 +262,7 @@ namespace Milestro.Components
             textStyle.SetFontFamilies(fontFamilies);
             textStyle.FontSize = size;
             textStyle.Locale = locale;
-            textStyle.Color = color;
+            textStyle.Color = textColor;
 
             var parser = new RichTextParser.RichTextParser();
             parser.ParseText(text ?? "");
@@ -302,14 +292,22 @@ namespace Milestro.Components
         private UnitySkiaRenderCommandList BuildRenderCommands()
         {
             var commands = new UnitySkiaRenderCommandList();
-            paragraphPosition = new Vector2(m_margin.left, m_margin.top);
-            commands.DrawParagraph(paragraph, paragraphPosition);
+            if (paragraph != null)
+            {
+                paragraphPosition = new Vector2(m_margin.left, m_margin.top);
+                commands.DrawParagraph(paragraph, paragraphPosition);
+            }
+            else
+            {
+                Debug.LogWarning("No paragraph selected");
+            }
+
             return commands;
         }
 
         private void ApplySurfaceToRawImage()
         {
-            Texture = surface.Texture;
+            Texture = surface!.Texture;
             UvRect = surface.DisplayUvRect;
         }
     }

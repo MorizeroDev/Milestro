@@ -16,8 +16,55 @@ repositories { repo() }
 val h2csSourceFile = file("include/Milestro/game/milestro_game_interface.h")
 val h2csCsharpBindingOutputFile = file("apps/unity-plugins/Milestro/Binding/BindingC.cs")
 val h2csCppFrameworkBindingOutputFile = file("apps/unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp")
+val unityPluginsFormatSolutionFile = file("apps/unity-plugins/Milestro.UnityPlugins.Format.slnx")
 
 tasks {
+    register("format-cs") {
+        group = "formatting"
+        description = "Formats C# files under apps/unity-plugins with dotnet format."
+
+        doLast {
+            if (!hasDotnetFormat()) {
+                logger.lifecycle("dotnet format not found; skipping C# formatting.")
+                return@doLast
+            }
+
+            val sourceFiles = fileTree("apps/unity-plugins") {
+                include("**/*.cs")
+            }.files.sortedBy { it.path }
+
+            if (sourceFiles.isEmpty()) {
+                logger.lifecycle("No C# files found under apps/unity-plugins.")
+                return@doLast
+            }
+
+            val exitCode = ProcessBuilder(
+                "dotnet",
+                "format",
+                "whitespace",
+                unityPluginsFormatSolutionFile.absolutePath,
+                "--verbosity",
+                "minimal",
+            )
+                .inheritIO()
+                .directory(rootDir)
+                .start()
+                .waitFor()
+
+            if (exitCode == 0) {
+                logger.lifecycle("Formatted ${sourceFiles.size} C# files under apps/unity-plugins with dotnet format.")
+            } else {
+                throw GradleException("dotnet format failed for apps/unity-plugins with exit code $exitCode.")
+            }
+        }
+    }
+
+    register("format") {
+        group = "formatting"
+        description = "Formats project sources."
+        dependsOn("format-cs")
+    }
+
     h2cs {
         projectName = "Milestro"
         sourceFilePath = h2csSourceFile.absolutePath
@@ -78,6 +125,16 @@ fun RepositoryHandler.repo() {
 fun hasClangFormat(): Boolean {
     return runCatching {
         ProcessBuilder("clang-format", "--version")
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
+            .waitFor() == 0
+    }.getOrDefault(false)
+}
+
+fun hasDotnetFormat(): Boolean {
+    return runCatching {
+        ProcessBuilder("dotnet", "format", "--version")
             .redirectOutput(ProcessBuilder.Redirect.DISCARD)
             .redirectError(ProcessBuilder.Redirect.DISCARD)
             .start()

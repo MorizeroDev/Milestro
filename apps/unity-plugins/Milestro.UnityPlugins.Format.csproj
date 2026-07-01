@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <LangVersion>latest</LangVersion>
+    <BaseIntermediateOutputPath>../../build/dotnet-format-cs/obj/</BaseIntermediateOutputPath>
+    <BaseOutputPath>../../build/dotnet-format-cs/bin/</BaseOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="**/*.cs" />
+  </ItemGroup>
+</Project>

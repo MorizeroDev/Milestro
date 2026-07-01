@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using System.Collections.Generic;
 using Milestro.RichTextParser;
 using Milestro.Skia.TextLayout;

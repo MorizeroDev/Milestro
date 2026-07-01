@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Milestro.Skia.TextLayout;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;

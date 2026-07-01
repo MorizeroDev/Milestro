@@ -28,8 +28,9 @@ namespace Milestro.Components
 
         protected bool Inited { get; private set; } = false;
 
-        private void OnEnable()
+        protected override void OnEnable()
         {
+            base.OnEnable();
             Inited = true;
             rect = GetComponent<RectTransform>();
             img = GetComponent<Image>();

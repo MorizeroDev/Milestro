@@ -11,8 +11,8 @@ namespace Milestro.Skia
         public bool UseSrgbStorage => surface.UseSrgbStorage;
 
         public Rect DisplayUvRect => surface.DisplayUvRect;
-        public Texture Texture => surface.Texture;
-        public RenderTexture RenderTexture => surface.RenderTexture;
+        public Texture? Texture => surface.Texture;
+        public RenderTexture? RenderTexture => surface.RenderTexture;
 
         public int Width => surface.Width;
         public int Height => surface.Height;
