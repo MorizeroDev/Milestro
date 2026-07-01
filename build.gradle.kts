@@ -96,7 +96,8 @@ tasks {
             listOf("milestro::skia::textlayout::ParagraphStyle") to "IntPtr",
             listOf("milestro::skia::textlayout::StrutStyle") to "IntPtr",
             listOf("milestro::skia::textlayout::TextStyle") to "IntPtr",
-
+            listOf("milestro::skia::textlayout::InputBox") to "IntPtr",
+            listOf("milestro::skia::textlayout::InputBoxDrawSnapshot") to "IntPtr",
         )
 
         doLast {
