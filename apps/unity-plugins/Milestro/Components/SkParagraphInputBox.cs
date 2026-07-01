@@ -17,6 +17,9 @@ namespace Milestro.Components
     [RequireComponent(typeof(CanvasRenderer))]
     public class SkParagraphInputBox : SkiaRenderTextureGraphic, IPointerClickHandler, ISelectHandler, IDeselectHandler
     {
+        private const float KeyRepeatInitialDelay = 0.42f;
+        private const float KeyRepeatInterval = 0.045f;
+
         [TextArea(1, 1)]
         [SerializeField]
         [FormerlySerializedAs("text")]
@@ -66,6 +69,11 @@ namespace Milestro.Components
         [NonSerialized] private float nextBlinkTime;
         [NonSerialized] private bool compositionActive;
         [NonSerialized] private string lastCompositionText = "";
+        [NonSerialized] private char pendingHighSurrogate;
+        [NonSerialized] private float nextLeftRepeatTime;
+        [NonSerialized] private float nextRightRepeatTime;
+        [NonSerialized] private float nextBackspaceRepeatTime;
+        [NonSerialized] private float nextDeleteRepeatTime;
 #if UNITY_EDITOR
         [NonSerialized] private bool m_editorRebuildQueued;
 #endif
@@ -88,6 +96,8 @@ namespace Milestro.Components
                 }
                 compositionActive = false;
                 lastCompositionText = "";
+                pendingHighSurrogate = '\0';
+                ResetKeyRepeatState();
                 layoutDirty = true;
                 paintDirty = true;
             }
@@ -117,10 +127,7 @@ namespace Milestro.Components
         protected override void OnDisable()
         {
             base.OnDisable();
-            focused = false;
-            compositionActive = false;
-            lastCompositionText = "";
-            Input.imeCompositionMode = IMECompositionMode.Auto;
+            ReleaseInputFocus();
             Texture = null;
             RetireInputBox();
             surface?.Dispose();
@@ -134,8 +141,15 @@ namespace Milestro.Components
         {
             if (focused)
             {
-                ReadKeyboardInput();
-                UpdateCaretBlink();
+                if (CanReadInput())
+                {
+                    ReadKeyboardInput();
+                    UpdateCaretBlink();
+                }
+                else
+                {
+                    ReleaseInputFocus();
+                }
             }
 
             RebuildResources();
@@ -158,6 +172,8 @@ namespace Milestro.Components
             inputBox.HitTest(ToContentPoint(localPoint));
             compositionActive = false;
             lastCompositionText = "";
+            pendingHighSurrogate = '\0';
+            ResetKeyRepeatState();
             m_text = inputBox.Text;
             ResetBlink();
             paintDirty = true;
@@ -170,17 +186,7 @@ namespace Milestro.Components
 
         public void OnDeselect(BaseEventData eventData)
         {
-            focused = false;
-            compositionActive = false;
-            lastCompositionText = "";
-            Input.imeCompositionMode = IMECompositionMode.Auto;
-            caretVisible = false;
-            if (inputBox != null)
-            {
-                inputBox.ClearComposition();
-                inputBox.SetCaretVisible(false);
-            }
-            paintDirty = true;
+            ReleaseInputFocus();
         }
 
 #if UNITY_EDITOR
@@ -240,6 +246,45 @@ namespace Milestro.Components
             paintDirty = true;
         }
 
+        private void ReleaseInputFocus()
+        {
+            focused = false;
+            compositionActive = false;
+            lastCompositionText = "";
+            pendingHighSurrogate = '\0';
+            ResetKeyRepeatState();
+            Input.imeCompositionMode = IMECompositionMode.Auto;
+            caretVisible = false;
+            if (inputBox != null)
+            {
+                inputBox.ClearComposition();
+                inputBox.SetCaretVisible(false);
+            }
+            paintDirty = true;
+        }
+
+        private bool CanReadInput()
+        {
+            var eventSystem = EventSystem.current;
+            if (eventSystem != null && eventSystem.currentSelectedGameObject != gameObject)
+            {
+                return false;
+            }
+
+#if UNITY_EDITOR
+            if (Application.isPlaying)
+            {
+                var focusedWindow = EditorWindow.focusedWindow;
+                if (focusedWindow == null || focusedWindow.GetType().Name != "GameView")
+                {
+                    return false;
+                }
+            }
+#endif
+
+            return true;
+        }
+
         private void ResetBlink()
         {
             caretVisible = true;
@@ -281,26 +326,82 @@ namespace Milestro.Components
                 changed |= UpdateComposition();
             }
 
-            if (!compositionActive)
+            changed |= ReadEditingKeys();
+            ApplyInputChange(changed);
+        }
+
+        private bool ReadEditingKeys()
+        {
+            if (compositionActive || inputBox == null)
             {
-                if (Input.GetKeyDown(KeyCode.LeftArrow) && inputBox != null)
-                {
-                    changed |= inputBox.MovePrevious();
-                }
-                if (Input.GetKeyDown(KeyCode.RightArrow) && inputBox != null)
-                {
-                    changed |= inputBox.MoveNext();
-                }
-                if (Input.GetKeyDown(KeyCode.Backspace) && inputBox != null)
-                {
-                    changed |= inputBox.DeleteBackward();
-                }
-                if (Input.GetKeyDown(KeyCode.Delete) && inputBox != null)
-                {
-                    changed |= inputBox.DeleteForward();
-                }
+                ResetKeyRepeatState();
+                return false;
             }
 
+            var changed = false;
+            if (ShouldProcessRepeatingKey(KeyCode.LeftArrow, ref nextLeftRepeatTime))
+            {
+                pendingHighSurrogate = '\0';
+                changed |= inputBox.MovePrevious();
+            }
+            if (ShouldProcessRepeatingKey(KeyCode.RightArrow, ref nextRightRepeatTime))
+            {
+                pendingHighSurrogate = '\0';
+                changed |= inputBox.MoveNext();
+            }
+            if (ShouldProcessRepeatingKey(KeyCode.Backspace, ref nextBackspaceRepeatTime))
+            {
+                pendingHighSurrogate = '\0';
+                changed |= inputBox.DeleteBackward();
+            }
+            if (ShouldProcessRepeatingKey(KeyCode.Delete, ref nextDeleteRepeatTime))
+            {
+                pendingHighSurrogate = '\0';
+                changed |= inputBox.DeleteForward();
+            }
+            return changed;
+        }
+
+        private bool ShouldProcessRepeatingKey(KeyCode keyCode, ref float nextRepeatTime)
+        {
+            var now = Time.unscaledTime;
+            if (Input.GetKeyDown(keyCode))
+            {
+                nextRepeatTime = now + KeyRepeatInitialDelay;
+                return true;
+            }
+
+            if (!Input.GetKey(keyCode))
+            {
+                nextRepeatTime = 0;
+                return false;
+            }
+
+            if (nextRepeatTime <= 0)
+            {
+                nextRepeatTime = now + KeyRepeatInitialDelay;
+                return false;
+            }
+
+            if (now < nextRepeatTime)
+            {
+                return false;
+            }
+
+            nextRepeatTime = now + KeyRepeatInterval;
+            return true;
+        }
+
+        private void ResetKeyRepeatState()
+        {
+            nextLeftRepeatTime = 0;
+            nextRightRepeatTime = 0;
+            nextBackspaceRepeatTime = 0;
+            nextDeleteRepeatTime = 0;
+        }
+
+        private void ApplyInputChange(bool changed)
+        {
             if (inputBox != null)
             {
                 UpdateCompositionCursorPosition();
@@ -395,26 +496,66 @@ namespace Milestro.Components
             return char.IsControl(ch) || ch == '\u007f';
         }
 
-        private static string FilterCommittedInput(string input)
+        private string FilterCommittedInput(string input)
         {
             if (string.IsNullOrEmpty(input))
             {
                 return string.Empty;
             }
 
-            var builder = new StringBuilder(input.Length);
+            var builder = new StringBuilder(input.Length + (pendingHighSurrogate == '\0' ? 0 : 1));
             for (var i = 0; i < input.Length; ++i)
             {
                 var ch = input[i];
                 if (ch == '\u001b')
                 {
+                    pendingHighSurrogate = '\0';
                     i = SkipEscapeSequence(input, i) - 1;
                     continue;
                 }
                 if (IsCommittedTextControl(ch))
                 {
+                    pendingHighSurrogate = '\0';
                     continue;
                 }
+                if (char.IsHighSurrogate(ch))
+                {
+                    if (pendingHighSurrogate != '\0')
+                    {
+                        pendingHighSurrogate = ch;
+                        continue;
+                    }
+
+                    if (i + 1 >= input.Length)
+                    {
+                        pendingHighSurrogate = ch;
+                        continue;
+                    }
+
+                    var low = input[i + 1];
+                    if (char.IsLowSurrogate(low))
+                    {
+                        builder.Append(ch);
+                        builder.Append(low);
+                        ++i;
+                    }
+                    else
+                    {
+                        pendingHighSurrogate = ch;
+                    }
+                    continue;
+                }
+                if (char.IsLowSurrogate(ch))
+                {
+                    if (pendingHighSurrogate != '\0')
+                    {
+                        builder.Append(pendingHighSurrogate);
+                        builder.Append(ch);
+                        pendingHighSurrogate = '\0';
+                    }
+                    continue;
+                }
+                pendingHighSurrogate = '\0';
                 builder.Append(ch);
             }
             return builder.ToString();
