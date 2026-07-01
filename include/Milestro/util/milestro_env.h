@@ -1,6 +1,9 @@
 #ifndef MILESTRO_MILESTRO_ENV_H
 #define MILESTRO_MILESTRO_ENV_H
 
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <string>
 
 namespace milestro::util::env {

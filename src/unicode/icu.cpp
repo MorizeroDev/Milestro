@@ -1,6 +1,10 @@
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
+
 #include <Milestro/common/milestro_platform.h>
 
-#if MILIZE_PLATFORM_WINDOWS
+#if MILESTRO_PLATFORM_WINDOWS
 
 #include <Milestro/util/milestro_encoding.h>
 
@@ -13,12 +17,16 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#if !MILESTRO_PLATFORM_IOS
+#include <dlfcn.h>
+#endif
 
 #endif
 
 #include <Milestro/io/milestro_io.h>
 #include <Milestro/log/log.h>
 #include <Milestro/unicode/milestro_icu.h>
+#include <Milestro/util/milestro_env.h>
 #include <cstdio>
 #include <cstring>
 #include <mutex>
@@ -27,7 +35,7 @@
 
 #include "unicode/udata.h"
 
-#if MILIZE_PLATFORM_WINDOWS
+#if MILESTRO_PLATFORM_WINDOWS
 
 #include <io.h>
 #include <windows.h>
@@ -61,7 +69,7 @@ static bool init_icu(void* addr) {
     return true;
 }
 
-#if MILIZE_PLATFORM_WINDOWS
+#if MILESTRO_PLATFORM_WINDOWS
 
 static void* win_mmap(const wchar_t* dataFile) {
     if (!dataFile) {
@@ -141,7 +149,7 @@ static bool load_from(const std::wstring& path) {
         return false;
     }
 
-    auto status = milestro::io::isFileExists(path);
+    auto status = milestro::io::isFileExists(milestro::util::encoding::WStringToString(path));
     auto sPath = path;
     if (status == milestro::io::FileStatus::Directory) {
         sPath = sPath + L"\\icudtl.dat";
@@ -160,7 +168,9 @@ bool LoadIcuImpl(void* dataPtr, std::string& dir) {
     std::lock_guard lock(IcuLoadMutex);
     if (!IcuLoaded) {
         IcuLoaded = init_icu(dataPtr) || load_from(wDir) || load_from(executable_directory()) ||
-                    load_from(library_directory());
+                    load_from(library_directory()) ||
+                    load_from(milestro::util::encoding::StringToWString(
+                            milestro::util::env::getenv("MILESTRO_UNICODE_ICUDAL_PATH")));
     }
     return IcuLoaded;
 }
@@ -189,12 +199,12 @@ void* posix_mmap(const char* dataFile, size_t* outSize = nullptr, int prot = PRO
     // 获取文件大小
     struct stat st{};
     if (fstat(fd, &st) < 0) {
-        MILESTROLOG_CRITICAL("posix_mmap: fstat(\"%s\") failed: %s", dataFile, strerror(errno));
+        MILESTROLOG_CRITICAL("posix_mmap: fstat(\"{}\") failed: {}", dataFile, strerror(errno));
         close(fd);
         return nullptr;
     }
     if (st.st_size == 0) {
-        MILESTROLOG_CRITICAL("posix_mmap: file \"%s\" is empty", dataFile);
+        MILESTROLOG_CRITICAL("posix_mmap: file \"{}\" is empty", dataFile);
         close(fd);
         return nullptr;
     }
@@ -202,7 +212,7 @@ void* posix_mmap(const char* dataFile, size_t* outSize = nullptr, int prot = PRO
     // 执行 mmap
     void* addr = mmap(nullptr, length, prot, flags, fd, 0);
     if (addr == MAP_FAILED) {
-        MILESTROLOG_CRITICAL("posix_mmap: mmap(\"%s\") failed: %s", dataFile, strerror(errno));
+        MILESTROLOG_CRITICAL("posix_mmap: mmap(\"{}\") failed: {}", dataFile, strerror(errno));
         close(fd);
         return nullptr;
     }
@@ -218,7 +228,7 @@ void* posix_mmap(const char* dataFile, size_t* outSize = nullptr, int prot = PRO
 void posix_munmap(void* addr, size_t size) {
     if (addr && size > 0) {
         if (munmap(addr, size) < 0) {
-            MILESTROLOG_CRITICAL("posix_munmap: munmap failed: %s", strerror(errno));
+            MILESTROLOG_CRITICAL("posix_munmap: munmap failed: {}", strerror(errno));
         }
     }
 }
@@ -241,11 +251,40 @@ static bool load_from(const std::string& path) {
     return false;
 }
 
+#if !MILESTRO_PLATFORM_IOS
+static std::string library_icudtl_path() {
+    Dl_info info{};
+    if (dladdr(reinterpret_cast<const void*>(&library_icudtl_path), &info) == 0 || info.dli_fname == nullptr) {
+        return {};
+    }
+
+    std::error_code ec;
+    auto path = std::filesystem::path(info.dli_fname);
+    if (path.is_relative()) {
+        path = std::filesystem::absolute(path, ec);
+        if (ec) {
+            return {};
+        }
+    }
+
+    if (!path.has_parent_path()) {
+        return {};
+    }
+    path.replace_filename("icudtl.dat");
+    return path.string();
+}
+#endif
 
 bool LoadIcuImpl(void* dataPtr, std::string& path) {
     std::lock_guard lock(IcuLoadMutex);
     if (!IcuLoaded) {
-        IcuLoaded = init_icu(dataPtr) || load_from(path) || load_from(std::filesystem::current_path());
+#if MILESTRO_PLATFORM_IOS
+        IcuLoaded = init_icu(dataPtr) || load_from(path);
+#else
+        IcuLoaded = init_icu(dataPtr) || load_from(path) || load_from(library_icudtl_path()) ||
+                    load_from(std::filesystem::current_path().string()) ||
+                    load_from(milestro::util::env::getenv("MILESTRO_UNICODE_ICUDAL_PATH"));
+#endif
     }
     return IcuLoaded;
 }
