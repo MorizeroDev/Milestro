@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Milestro.Binding;
 using Milestro.Model;
-using Milestro.Native;
+using Paraparty.UnityNative;
 using UnityEngine;
 
 namespace Milestro.Skia.TextLayout

@@ -1,5 +1,5 @@
 using System.Text;
-using Milestro.ColorUniverse;
+using Paraparty.Colors;
 using UnityEngine;
 
 namespace Milestro.RichTextParser

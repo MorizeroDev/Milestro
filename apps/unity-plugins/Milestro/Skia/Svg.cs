@@ -1,6 +1,6 @@
 using System;
 using Milestro.Binding;
-using Milestro.Native;
+using Paraparty.UnityNative;
 using UnityEngine;
 
 namespace Milestro.Skia.TextLayout

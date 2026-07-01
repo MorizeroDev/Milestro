@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -6,8 +5,10 @@ using System.IO;
 using System.Text;
 using System.Xml;
 using Milestro.Model;
+using Milestro.RichTextParser.AST;
+using Paraparty.Colors;
 using UnityEngine;
-using Milestro.ColorUniverse;
+using XmlNode = Milestro.RichTextParser.AST.XmlNode;
 
 namespace Milestro.RichTextParser
 {

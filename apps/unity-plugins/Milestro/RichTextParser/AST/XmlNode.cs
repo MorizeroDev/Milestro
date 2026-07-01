@@ -1,8 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-
-namespace Milestro.RichTextParser
+namespace Milestro.RichTextParser.AST
 {
     public abstract class XmlNode
     {

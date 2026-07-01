@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Milestro.Binding;
-using Milestro.Native;
+using Paraparty.UnityNative;
 
 namespace Milestro.Skia.TextLayout
 {
