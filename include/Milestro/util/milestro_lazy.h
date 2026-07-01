@@ -52,6 +52,6 @@ namespace milestro::util {
         const std::function<T()> factory;
     };
 
-} // namespace milize::util
+} // namespace milestro::util
 
 #endif //MILESTRO_MILESTRO_LAZY_H

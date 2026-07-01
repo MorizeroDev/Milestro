@@ -30,6 +30,6 @@ inline void StopWatch(std::function<void()> task, const std::string taskName) {
     MILESTROLOG_DEBUG("{}: {}", taskName, GetDuration(endTime, startTime));
 }
 
-} // namespace milize::util::time
+} // namespace milestro::util::time
 
 #endif //MILESTRO_MILESTRO_TIME_H

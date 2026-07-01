@@ -71,6 +71,15 @@ tasks {
         csharpBindingOutputPath = h2csCsharpBindingOutputFile.absolutePath
         cppFrameworkBindingOutputPath = h2csCppFrameworkBindingOutputFile.absolutePath
         addTypeMapping(
+            listOf("milestro::game::model::DataEnvelop") to "IntPtr",
+            listOf("milestro::game::model::BytesWrapper") to "IntPtr",
+            listOf("milestro::game::model::NumberWrapper") to "IntPtr",
+
+            listOf("milestro::unicode::StringComparator") to "IntPtr",
+            listOf("milestro::unicode::Normalizer") to "IntPtr",
+            listOf("milestro::unicode::Segmenter") to "IntPtr",
+            listOf("milestro::unicode::Transliterator") to "IntPtr",
+
             listOf("milestro::skia::Canvas") to "IntPtr",
             listOf("milestro::skia::Image") to "IntPtr",
             listOf("milestro::skia::Typeface") to "IntPtr",
@@ -88,7 +97,6 @@ tasks {
             listOf("milestro::skia::textlayout::StrutStyle") to "IntPtr",
             listOf("milestro::skia::textlayout::TextStyle") to "IntPtr",
 
-            listOf("milestro::icu::IcuUCollator") to "IntPtr",
         )
 
         doLast {

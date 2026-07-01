@@ -14,61 +14,81 @@
 #endif
 
 namespace milestro {
-    namespace skia {
-        class Canvas;
 
-        class Image;
+namespace game {
+namespace model {
+class DataEnvelop;
+class NumberWrapper;
+class BytesWrapper;
+} // namespace model
+} // namespace game
 
-        class Typeface;
+namespace skia {
+class Canvas;
 
-        class Font;
+class Image;
 
-        class Path;
+class Typeface;
 
-        class Svg;
+class Font;
 
-        class VertexData;
+class Path;
 
-        class MilestroFontFamilyInfo;
+class Svg;
 
-        class MilestroFontFamilyList;
+class VertexData;
 
-        class MilestroFontFaceInfo;
+class MilestroFontFamilyInfo;
 
-        class MilestroFontFaceList;
+class MilestroFontFamilyList;
 
-        namespace textlayout {
-            class Paragraph;
+class MilestroFontFaceInfo;
 
-            class ParagraphBuilder;
+class MilestroFontFaceList;
 
-            class ParagraphStyle;
+namespace textlayout {
+class Paragraph;
 
-            class TextStyle;
+class ParagraphBuilder;
 
-            class StrutStyle;
-        }
-    }
+class ParagraphStyle;
 
-    namespace icu {
-        class IcuUCollator;
-    }
+class TextStyle;
 
-    namespace cdt {
-        class MilestroTriangulation;
-    }
+class StrutStyle;
+} // namespace textlayout
+} // namespace skia
+
+namespace icu {
+class IcuUCollator;
 }
 
+namespace cdt {
+class MilestroTriangulation;
+}
 
-typedef uint64_t (*MilestroSkiaTextlayoutParagraphSplitGlyphCallback)(
-        const void *handler,
-        uint16_t glyphId,
-        milestro::skia::Font *font,
+namespace unicode {
+class StringComparator;
 
-        float boundLeft, float boundTop,
-        float boundRight, float boundBottom,
+class Normalizer;
 
-        float advanceWidth, float advanceHeight
-);
+class Segmenter;
+
+class Transliterator;
+} // namespace unicode
+} // namespace milestro
+
+
+typedef uint64_t (*MilestroSkiaTextlayoutParagraphSplitGlyphCallback)(const void* handler,
+                                                                      uint16_t glyphId,
+                                                                      milestro::skia::Font* font,
+
+                                                                      float boundLeft,
+                                                                      float boundTop,
+                                                                      float boundRight,
+                                                                      float boundBottom,
+
+                                                                      float advanceWidth,
+                                                                      float advanceHeight);
 
 #endif

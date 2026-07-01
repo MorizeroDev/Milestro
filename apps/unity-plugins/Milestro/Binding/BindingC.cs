@@ -6,8 +6,8 @@ namespace Milestro.Binding
     public class BindingC
     {
 #if UNITY_IOS && !UNITY_EDITOR
-        private const string dllName = "__Internal";
-        private const string EntryPointPrefix = "FrameworkBinding";
+    private const string dllName = "__Internal";
+    private const string EntryPointPrefix = "FrameworkBinding";
 #else
         private const string dllName = "libMilestro";
         private const string EntryPointPrefix = "";
@@ -372,20 +372,16 @@ namespace Milestro.Binding
         internal static extern unsafe long SkiaTextlayoutParagraphStyleSetHeight(IntPtr s, float height);
 
 
-        [DllImport(dllName,
-                   EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleGetTextHeightBehavior")]
-        internal static extern unsafe long SkiaTextlayoutParagraphStyleGetTextHeightBehavior(IntPtr s,
-                                                                                             out int behavior);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleGetTextHeightBehavior")]
+        internal static extern unsafe long SkiaTextlayoutParagraphStyleGetTextHeightBehavior(IntPtr s, out int behavior);
 
 
-        [DllImport(dllName,
-                   EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleSetTextHeightBehavior")]
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleSetTextHeightBehavior")]
         internal static extern unsafe long SkiaTextlayoutParagraphStyleSetTextHeightBehavior(IntPtr s, int behavior);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleIsUnlimitedLines")]
-        internal static extern unsafe long SkiaTextlayoutParagraphStyleIsUnlimitedLines(IntPtr s,
-                                                                                        out int unlimitedLines);
+        internal static extern unsafe long SkiaTextlayoutParagraphStyleIsUnlimitedLines(IntPtr s, out int unlimitedLines);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleIsEllipsized")]
@@ -393,8 +389,7 @@ namespace Milestro.Binding
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleGetEffectiveAlign")]
-        internal static extern unsafe long SkiaTextlayoutParagraphStyleGetEffectiveAlign(IntPtr s,
-                                                                                         out int effectiveAlign);
+        internal static extern unsafe long SkiaTextlayoutParagraphStyleGetEffectiveAlign(IntPtr s, out int effectiveAlign);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleIsHintingOn")]
@@ -405,13 +400,11 @@ namespace Milestro.Binding
         internal static extern unsafe long SkiaTextlayoutParagraphStyleTurnHintingOff(IntPtr s);
 
 
-        [DllImport(dllName,
-                   EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleGetReplaceTabCharacters")]
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleGetReplaceTabCharacters")]
         internal static extern unsafe long SkiaTextlayoutParagraphStyleGetReplaceTabCharacters(IntPtr s, out int v);
 
 
-        [DllImport(dllName,
-                   EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleSetReplaceTabCharacters")]
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleSetReplaceTabCharacters")]
         internal static extern unsafe long SkiaTextlayoutParagraphStyleSetReplaceTabCharacters(IntPtr s, int v);
 
 
@@ -432,13 +425,11 @@ namespace Milestro.Binding
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutStrutStyleSetFontFamilies")]
-        internal static extern unsafe long
-        SkiaTextlayoutStrutStyleSetFontFamilies(IntPtr s, void** families, uint size);
+        internal static extern unsafe long SkiaTextlayoutStrutStyleSetFontFamilies(IntPtr s, void** families, uint size);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutStrutStyleSetFontStyle")]
-        internal static extern unsafe long
-        SkiaTextlayoutStrutStyleSetFontStyle(IntPtr s, int weight, int width, int slant);
+        internal static extern unsafe long SkiaTextlayoutStrutStyleSetFontStyle(IntPtr s, int weight, int width, int slant);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutStrutStyleGetFontStyle")]
@@ -541,8 +532,7 @@ namespace Milestro.Binding
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleSetDecorationColor")]
-        internal static extern unsafe long
-        SkiaTextlayoutTextStyleSetDecorationColor(IntPtr s, int r, int g, int b, int a);
+        internal static extern unsafe long SkiaTextlayoutTextStyleSetDecorationColor(IntPtr s, int r, int g, int b, int a);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleGetDecorationStyle")]
@@ -555,8 +545,8 @@ namespace Milestro.Binding
 
         [DllImport(dllName,
                    EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleGetDecorationThicknessMultiplier")]
-        internal static extern unsafe long
-        SkiaTextlayoutTextStyleGetDecorationThicknessMultiplier(IntPtr s, out float multiplier);
+        internal static extern unsafe long SkiaTextlayoutTextStyleGetDecorationThicknessMultiplier(IntPtr s,
+                                                                                                   out float multiplier);
 
 
         [DllImport(dllName,
@@ -566,8 +556,7 @@ namespace Milestro.Binding
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleSetFontStyle")]
-        internal static extern unsafe long
-        SkiaTextlayoutTextStyleSetFontStyle(IntPtr s, int weight, int width, int slant);
+        internal static extern unsafe long SkiaTextlayoutTextStyleSetFontStyle(IntPtr s, int weight, int width, int slant);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleGetFontStyle")]
@@ -595,8 +584,7 @@ namespace Milestro.Binding
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleAddFontFeature")]
-        internal static extern unsafe long
-        SkiaTextlayoutTextStyleAddFontFeature(IntPtr s, byte[] fontFeature, int value);
+        internal static extern unsafe long SkiaTextlayoutTextStyleAddFontFeature(IntPtr s, byte[] fontFeature, int value);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleResetFontFeatures")]
@@ -687,19 +675,76 @@ namespace Milestro.Binding
         internal static extern unsafe long SkiaTextlayoutTextStyleIsPlaceholder(IntPtr s, out int isPlaceholder);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroIcuIcuUCollatorCreate")]
-        internal static extern unsafe long IcuIcuUCollatorCreate(out IntPtr ret, byte[] collation);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeStringComparatorCreate")]
+        internal static extern unsafe long MilizeStringComparatorCreate(out IntPtr ret, byte[] collation);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroIcuIcuUCollatorDestroy")]
-        internal static extern unsafe long IcuIcuUCollatorDestroy(out IntPtr ret);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeStringComparatorDestroy")]
+        internal static extern unsafe long MilizeStringComparatorDestroy(ref IntPtr ret);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroIcuIcuUCollatorCompare")]
-        internal static extern unsafe long IcuIcuUCollatorCompare(IntPtr cmp, out int result, byte[] a, byte[] b);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeStringComparatorCompare")]
+        internal static extern unsafe long MilizeStringComparatorCompare(IntPtr cmp, out int result, byte[] a, byte[] b);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroIcuIcuUCollatorSetAttribute")]
-        internal static extern unsafe long IcuIcuUCollatorSetAttribute(IntPtr collator, int attr, int value);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeNormalizerCreate")]
+        internal static extern unsafe long MilizeUnicodeNormalizerCreate(out IntPtr ret, byte* name, int mode);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeNormalizerDestroy")]
+        internal static extern unsafe long MilizeUnicodeNormalizerDestroy(ref IntPtr ret);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeNormalizerNormalize")]
+        internal static extern unsafe long MilizeUnicodeNormalizerNormalize(IntPtr seg, out IntPtr ret, byte* text);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeSegmenterCreate")]
+        internal static extern unsafe long MilizeUnicodeSegmenterCreate(out IntPtr ret, byte* locale, byte* text);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeSegmenterDestroy")]
+        internal static extern unsafe long MilizeUnicodeSegmenterDestroy(ref IntPtr ret);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeSegmenterFirst")]
+        internal static extern unsafe long MilizeUnicodeSegmenterFirst(IntPtr seg, out int ret);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeSegmenterNext")]
+        internal static extern unsafe long MilizeUnicodeSegmenterNext(IntPtr seg, out int ret);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeSegmenterCurrent")]
+        internal static extern unsafe long MilizeUnicodeSegmenterCurrent(IntPtr seg, out int ret);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeSegmenterPrevious")]
+        internal static extern unsafe long MilizeUnicodeSegmenterPrevious(IntPtr seg, out int ret);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeSegmenterSubString")]
+        internal static extern unsafe long MilizeUnicodeSegmenterSubString(IntPtr seg, out IntPtr ret, int start, int len);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeTransliteratorCreate")]
+        internal static extern unsafe long MilizeUnicodeTransliteratorCreate(out IntPtr ret, byte* id, int direction);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeTransliteratorDestroy")]
+        internal static extern unsafe long MilizeUnicodeTransliteratorDestroy(ref IntPtr ret);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeTransliteratorTransliterate")]
+        internal static extern unsafe long
+        MilizeUnicodeTransliteratorTransliterate(IntPtr t, out IntPtr output, byte* input);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeCaseMapToUpper")]
+        internal static extern unsafe long MilizeUnicodeCaseMapToUpper(out IntPtr ret, byte* locale, byte* text);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeCaseMapToLower")]
+        internal static extern unsafe long MilizeUnicodeCaseMapToLower(out IntPtr ret, byte* locale, byte* text);
     }
 }

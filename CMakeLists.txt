@@ -193,6 +193,10 @@ add_subdirectory("ext/PluginAPI" EXCLUDE_FROM_ALL)
 set(CLI11_PRECOMPILED ON)
 add_subdirectory("ext/cli11" EXCLUDE_FROM_ALL)
 
+add_subdirectory("ext/icu-cmake")
+set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} "icu")
+set(PROJECT_PLATFORM_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${icu_includes})
+
 if (MILESTRO_SKIA_CMAKE AND MILESTRO_SKIA_INCLUDE_PATH)
     add_subdirectory("${MILESTRO_SKIA_CMAKE}" "ext/skia" EXCLUDE_FROM_ALL)
     set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES}
@@ -204,7 +208,6 @@ if (MILESTRO_SKIA_CMAKE AND MILESTRO_SKIA_INCLUDE_PATH)
     target_compile_definitions(third_party__icu INTERFACE
             U_USING_ICU_NAMESPACE=0
             U_DISABLE_RENAMING=1
-            U_SHOW_CPLUSPLUS_API=0
             U_NOEXCEPT=
             U_STATIC_IMPLEMENTATION
     )
@@ -240,7 +243,6 @@ elseif (MILESTRO_SKIA_LIB_PATH AND MILESTRO_SKIA_INCLUDE_PATH)
     target_compile_definitions(skia INTERFACE
             U_USING_ICU_NAMESPACE=0
             U_DISABLE_RENAMING=1
-            U_SHOW_CPLUSPLUS_API=0
             U_NOEXCEPT=
             U_STATIC_IMPLEMENTATION
     )
@@ -253,36 +255,85 @@ else ()
     message(FATAL_ERROR "No Skia set")
 endif ()
 
+if (APPLE AND CMAKE_GENERATOR STREQUAL "Ninja")
+    if(IOS)
+        set(APPLE_SDK_PLATFORM "iphoneos")
+    else()
+        set(APPLE_SDK_PLATFORM "macosx")
+    endif()
+    execute_process(
+            COMMAND xcrun --sdk ${APPLE_SDK_PLATFORM} --show-sdk-path
+            OUTPUT_VARIABLE APPLE_SDK_PATH
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    execute_process(
+            COMMAND xcrun --sdk ${APPLE_SDK_PLATFORM} --show-sdk-version
+            OUTPUT_VARIABLE APPLE_SDK_VERSION
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
 
-set(PROJECT_PLATFORM_INCLUDES ${PROJECT_PLATFORM_INCLUDES}
-        ${SKIA_INCLUDE_PATH}/third_party/externals/icu/source/i18n
-        ${SKIA_INCLUDE_PATH}/third_party/externals/icu/source/common
-)
+    message(STATUS "APPLE_SDK_PATH: ${APPLE_SDK_PATH}")
+    message(STATUS "APPLE_SDK_VERSION: ${APPLE_SDK_VERSION}")
 
-if (DEFINED APPLE)
-    if (MILESTRO_ENABLE_RELEASE_SYMBOLS)
+    set(CMAKE_OSX_SYSROOT "${APPLE_SDK_PATH}")
+
+    # 从 cmake 参数那边读，并且兼容 ios-cmake 的 DEPLOYMENT_TARGET 选项
+    set(SWIFT_DEPLOYMENT_TARGET "${CMAKE_OSX_DEPLOYMENT_TARGET}")
+    if (NOT SWIFT_DEPLOYMENT_TARGET)
+        set(SWIFT_DEPLOYMENT_TARGET "${DEPLOYMENT_TARGET}")
+    endif ()
+    if (NOT SWIFT_DEPLOYMENT_TARGET)
+        set(SWIFT_DEPLOYMENT_TARGET "${APPLE_SDK_VERSION}")
+    endif ()
+
+    if (IOS)
+        set(SWIFT_TARGET "arm64-apple-ios${SWIFT_DEPLOYMENT_TARGET}")
+    else ()
+        set(SWIFT_TARGET "arm64-apple-macosx${SWIFT_DEPLOYMENT_TARGET}")
+    endif()
+
+    set(CMAKE_Swift_COMPILER_TARGET "${SWIFT_TARGET}")
+    set(CMAKE_Swift_FLAGS "-sdk ${CMAKE_OSX_SYSROOT}")
+    if (MILIZE_ENABLE_RELEASE_SYMBOLS)
         string(APPEND CMAKE_Swift_FLAGS " -g")
     endif ()
-    if (MILESTRO_REMAP_SOURCE_PATHS)
-        string(APPEND CMAKE_Swift_FLAGS " -debug-prefix-map ${PROJECT_SOURCE_DIR}=${MILESTRO_REMAP_SOURCE_PREFIX}")
-        string(APPEND CMAKE_Swift_FLAGS " -debug-prefix-map ${PROJECT_BINARY_DIR}=${MILESTRO_REMAP_BUILD_PREFIX}")
+    if (MILIZE_REMAP_SOURCE_PATHS)
+        string(APPEND CMAKE_Swift_FLAGS " -debug-prefix-map ${PROJECT_SOURCE_DIR}=${MILIZE_REMAP_SOURCE_PREFIX}")
+        string(APPEND CMAKE_Swift_FLAGS " -debug-prefix-map ${PROJECT_BINARY_DIR}=${MILIZE_REMAP_BUILD_PREFIX}")
     endif ()
 
+    execute_process(
+            COMMAND xcrun --find swiftc
+            OUTPUT_VARIABLE CMAKE_Swift_COMPILER
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if (NOT CMAKE_Swift_COMPILER)
+        message(FATAL_ERROR "Could not locate swiftc via xcrun")
+    endif()
+    message(STATUS "Using Swift compiler: ${CMAKE_Swift_COMPILER}")
+    message(STATUS "SWIFT_TARGET: ${SWIFT_TARGET}")
+endif()
+
+if (APPLE)
+    # Enable language support (CMake will probe using the above target/SDK)
     enable_language(Swift)
     enable_language(OBJC)
     enable_language(OBJCXX)
 
+    # Check that Swift is new enough and C++ is Clang-based
     if ("${CMAKE_Swift_COMPILER_VERSION}" VERSION_LESS 5.9)
-        message(FATAL_ERROR "Bidirectional C++ Interop requires Swift 5.9 or greater. Have ${CMAKE_Swift_COMPILER_VERSION}")
+        message(FATAL_ERROR "Bidirectional C++ Interop requires Swift 5.9 or greater. Found ${CMAKE_Swift_COMPILER_VERSION}")
     endif ()
 
     if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" AND NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
-        message(FATAL_ERROR "Project requires building with Clang. Have ${CMAKE_CXX_COMPILER_ID}")
+        message(FATAL_ERROR "Project requires building with Clang. Found ${CMAKE_CXX_COMPILER_ID}")
     endif ()
 
-#    include(InitializeSwift)
-#    include(AddSwift)
+    # Include Swift support modules
+    include(InitializeSwift)
+    include(AddSwift)
 
+    # Link against Foundation framework
     find_library(FOUNDATION Foundation)
     find_library(COREFOUNDATION CoreFoundation)
     find_library(CORETEXT CoreText)
@@ -377,7 +428,12 @@ set(
         src/skia/textlayout/ParagraphBuilder.cpp
         src/skia/textlayout/Paragraph.cpp
 
-        src/icu/IcuUCCollator.cpp
+        src/unicode/icu.cpp
+        src/unicode/comparison.cpp
+        src/unicode/normalize.cpp
+        src/unicode/segments.cpp
+        src/unicode/transliterator.cpp
+        src/unicode/util.cpp
 )
 
 set(
@@ -401,8 +457,12 @@ set(
         src/game/milestro_game_skia_textlayout_paragraphstyle.cpp
         src/game/milestro_game_skia_textlayout_strutstyle.cpp
         src/game/milestro_game_skia_textlayout_textstyle.cpp
-
-        src/game/milestro_game_icu_icuucollator.cpp
+        src/game/milestro_game_unicode_comparison.cpp
+        src/game/milestro_game_unicode_segments.cpp
+        src/game/milestro_game_unicode_normalize.cpp
+        src/game/milestro_game_unicode_transliterator.cpp
+        src/game/milestro_game_unicode_util.cpp
+        src/game/milize_game_model.cpp
 )
 
 if (APPLE)

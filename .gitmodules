@@ -13,3 +13,6 @@
 [submodule "ext/ios-cmake"]
 	path = ext/ios-cmake
 	url = https://github.com/leetal/ios-cmake.git
+[submodule "ext/icu"]
+	path = ext/icu
+	url = https://github.com/ParaParty/icu.git
