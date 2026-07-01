@@ -214,6 +214,17 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetCaretVisible(milestro::ski
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxInsertText(milestro::skia::textlayout::InputBox *inputBox,
                                                               [[milize::CSharpType("void*")]] void *text,
                                                               uint64_t size);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetComposition(milestro::skia::textlayout::InputBox *inputBox,
+                                                                   [[milize::CSharpType("void*")]] void *text,
+                                                                   uint64_t size,
+                                                                   int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxCommitComposition(milestro::skia::textlayout::InputBox *inputBox,
+                                                                      [[milize::CSharpType("void*")]] void *text,
+                                                                      uint64_t size,
+                                                                      int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxClearComposition(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t &changed);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxDeleteBackward(milestro::skia::textlayout::InputBox *inputBox,
                                                                   int32_t &changed);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxDeleteForward(milestro::skia::textlayout::InputBox *inputBox,
@@ -250,6 +261,11 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetCaretRect(milestro::skia::
                                                                 float &top,
                                                                 float &right,
                                                                 float &bottom);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetCompositionRect(milestro::skia::textlayout::InputBox *inputBox,
+                                                                      float &left,
+                                                                      float &top,
+                                                                      float &right,
+                                                                      float &bottom);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetMetrics(milestro::skia::textlayout::InputBox *inputBox,
                                                               float &height,
                                                               float &longestLine,

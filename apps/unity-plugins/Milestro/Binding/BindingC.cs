@@ -353,6 +353,20 @@ namespace Milestro.Binding
         internal static extern unsafe long SkiaTextlayoutInputBoxInsertText(IntPtr inputBox, void* text, ulong size);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxSetComposition")]
+        internal static extern unsafe long
+        SkiaTextlayoutInputBoxSetComposition(IntPtr inputBox, void* text, ulong size, out int changed);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxCommitComposition")]
+        internal static extern unsafe long
+        SkiaTextlayoutInputBoxCommitComposition(IntPtr inputBox, void* text, ulong size, out int changed);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxClearComposition")]
+        internal static extern unsafe long SkiaTextlayoutInputBoxClearComposition(IntPtr inputBox, out int changed);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxDeleteBackward")]
         internal static extern unsafe long SkiaTextlayoutInputBoxDeleteBackward(IntPtr inputBox, out int changed);
 
@@ -409,6 +423,14 @@ namespace Milestro.Binding
                                                                               out float top,
                                                                               out float right,
                                                                               out float bottom);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxGetCompositionRect")]
+        internal static extern unsafe long SkiaTextlayoutInputBoxGetCompositionRect(IntPtr inputBox,
+                                                                                   out float left,
+                                                                                   out float top,
+                                                                                   out float right,
+                                                                                   out float bottom);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxGetMetrics")]

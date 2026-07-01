@@ -172,3 +172,50 @@ TEST_F(InputBoxTest, CaretMetricsHitTestAndHorizontalScrollAreNative) {
     EXPECT_EQ(inputBox->getCursorUtf8(),
               inputBox->snapUtf8(inputBox->getCursorUtf8(), milestro_text::TextBoundarySnapMode::Nearest));
 }
+
+TEST_F(InputBoxTest, CompositionIsTransientUntilCommit) {
+    const std::string committed = "ab";
+    const std::string composition = "\xE6\x97\xA5";
+    auto inputBox = MakeInputBox();
+    inputBox->setText(committed.c_str(), committed.size());
+    inputBox->setCursorUtf8(1, skia::textlayout::Affinity::kDownstream);
+
+    ASSERT_TRUE(inputBox->setComposition(composition.c_str(), composition.size()));
+    EXPECT_EQ(inputBox->getText(), committed);
+    EXPECT_EQ(inputBox->getCursorUtf8(), 1U);
+
+    const auto compositionRect = inputBox->getCompositionRect();
+    const auto caretRect = inputBox->getCaretRect();
+    EXPECT_GT(compositionRect.right, compositionRect.left);
+    EXPECT_GT(compositionRect.bottom, compositionRect.top);
+    EXPECT_GE(caretRect.left, compositionRect.left);
+
+    ASSERT_TRUE(inputBox->commitComposition(composition.c_str(), composition.size()));
+    EXPECT_EQ(inputBox->getText(), "a" + composition + "b");
+    EXPECT_EQ(inputBox->getCursorUtf8(), 1U + composition.size());
+}
+
+TEST_F(InputBoxTest, CompositionClearDoesNotMutateCommittedText) {
+    const std::string committed = "ab";
+    const std::string composition = "\xE3\x81\x8B";
+    auto inputBox = MakeInputBox();
+    inputBox->setText(committed.c_str(), committed.size());
+    inputBox->setCursorUtf8(1, skia::textlayout::Affinity::kDownstream);
+
+    ASSERT_TRUE(inputBox->setComposition(composition.c_str(), composition.size()));
+    ASSERT_TRUE(inputBox->clearComposition());
+    EXPECT_EQ(inputBox->getText(), committed);
+    EXPECT_EQ(inputBox->getCursorUtf8(), 1U);
+    EXPECT_FALSE(inputBox->clearComposition());
+}
+
+TEST_F(InputBoxTest, EmptyCommitUsesCurrentCompositionText) {
+    const std::string composition = "\xE4\xBD\xA0";
+    auto inputBox = MakeInputBox();
+    inputBox->setText("", 0);
+
+    ASSERT_TRUE(inputBox->setComposition(composition.c_str(), composition.size()));
+    ASSERT_TRUE(inputBox->commitComposition(nullptr, 0));
+    EXPECT_EQ(inputBox->getText(), composition);
+    EXPECT_EQ(inputBox->getCursorUtf8(), composition.size());
+}

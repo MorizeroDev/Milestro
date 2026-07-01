@@ -237,6 +237,43 @@ namespace Milestro.Skia.TextLayout
             }
         }
 
+        public bool SetComposition(string text)
+        {
+            ThrowIfDisposed();
+            var bytes = Encoding.UTF8.GetBytes(text ?? string.Empty);
+            unsafe
+            {
+                fixed (byte* ptr = bytes)
+                {
+                    ExitCodeUtil.ThrowIfFailed(
+                        BindingC.SkiaTextlayoutInputBoxSetComposition(Ptr, ptr, (ulong)bytes.Length, out var changed));
+                    return changed != 0;
+                }
+            }
+        }
+
+        public bool CommitComposition(string text)
+        {
+            ThrowIfDisposed();
+            var bytes = Encoding.UTF8.GetBytes(text ?? string.Empty);
+            unsafe
+            {
+                fixed (byte* ptr = bytes)
+                {
+                    ExitCodeUtil.ThrowIfFailed(
+                        BindingC.SkiaTextlayoutInputBoxCommitComposition(Ptr, ptr, (ulong)bytes.Length, out var changed));
+                    return changed != 0;
+                }
+            }
+        }
+
+        public bool ClearComposition()
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxClearComposition(Ptr, out var changed));
+            return changed != 0;
+        }
+
         public bool DeleteBackward()
         {
             ThrowIfDisposed();
@@ -314,6 +351,18 @@ namespace Milestro.Skia.TextLayout
             ThrowIfDisposed();
             ExitCodeUtil.ThrowIfFailed(
                 BindingC.SkiaTextlayoutInputBoxGetCaretRect(Ptr, out var left, out var top, out var right, out var bottom));
+            return Rect.MinMaxRect(left, top, right, bottom);
+        }
+
+        public Rect GetCompositionRect()
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutInputBoxGetCompositionRect(Ptr,
+                    out var left,
+                    out var top,
+                    out var right,
+                    out var bottom));
             return Rect.MinMaxRect(left, top, right, bottom);
         }
 

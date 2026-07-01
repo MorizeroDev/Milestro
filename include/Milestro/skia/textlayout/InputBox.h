@@ -116,6 +116,10 @@ public:
     }
 
     void insertText(const char* text, size_t length);
+    bool setComposition(const char* text, size_t length);
+    bool commitComposition(const char* text, size_t length);
+    bool clearComposition();
+    bool hasComposition() const { return !compositionText_.empty(); }
     bool deleteBackward();
     bool deleteForward();
     bool movePrevious();
@@ -124,6 +128,7 @@ public:
 
     void ensureCaretVisible();
     InputBoxCaretRect getCaretRect();
+    InputBoxCaretRect getCompositionRect();
     InputBoxMetrics getMetrics();
     size_t getLineCount();
     bool getLineMetrics(size_t lineNumber, InputBoxLineMetrics& metrics);
@@ -145,14 +150,24 @@ private:
     SkColor caretColor_ = SK_ColorWHITE;
     bool caretVisible_ = true;
     bool paragraphDirty_ = true;
+    std::string compositionText_;
 
     static std::string sanitizeSingleLine(const char* text, size_t length);
 
     void rebuildParagraphIfNeeded();
     std::unique_ptr<::skia::textlayout::Paragraph> buildParagraph() const;
+    std::unique_ptr<::skia::textlayout::Paragraph> buildParagraphForText(const std::string& text) const;
+    std::string displayText() const;
+    TextBoundaryMap displayBoundaryMap() const;
+    size_t displayCaretUtf8() const;
+    size_t displayCompositionStartUtf8() const;
+    size_t displayCompositionEndUtf8() const;
+    size_t committedUtf8FromDisplay(size_t displayUtf8) const;
+    InputBoxCaretRect getCaretRectForDisplayOffset(size_t displayUtf8);
     SkScalar paragraphLayoutWidth() const;
     SkScalar contentWidth();
     void replaceText(std::string text, size_t requestedCursor);
+    void markCompositionDirty();
 };
 
 class MILESTRO_API InputBoxDrawSnapshot {
@@ -160,9 +175,11 @@ public:
     InputBoxDrawSnapshot(std::unique_ptr<::skia::textlayout::Paragraph> paragraph,
                          InputBoxCaretRect caretRect,
                          InputBoxMetrics metrics,
+                         InputBoxCaretRect compositionRect,
                          SkScalar caretWidth,
                          SkColor caretColor,
-                         bool caretVisible);
+                         bool caretVisible,
+                         bool compositionVisible);
 
     void paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, SkScalar height) const;
 
@@ -170,9 +187,11 @@ private:
     std::unique_ptr<::skia::textlayout::Paragraph> paragraph_;
     InputBoxCaretRect caretRect_;
     InputBoxMetrics metrics_;
+    InputBoxCaretRect compositionRect_;
     SkScalar caretWidth_ = 1.0f;
     SkColor caretColor_ = SK_ColorWHITE;
     bool caretVisible_ = false;
+    bool compositionVisible_ = false;
 };
 
 } // namespace milestro::skia::textlayout

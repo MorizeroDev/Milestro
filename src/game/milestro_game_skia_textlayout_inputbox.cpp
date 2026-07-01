@@ -139,6 +139,34 @@ int64_t MilestroSkiaTextlayoutInputBoxInsertText(milestro::skia::textlayout::Inp
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutInputBoxSetComposition(milestro::skia::textlayout::InputBox *inputBox,
+                                                     void *text,
+                                                     uint64_t size,
+                                                     int32_t &changed) try {
+    changed = inputBox->setComposition(static_cast<const char *>(text), static_cast<size_t>(size)) ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxCommitComposition(milestro::skia::textlayout::InputBox *inputBox,
+                                                        void *text,
+                                                        uint64_t size,
+                                                        int32_t &changed) try {
+    changed = inputBox->commitComposition(static_cast<const char *>(text), static_cast<size_t>(size)) ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxClearComposition(milestro::skia::textlayout::InputBox *inputBox,
+                                                       int32_t &changed) try {
+    changed = inputBox->clearComposition() ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutInputBoxDeleteBackward(milestro::skia::textlayout::InputBox *inputBox,
                                                      int32_t &changed) try {
     changed = inputBox->deleteBackward() ? 1 : 0;
@@ -244,6 +272,21 @@ int64_t MilestroSkiaTextlayoutInputBoxGetCaretRect(milestro::skia::textlayout::I
                                                    float &right,
                                                    float &bottom) try {
     const auto rect = inputBox->getCaretRect();
+    left = rect.left;
+    top = rect.top;
+    right = rect.right;
+    bottom = rect.bottom;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxGetCompositionRect(milestro::skia::textlayout::InputBox *inputBox,
+                                                         float &left,
+                                                         float &top,
+                                                         float &right,
+                                                         float &bottom) try {
+    const auto rect = inputBox->getCompositionRect();
     left = rect.left;
     top = rect.top;
     right = rect.right;

@@ -428,6 +428,28 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxInsertText(milestro::skia:
     return MilestroSkiaTextlayoutInputBoxInsertText(inputBox, text, size);
 }
 
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxSetComposition(
+        milestro::skia::textlayout::InputBox* inputBox,
+        [[milize::CSharpType("void*")]] void* text,
+        uint64_t size,
+        int32_t& changed) {
+    return MilestroSkiaTextlayoutInputBoxSetComposition(inputBox, text, size, changed);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxCommitComposition(
+        milestro::skia::textlayout::InputBox* inputBox,
+        [[milize::CSharpType("void*")]] void* text,
+        uint64_t size,
+        int32_t& changed) {
+    return MilestroSkiaTextlayoutInputBoxCommitComposition(inputBox, text, size, changed);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxClearComposition(
+        milestro::skia::textlayout::InputBox* inputBox,
+        int32_t& changed) {
+    return MilestroSkiaTextlayoutInputBoxClearComposition(inputBox, changed);
+}
+
 int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxDeleteBackward(milestro::skia::textlayout::InputBox* inputBox,
                                                                      int32_t& changed) {
     return MilestroSkiaTextlayoutInputBoxDeleteBackward(inputBox, changed);
@@ -498,6 +520,15 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxGetCaretRect(milestro::ski
                                                                    float& right,
                                                                    float& bottom) {
     return MilestroSkiaTextlayoutInputBoxGetCaretRect(inputBox, left, top, right, bottom);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxGetCompositionRect(
+        milestro::skia::textlayout::InputBox* inputBox,
+        float& left,
+        float& top,
+        float& right,
+        float& bottom) {
+    return MilestroSkiaTextlayoutInputBoxGetCompositionRect(inputBox, left, top, right, bottom);
 }
 
 int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxGetMetrics(milestro::skia::textlayout::InputBox* inputBox,

@@ -64,6 +64,8 @@ namespace Milestro.Components
         [NonSerialized] private bool focused;
         [NonSerialized] private bool caretVisible = true;
         [NonSerialized] private float nextBlinkTime;
+        [NonSerialized] private bool compositionActive;
+        [NonSerialized] private string lastCompositionText = "";
 #if UNITY_EDITOR
         [NonSerialized] private bool m_editorRebuildQueued;
 #endif
@@ -84,6 +86,8 @@ namespace Milestro.Components
                 {
                     inputBox.Text = m_text;
                 }
+                compositionActive = false;
+                lastCompositionText = "";
                 layoutDirty = true;
                 paintDirty = true;
             }
@@ -114,6 +118,9 @@ namespace Milestro.Components
         {
             base.OnDisable();
             focused = false;
+            compositionActive = false;
+            lastCompositionText = "";
+            Input.imeCompositionMode = IMECompositionMode.Auto;
             Texture = null;
             RetireInputBox();
             surface?.Dispose();
@@ -149,6 +156,8 @@ namespace Milestro.Components
             }
 
             inputBox.HitTest(ToContentPoint(localPoint));
+            compositionActive = false;
+            lastCompositionText = "";
             m_text = inputBox.Text;
             ResetBlink();
             paintDirty = true;
@@ -162,9 +171,13 @@ namespace Milestro.Components
         public void OnDeselect(BaseEventData eventData)
         {
             focused = false;
+            compositionActive = false;
+            lastCompositionText = "";
+            Input.imeCompositionMode = IMECompositionMode.Auto;
             caretVisible = false;
             if (inputBox != null)
             {
+                inputBox.ClearComposition();
                 inputBox.SetCaretVisible(false);
             }
             paintDirty = true;
@@ -222,6 +235,7 @@ namespace Milestro.Components
         private void Focus()
         {
             focused = true;
+            Input.imeCompositionMode = IMECompositionMode.On;
             ResetBlink();
             paintDirty = true;
         }
@@ -247,40 +261,138 @@ namespace Milestro.Components
         private void ReadKeyboardInput()
         {
             var changed = false;
-            if (Input.GetKeyDown(KeyCode.LeftArrow) && inputBox != null)
-            {
-                changed |= inputBox.MovePrevious();
-            }
-            if (Input.GetKeyDown(KeyCode.RightArrow) && inputBox != null)
-            {
-                changed |= inputBox.MoveNext();
-            }
-            if (Input.GetKeyDown(KeyCode.Backspace) && inputBox != null)
-            {
-                changed |= inputBox.DeleteBackward();
-            }
-            if (Input.GetKeyDown(KeyCode.Delete) && inputBox != null)
-            {
-                changed |= inputBox.DeleteForward();
-            }
-
             var committedText = FilterCommittedInput(Input.inputString);
             if (committedText.Length > 0 && inputBox != null)
             {
-                inputBox.InsertText(committedText);
-                changed = true;
+                if (compositionActive)
+                {
+                    changed |= inputBox.CommitComposition(committedText);
+                    compositionActive = false;
+                    lastCompositionText = "";
+                }
+                else
+                {
+                    inputBox.InsertText(committedText);
+                    changed = true;
+                }
+            }
+            else
+            {
+                changed |= UpdateComposition();
             }
 
-            if (!changed || inputBox == null)
+            if (!compositionActive)
+            {
+                if (Input.GetKeyDown(KeyCode.LeftArrow) && inputBox != null)
+                {
+                    changed |= inputBox.MovePrevious();
+                }
+                if (Input.GetKeyDown(KeyCode.RightArrow) && inputBox != null)
+                {
+                    changed |= inputBox.MoveNext();
+                }
+                if (Input.GetKeyDown(KeyCode.Backspace) && inputBox != null)
+                {
+                    changed |= inputBox.DeleteBackward();
+                }
+                if (Input.GetKeyDown(KeyCode.Delete) && inputBox != null)
+                {
+                    changed |= inputBox.DeleteForward();
+                }
+            }
+
+            if (inputBox != null)
+            {
+                UpdateCompositionCursorPosition();
+            }
+
+            if (changed && inputBox != null)
+            {
+                m_text = inputBox.Text;
+                inputBox.EnsureCaretVisible();
+                ResetBlink();
+                layoutDirty = true;
+                paintDirty = true;
+            }
+        }
+
+        private bool UpdateComposition()
+        {
+            if (inputBox == null)
+            {
+                compositionActive = false;
+                lastCompositionText = "";
+                return false;
+            }
+
+            var compositionText = Input.compositionString ?? "";
+            if (compositionText.Length > 0)
+            {
+                compositionActive = true;
+                if (compositionText == lastCompositionText)
+                {
+                    return false;
+                }
+
+                lastCompositionText = compositionText;
+                return inputBox.SetComposition(compositionText);
+            }
+
+            if (!compositionActive)
+            {
+                return false;
+            }
+
+            compositionActive = false;
+            lastCompositionText = "";
+            return inputBox.ClearComposition();
+        }
+
+        private void UpdateCompositionCursorPosition()
+        {
+            if (inputBox == null || rectTransform == null)
             {
                 return;
             }
 
-            m_text = inputBox.Text;
-            inputBox.EnsureCaretVisible();
-            ResetBlink();
-            layoutDirty = true;
-            paintDirty = true;
+            var rect = inputBox.GetCompositionRect();
+            var metrics = inputBox.GetMetrics();
+            var localPoint = ContentPointToLocalPoint(new Vector2(rect.right - metrics.ScrollX, rect.bottom));
+            var worldPoint = rectTransform.TransformPoint(localPoint);
+            var camera = canvas == null || canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
+            Input.compositionCursorPos = RectTransformUtility.WorldToScreenPoint(camera, worldPoint);
+        }
+
+        private static bool IsEscapeSequenceLead(char ch)
+        {
+            return ch == '[' || ch == 'O';
+        }
+
+        private static bool IsEscapeSequenceParameter(char ch)
+        {
+            return (ch >= '0' && ch <= '9') || ch == ';' || ch == '?' || ch == '=';
+        }
+
+        private static int SkipEscapeSequence(string input, int escapeIndex)
+        {
+            var index = escapeIndex + 1;
+            if (index >= input.Length || !IsEscapeSequenceLead(input[index]))
+            {
+                return index;
+            }
+
+            ++index;
+            while (index < input.Length && IsEscapeSequenceParameter(input[index]))
+            {
+                ++index;
+            }
+
+            return index < input.Length ? index + 1 : index;
+        }
+
+        private static bool IsCommittedTextControl(char ch)
+        {
+            return char.IsControl(ch) || ch == '\u007f';
         }
 
         private static string FilterCommittedInput(string input)
@@ -291,9 +403,15 @@ namespace Milestro.Components
             }
 
             var builder = new StringBuilder(input.Length);
-            foreach (var ch in input)
+            for (var i = 0; i < input.Length; ++i)
             {
-                if (ch == '\b' || ch == '\n' || ch == '\r' || ch == '\u007f')
+                var ch = input[i];
+                if (ch == '\u001b')
+                {
+                    i = SkipEscapeSequence(input, i) - 1;
+                    continue;
+                }
+                if (IsCommittedTextControl(ch))
                 {
                     continue;
                 }
@@ -375,6 +493,8 @@ namespace Milestro.Components
 
             inputBox = new InputBox(paragraphStyle, textStyle);
             inputBox.Text = m_text;
+            compositionActive = false;
+            lastCompositionText = "";
             inputBox.SetCaretColor(m_caretColor);
             inputBox.SetCaretWidth(m_caretWidth);
             inputBox.SetViewport(ContentSize());
@@ -415,6 +535,13 @@ namespace Milestro.Components
             var rect = rectTransform.rect;
             return new Vector2(localPoint.x - rect.xMin - m_margin.left,
                 rect.yMax - localPoint.y - m_margin.top);
+        }
+
+        private Vector2 ContentPointToLocalPoint(Vector2 contentPoint)
+        {
+            var rect = rectTransform.rect;
+            return new Vector2(rect.xMin + m_margin.left + contentPoint.x,
+                rect.yMax - m_margin.top - contentPoint.y);
         }
 
         private ColorSpace SurfaceColorSpace()
