@@ -51,6 +51,8 @@ class Paragraph;
 
 class InputBox;
 
+class InputBoxDrawSnapshot;
+
 class ParagraphBuilder;
 
 class ParagraphStyle;

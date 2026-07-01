@@ -43,13 +43,13 @@ void DrawParagraphCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& comm
     paragraph->paint(canvas, command.x, command.y);
 }
 
-void DrawInputBoxCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& command) {
-    auto* inputBox = static_cast<milestro::skia::textlayout::InputBox*>(command.resource);
-    if (inputBox == nullptr) {
+void DrawInputBoxSnapshotCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& command) {
+    auto* snapshot = static_cast<milestro::skia::textlayout::InputBoxDrawSnapshot*>(command.resource);
+    if (snapshot == nullptr) {
         return;
     }
 
-    inputBox->paint(canvas, command.x, command.y, command.width, command.height);
+    snapshot->paint(canvas, command.x, command.y, command.width, command.height);
 }
 
 void DrawCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& command) {
@@ -60,8 +60,8 @@ void DrawCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& command) {
         case MilestroUnityDrawCommandKind::Paragraph:
             DrawParagraphCommand(canvas, command);
             return;
-        case MilestroUnityDrawCommandKind::InputBox:
-            DrawInputBoxCommand(canvas, command);
+        case MilestroUnityDrawCommandKind::InputBoxSnapshot:
+            DrawInputBoxSnapshotCommand(canvas, command);
             return;
         default:
             return;

@@ -376,6 +376,17 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxDestroy(
     return MilestroSkiaTextlayoutInputBoxDestroy(ret);
 }
 
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxCreateDrawSnapshot(
+        milestro::skia::textlayout::InputBox* inputBox,
+        milestro::skia::textlayout::InputBoxDrawSnapshot*& ret) {
+    return MilestroSkiaTextlayoutInputBoxCreateDrawSnapshot(inputBox, ret);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxDrawSnapshotDestroy(
+        milestro::skia::textlayout::InputBoxDrawSnapshot*& ret) {
+    return MilestroSkiaTextlayoutInputBoxDrawSnapshotDestroy(ret);
+}
+
 int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxSetText(
         milestro::skia::textlayout::InputBox* inputBox,
         [[milize::CSharpType("void*")]] void* text,

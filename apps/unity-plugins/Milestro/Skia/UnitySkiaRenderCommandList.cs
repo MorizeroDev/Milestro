@@ -11,7 +11,7 @@ namespace Milestro.Skia
         {
             Paragraph = 1,
             Image = 2,
-            InputBox = 3
+            InputBoxSnapshot = 3
         }
 
         internal struct Command
@@ -23,6 +23,7 @@ namespace Milestro.Skia
             public float Width;
             public float Height;
             public object KeepAlive;
+            public bool SnapshotInputBox;
         }
 
         private readonly List<Command> commands = new List<Command>();
@@ -93,13 +94,13 @@ namespace Milestro.Skia
 
             commands.Add(new Command
             {
-                Kind = CommandKind.InputBox,
-                Resource = inputBox.Ptr,
+                Kind = CommandKind.InputBoxSnapshot,
                 X = viewport.x,
                 Y = viewport.y,
                 Width = viewport.width,
                 Height = viewport.height,
-                KeepAlive = inputBox
+                KeepAlive = inputBox,
+                SnapshotInputBox = true
             });
         }
 

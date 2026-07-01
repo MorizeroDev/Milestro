@@ -489,6 +489,19 @@ void InputBox::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, S
     canvas->restore();
 }
 
+std::unique_ptr<InputBoxDrawSnapshot> InputBox::createDrawSnapshot() {
+    rebuildParagraphIfNeeded();
+    auto paragraph = buildParagraph();
+    auto caretRect = getCaretRect();
+    auto metrics = getMetrics();
+    return std::make_unique<InputBoxDrawSnapshot>(std::move(paragraph),
+                                                  caretRect,
+                                                  metrics,
+                                                  caretWidth_,
+                                                  caretColor_,
+                                                  caretVisible_);
+}
+
 std::string InputBox::sanitizeSingleLine(const char* text, size_t length) {
     std::string result;
     if (text == nullptr || length == 0) {
@@ -510,6 +523,12 @@ void InputBox::rebuildParagraphIfNeeded() {
         return;
     }
 
+    paragraph_ = buildParagraph();
+    paragraphDirty_ = false;
+    scrollX_ = ClampScalar(scrollX_, 0.0f, std::max<SkScalar>(0.0f, contentWidth() - viewportWidth_));
+}
+
+std::unique_ptr<::skia::textlayout::Paragraph> InputBox::buildParagraph() const {
     auto fontCollection = GetFontCollection();
     auto unicodeProvider = GetUnicodeProvider();
     auto builder = ::skia::textlayout::ParagraphBuilder::make(paragraphStyle_,
@@ -518,10 +537,9 @@ void InputBox::rebuildParagraphIfNeeded() {
     builder->pushStyle(textStyle_);
     const auto& text = boundaryMap_.text();
     builder->addText(text.c_str(), text.size());
-    paragraph_ = builder->Build();
-    paragraph_->layout(paragraphLayoutWidth());
-    paragraphDirty_ = false;
-    scrollX_ = ClampScalar(scrollX_, 0.0f, std::max<SkScalar>(0.0f, contentWidth() - viewportWidth_));
+    auto paragraph = builder->Build();
+    paragraph->layout(paragraphLayoutWidth());
+    return paragraph;
 }
 
 SkScalar InputBox::paragraphLayoutWidth() const {
@@ -544,6 +562,48 @@ void InputBox::replaceText(std::string text, size_t requestedCursor) {
     affinity_ = ::skia::textlayout::Affinity::kDownstream;
     paragraphDirty_ = true;
     ensureCaretVisible();
+}
+
+InputBoxDrawSnapshot::InputBoxDrawSnapshot(std::unique_ptr<::skia::textlayout::Paragraph> paragraph,
+                                           InputBoxCaretRect caretRect,
+                                           InputBoxMetrics metrics,
+                                           SkScalar caretWidth,
+                                           SkColor caretColor,
+                                           bool caretVisible)
+        : paragraph_(std::move(paragraph)),
+          caretRect_(caretRect),
+          metrics_(metrics),
+          caretWidth_(caretWidth),
+          caretColor_(caretColor),
+          caretVisible_(caretVisible) {}
+
+void InputBoxDrawSnapshot::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, SkScalar height) const {
+    if (canvas == nullptr) {
+        return;
+    }
+
+    canvas->save();
+    const auto clipWidth = width > 0.0f ? width : metrics_.viewportWidth;
+    const auto clipHeight = height > 0.0f ? height : metrics_.viewportHeight;
+    canvas->clipRect(SkRect::MakeXYWH(x, y, clipWidth, clipHeight));
+
+    if (paragraph_ != nullptr) {
+        paragraph_->paint(canvas, x - metrics_.scrollX, y);
+    }
+
+    if (caretVisible_) {
+        SkPaint paint;
+        paint.setColor(caretColor_);
+        paint.setStyle(SkPaint::kFill_Style);
+        const auto caretRight = std::max(caretRect_.right, caretRect_.left + caretWidth_);
+        canvas->drawRect(SkRect::MakeLTRB(x + caretRect_.left - metrics_.scrollX,
+                                          y + caretRect_.top,
+                                          x + caretRight - metrics_.scrollX,
+                                          y + caretRect_.bottom),
+                         paint);
+    }
+
+    canvas->restore();
 }
 
 } // namespace milestro::skia::textlayout

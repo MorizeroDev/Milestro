@@ -57,6 +57,8 @@ struct InputBoxLineMetrics {
     uint64_t lineNumber = 0;
 };
 
+class InputBoxDrawSnapshot;
+
 class MILESTRO_API TextBoundaryMap {
 public:
     TextBoundaryMap();
@@ -127,6 +129,7 @@ public:
     bool getLineMetrics(size_t lineNumber, InputBoxLineMetrics& metrics);
 
     void paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, SkScalar height);
+    std::unique_ptr<InputBoxDrawSnapshot> createDrawSnapshot();
 
 private:
     ::skia::textlayout::ParagraphStyle paragraphStyle_;
@@ -146,9 +149,30 @@ private:
     static std::string sanitizeSingleLine(const char* text, size_t length);
 
     void rebuildParagraphIfNeeded();
+    std::unique_ptr<::skia::textlayout::Paragraph> buildParagraph() const;
     SkScalar paragraphLayoutWidth() const;
     SkScalar contentWidth();
     void replaceText(std::string text, size_t requestedCursor);
+};
+
+class MILESTRO_API InputBoxDrawSnapshot {
+public:
+    InputBoxDrawSnapshot(std::unique_ptr<::skia::textlayout::Paragraph> paragraph,
+                         InputBoxCaretRect caretRect,
+                         InputBoxMetrics metrics,
+                         SkScalar caretWidth,
+                         SkColor caretColor,
+                         bool caretVisible);
+
+    void paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, SkScalar height) const;
+
+private:
+    std::unique_ptr<::skia::textlayout::Paragraph> paragraph_;
+    InputBoxCaretRect caretRect_;
+    InputBoxMetrics metrics_;
+    SkScalar caretWidth_ = 1.0f;
+    SkColor caretColor_ = SK_ColorWHITE;
+    bool caretVisible_ = false;
 };
 
 } // namespace milestro::skia::textlayout

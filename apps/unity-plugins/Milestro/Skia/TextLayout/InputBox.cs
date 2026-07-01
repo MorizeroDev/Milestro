@@ -92,6 +92,51 @@ namespace Milestro.Skia.TextLayout
         }
     }
 
+    internal sealed class InputBoxDrawSnapshot : IDisposable
+    {
+        private bool disposed;
+
+        internal IntPtr Ptr { get; private set; }
+
+        internal InputBoxDrawSnapshot(IntPtr ptr)
+        {
+            Ptr = ptr;
+        }
+
+        ~InputBoxDrawSnapshot()
+        {
+            Dispose(false);
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            disposed = true;
+            if (Ptr == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var ptr = Ptr;
+            var result = BindingC.SkiaTextlayoutInputBoxDrawSnapshotDestroy(ref ptr);
+            if (disposing)
+            {
+                ExitCodeUtil.ThrowIfFailed(result);
+            }
+            Ptr = ptr;
+        }
+    }
+
     public sealed class InputBox : IDisposable
     {
         private bool disposed;
@@ -144,6 +189,13 @@ namespace Milestro.Skia.TextLayout
                         BindingC.SkiaTextlayoutInputBoxSetText(Ptr, ptr, (ulong)bytes.Length));
                 }
             }
+        }
+
+        internal InputBoxDrawSnapshot CreateDrawSnapshot()
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxCreateDrawSnapshot(Ptr, out var ptr));
+            return new InputBoxDrawSnapshot(ptr);
         }
 
         public void SetViewport(Vector2 size)

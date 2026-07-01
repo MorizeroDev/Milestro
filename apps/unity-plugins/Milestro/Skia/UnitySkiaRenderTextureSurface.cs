@@ -59,6 +59,7 @@ namespace Milestro.Skia
             public IntPtr CommandsPtr;
             public Texture Texture;
             public object[] Resources;
+            public IDisposable[] OwnedResources;
 
             public void KeepAlive()
             {
@@ -70,8 +71,16 @@ namespace Milestro.Skia
 
                 foreach (var resource in Resources)
                 {
-                    GC.KeepAlive(resource);
+                    if (resource != null)
+                    {
+                        GC.KeepAlive(resource);
+                    }
                 }
+            }
+
+            public void DisposeOwnedResources()
+            {
+                DisposeResources(OwnedResources);
             }
         }
 
@@ -251,10 +260,12 @@ namespace Milestro.Skia
 
             var submissionPtr = IntPtr.Zero;
             var commandsPtr = IntPtr.Zero;
+            object[] resources = Array.Empty<object>();
+            IDisposable[] ownedResources = Array.Empty<IDisposable>();
             PendingRenderEvent? pendingEvent = null;
             try
             {
-                commandsPtr = MarshalCommands(commands);
+                commandsPtr = MarshalCommands(commands, out resources, out ownedResources);
                 var submission = new RenderSubmissionPayload
                 {
                     Target = target,
@@ -267,7 +278,7 @@ namespace Milestro.Skia
                 Marshal.StructureToPtr(submission, submissionPtr, false);
 
                 // HasUsableTexture and TryGetNativeTargetHandles above guarantee a live target texture here.
-                pendingEvent = AddPendingEvent(submissionPtr, commandsPtr, Texture!, SnapshotResources(commands));
+                pendingEvent = AddPendingEvent(submissionPtr, commandsPtr, Texture!, resources, ownedResources);
 
                 CommandBuffer? cmd = null;
                 try
@@ -291,6 +302,8 @@ namespace Milestro.Skia
                 else
                 {
                     FreeSubmission(submissionPtr, commandsPtr);
+                    KeepAliveResources(resources);
+                    DisposeResources(ownedResources);
                 }
                 throw;
             }
@@ -326,8 +339,12 @@ namespace Milestro.Skia
             }
         }
 
-        private static IntPtr MarshalCommands(UnitySkiaRenderCommandList commandList)
+        private static IntPtr MarshalCommands(UnitySkiaRenderCommandList commandList,
+            out object[] keepAliveResources,
+            out IDisposable[] ownedResources)
         {
+            keepAliveResources = Array.Empty<object>();
+            ownedResources = Array.Empty<IDisposable>();
             if (commandList.Count == 0)
             {
                 return IntPtr.Zero;
@@ -335,48 +352,88 @@ namespace Milestro.Skia
 
             var commandSize = Marshal.SizeOf<DrawCommandPayload>();
             var commandsPtr = Marshal.AllocHGlobal(commandSize * commandList.Count);
+            var keepAliveList = new List<object>(commandList.Count);
+            var ownedList = new List<IDisposable>();
             try
             {
                 var commands = commandList.Commands;
                 for (var i = 0; i < commands.Count; ++i)
                 {
                     var command = commands[i];
+                    var resource = command.Resource;
+                    var keepAlive = command.KeepAlive;
+                    if (command.SnapshotInputBox)
+                    {
+                        if (!(command.KeepAlive is TextLayout.InputBox inputBox))
+                        {
+                            throw new InvalidOperationException("Milestro InputBox draw command is missing its editor model.");
+                        }
+
+                        var snapshot = inputBox.CreateDrawSnapshot();
+                        resource = snapshot.Ptr;
+                        keepAlive = snapshot;
+                        ownedList.Add(snapshot);
+                    }
+
                     var payload = new DrawCommandPayload
                     {
                         Kind = (int)command.Kind,
-                        Resource = command.Resource,
+                        Resource = resource,
                         X = command.X,
                         Y = command.Y,
                         Width = command.Width,
                         Height = command.Height
                     };
                     Marshal.StructureToPtr(payload, IntPtr.Add(commandsPtr, i * commandSize), false);
+                    keepAliveList.Add(keepAlive);
                 }
+
+                keepAliveResources = keepAliveList.ToArray();
+                ownedResources = ownedList.ToArray();
             }
             catch
             {
-                Marshal.FreeHGlobal(commandsPtr);
+                try
+                {
+                    DisposeResources(ownedList);
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(commandsPtr);
+                }
                 throw;
             }
 
             return commandsPtr;
         }
 
-        private static object[] SnapshotResources(UnitySkiaRenderCommandList commandList)
+        private static void KeepAliveResources(object[] resources)
         {
-            if (commandList.Count == 0)
+            if (resources == null)
             {
-                return Array.Empty<object>();
+                return;
             }
 
-            var resources = new object[commandList.Count];
-            var commands = commandList.Commands;
-            for (var i = 0; i < commands.Count; ++i)
+            foreach (var resource in resources)
             {
-                resources[i] = commands[i].KeepAlive;
+                if (resource != null)
+                {
+                    GC.KeepAlive(resource);
+                }
+            }
+        }
+
+        private static void DisposeResources(IEnumerable<IDisposable> resources)
+        {
+            if (resources == null)
+            {
+                return;
             }
 
-            return resources;
+            foreach (var resource in resources)
+            {
+                resource?.Dispose();
+            }
         }
 
         private static void FreeSubmission(IntPtr submissionPtr, IntPtr commandsPtr)
@@ -627,7 +684,8 @@ namespace Milestro.Skia
         private static PendingRenderEvent AddPendingEvent(IntPtr submissionPtr,
             IntPtr commandsPtr,
             Texture texture,
-            object[] resources)
+            object[] resources,
+            IDisposable[] ownedResources)
         {
             EnsureLifetimePump();
             lock (PendingLock)
@@ -638,7 +696,8 @@ namespace Milestro.Skia
                     SubmissionPtr = submissionPtr,
                     CommandsPtr = commandsPtr,
                     Texture = texture,
-                    Resources = resources
+                    Resources = resources,
+                    OwnedResources = ownedResources
                 };
                 PendingEvents.Add(pendingEvent);
                 return pendingEvent;
@@ -657,6 +716,7 @@ namespace Milestro.Skia
             {
                 FreeSubmission(pendingEvent.SubmissionPtr, pendingEvent.CommandsPtr);
                 pendingEvent.KeepAlive();
+                pendingEvent.DisposeOwnedResources();
             }
         }
 
@@ -705,6 +765,7 @@ namespace Milestro.Skia
 
                     FreeSubmission(pendingEvent.SubmissionPtr, pendingEvent.CommandsPtr);
                     pendingEvent.KeepAlive();
+                    pendingEvent.DisposeOwnedResources();
                     PendingEvents.RemoveAt(i);
                 }
 

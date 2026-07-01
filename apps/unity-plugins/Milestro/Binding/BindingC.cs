@@ -315,6 +315,14 @@ namespace Milestro.Binding
         internal static extern unsafe long SkiaTextlayoutInputBoxDestroy(ref IntPtr ret);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxCreateDrawSnapshot")]
+        internal static extern unsafe long SkiaTextlayoutInputBoxCreateDrawSnapshot(IntPtr inputBox, out IntPtr ret);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxDrawSnapshotDestroy")]
+        internal static extern unsafe long SkiaTextlayoutInputBoxDrawSnapshotDestroy(ref IntPtr ret);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxSetText")]
         internal static extern unsafe long SkiaTextlayoutInputBoxSetText(IntPtr inputBox, void* text, ulong size);
 

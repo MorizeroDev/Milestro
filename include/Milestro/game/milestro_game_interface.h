@@ -188,6 +188,11 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxCreate(milestro::skia::textla
                                                           milestro::skia::textlayout::TextStyle *textStyle);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxDestroy(
         [[milize::RefType("ref")]] milestro::skia::textlayout::InputBox *&ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxCreateDrawSnapshot(
+        milestro::skia::textlayout::InputBox *inputBox,
+        milestro::skia::textlayout::InputBoxDrawSnapshot *&ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxDrawSnapshotDestroy(
+        [[milize::RefType("ref")]] milestro::skia::textlayout::InputBoxDrawSnapshot *&ret);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetText(milestro::skia::textlayout::InputBox *inputBox,
                                                            [[milize::CSharpType("void*")]] void *text,
                                                            uint64_t size);
