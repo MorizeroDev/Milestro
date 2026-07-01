@@ -409,6 +409,7 @@ MILESTRO_API int64_t MilestroLoadICU(
         [[milize::CSharpType("byte*")]] uint8_t *ptr,
         [[milize::CSharpType("byte*")]] uint8_t *dir
 );
+MILESTRO_API int64_t MilestroIsICULoaded(int32_t &loaded);
 
 MILESTRO_API int64_t MilestroUnicodeNormalizerCreate(milestro::unicode::Normalizer*& ret,
                                                    [[milize::CSharpType("byte*")]] uint8_t* name,

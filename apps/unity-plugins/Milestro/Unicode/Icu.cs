@@ -6,6 +6,17 @@ namespace Milestro.Unicode
 {
     public static class Icu
     {
+        public static bool IsLoaded()
+        {
+            var ret = BindingC.IsICULoaded(out var loaded);
+            if (ret < 0)
+            {
+                throw new System.Exception("Failed to query ICU load state");
+            }
+
+            return loaded != 0;
+        }
+
         public static unsafe void LoadIcuFronPath(string path)
         {
             var pathCStr = path.CStr();

@@ -715,6 +715,10 @@ namespace Milestro.Binding
         internal static extern unsafe long LoadICU(byte* ptr, byte* dir);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroIsICULoaded")]
+        internal static extern unsafe long IsICULoaded(out int loaded);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeNormalizerCreate")]
         internal static extern unsafe long UnicodeNormalizerCreate(out IntPtr ret, byte* name, int mode);
 

@@ -895,6 +895,10 @@ int64_t FrameworkBindingMilestroLoadICU([[milize::CSharpType("byte*")]] uint8_t*
     return MilestroLoadICU(ptr, dir);
 }
 
+int64_t FrameworkBindingMilestroIsICULoaded(int32_t& loaded) {
+    return MilestroIsICULoaded(loaded);
+}
+
 int64_t FrameworkBindingMilestroUnicodeNormalizerCreate(milestro::unicode::Normalizer*& ret,
                                                         [[milize::CSharpType("byte*")]] uint8_t* name,
                                                         int32_t mode) {

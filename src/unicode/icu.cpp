@@ -154,6 +154,11 @@ static bool load_from(const std::wstring& path) {
     if (status == milestro::io::FileStatus::Directory) {
         sPath = sPath + L"\\icudtl.dat";
     }
+    auto sPathString = milestro::util::encoding::WStringToString(sPath);
+    if (milestro::io::isFileExists(sPathString) != milestro::io::FileStatus::Exists) {
+        MILESTROLOG_INFO("ICU data file does not exist: {}", sPathString);
+        return false;
+    }
     if (void* addr = win_mmap(sPath.c_str())) {
         if (init_icu(addr)) {
             return true;
@@ -171,6 +176,9 @@ bool LoadIcuImpl(void* dataPtr, std::string& dir) {
                     load_from(library_directory()) ||
                     load_from(milestro::util::encoding::StringToWString(
                             milestro::util::env::getenv("MILESTRO_UNICODE_ICUDAL_PATH")));
+        if (IcuLoaded) {
+            MILESTROLOG_INFO("ICU loaded successfully.");
+        }
     }
     return IcuLoaded;
 }
@@ -243,6 +251,10 @@ static bool load_from(const std::string& path) {
     if (status == milestro::io::FileStatus::Directory) {
         sPath = sPath + "/icudtl.dat";
     }
+    if (milestro::io::isFileExists(sPath) != milestro::io::FileStatus::Exists) {
+        MILESTROLOG_INFO("ICU data file does not exist: {}", sPath);
+        return false;
+    }
     if (void* addr = posix_mmap(sPath.c_str())) {
         if (init_icu(addr)) {
             return true;
@@ -285,6 +297,9 @@ bool LoadIcuImpl(void* dataPtr, std::string& path) {
                     load_from(std::filesystem::current_path().string()) ||
                     load_from(milestro::util::env::getenv("MILESTRO_UNICODE_ICUDAL_PATH"));
 #endif
+        if (IcuLoaded) {
+            MILESTROLOG_INFO("ICU loaded successfully.");
+        }
     }
     return IcuLoaded;
 }

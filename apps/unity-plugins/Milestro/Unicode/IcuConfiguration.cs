@@ -76,6 +76,12 @@ namespace Milestro.Unicode
                 return;
             }
 
+            if (Icu.IsLoaded())
+            {
+                Debug.Log("ICU already loaded.");
+                return;
+            }
+
             var result = InitDelegate.Value;
             if (result)
             {

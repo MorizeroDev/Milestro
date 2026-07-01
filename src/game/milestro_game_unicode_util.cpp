@@ -33,6 +33,13 @@ MILESTRO_API int64_t MilestroLoadICU(uint8_t *ptr, uint8_t *path) try {
     return MILESTRO_API_RET_FAILED;
 }
 
+MILESTRO_API int64_t MilestroIsICULoaded(int32_t &loaded) try {
+    loaded = milestro::unicode::IsICULoaded() ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 MILESTRO_API int64_t MilestroUnicodeCaseMapToUpper(
         milestro::game::model::BytesWrapper *&ret,
         uint8_t *locale,
