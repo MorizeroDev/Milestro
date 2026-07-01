@@ -400,6 +400,15 @@ set(MILESTRO_CLI_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${MILESTRO_SKIA_INCLUDE_P
 set(MILESTRO_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES})
 set(MILESTRO_CLI_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES})
 
+set(
+        MILESTRO_SKUNICODE_ICU_FILE
+        ext/skia-unicode/src/SkUnicode.cpp
+        ext/skia-unicode/src/SkUnicode_icu.cpp
+        ext/skia-unicode/src/SkUnicode_icu_bidi.cpp
+        ext/skia-unicode/src/SkBidiFactory_icu_full.cpp
+        ext/skia-unicode/src/SkUnicode_icu_builtin.cpp
+)
+
 if (MILESTRO_ENABLE_CLI)
     set(MILESTRO_DEFINITIONS ${MILESTRO_DEFINITIONS} "MILESTRO_USE_CLI")
     set(MILESTRO_CLI_DEFINITIONS ${MILESTRO_CLI_DEFINITIONS} "MILESTRO_USE_CLI")
@@ -414,7 +423,8 @@ set(
 
         src/skia/FontRegistry.cpp
         src/skia/MilestroRegisteredFontMgr.cpp
-        src/skia/Unicode.cpp
+        src/skia/unicode/SkUnicodeNop.cpp
+        src/skia/unicode/Unicode.cpp
         src/skia/Canvas.cpp
         src/skia/Typeface.cpp
         src/skia/Font.cpp
@@ -503,9 +513,9 @@ set(
 
 # We will not use BUILD_SHARED_LIBS, and you can see the above comment for reasons.
 if (MILESTRO_BUILD_SHARED_LIBS)
-    add_library(Milestro SHARED ${MILESTRO_CORE_FILE} ${MILESTRO_APPLICATION_FILE} ${PUBLIC_GAME_INTERFACE})
+    add_library(Milestro SHARED ${MILESTRO_CORE_FILE} ${MILESTRO_APPLICATION_FILE} ${MILESTRO_SKUNICODE_ICU_FILE} ${PUBLIC_GAME_INTERFACE})
 else ()
-    add_library(Milestro STATIC ${MILESTRO_CORE_FILE} ${MILESTRO_APPLICATION_FILE} ${PUBLIC_GAME_INTERFACE})
+    add_library(Milestro STATIC ${MILESTRO_CORE_FILE} ${MILESTRO_APPLICATION_FILE} ${MILESTRO_SKUNICODE_ICU_FILE} ${PUBLIC_GAME_INTERFACE})
 endif ()
 
 # Only Apple Can Do
@@ -520,6 +530,13 @@ if (DEFINED APPLE AND DEFINED IOS AND MILESTRO_BUILD_FRAMEWORK_LIBS)
 endif ()
 
 target_compile_definitions(Milestro PUBLIC ${MILESTRO_DEFINITIONS})
+target_compile_definitions(Milestro PRIVATE
+        SKUNICODE_IMPLEMENTATION=1
+        SK_UNICODE_AVAILABLE
+        SK_UNICODE_ICU_IMPLEMENTATION
+        U_USING_ICU_NAMESPACE=0
+        U_DISABLE_RENAMING=1
+)
 
 if (MSVC)
     target_compile_options(Milestro PRIVATE

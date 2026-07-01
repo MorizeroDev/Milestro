@@ -39,6 +39,21 @@ MILESTRO_API int64_t MilestroUnityRenderCreateD3D12ExternalTexture(int32_t width
 MILESTRO_API int64_t MilestroUnityRenderDestroyD3D12ExternalTexture(
         [[milize::RefType("ref")]] [[milize::CSharpType("IntPtr")]] void *&texture);
 
+
+MILESTRO_API int64_t MilestroGameModelDataEnvelopDestroy([[milize::RefType("ref")]]
+                                                     milestro::game::model::DataEnvelop *&ret);
+MILESTRO_API int64_t MilestroGameModelBytesWrapperCreate(milestro::game::model::BytesWrapper *&ret,
+                                                     [[milize::CSharpType("byte*")]] uint8_t *ptr,
+                                                     uint64_t size);
+MILESTRO_API int64_t MilestroGameModelBytesWrapperCStr(milestro::game::model::BytesWrapper* ret,
+                                                    [[milize::CSharpType("IntPtr")]] uint8_t*& ptr,
+                                                    uint64_t& size);
+MILESTRO_API int64_t MilestroGameModelNumberWrapperCreate(milestro::game::model::NumberWrapper *&ret,
+                                                      double number
+);
+MILESTRO_API int64_t MilestroGameModelNumberWrapperValue(milestro::game::model::NumberWrapper* ret,
+                                                     double& value);
+
 MILESTRO_API int64_t MilestroSkiaFontRegistryRegisterFontFromFile(uint8_t *path);
 MILESTRO_API int64_t MilestroSkiaFontRegistryGetRegisteredFontFamilyList(milestro::skia::MilestroFontFamilyList *&ret);
 MILESTRO_API int64_t MilestroSkiaFontFamilyListDestroy(
@@ -378,49 +393,58 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetPlaceholder(milestro::ski
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleIsPlaceholder(milestro::skia::textlayout::TextStyle *s,
                                                                   int32_t &isPlaceholder);
 
-MILESTRO_API int64_t MilizeStringComparatorCreate(milestro::unicode::StringComparator*& ret, uint8_t* collation);
+MILESTRO_API int64_t MilestroStringComparatorCreate(milestro::unicode::StringComparator*& ret, uint8_t* collation);
 MILESTRO_API int64_t
-MilizeStringComparatorDestroy([[milize::RefType("ref")]] milestro::unicode::StringComparator*& ret);
-MILESTRO_API int64_t MilizeStringComparatorCompare(milestro::unicode::StringComparator* cmp,
+MilestroStringComparatorDestroy([[milize::RefType("ref")]] milestro::unicode::StringComparator*& ret);
+MILESTRO_API int64_t MilestroStringComparatorCompare(milestro::unicode::StringComparator* cmp,
                                                    int32_t& result,
                                                    uint8_t* a,
                                                    uint8_t* b);
 
-MILESTRO_API int64_t MilizeUnicodeNormalizerCreate(milestro::unicode::Normalizer*& ret,
+MILESTRO_API int64_t MilestroCopyAndLoadICU(
+        [[milize::CSharpType("byte*")]] uint8_t *ptr, uint64_t size,
+        [[milize::CSharpType("byte*")]] uint8_t *dir
+);
+MILESTRO_API int64_t MilestroLoadICU(
+        [[milize::CSharpType("byte*")]] uint8_t *ptr,
+        [[milize::CSharpType("byte*")]] uint8_t *dir
+);
+
+MILESTRO_API int64_t MilestroUnicodeNormalizerCreate(milestro::unicode::Normalizer*& ret,
                                                    [[milize::CSharpType("byte*")]] uint8_t* name,
                                                    int32_t mode);
-MILESTRO_API int64_t MilizeUnicodeNormalizerDestroy([[milize::RefType("ref")]] milestro::unicode::Normalizer*& ret);
-MILESTRO_API int64_t MilizeUnicodeNormalizerNormalize(milestro::unicode::Normalizer* seg,
+MILESTRO_API int64_t MilestroUnicodeNormalizerDestroy([[milize::RefType("ref")]] milestro::unicode::Normalizer*& ret);
+MILESTRO_API int64_t MilestroUnicodeNormalizerNormalize(milestro::unicode::Normalizer* seg,
                                                       milestro::game::model::BytesWrapper*& ret,
                                                       [[milize::CSharpType("byte*")]] uint8_t* text);
 
 
-MILESTRO_API int64_t MilizeUnicodeSegmenterCreate(milestro::unicode::Segmenter*& ret,
+MILESTRO_API int64_t MilestroUnicodeSegmenterCreate(milestro::unicode::Segmenter*& ret,
                                                   [[milize::CSharpType("byte*")]] uint8_t* locale,
                                                   [[milize::CSharpType("byte*")]] uint8_t* text);
-MILESTRO_API int64_t MilizeUnicodeSegmenterDestroy([[milize::RefType("ref")]] milestro::unicode::Segmenter*& ret);
-MILESTRO_API int64_t MilizeUnicodeSegmenterFirst(milestro::unicode::Segmenter* seg, int32_t& ret);
-MILESTRO_API int64_t MilizeUnicodeSegmenterNext(milestro::unicode::Segmenter* seg, int32_t& ret);
-MILESTRO_API int64_t MilizeUnicodeSegmenterCurrent(milestro::unicode::Segmenter* seg, int32_t& ret);
-MILESTRO_API int64_t MilizeUnicodeSegmenterPrevious(milestro::unicode::Segmenter* seg, int32_t& ret);
-MILESTRO_API int64_t MilizeUnicodeSegmenterSubString(milestro::unicode::Segmenter* seg,
+MILESTRO_API int64_t MilestroUnicodeSegmenterDestroy([[milize::RefType("ref")]] milestro::unicode::Segmenter*& ret);
+MILESTRO_API int64_t MilestroUnicodeSegmenterFirst(milestro::unicode::Segmenter* seg, int32_t& ret);
+MILESTRO_API int64_t MilestroUnicodeSegmenterNext(milestro::unicode::Segmenter* seg, int32_t& ret);
+MILESTRO_API int64_t MilestroUnicodeSegmenterCurrent(milestro::unicode::Segmenter* seg, int32_t& ret);
+MILESTRO_API int64_t MilestroUnicodeSegmenterPrevious(milestro::unicode::Segmenter* seg, int32_t& ret);
+MILESTRO_API int64_t MilestroUnicodeSegmenterSubString(milestro::unicode::Segmenter* seg,
                                                      milestro::game::model::BytesWrapper*& ret,
                                                      int32_t start,
                                                      int32_t len);
 
-MILESTRO_API int64_t MilizeUnicodeTransliteratorCreate(milestro::unicode::Transliterator*& ret,
+MILESTRO_API int64_t MilestroUnicodeTransliteratorCreate(milestro::unicode::Transliterator*& ret,
                                                        [[milize::CSharpType("byte*")]] uint8_t* id,
                                                        int32_t direction);
 MILESTRO_API int64_t
-MilizeUnicodeTransliteratorDestroy([[milize::RefType("ref")]] milestro::unicode::Transliterator*& ret);
-MILESTRO_API int64_t MilizeUnicodeTransliteratorTransliterate(milestro::unicode::Transliterator* t,
+MilestroUnicodeTransliteratorDestroy([[milize::RefType("ref")]] milestro::unicode::Transliterator*& ret);
+MILESTRO_API int64_t MilestroUnicodeTransliteratorTransliterate(milestro::unicode::Transliterator* t,
                                                               milestro::game::model::BytesWrapper*& output,
                                                               [[milize::CSharpType("byte*")]] uint8_t* input);
 
-MILESTRO_API int64_t MilizeUnicodeCaseMapToUpper(milestro::game::model::BytesWrapper*& ret,
+MILESTRO_API int64_t MilestroUnicodeCaseMapToUpper(milestro::game::model::BytesWrapper*& ret,
                                                  [[milize::CSharpType("byte*")]] uint8_t* locale,
                                                  [[milize::CSharpType("byte*")]] uint8_t* text);
-MILESTRO_API int64_t MilizeUnicodeCaseMapToLower(milestro::game::model::BytesWrapper*& ret,
+MILESTRO_API int64_t MilestroUnicodeCaseMapToLower(milestro::game::model::BytesWrapper*& ret,
                                                  [[milize::CSharpType("byte*")]] uint8_t* locale,
                                                  [[milize::CSharpType("byte*")]] uint8_t* text);
 

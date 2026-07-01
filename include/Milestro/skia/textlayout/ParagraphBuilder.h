@@ -1,12 +1,12 @@
 #ifndef MILESTRO_SKIA_TEXTLAYOUT_PARAGRAPHBUILDER_H
 #define MILESTRO_SKIA_TEXTLAYOUT_PARAGRAPHBUILDER_H
 
-#include "modules/skparagraph/include/ParagraphBuilder.h"
-#include "ParagraphStyle.h"
+#include "../unicode/Unicode.h"
 #include "FontCollection.h"
-#include "Milestro/skia/Unicode.h"
-#include "TextStyle.h"
 #include "Paragraph.h"
+#include "ParagraphStyle.h"
+#include "TextStyle.h"
+#include "modules/skparagraph/include/ParagraphBuilder.h"
 
 namespace milestro::skia::textlayout {
 

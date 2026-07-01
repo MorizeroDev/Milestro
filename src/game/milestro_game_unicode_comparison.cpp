@@ -6,17 +6,17 @@
 
 extern "C" {
 
-MILESTRO_API int64_t MilizeStringComparatorCreate(milestro::unicode::StringComparator*& ret, uint8_t* collation) try {
+MILESTRO_API int64_t MilestroStringComparatorCreate(milestro::unicode::StringComparator*& ret, uint8_t* collation) try {
     ret = new milestro::unicode::StringComparator(std::string(reinterpret_cast<char*>(collation)));
     return MILESTRO_API_RET_OK;
 } catch (std::runtime_error& e) {
-    MILESTROLOG_ERROR("MilizeStringComparatorCreate: {}", e.what());
+    MILESTROLOG_ERROR("MilestroStringComparatorCreate: {}", e.what());
     return MILESTRO_API_RET_FAILED;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-MILESTRO_API int64_t MilizeStringComparatorDestroy(milestro::unicode::StringComparator*& ret) try {
+MILESTRO_API int64_t MilestroStringComparatorDestroy(milestro::unicode::StringComparator*& ret) try {
     delete ret;
     ret = nullptr;
     return MILESTRO_API_RET_OK;
@@ -24,7 +24,7 @@ MILESTRO_API int64_t MilizeStringComparatorDestroy(milestro::unicode::StringComp
     return MILESTRO_API_RET_FAILED;
 }
 
-MILESTRO_API int64_t MilizeStringComparatorCompare(milestro::unicode::StringComparator* cmp, int32_t& result, uint8_t* a, uint8_t* b) try {
+MILESTRO_API int64_t MilestroStringComparatorCompare(milestro::unicode::StringComparator* cmp, int32_t& result, uint8_t* a, uint8_t* b) try {
     result = cmp->compare(reinterpret_cast<char*>(a), reinterpret_cast<char*>(b));
     return MILESTRO_API_RET_OK;
 } catch (...) {

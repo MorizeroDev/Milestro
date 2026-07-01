@@ -42,6 +42,26 @@ namespace Milestro.Binding
         internal static extern unsafe long UnityRenderDestroyD3D12ExternalTexture(ref IntPtr texture);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroGameModelDataEnvelopDestroy")]
+        internal static extern unsafe long GameModelDataEnvelopDestroy(ref IntPtr ret);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroGameModelBytesWrapperCreate")]
+        internal static extern unsafe long GameModelBytesWrapperCreate(out IntPtr ret, byte* ptr, ulong size);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroGameModelBytesWrapperCStr")]
+        internal static extern unsafe long GameModelBytesWrapperCStr(IntPtr ret, out IntPtr ptr, out ulong size);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroGameModelNumberWrapperCreate")]
+        internal static extern unsafe long GameModelNumberWrapperCreate(out IntPtr ret, double number);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroGameModelNumberWrapperValue")]
+        internal static extern unsafe long GameModelNumberWrapperValue(IntPtr ret, out double value);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontRegistryRegisterFontFromFile")]
         internal static extern unsafe long SkiaFontRegistryRegisterFontFromFile(byte[] path);
 
@@ -675,76 +695,83 @@ namespace Milestro.Binding
         internal static extern unsafe long SkiaTextlayoutTextStyleIsPlaceholder(IntPtr s, out int isPlaceholder);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeStringComparatorCreate")]
-        internal static extern unsafe long MilizeStringComparatorCreate(out IntPtr ret, byte[] collation);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroStringComparatorCreate")]
+        internal static extern unsafe long StringComparatorCreate(out IntPtr ret, byte[] collation);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeStringComparatorDestroy")]
-        internal static extern unsafe long MilizeStringComparatorDestroy(ref IntPtr ret);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroStringComparatorDestroy")]
+        internal static extern unsafe long StringComparatorDestroy(ref IntPtr ret);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeStringComparatorCompare")]
-        internal static extern unsafe long MilizeStringComparatorCompare(IntPtr cmp, out int result, byte[] a, byte[] b);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroStringComparatorCompare")]
+        internal static extern unsafe long StringComparatorCompare(IntPtr cmp, out int result, byte[] a, byte[] b);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeNormalizerCreate")]
-        internal static extern unsafe long MilizeUnicodeNormalizerCreate(out IntPtr ret, byte* name, int mode);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroCopyAndLoadICU")]
+        internal static extern unsafe long CopyAndLoadICU(byte* ptr, ulong size, byte* dir);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeNormalizerDestroy")]
-        internal static extern unsafe long MilizeUnicodeNormalizerDestroy(ref IntPtr ret);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroLoadICU")]
+        internal static extern unsafe long LoadICU(byte* ptr, byte* dir);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeNormalizerNormalize")]
-        internal static extern unsafe long MilizeUnicodeNormalizerNormalize(IntPtr seg, out IntPtr ret, byte* text);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeNormalizerCreate")]
+        internal static extern unsafe long UnicodeNormalizerCreate(out IntPtr ret, byte* name, int mode);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeSegmenterCreate")]
-        internal static extern unsafe long MilizeUnicodeSegmenterCreate(out IntPtr ret, byte* locale, byte* text);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeNormalizerDestroy")]
+        internal static extern unsafe long UnicodeNormalizerDestroy(ref IntPtr ret);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeSegmenterDestroy")]
-        internal static extern unsafe long MilizeUnicodeSegmenterDestroy(ref IntPtr ret);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeNormalizerNormalize")]
+        internal static extern unsafe long UnicodeNormalizerNormalize(IntPtr seg, out IntPtr ret, byte* text);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeSegmenterFirst")]
-        internal static extern unsafe long MilizeUnicodeSegmenterFirst(IntPtr seg, out int ret);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeSegmenterCreate")]
+        internal static extern unsafe long UnicodeSegmenterCreate(out IntPtr ret, byte* locale, byte* text);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeSegmenterNext")]
-        internal static extern unsafe long MilizeUnicodeSegmenterNext(IntPtr seg, out int ret);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeSegmenterDestroy")]
+        internal static extern unsafe long UnicodeSegmenterDestroy(ref IntPtr ret);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeSegmenterCurrent")]
-        internal static extern unsafe long MilizeUnicodeSegmenterCurrent(IntPtr seg, out int ret);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeSegmenterFirst")]
+        internal static extern unsafe long UnicodeSegmenterFirst(IntPtr seg, out int ret);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeSegmenterPrevious")]
-        internal static extern unsafe long MilizeUnicodeSegmenterPrevious(IntPtr seg, out int ret);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeSegmenterNext")]
+        internal static extern unsafe long UnicodeSegmenterNext(IntPtr seg, out int ret);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeSegmenterSubString")]
-        internal static extern unsafe long MilizeUnicodeSegmenterSubString(IntPtr seg, out IntPtr ret, int start, int len);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeSegmenterCurrent")]
+        internal static extern unsafe long UnicodeSegmenterCurrent(IntPtr seg, out int ret);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeTransliteratorCreate")]
-        internal static extern unsafe long MilizeUnicodeTransliteratorCreate(out IntPtr ret, byte* id, int direction);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeSegmenterPrevious")]
+        internal static extern unsafe long UnicodeSegmenterPrevious(IntPtr seg, out int ret);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeTransliteratorDestroy")]
-        internal static extern unsafe long MilizeUnicodeTransliteratorDestroy(ref IntPtr ret);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeSegmenterSubString")]
+        internal static extern unsafe long UnicodeSegmenterSubString(IntPtr seg, out IntPtr ret, int start, int len);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeTransliteratorTransliterate")]
-        internal static extern unsafe long
-        MilizeUnicodeTransliteratorTransliterate(IntPtr t, out IntPtr output, byte* input);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeTransliteratorCreate")]
+        internal static extern unsafe long UnicodeTransliteratorCreate(out IntPtr ret, byte* id, int direction);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeCaseMapToUpper")]
-        internal static extern unsafe long MilizeUnicodeCaseMapToUpper(out IntPtr ret, byte* locale, byte* text);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeTransliteratorDestroy")]
+        internal static extern unsafe long UnicodeTransliteratorDestroy(ref IntPtr ret);
 
 
-        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilizeUnicodeCaseMapToLower")]
-        internal static extern unsafe long MilizeUnicodeCaseMapToLower(out IntPtr ret, byte* locale, byte* text);
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeTransliteratorTransliterate")]
+        internal static extern unsafe long UnicodeTransliteratorTransliterate(IntPtr t, out IntPtr output, byte* input);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeCaseMapToUpper")]
+        internal static extern unsafe long UnicodeCaseMapToUpper(out IntPtr ret, byte* locale, byte* text);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnicodeCaseMapToLower")]
+        internal static extern unsafe long UnicodeCaseMapToLower(out IntPtr ret, byte* locale, byte* text);
     }
 }

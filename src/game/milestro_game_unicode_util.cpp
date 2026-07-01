@@ -6,7 +6,7 @@
 
 extern "C" {
 
-MILESTRO_API int64_t MilizeCopyAndLoadICU(uint8_t *ptr, uint64_t size, uint8_t *path) try {
+MILESTRO_API int64_t MilestroCopyAndLoadICU(uint8_t *ptr, uint64_t size, uint8_t *path) try {
     auto ret = milestro::unicode::CopyAndLoadICU(
             ptr,
             size,
@@ -20,7 +20,7 @@ MILESTRO_API int64_t MilizeCopyAndLoadICU(uint8_t *ptr, uint64_t size, uint8_t *
     return MILESTRO_API_RET_FAILED;
 }
 
-MILESTRO_API int64_t MilizeLoadICU(uint8_t *ptr, uint8_t *path) try {
+MILESTRO_API int64_t MilestroLoadICU(uint8_t *ptr, uint8_t *path) try {
     auto ret = milestro::unicode::LoadICU(
             ptr,
             path == nullptr ? "" : std::string(reinterpret_cast<char *>(path))
@@ -33,7 +33,7 @@ MILESTRO_API int64_t MilizeLoadICU(uint8_t *ptr, uint8_t *path) try {
     return MILESTRO_API_RET_FAILED;
 }
 
-MILESTRO_API int64_t MilizeUnicodeCaseMapToUpper(
+MILESTRO_API int64_t MilestroUnicodeCaseMapToUpper(
         milestro::game::model::BytesWrapper *&ret,
         uint8_t *locale,
         uint8_t *text
@@ -49,7 +49,7 @@ MILESTRO_API int64_t MilizeUnicodeCaseMapToUpper(
     return MILESTRO_API_RET_FAILED;
 }
 
-MILESTRO_API int64_t MilizeUnicodeCaseMapToLower(
+MILESTRO_API int64_t MilestroUnicodeCaseMapToLower(
         milestro::game::model::BytesWrapper *&ret,
         uint8_t *locale,
         uint8_t *text

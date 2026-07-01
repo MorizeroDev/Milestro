@@ -7,7 +7,7 @@
 
 extern "C" {
 
-MILESTRO_API int64_t MilizeUnicodeNormalizerCreate(milestro::unicode::Normalizer *&ret,
+MILESTRO_API int64_t MilestroUnicodeNormalizerCreate(milestro::unicode::Normalizer *&ret,
                                       uint8_t *name,
                                       int32_t mode
 ) try {
@@ -17,13 +17,13 @@ MILESTRO_API int64_t MilizeUnicodeNormalizerCreate(milestro::unicode::Normalizer
     );
     return MILESTRO_API_RET_OK;
 } catch (std::runtime_error &e) {
-    MILESTROLOG_ERROR("MilizeUnicodeNormalizerCreate: {}", e.what());
+    MILESTROLOG_ERROR("MilestroUnicodeNormalizerCreate: {}", e.what());
     return MILESTRO_API_RET_FAILED;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-MILESTRO_API int64_t MilizeUnicodeNormalizerDestroy(milestro::unicode::Normalizer *&ret) try {
+MILESTRO_API int64_t MilestroUnicodeNormalizerDestroy(milestro::unicode::Normalizer *&ret) try {
     delete ret;
     ret = nullptr;
     return MILESTRO_API_RET_OK;
@@ -31,7 +31,7 @@ MILESTRO_API int64_t MilizeUnicodeNormalizerDestroy(milestro::unicode::Normalize
     return MILESTRO_API_RET_FAILED;
 }
 
-MILESTRO_API int64_t MilizeUnicodeNormalizerNormalize(milestro::unicode::Normalizer *seg,
+MILESTRO_API int64_t MilestroUnicodeNormalizerNormalize(milestro::unicode::Normalizer *seg,
                                          milestro::game::model::BytesWrapper *&ret,
                                          uint8_t *text
 ) try {

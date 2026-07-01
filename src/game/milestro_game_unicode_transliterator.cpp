@@ -5,7 +5,7 @@
 
 extern "C" {
 
-MILESTRO_API int64_t MilizeUnicodeTransliteratorCreate(milestro::unicode::Transliterator *&ret,
+MILESTRO_API int64_t MilestroUnicodeTransliteratorCreate(milestro::unicode::Transliterator *&ret,
                                                      uint8_t *id,
                                                      int32_t direction
 ) try {
@@ -14,13 +14,13 @@ MILESTRO_API int64_t MilizeUnicodeTransliteratorCreate(milestro::unicode::Transl
     );
     return MILESTRO_API_RET_OK;
 } catch (std::runtime_error &e) {
-    MILESTROLOG_ERROR("MilizeUnicodeTransliteratorCreate: {}", e.what());
+    MILESTROLOG_ERROR("MilestroUnicodeTransliteratorCreate: {}", e.what());
     return MILESTRO_API_RET_FAILED;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-MILESTRO_API int64_t MilizeUnicodeTransliteratorDestroy(milestro::unicode::Transliterator *&ret) try {
+MILESTRO_API int64_t MilestroUnicodeTransliteratorDestroy(milestro::unicode::Transliterator *&ret) try {
     delete ret;
     ret = nullptr;
     return MILESTRO_API_RET_OK;
@@ -28,7 +28,7 @@ MILESTRO_API int64_t MilizeUnicodeTransliteratorDestroy(milestro::unicode::Trans
     return MILESTRO_API_RET_FAILED;
 }
 
-MILESTRO_API int64_t MilizeUnicodeTransliteratorTransliterate(milestro::unicode::Transliterator *t,
+MILESTRO_API int64_t MilestroUnicodeTransliteratorTransliterate(milestro::unicode::Transliterator *t,
                                                             milestro::game::model::BytesWrapper *&output,
                                                             uint8_t *input
 ) try {

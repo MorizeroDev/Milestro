@@ -1,6 +1,7 @@
 #ifndef MILESTRO_ICU_H
 #define MILESTRO_ICU_H
 
+#include <cstdint>
 #include <string>
 
 namespace milestro::unicode {
@@ -8,6 +9,8 @@ namespace milestro::unicode {
 bool CopyAndLoadICU(uint8_t* dataPtr, size_t size, std::string path);
 
 bool LoadICU(void* dataPtr, std::string path);
+
+bool IsICULoaded();
 
 void EnsureLoadICU();
 

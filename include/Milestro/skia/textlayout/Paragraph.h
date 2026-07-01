@@ -1,15 +1,15 @@
 #ifndef MILESTRO_SKIA_TEXTLAYOUT_PARAGRAPH_H
 #define MILESTRO_SKIA_TEXTLAYOUT_PARAGRAPH_H
 
-#include "modules/skparagraph/include/ParagraphBuilder.h"
-#include "ParagraphStyle.h"
+#include "../unicode/Unicode.h"
 #include "FontCollection.h"
-#include "Milestro/skia/Unicode.h"
-#include "TextStyle.h"
-#include "Milestro/skia/Path.h"
-#include "Milestro/skia/Canvas.h"
-#include "Milestro/util/milestro_serializerable.h"
 #include "Milestro/game/milestro_game_types.h"
+#include "Milestro/skia/Canvas.h"
+#include "Milestro/skia/Path.h"
+#include "Milestro/util/milestro_serializerable.h"
+#include "ParagraphStyle.h"
+#include "TextStyle.h"
+#include "modules/skparagraph/include/ParagraphBuilder.h"
 
 namespace milestro::skia::textlayout {
 

@@ -7,7 +7,7 @@
 
 extern "C" {
 
-MILESTRO_API int64_t MilizeUnicodeSegmenterCreate(milestro::unicode::Segmenter *&ret,
+MILESTRO_API int64_t MilestroUnicodeSegmenterCreate(milestro::unicode::Segmenter *&ret,
                                      uint8_t *locale,
                                      uint8_t *text
 ) try {
@@ -17,13 +17,13 @@ MILESTRO_API int64_t MilizeUnicodeSegmenterCreate(milestro::unicode::Segmenter *
     );
     return MILESTRO_API_RET_OK;
 } catch (std::runtime_error &e) {
-    MILESTROLOG_ERROR("MilizeUnicodeSegmenterCreate: {}", e.what());
+    MILESTROLOG_ERROR("MilestroUnicodeSegmenterCreate: {}", e.what());
     return MILESTRO_API_RET_FAILED;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-MILESTRO_API int64_t MilizeUnicodeSegmenterDestroy(milestro::unicode::Segmenter *&ret) try {
+MILESTRO_API int64_t MilestroUnicodeSegmenterDestroy(milestro::unicode::Segmenter *&ret) try {
     delete ret;
     ret = nullptr;
     return MILESTRO_API_RET_OK;
@@ -31,7 +31,7 @@ MILESTRO_API int64_t MilizeUnicodeSegmenterDestroy(milestro::unicode::Segmenter 
     return MILESTRO_API_RET_FAILED;
 }
 
-MILESTRO_API int64_t MilizeUnicodeSegmenterFirst(milestro::unicode::Segmenter *seg,
+MILESTRO_API int64_t MilestroUnicodeSegmenterFirst(milestro::unicode::Segmenter *seg,
                                                int32_t &ret) try {
     ret = seg->first();
     return MILESTRO_API_RET_OK;
@@ -39,7 +39,7 @@ MILESTRO_API int64_t MilizeUnicodeSegmenterFirst(milestro::unicode::Segmenter *s
     return MILESTRO_API_RET_FAILED;
 }
 
-MILESTRO_API int64_t MilizeUnicodeSegmenterNext(milestro::unicode::Segmenter *seg,
+MILESTRO_API int64_t MilestroUnicodeSegmenterNext(milestro::unicode::Segmenter *seg,
                                    int32_t &ret
 ) try {
     ret = seg->next();
@@ -49,7 +49,7 @@ MILESTRO_API int64_t MilizeUnicodeSegmenterNext(milestro::unicode::Segmenter *se
 }
 
 
-MILESTRO_API int64_t MilizeUnicodeSegmenterCurrent(milestro::unicode::Segmenter *seg,
+MILESTRO_API int64_t MilestroUnicodeSegmenterCurrent(milestro::unicode::Segmenter *seg,
                                                  int32_t &ret
 ) try {
     ret = seg->current();
@@ -59,7 +59,7 @@ MILESTRO_API int64_t MilizeUnicodeSegmenterCurrent(milestro::unicode::Segmenter 
 }
 
 
-MILESTRO_API int64_t MilizeUnicodeSegmenterPrevious(milestro::unicode::Segmenter *seg,
+MILESTRO_API int64_t MilestroUnicodeSegmenterPrevious(milestro::unicode::Segmenter *seg,
                                                   int32_t &ret
 ) try {
     ret = seg->previous();
@@ -69,7 +69,7 @@ MILESTRO_API int64_t MilizeUnicodeSegmenterPrevious(milestro::unicode::Segmenter
 }
 
 
-MILESTRO_API int64_t MilizeUnicodeSegmenterSubString(milestro::unicode::Segmenter *seg,
+MILESTRO_API int64_t MilestroUnicodeSegmenterSubString(milestro::unicode::Segmenter *seg,
                                                    milestro::game::model::BytesWrapper *&ret,
                                                    int32_t start,
                                                    int32_t len

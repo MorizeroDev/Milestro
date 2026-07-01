@@ -2,6 +2,8 @@
     "name": "Milestro",
     "rootNamespace": "",
     "references": [
+        "party.para.util.colors",
+        "party.para.util.unitynative"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -36,6 +36,32 @@ int64_t FrameworkBindingMilestroUnityRenderDestroyD3D12ExternalTexture(
     return MilestroUnityRenderDestroyD3D12ExternalTexture(texture);
 }
 
+int64_t FrameworkBindingMilestroGameModelDataEnvelopDestroy(
+        [[milize::RefType("ref")]] milestro::game::model::DataEnvelop*& ret) {
+    return MilestroGameModelDataEnvelopDestroy(ret);
+}
+
+int64_t FrameworkBindingMilestroGameModelBytesWrapperCreate(milestro::game::model::BytesWrapper*& ret,
+                                                            [[milize::CSharpType("byte*")]] uint8_t* ptr,
+                                                            uint64_t size) {
+    return MilestroGameModelBytesWrapperCreate(ret, ptr, size);
+}
+
+int64_t FrameworkBindingMilestroGameModelBytesWrapperCStr(milestro::game::model::BytesWrapper* ret,
+                                                          [[milize::CSharpType("IntPtr")]] uint8_t*& ptr,
+                                                          uint64_t& size) {
+    return MilestroGameModelBytesWrapperCStr(ret, ptr, size);
+}
+
+int64_t FrameworkBindingMilestroGameModelNumberWrapperCreate(milestro::game::model::NumberWrapper*& ret,
+                                                             double number) {
+    return MilestroGameModelNumberWrapperCreate(ret, number);
+}
+
+int64_t FrameworkBindingMilestroGameModelNumberWrapperValue(milestro::game::model::NumberWrapper* ret, double& value) {
+    return MilestroGameModelNumberWrapperValue(ret, value);
+}
+
 int64_t FrameworkBindingMilestroSkiaFontRegistryRegisterFontFromFile(uint8_t* path) {
     return MilestroSkiaFontRegistryRegisterFontFromFile(path);
 }
@@ -842,98 +868,110 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutTextStyleIsPlaceholder(milestro::s
     return MilestroSkiaTextlayoutTextStyleIsPlaceholder(s, isPlaceholder);
 }
 
-int64_t FrameworkBindingMilizeStringComparatorCreate(milestro::unicode::StringComparator*& ret, uint8_t* collation) {
-    return MilizeStringComparatorCreate(ret, collation);
+int64_t FrameworkBindingMilestroStringComparatorCreate(milestro::unicode::StringComparator*& ret, uint8_t* collation) {
+    return MilestroStringComparatorCreate(ret, collation);
 }
 
 int64_t
-FrameworkBindingMilizeStringComparatorDestroy([[milize::RefType("ref")]] milestro::unicode::StringComparator*& ret) {
-    return MilizeStringComparatorDestroy(ret);
+FrameworkBindingMilestroStringComparatorDestroy([[milize::RefType("ref")]] milestro::unicode::StringComparator*& ret) {
+    return MilestroStringComparatorDestroy(ret);
 }
 
-int64_t FrameworkBindingMilizeStringComparatorCompare(milestro::unicode::StringComparator* cmp,
-                                                      int32_t& result,
-                                                      uint8_t* a,
-                                                      uint8_t* b) {
-    return MilizeStringComparatorCompare(cmp, result, a, b);
+int64_t FrameworkBindingMilestroStringComparatorCompare(milestro::unicode::StringComparator* cmp,
+                                                        int32_t& result,
+                                                        uint8_t* a,
+                                                        uint8_t* b) {
+    return MilestroStringComparatorCompare(cmp, result, a, b);
 }
 
-int64_t FrameworkBindingMilizeUnicodeNormalizerCreate(milestro::unicode::Normalizer*& ret,
-                                                      [[milize::CSharpType("byte*")]] uint8_t* name,
-                                                      int32_t mode) {
-    return MilizeUnicodeNormalizerCreate(ret, name, mode);
+int64_t FrameworkBindingMilestroCopyAndLoadICU([[milize::CSharpType("byte*")]] uint8_t* ptr,
+                                               uint64_t size,
+                                               [[milize::CSharpType("byte*")]] uint8_t* dir) {
+    return MilestroCopyAndLoadICU(ptr, size, dir);
 }
 
-int64_t FrameworkBindingMilizeUnicodeNormalizerDestroy([[milize::RefType("ref")]] milestro::unicode::Normalizer*& ret) {
-    return MilizeUnicodeNormalizerDestroy(ret);
+int64_t FrameworkBindingMilestroLoadICU([[milize::CSharpType("byte*")]] uint8_t* ptr,
+                                        [[milize::CSharpType("byte*")]] uint8_t* dir) {
+    return MilestroLoadICU(ptr, dir);
 }
 
-int64_t FrameworkBindingMilizeUnicodeNormalizerNormalize(milestro::unicode::Normalizer* seg,
-                                                         milestro::game::model::BytesWrapper*& ret,
-                                                         [[milize::CSharpType("byte*")]] uint8_t* text) {
-    return MilizeUnicodeNormalizerNormalize(seg, ret, text);
-}
-
-int64_t FrameworkBindingMilizeUnicodeSegmenterCreate(milestro::unicode::Segmenter*& ret,
-                                                     [[milize::CSharpType("byte*")]] uint8_t* locale,
-                                                     [[milize::CSharpType("byte*")]] uint8_t* text) {
-    return MilizeUnicodeSegmenterCreate(ret, locale, text);
-}
-
-int64_t FrameworkBindingMilizeUnicodeSegmenterDestroy([[milize::RefType("ref")]] milestro::unicode::Segmenter*& ret) {
-    return MilizeUnicodeSegmenterDestroy(ret);
-}
-
-int64_t FrameworkBindingMilizeUnicodeSegmenterFirst(milestro::unicode::Segmenter* seg, int32_t& ret) {
-    return MilizeUnicodeSegmenterFirst(seg, ret);
-}
-
-int64_t FrameworkBindingMilizeUnicodeSegmenterNext(milestro::unicode::Segmenter* seg, int32_t& ret) {
-    return MilizeUnicodeSegmenterNext(seg, ret);
-}
-
-int64_t FrameworkBindingMilizeUnicodeSegmenterCurrent(milestro::unicode::Segmenter* seg, int32_t& ret) {
-    return MilizeUnicodeSegmenterCurrent(seg, ret);
-}
-
-int64_t FrameworkBindingMilizeUnicodeSegmenterPrevious(milestro::unicode::Segmenter* seg, int32_t& ret) {
-    return MilizeUnicodeSegmenterPrevious(seg, ret);
-}
-
-int64_t FrameworkBindingMilizeUnicodeSegmenterSubString(milestro::unicode::Segmenter* seg,
-                                                        milestro::game::model::BytesWrapper*& ret,
-                                                        int32_t start,
-                                                        int32_t len) {
-    return MilizeUnicodeSegmenterSubString(seg, ret, start, len);
-}
-
-int64_t FrameworkBindingMilizeUnicodeTransliteratorCreate(milestro::unicode::Transliterator*& ret,
-                                                          [[milize::CSharpType("byte*")]] uint8_t* id,
-                                                          int32_t direction) {
-    return MilizeUnicodeTransliteratorCreate(ret, id, direction);
+int64_t FrameworkBindingMilestroUnicodeNormalizerCreate(milestro::unicode::Normalizer*& ret,
+                                                        [[milize::CSharpType("byte*")]] uint8_t* name,
+                                                        int32_t mode) {
+    return MilestroUnicodeNormalizerCreate(ret, name, mode);
 }
 
 int64_t
-FrameworkBindingMilizeUnicodeTransliteratorDestroy([[milize::RefType("ref")]] milestro::unicode::Transliterator*& ret) {
-    return MilizeUnicodeTransliteratorDestroy(ret);
+FrameworkBindingMilestroUnicodeNormalizerDestroy([[milize::RefType("ref")]] milestro::unicode::Normalizer*& ret) {
+    return MilestroUnicodeNormalizerDestroy(ret);
 }
 
-int64_t FrameworkBindingMilizeUnicodeTransliteratorTransliterate(milestro::unicode::Transliterator* t,
-                                                                 milestro::game::model::BytesWrapper*& output,
-                                                                 [[milize::CSharpType("byte*")]] uint8_t* input) {
-    return MilizeUnicodeTransliteratorTransliterate(t, output, input);
+int64_t FrameworkBindingMilestroUnicodeNormalizerNormalize(milestro::unicode::Normalizer* seg,
+                                                           milestro::game::model::BytesWrapper*& ret,
+                                                           [[milize::CSharpType("byte*")]] uint8_t* text) {
+    return MilestroUnicodeNormalizerNormalize(seg, ret, text);
 }
 
-int64_t FrameworkBindingMilizeUnicodeCaseMapToUpper(milestro::game::model::BytesWrapper*& ret,
-                                                    [[milize::CSharpType("byte*")]] uint8_t* locale,
-                                                    [[milize::CSharpType("byte*")]] uint8_t* text) {
-    return MilizeUnicodeCaseMapToUpper(ret, locale, text);
+int64_t FrameworkBindingMilestroUnicodeSegmenterCreate(milestro::unicode::Segmenter*& ret,
+                                                       [[milize::CSharpType("byte*")]] uint8_t* locale,
+                                                       [[milize::CSharpType("byte*")]] uint8_t* text) {
+    return MilestroUnicodeSegmenterCreate(ret, locale, text);
 }
 
-int64_t FrameworkBindingMilizeUnicodeCaseMapToLower(milestro::game::model::BytesWrapper*& ret,
-                                                    [[milize::CSharpType("byte*")]] uint8_t* locale,
-                                                    [[milize::CSharpType("byte*")]] uint8_t* text) {
-    return MilizeUnicodeCaseMapToLower(ret, locale, text);
+int64_t FrameworkBindingMilestroUnicodeSegmenterDestroy([[milize::RefType("ref")]] milestro::unicode::Segmenter*& ret) {
+    return MilestroUnicodeSegmenterDestroy(ret);
+}
+
+int64_t FrameworkBindingMilestroUnicodeSegmenterFirst(milestro::unicode::Segmenter* seg, int32_t& ret) {
+    return MilestroUnicodeSegmenterFirst(seg, ret);
+}
+
+int64_t FrameworkBindingMilestroUnicodeSegmenterNext(milestro::unicode::Segmenter* seg, int32_t& ret) {
+    return MilestroUnicodeSegmenterNext(seg, ret);
+}
+
+int64_t FrameworkBindingMilestroUnicodeSegmenterCurrent(milestro::unicode::Segmenter* seg, int32_t& ret) {
+    return MilestroUnicodeSegmenterCurrent(seg, ret);
+}
+
+int64_t FrameworkBindingMilestroUnicodeSegmenterPrevious(milestro::unicode::Segmenter* seg, int32_t& ret) {
+    return MilestroUnicodeSegmenterPrevious(seg, ret);
+}
+
+int64_t FrameworkBindingMilestroUnicodeSegmenterSubString(milestro::unicode::Segmenter* seg,
+                                                          milestro::game::model::BytesWrapper*& ret,
+                                                          int32_t start,
+                                                          int32_t len) {
+    return MilestroUnicodeSegmenterSubString(seg, ret, start, len);
+}
+
+int64_t FrameworkBindingMilestroUnicodeTransliteratorCreate(milestro::unicode::Transliterator*& ret,
+                                                            [[milize::CSharpType("byte*")]] uint8_t* id,
+                                                            int32_t direction) {
+    return MilestroUnicodeTransliteratorCreate(ret, id, direction);
+}
+
+int64_t FrameworkBindingMilestroUnicodeTransliteratorDestroy(
+        [[milize::RefType("ref")]] milestro::unicode::Transliterator*& ret) {
+    return MilestroUnicodeTransliteratorDestroy(ret);
+}
+
+int64_t FrameworkBindingMilestroUnicodeTransliteratorTransliterate(milestro::unicode::Transliterator* t,
+                                                                   milestro::game::model::BytesWrapper*& output,
+                                                                   [[milize::CSharpType("byte*")]] uint8_t* input) {
+    return MilestroUnicodeTransliteratorTransliterate(t, output, input);
+}
+
+int64_t FrameworkBindingMilestroUnicodeCaseMapToUpper(milestro::game::model::BytesWrapper*& ret,
+                                                      [[milize::CSharpType("byte*")]] uint8_t* locale,
+                                                      [[milize::CSharpType("byte*")]] uint8_t* text) {
+    return MilestroUnicodeCaseMapToUpper(ret, locale, text);
+}
+
+int64_t FrameworkBindingMilestroUnicodeCaseMapToLower(milestro::game::model::BytesWrapper*& ret,
+                                                      [[milize::CSharpType("byte*")]] uint8_t* locale,
+                                                      [[milize::CSharpType("byte*")]] uint8_t* text) {
+    return MilestroUnicodeCaseMapToLower(ret, locale, text);
 }
 
 #ifdef __clang__

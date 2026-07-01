@@ -23,6 +23,7 @@
 #include <cstring>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "unicode/udata.h"
 
@@ -34,6 +35,13 @@
 #endif
 
 namespace milestro::unicode {
+namespace {
+
+std::mutex IcuLoadMutex;
+bool IcuLoaded = false;
+
+} // namespace
+
 static bool init_icu(void* addr) {
     if (addr == nullptr) {
         return false;
@@ -149,13 +157,12 @@ static bool load_from(const std::wstring& path) {
 bool LoadIcuImpl(void* dataPtr, std::string& dir) {
     std::wstring wDir = milestro::util::encoding::StringToWString(dir);
 
-    static bool good = false;
-    static std::once_flag flag;
-    std::call_once(flag, [&]() {
-        good = init_icu(dataPtr) || load_from(wDir) || load_from(executable_directory()) ||
-               load_from(library_directory());
-    });
-    return good;
+    std::lock_guard lock(IcuLoadMutex);
+    if (!IcuLoaded) {
+        IcuLoaded = init_icu(dataPtr) || load_from(wDir) || load_from(executable_directory()) ||
+                    load_from(library_directory());
+    }
+    return IcuLoaded;
 }
 
 #else
@@ -176,7 +183,7 @@ void* posix_mmap(const char* dataFile, size_t* outSize = nullptr, int prot = PRO
     // 打开文件，仅只读示例。如需可写映射，可改 O_RDWR，并修改 prot/flags。
     int fd = open(dataFile, O_RDONLY);
     if (fd < 0) {
-        MILESTROLOG_CRITICAL("posix_mmap: open(\"%s\") failed: %s", dataFile, strerror(errno));
+        MILESTROLOG_CRITICAL("posix_mmap: open(\"{}\") failed: {}", dataFile, strerror(errno));
         return nullptr;
     }
     // 获取文件大小
@@ -236,12 +243,11 @@ static bool load_from(const std::string& path) {
 
 
 bool LoadIcuImpl(void* dataPtr, std::string& path) {
-    static bool good = false;
-    static std::once_flag flag;
-    std::call_once(flag, [&]() {
-        good = init_icu(dataPtr) || load_from(path) || load_from(std::filesystem::current_path());
-    });
-    return good;
+    std::lock_guard lock(IcuLoadMutex);
+    if (!IcuLoaded) {
+        IcuLoaded = init_icu(dataPtr) || load_from(path) || load_from(std::filesystem::current_path());
+    }
+    return IcuLoaded;
 }
 
 #endif
@@ -252,14 +258,23 @@ bool LoadICU(void* dataPtr, std::string path) {
     return LoadIcuImpl(dataPtr, path);
 };
 
+bool IsICULoaded() {
+    std::lock_guard lock(IcuLoadMutex);
+    return IcuLoaded;
+}
+
 bool CopyAndLoadICU(uint8_t* dataPtr, size_t size, std::string path) {
     static bool good = false;
-    static std::once_flag flag;
-    std::call_once(flag, [&]() {
+    static std::mutex mutex;
+    std::lock_guard lock(mutex);
+    if (!good && !IsICULoaded()) {
+        if (dataPtr == nullptr || size == 0) {
+            return false;
+        }
         icudtl = std::make_unique<std::vector<uint8_t>>(dataPtr, dataPtr + size);
         good = LoadICU(icudtl->data(), path);
-    });
-    return good;
+    }
+    return good || IsICULoaded();
 };
 
 void EnsureLoadICU() {

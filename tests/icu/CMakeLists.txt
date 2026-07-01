@@ -5,9 +5,13 @@ set(MILESTRO_TEST_SOURCE
 )
 
 add_executable(${MILESTRO_TEST_NAME} ${MILESTRO_TEST_SOURCE})
+target_compile_definitions(${MILESTRO_TEST_NAME} PRIVATE
+        MILESTRO_TEST_ICUDTL_PATH="${PROJECT_SOURCE_DIR}/ext/icu-cmake/common/icudtl.dat"
+)
 target_link_libraries(${MILESTRO_TEST_NAME} PRIVATE
         GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main
         Milestro
+        ${PROJECT_PLATFORM_LIBRARIES}
 )
 
 if (ANDROID)
@@ -23,8 +27,10 @@ else ()
             COMMAND ${MILESTRO_TEST_NAME}
     )
     set_tests_properties(${MILESTRO_TEST_NAME} PROPERTIES ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+    set_property(TEST ${MILESTRO_TEST_NAME} APPEND PROPERTY ENVIRONMENT "DYLD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
     #    set_property(TEST ${MILESTRO_TEST_NAME} APPEND PROPERTY ENVIRONMENT "PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}:$ENV{PATH}")
     set_property(TEST ${MILESTRO_TEST_NAME} APPEND PROPERTY ENVIRONMENT "MILESTRO_TEST_DATA_PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/data")
+    set_property(TEST ${MILESTRO_TEST_NAME} APPEND PROPERTY ENVIRONMENT "MILESTRO_TEST_ICUDTL_PATH=${PROJECT_SOURCE_DIR}/ext/icu-cmake/common/icudtl.dat")
     # The test is run in the runtime directory. So the test data is copied there too
     add_custom_command(
             TARGET ${MILESTRO_TEST_NAME} POST_BUILD
