@@ -8,6 +8,7 @@ add_executable(${MILESTRO_TEST_NAME} ${MILESTRO_TEST_SOURCE})
 target_link_libraries(${MILESTRO_TEST_NAME} PRIVATE
         GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main
         Milestro
+        ${PROJECT_PLATFORM_LIBRARIES}
 )
 
 if (ANDROID)

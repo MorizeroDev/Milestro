@@ -183,6 +183,160 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphToPath(milestro::skia::textl
                                                            milestro::skia::Path *&path,
                                                            float x, float y);
 
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxCreate(milestro::skia::textlayout::InputBox *&ret,
+                                                          milestro::skia::textlayout::ParagraphStyle *paragraphStyle,
+                                                          milestro::skia::textlayout::TextStyle *textStyle);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxDestroy(
+        [[milize::RefType("ref")]] milestro::skia::textlayout::InputBox *&ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxCreateDrawSnapshot(
+        milestro::skia::textlayout::InputBox *inputBox,
+        milestro::skia::textlayout::InputBoxDrawSnapshot *&ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxDrawSnapshotDestroy(
+        [[milize::RefType("ref")]] milestro::skia::textlayout::InputBoxDrawSnapshot *&ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetText(milestro::skia::textlayout::InputBox *inputBox,
+                                                           [[milize::CSharpType("void*")]] void *text,
+                                                           uint64_t size);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetText(milestro::skia::textlayout::InputBox *inputBox,
+                                                           [[milize::CSharpType("IntPtr")]] uint8_t *&ptr,
+                                                           uint64_t &size);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetViewport(milestro::skia::textlayout::InputBox *inputBox,
+                                                               float width,
+                                                               float height);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetCaretColor(milestro::skia::textlayout::InputBox *inputBox,
+                                                                 int32_t r,
+                                                                 int32_t g,
+                                                                 int32_t b,
+                                                                 int32_t a);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetSelectionColor(milestro::skia::textlayout::InputBox *inputBox,
+                                                                     int32_t r,
+                                                                     int32_t g,
+                                                                     int32_t b,
+                                                                     int32_t a);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetCaretWidth(milestro::skia::textlayout::InputBox *inputBox,
+                                                                 float width);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetCaretVisible(milestro::skia::textlayout::InputBox *inputBox,
+                                                                   int32_t visible);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxInsertText(milestro::skia::textlayout::InputBox *inputBox,
+                                                              [[milize::CSharpType("void*")]] void *text,
+                                                              uint64_t size);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetComposition(milestro::skia::textlayout::InputBox *inputBox,
+                                                                   [[milize::CSharpType("void*")]] void *text,
+                                                                   uint64_t size,
+                                                                   int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxCommitComposition(milestro::skia::textlayout::InputBox *inputBox,
+                                                                      [[milize::CSharpType("void*")]] void *text,
+                                                                      uint64_t size,
+                                                                      int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxClearComposition(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxDeleteBackward(milestro::skia::textlayout::InputBox *inputBox,
+                                                                  int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxDeleteForward(milestro::skia::textlayout::InputBox *inputBox,
+                                                                 int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxUndo(milestro::skia::textlayout::InputBox *inputBox,
+                                                        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxRedo(milestro::skia::textlayout::InputBox *inputBox,
+                                                        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxBreakUndoGroup(
+        milestro::skia::textlayout::InputBox *inputBox);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMovePrevious(milestro::skia::textlayout::InputBox *inputBox,
+                                                                int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMoveNext(milestro::skia::textlayout::InputBox *inputBox,
+                                                            int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMovePreviousExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMoveNextExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxHitTest(milestro::skia::textlayout::InputBox *inputBox,
+                                                           float x,
+                                                           float y,
+                                                           int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxHitTestExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        float x,
+        float y,
+        int32_t extendSelection,
+        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxEnsureCaretVisible(
+        milestro::skia::textlayout::InputBox *inputBox);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetCursor(milestro::skia::textlayout::InputBox *inputBox,
+                                                             uint64_t &utf8Offset,
+                                                             uint64_t &utf16Offset,
+                                                             int32_t &affinity);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetCursorUtf8(milestro::skia::textlayout::InputBox *inputBox,
+                                                                 uint64_t utf8Offset,
+                                                                 int32_t affinity);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetSelection(milestro::skia::textlayout::InputBox *inputBox,
+                                                                uint64_t &anchorUtf8,
+                                                                uint64_t &focusUtf8,
+                                                                uint64_t &startUtf8,
+                                                                uint64_t &endUtf8,
+                                                                int32_t &anchorAffinity,
+                                                                int32_t &focusAffinity,
+                                                                int32_t &hasSelection);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetSelectedText(
+        milestro::skia::textlayout::InputBox *inputBox,
+        milestro::game::model::BytesWrapper *&ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetSelectionUtf8(
+        milestro::skia::textlayout::InputBox *inputBox,
+        uint64_t anchorUtf8,
+        uint64_t focusUtf8,
+        int32_t anchorAffinity,
+        int32_t focusAffinity,
+        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxClearSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSelectAll(milestro::skia::textlayout::InputBox *inputBox,
+                                                             int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxUtf8ToUtf16(milestro::skia::textlayout::InputBox *inputBox,
+                                                               uint64_t utf8Offset,
+                                                               uint64_t &utf16Offset);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxUtf16ToUtf8(milestro::skia::textlayout::InputBox *inputBox,
+                                                               uint64_t utf16Offset,
+                                                               uint64_t &utf8Offset);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSnapUtf8(milestro::skia::textlayout::InputBox *inputBox,
+                                                            uint64_t utf8Offset,
+                                                            int32_t mode,
+                                                            uint64_t &snappedUtf8Offset);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetCaretRect(milestro::skia::textlayout::InputBox *inputBox,
+                                                                float &left,
+                                                                float &top,
+                                                                float &right,
+                                                                float &bottom);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetCompositionRect(milestro::skia::textlayout::InputBox *inputBox,
+                                                                      float &left,
+                                                                      float &top,
+                                                                      float &right,
+                                                                      float &bottom);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetMetrics(milestro::skia::textlayout::InputBox *inputBox,
+                                                              float &height,
+                                                              float &longestLine,
+                                                              float &minIntrinsicWidth,
+                                                              float &maxIntrinsicWidth,
+                                                              float &contentWidth,
+                                                              float &scrollX,
+                                                              float &viewportWidth,
+                                                              float &viewportHeight);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetLineCount(milestro::skia::textlayout::InputBox *inputBox,
+                                                                uint64_t &lineCount);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetLineMetrics(milestro::skia::textlayout::InputBox *inputBox,
+                                                                  uint64_t lineNumber,
+                                                                  uint64_t &startUtf8,
+                                                                  uint64_t &endUtf8,
+                                                                  float &ascent,
+                                                                  float &descent,
+                                                                  float &unscaledAscent,
+                                                                  float &height,
+                                                                  float &width,
+                                                                  float &left,
+                                                                  float &baseline);
+
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderCreate(milestro::skia::textlayout::ParagraphBuilder *&ret,
                                                                   milestro::skia::textlayout::ParagraphStyle *style);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderDestroy(milestro::skia::textlayout::ParagraphBuilder *&ret);
