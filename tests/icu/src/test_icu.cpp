@@ -3,6 +3,8 @@
 #include "Milestro/game/milestro_game_retcode.h"
 #include "include/core/SkString.h"
 #include "modules/skunicode/include/SkUnicode.h"
+#include <algorithm>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
@@ -80,6 +82,33 @@ TEST_F(IcuTest, SkUnicodeProviderUsesIcuBreakIterator) {
     ASSERT_TRUE(iterator->setText(text, static_cast<int>(std::char_traits<char>::length(text))));
     EXPECT_EQ(iterator->first(), 0);
     EXPECT_GT(iterator->next(), 0);
+}
+
+TEST_F(IcuTest, SkUnicodeProviderComputesArabicBidiRegions) {
+    auto provider = milestro::skia::GetUnicodeProvider();
+    ASSERT_NE(provider, nullptr);
+
+    auto unicode = provider->unwrap();
+    ASSERT_NE(unicode, nullptr);
+
+    const char text[] = "abc \xD9\x85\xD8\xB1\xD8\xAD\xD8\xA8\xD8\xA7";
+    std::vector<SkUnicode::BidiRegion> bidiRegions;
+    ASSERT_TRUE(unicode->getBidiRegions(text,
+                                        static_cast<int>(std::strlen(text)),
+                                        SkUnicode::TextDirection::kLTR,
+                                        &bidiRegions));
+
+    EXPECT_GT(bidiRegions.size(), 1u);
+    EXPECT_EQ(bidiRegions.front().start, 0u);
+    EXPECT_EQ(bidiRegions.front().level % 2, 0);
+
+    auto rtlRegion = std::find_if(bidiRegions.begin(),
+                                  bidiRegions.end(),
+                                  [](const SkUnicode::BidiRegion& region) {
+                                      return region.level % 2 == 1;
+                                  });
+    ASSERT_NE(rtlRegion, bidiRegions.end());
+    EXPECT_LT(rtlRegion->start, rtlRegion->end);
 }
 
 int main(int argc, char **argv) {

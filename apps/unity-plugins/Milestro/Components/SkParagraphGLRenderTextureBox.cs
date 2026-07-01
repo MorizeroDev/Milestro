@@ -35,7 +35,10 @@ namespace Milestro.Components
 
         [SerializeField]
         [FormerlySerializedAs("textAlign")]
-        private TextAlign m_textAlign = TextAlign.Left;
+        private TextAlign m_textAlign = TextAlign.Start;
+
+        [SerializeField]
+        private TextDirection m_textDirection = TextDirection.Ltr;
 
         [SerializeField]
         [FormerlySerializedAs("size")]
@@ -88,6 +91,16 @@ namespace Milestro.Components
             set
             {
                 m_textAlign = value;
+                m_havePropertiesChanged = true;
+            }
+        }
+
+        public TextDirection textDirection
+        {
+            get => m_textDirection;
+            set
+            {
+                m_textDirection = value;
                 m_havePropertiesChanged = true;
             }
         }
@@ -257,6 +270,7 @@ namespace Milestro.Components
         {
             ParagraphStyle paragraphStyle = new ParagraphStyle();
             paragraphStyle.TextAlign = (int)textAlign;
+            paragraphStyle.TextDirection = (int)textDirection;
 
             TextStyle textStyle = new TextStyle();
             textStyle.SetFontFamilies(fontFamilies);

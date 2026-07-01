@@ -39,6 +39,9 @@ skia_use_gl=false
 skia_use_direct3d=true
 skia_use_vulkan=true
 
+skia_use_icu=false
+skia_use_client_icu=true
+
 extra_cflags=["/D_ITERATOR_DEBUG_LEVEL=2", "/MDd"]
 
 clang_win="C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64"
@@ -86,6 +89,9 @@ skia_use_gl=false
 
 skia_use_direct3d=true
 skia_use_vulkan=true
+
+skia_use_icu=false
+skia_use_client_icu=true
 
 extra_cflags=["/MD"]
 

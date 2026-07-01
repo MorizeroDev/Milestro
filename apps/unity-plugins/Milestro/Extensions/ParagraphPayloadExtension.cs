@@ -10,6 +10,7 @@ namespace Milestro.Extensions
         public static ParagraphStyle ToParagraphStyle(this ParagraphStyleState t, ParagraphStyle baseParaStyle)
         {
             var ret = new ParagraphStyle();
+            ret.TextDirection = baseParaStyle.TextDirection;
 
             if (t.TextAlign.HasValue)
             {

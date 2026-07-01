@@ -1,5 +1,6 @@
 set(MILESTRO_TEST_NAME "MilestroTest_SkiaUnicodeFallback")
 set(MILESTRO_TEST_SOURCE
+        src/test_paragraph_style.cpp
         src/test_unicode_fallback.cpp
 )
 
