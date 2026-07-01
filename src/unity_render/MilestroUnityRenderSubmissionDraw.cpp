@@ -1,6 +1,7 @@
 #include "unity_render/MilestroUnityRenderSubmissionDraw.h"
 
 #include <Milestro/skia/Image.h>
+#include <Milestro/skia/textlayout/InputBox.h>
 #include <Milestro/skia/textlayout/Paragraph.h>
 
 #include "include/core/SkCanvas.h"
@@ -42,6 +43,15 @@ void DrawParagraphCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& comm
     paragraph->paint(canvas, command.x, command.y);
 }
 
+void DrawInputBoxCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& command) {
+    auto* inputBox = static_cast<milestro::skia::textlayout::InputBox*>(command.resource);
+    if (inputBox == nullptr) {
+        return;
+    }
+
+    inputBox->paint(canvas, command.x, command.y, command.width, command.height);
+}
+
 void DrawCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& command) {
     switch (static_cast<MilestroUnityDrawCommandKind>(command.kind)) {
         case MilestroUnityDrawCommandKind::Image:
@@ -49,6 +59,9 @@ void DrawCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& command) {
             return;
         case MilestroUnityDrawCommandKind::Paragraph:
             DrawParagraphCommand(canvas, command);
+            return;
+        case MilestroUnityDrawCommandKind::InputBox:
+            DrawInputBoxCommand(canvas, command);
             return;
         default:
             return;

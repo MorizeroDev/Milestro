@@ -10,7 +10,8 @@ namespace Milestro.Skia
         internal enum CommandKind
         {
             Paragraph = 1,
-            Image = 2
+            Image = 2,
+            InputBox = 3
         }
 
         internal struct Command
@@ -80,6 +81,25 @@ namespace Milestro.Skia
                 X = position.x,
                 Y = position.y,
                 KeepAlive = image
+            });
+        }
+
+        public void DrawInputBox(TextLayout.InputBox inputBox, Rect viewport)
+        {
+            if (inputBox == null)
+            {
+                return;
+            }
+
+            commands.Add(new Command
+            {
+                Kind = CommandKind.InputBox,
+                Resource = inputBox.Ptr,
+                X = viewport.x,
+                Y = viewport.y,
+                Width = viewport.width,
+                Height = viewport.height,
+                KeepAlive = inputBox
             });
         }
 

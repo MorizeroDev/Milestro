@@ -439,6 +439,7 @@ set(
         src/skia/textlayout/ParagraphStyle.cpp
         src/skia/textlayout/ParagraphBuilder.cpp
         src/skia/textlayout/Paragraph.cpp
+        src/skia/textlayout/InputBox.cpp
 
         src/unicode/icu.cpp
         src/unicode/comparison.cpp
@@ -465,6 +466,7 @@ set(
         src/game/milestro_game_skia_svg.cpp
         src/game/milestro_game_skia_vertexdata.cpp
         src/game/milestro_game_skia_textlayout_paragraph.cpp
+        src/game/milestro_game_skia_textlayout_inputbox.cpp
         src/game/milestro_game_skia_textlayout_paragraphbuilder.cpp
         src/game/milestro_game_skia_textlayout_paragraphstyle.cpp
         src/game/milestro_game_skia_textlayout_strutstyle.cpp

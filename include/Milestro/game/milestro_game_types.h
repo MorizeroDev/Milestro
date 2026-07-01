@@ -49,6 +49,8 @@ class MilestroFontFaceList;
 namespace textlayout {
 class Paragraph;
 
+class InputBox;
+
 class ParagraphBuilder;
 
 class ParagraphStyle;

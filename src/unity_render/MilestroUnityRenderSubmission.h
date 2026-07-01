@@ -10,6 +10,7 @@
 enum class MilestroUnityDrawCommandKind : int32_t {
     Paragraph = 1,
     Image = 2,
+    InputBox = 3,
 };
 
 struct MilestroUnityDrawCommand {

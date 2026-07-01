@@ -1,5 +1,5 @@
 #include "Milestro/skia/FontRegistry.h"
-#include "Milestro/skia/Unicode.h"
+#include "Milestro/skia/unicode/Unicode.h"
 #include "Milestro/skia/textlayout/Paragraph.h"
 #include "Milestro/skia/textlayout/ParagraphBuilder.h"
 #include "Milestro/skia/textlayout/ParagraphStyle.h"
