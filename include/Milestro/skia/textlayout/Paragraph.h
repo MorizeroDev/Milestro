@@ -39,6 +39,14 @@ public :
         paragraph->paint(canvas, x, y);
     }
 
+    ::skia::textlayout::Paragraph *unwrap() {
+        return paragraph.get();
+    }
+
+    const ::skia::textlayout::Paragraph *unwrap() const {
+        return paragraph.get();
+    }
+
     MILESTRO_DECLARE_NON_COPYABLE(Paragraph)
 
 private:
