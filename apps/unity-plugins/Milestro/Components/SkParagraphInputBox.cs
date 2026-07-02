@@ -766,9 +766,9 @@ namespace Milestro.Components
             return char.IsControl(ch) || ch == '\u007f';
         }
 
-        private static bool IsCommittedTextFunctionKey(char ch)
+        private static bool IsCommittedTextAppKitFunctionKey(char ch)
         {
-            // Unity/macOS can surface non-text function keys as AppKit private-use chars.
+            // AppKit Function-Key Unicode Values can reach Input.inputString on macOS.
             return ch >= '\uf700' && ch <= '\uf747';
         }
 
@@ -945,7 +945,7 @@ namespace Milestro.Components
                     i = SkipEscapeSequence(committedInput, i) - 1;
                     continue;
                 }
-                if (IsCommittedTextControl(ch) || IsCommittedTextFunctionKey(ch))
+                if (IsCommittedTextControl(ch) || IsCommittedTextAppKitFunctionKey(ch))
                 {
                     ClearPendingHighSurrogate();
                     continue;
