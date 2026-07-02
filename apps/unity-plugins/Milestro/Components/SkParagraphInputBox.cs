@@ -455,6 +455,11 @@ namespace Milestro.Components
                 return false;
             }
 
+            if (TryHandleClipboardShortcut(out var clipboardChanged))
+            {
+                return clipboardChanged;
+            }
+
             var changed = false;
             if (IsSelectAllShortcutDown())
             {
@@ -486,6 +491,59 @@ namespace Milestro.Components
             return changed;
         }
 
+        private bool TryHandleClipboardShortcut(out bool changed)
+        {
+            changed = false;
+            if (inputBox == null)
+            {
+                return false;
+            }
+
+            if (IsCopyShortcutDown())
+            {
+                ResetSurrogateInputState();
+                ResetKeyRepeatState();
+                var selectedText = inputBox.SelectedText;
+                if (selectedText.Length > 0)
+                {
+                    GUIUtility.systemCopyBuffer = selectedText;
+                }
+                return true;
+            }
+
+            if (IsCutShortcutDown())
+            {
+                ResetSurrogateInputState();
+                ResetKeyRepeatState();
+                if (!inputBox.Selection.HasSelection)
+                {
+                    return true;
+                }
+
+                var selectedText = inputBox.SelectedText;
+                GUIUtility.systemCopyBuffer = selectedText;
+                changed = inputBox.DeleteForward();
+                return true;
+            }
+
+            if (IsPasteShortcutDown())
+            {
+                ResetSurrogateInputState();
+                ResetKeyRepeatState();
+                var clipboardText = GUIUtility.systemCopyBuffer ?? "";
+                if (clipboardText.Length == 0)
+                {
+                    return true;
+                }
+
+                inputBox.InsertText(clipboardText);
+                changed = true;
+                return true;
+            }
+
+            return false;
+        }
+
         private static bool IsSelectionModifierPressed()
         {
             return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
@@ -499,9 +557,47 @@ namespace Milestro.Components
                    Input.GetKey(KeyCode.RightCommand);
         }
 
+        private static bool IsControlPressed()
+        {
+            return Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+        }
+
         private static bool IsSelectAllShortcutDown()
         {
             return IsCommandOrControlPressed() && Input.GetKeyDown(KeyCode.A);
+        }
+
+        private static bool IsCopyShortcutDown()
+        {
+            return (IsCommandOrControlPressed() && Input.GetKeyDown(KeyCode.C)) ||
+                   (IsControlPressed() && Input.GetKeyDown(KeyCode.Insert));
+        }
+
+        private static bool IsCutShortcutDown()
+        {
+            return (IsCommandOrControlPressed() && Input.GetKeyDown(KeyCode.X)) ||
+                   (IsSelectionModifierPressed() && Input.GetKeyDown(KeyCode.Delete));
+        }
+
+        private static bool IsPasteShortcutDown()
+        {
+            return (IsCommandOrControlPressed() && Input.GetKeyDown(KeyCode.V)) ||
+                   (IsSelectionModifierPressed() && Input.GetKeyDown(KeyCode.Insert));
+        }
+
+        private static bool IsCommittedTextShortcutSuppressed()
+        {
+            if (IsCommandOrControlPressed() &&
+                (Input.GetKeyDown(KeyCode.A) ||
+                 Input.GetKeyDown(KeyCode.C) ||
+                 Input.GetKeyDown(KeyCode.V) ||
+                 Input.GetKeyDown(KeyCode.X)))
+            {
+                return true;
+            }
+
+            return (IsSelectionModifierPressed() || IsControlPressed()) &&
+                   (Input.GetKeyDown(KeyCode.Delete) || Input.GetKeyDown(KeyCode.Insert));
         }
 
         private bool ShouldProcessRepeatingKey(KeyCode keyCode, ref float nextRepeatTime)
@@ -720,6 +816,12 @@ namespace Milestro.Components
 
         private string ReadCommittedText()
         {
+            if (IsCommittedTextShortcutSuppressed())
+            {
+                ResetSurrogateInputState();
+                return string.Empty;
+            }
+
             var queuedGuiInput = TakeQueuedGuiCommittedInput();
             if (queuedGuiInput.Length == 0)
             {

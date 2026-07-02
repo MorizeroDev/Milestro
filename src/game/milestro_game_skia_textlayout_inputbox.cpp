@@ -305,6 +305,32 @@ int64_t MilestroSkiaTextlayoutInputBoxGetSelection(milestro::skia::textlayout::I
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutInputBoxGetSelectedText(milestro::skia::textlayout::InputBox *inputBox,
+                                                      uint8_t *&ptr,
+                                                      uint64_t &size) try {
+    ptr = nullptr;
+    size = 0;
+    if (inputBox == nullptr) {
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    const auto selection = inputBox->getSelection();
+    if (!selection.hasSelection) {
+        return MILESTRO_API_RET_OK;
+    }
+
+    const auto &text = inputBox->getText();
+    if (selection.startUtf8 > selection.endUtf8 || selection.endUtf8 > text.size()) {
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    ptr = reinterpret_cast<uint8_t *>(const_cast<char *>(text.data() + selection.startUtf8));
+    size = selection.endUtf8 - selection.startUtf8;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutInputBoxSetSelectionUtf8(
         milestro::skia::textlayout::InputBox *inputBox,
         uint64_t anchorUtf8,

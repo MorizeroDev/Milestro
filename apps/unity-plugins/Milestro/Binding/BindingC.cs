@@ -436,6 +436,12 @@ namespace Milestro.Binding
                                                                               out int hasSelection);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxGetSelectedText")]
+        internal static extern unsafe long SkiaTextlayoutInputBoxGetSelectedText(IntPtr inputBox,
+                                                                                 out IntPtr ptr,
+                                                                                 out ulong size);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxSetSelectionUtf8")]
         internal static extern unsafe long SkiaTextlayoutInputBoxSetSelectionUtf8(IntPtr inputBox,
                                                                                   ulong anchorUtf8,

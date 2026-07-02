@@ -390,6 +390,18 @@ namespace Milestro.Skia.TextLayout
             }
         }
 
+        public string SelectedText
+        {
+            get
+            {
+                ThrowIfDisposed();
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxGetSelectedText(Ptr,
+                    out var ptr,
+                    out var size));
+                return ReadNativeUtf8(ptr, size);
+            }
+        }
+
         public bool SetSelectionUtf8(ulong anchorUtf8,
             ulong focusUtf8,
             int anchorAffinity = 1,

@@ -1,4 +1,5 @@
 #include "Milestro/skia/FontRegistry.h"
+#include "Milestro/game/milestro_game_interface.h"
 #include "Milestro/skia/textlayout/InputBox.h"
 #include "Milestro/skia/textlayout/ParagraphStyle.h"
 #include "Milestro/skia/textlayout/TextStyle.h"
@@ -339,6 +340,30 @@ TEST_F(InputBoxTest, SelectAllReplacesFullText) {
     EXPECT_EQ(inputBox->getText(), "x");
     EXPECT_EQ(inputBox->getCursorUtf8(), 1U);
     EXPECT_FALSE(inputBox->hasSelection());
+}
+
+TEST_F(InputBoxTest, SelectedTextAbiReturnsClusterSafeUtf8Slice) {
+    auto inputBox = MakeInputBox();
+    const std::string family =
+            "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7";
+    const std::string text = "x" + family + "y";
+    inputBox->setText(text.c_str(), text.size());
+
+    ASSERT_TRUE(inputBox->setSelectionUtf8(1,
+                                           1 + family.size(),
+                                           skia::textlayout::Affinity::kDownstream,
+                                           skia::textlayout::Affinity::kDownstream));
+
+    uint8_t* ptr = nullptr;
+    uint64_t size = 0;
+    ASSERT_EQ(MilestroSkiaTextlayoutInputBoxGetSelectedText(inputBox.get(), ptr, size), 0);
+    ASSERT_NE(ptr, nullptr);
+    EXPECT_EQ(std::string(reinterpret_cast<char*>(ptr), static_cast<size_t>(size)), family);
+
+    ASSERT_TRUE(inputBox->clearSelection());
+    ASSERT_EQ(MilestroSkiaTextlayoutInputBoxGetSelectedText(inputBox.get(), ptr, size), 0);
+    EXPECT_EQ(ptr, nullptr);
+    EXPECT_EQ(size, 0U);
 }
 
 TEST_F(InputBoxTest, RightAlignedSelectionRectsUseParagraphGeometry) {
