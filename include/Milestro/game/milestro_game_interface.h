@@ -234,6 +234,12 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxDeleteBackward(milestro::skia
                                                                   int32_t &changed);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxDeleteForward(milestro::skia::textlayout::InputBox *inputBox,
                                                                  int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxUndo(milestro::skia::textlayout::InputBox *inputBox,
+                                                        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxRedo(milestro::skia::textlayout::InputBox *inputBox,
+                                                        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxBreakUndoGroup(
+        milestro::skia::textlayout::InputBox *inputBox);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMovePrevious(milestro::skia::textlayout::InputBox *inputBox,
                                                                 int32_t &changed);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMoveNext(milestro::skia::textlayout::InputBox *inputBox,

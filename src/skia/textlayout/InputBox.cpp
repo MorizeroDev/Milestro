@@ -20,6 +20,9 @@ constexpr SkScalar kSingleLineLayoutWidth = 1048576.0f;
 constexpr SkScalar kCaretScrollPadding = 2.0f;
 constexpr SkScalar kCompositionUnderlineHeight = 1.5f;
 constexpr SkScalar kFallbackAscentRatio = 0.8f;
+constexpr size_t kMaxEditHistoryGroups = 100;
+constexpr size_t kMaxEditHistoryBytes = 1024 * 1024;
+constexpr auto kEditMergeTimeout = std::chrono::milliseconds(1000);
 
 struct VerticalMetrics {
     SkScalar ascent = 0.0f;
@@ -316,6 +319,7 @@ InputBox::InputBox(ParagraphStyle* paragraphStyle, TextStyle* textStyle) : Input
 void InputBox::setText(const char* text, size_t length) {
     compositionText_.clear();
     replaceText(sanitizeSingleLine(text, length), cursorUtf8_);
+    clearEditHistory();
 }
 
 void InputBox::setViewport(SkScalar width, SkScalar height) {
@@ -330,10 +334,25 @@ void InputBox::setCaretWidth(SkScalar width) {
 }
 
 void InputBox::setCursorUtf8(size_t utf8Offset, ::skia::textlayout::Affinity affinity) {
+    const auto oldCursor = cursorUtf8_;
+    const auto oldAffinity = affinity_;
+    const auto oldAnchor = selectionAnchorUtf8_;
+    const auto oldFocus = selectionFocusUtf8_;
+    const auto oldAnchorAffinity = selectionAnchorAffinity_;
+    const auto oldFocusAffinity = selectionFocusAffinity_;
+
     cursorUtf8_ = boundaryMap_.snapUtf8(utf8Offset, TextBoundarySnapMode::Nearest);
     affinity_ = affinity;
     resetSelectionToCursor();
     ensureCaretVisible();
+    if (cursorUtf8_ != oldCursor ||
+        affinity_ != oldAffinity ||
+        selectionAnchorUtf8_ != oldAnchor ||
+        selectionFocusUtf8_ != oldFocus ||
+        selectionAnchorAffinity_ != oldAnchorAffinity ||
+        selectionFocusAffinity_ != oldFocusAffinity) {
+        breakUndoGroup();
+    }
 }
 
 void InputBox::insertText(const char* text, size_t length) {
@@ -342,9 +361,11 @@ void InputBox::insertText(const char* text, size_t length) {
         return;
     }
 
+    const auto before = captureEditState();
     compositionText_.clear();
     if (hasSelection()) {
         replaceSelectionWith(std::move(insert));
+        recordEdit(before, EditKind::ReplaceSelection);
         return;
     }
 
@@ -352,6 +373,7 @@ void InputBox::insertText(const char* text, size_t length) {
     const auto cursor = boundaryMap_.snapUtf8(cursorUtf8_, TextBoundarySnapMode::Nearest);
     next.insert(cursor, insert);
     replaceText(std::move(next), cursor + insert.size());
+    recordEdit(before, EditKind::Typing);
 }
 
 bool InputBox::setComposition(const char* text, size_t length) {
@@ -372,6 +394,7 @@ bool InputBox::commitComposition(const char* text, size_t length) {
         commitText = compositionText_;
     }
 
+    const auto before = captureEditState();
     const bool hadComposition = !compositionText_.empty();
     compositionText_.clear();
     if (commitText.empty()) {
@@ -383,6 +406,7 @@ bool InputBox::commitComposition(const char* text, size_t length) {
 
     if (hasSelection()) {
         replaceSelectionWith(std::move(commitText));
+        recordEdit(before, EditKind::ImeCommit);
         return true;
     }
 
@@ -390,6 +414,7 @@ bool InputBox::commitComposition(const char* text, size_t length) {
     const auto cursor = boundaryMap_.snapUtf8(cursorUtf8_, TextBoundarySnapMode::Nearest);
     next.insert(cursor, commitText);
     replaceText(std::move(next), cursor + commitText.size());
+    recordEdit(before, EditKind::ImeCommit);
     return true;
 }
 
@@ -439,17 +464,24 @@ bool InputBox::setSelectionUtf8(size_t anchorUtf8,
     affinity_ = focusAffinity;
     ensureCaretVisible();
 
-    return selectionAnchorUtf8_ != oldAnchor ||
-           selectionFocusUtf8_ != oldFocus ||
-           selectionAnchorAffinity_ != oldAnchorAffinity ||
-           selectionFocusAffinity_ != oldFocusAffinity ||
-           cursorUtf8_ != oldCursor ||
-           affinity_ != oldAffinity;
+    const bool changed = selectionAnchorUtf8_ != oldAnchor ||
+                         selectionFocusUtf8_ != oldFocus ||
+                         selectionAnchorAffinity_ != oldAnchorAffinity ||
+                         selectionFocusAffinity_ != oldFocusAffinity ||
+                         cursorUtf8_ != oldCursor ||
+                         affinity_ != oldAffinity;
+    if (changed) {
+        breakUndoGroup();
+    }
+    return changed;
 }
 
 bool InputBox::clearSelection() {
     const bool changed = hasSelection();
     resetSelectionToCursor();
+    if (changed) {
+        breakUndoGroup();
+    }
     return changed;
 }
 
@@ -461,8 +493,10 @@ bool InputBox::selectAll() {
 }
 
 bool InputBox::deleteBackward() {
+    const auto before = captureEditState();
     const bool clearedComposition = clearComposition();
     if (deleteSelection()) {
+        recordEdit(before, EditKind::DeleteSelection);
         return true;
     }
 
@@ -475,12 +509,15 @@ bool InputBox::deleteBackward() {
     auto next = boundaryMap_.text();
     next.erase(previous, cursor - previous);
     replaceText(std::move(next), previous);
+    recordEdit(before, EditKind::DeleteBackward);
     return true;
 }
 
 bool InputBox::deleteForward() {
+    const auto before = captureEditState();
     const bool clearedComposition = clearComposition();
     if (deleteSelection()) {
+        recordEdit(before, EditKind::DeleteSelection);
         return true;
     }
 
@@ -493,21 +530,28 @@ bool InputBox::deleteForward() {
     auto next = boundaryMap_.text();
     next.erase(cursor, nextBoundary - cursor);
     replaceText(std::move(next), cursor);
+    recordEdit(before, EditKind::DeleteForward);
     return true;
 }
 
 bool InputBox::movePrevious(bool extendSelection) {
+    const auto oldCursor = cursorUtf8_;
+    const auto oldAffinity = affinity_;
     const bool clearedComposition = clearComposition();
     if (!extendSelection && hasSelection()) {
         cursorUtf8_ = selectionStartUtf8();
         affinity_ = ::skia::textlayout::Affinity::kDownstream;
         resetSelectionToCursor();
         ensureCaretVisible();
+        breakUndoGroup();
         return true;
     }
 
     const auto previous = boundaryMap_.previousBoundary(cursorUtf8_);
     if (previous == cursorUtf8_) {
+        if (clearedComposition) {
+            breakUndoGroup();
+        }
         return clearedComposition;
     }
 
@@ -521,21 +565,30 @@ bool InputBox::movePrevious(bool extendSelection) {
         resetSelectionToCursor();
         ensureCaretVisible();
     }
+    if (clearedComposition || cursorUtf8_ != oldCursor || affinity_ != oldAffinity) {
+        breakUndoGroup();
+    }
     return true;
 }
 
 bool InputBox::moveNext(bool extendSelection) {
+    const auto oldCursor = cursorUtf8_;
+    const auto oldAffinity = affinity_;
     const bool clearedComposition = clearComposition();
     if (!extendSelection && hasSelection()) {
         cursorUtf8_ = selectionEndUtf8();
         affinity_ = ::skia::textlayout::Affinity::kDownstream;
         resetSelectionToCursor();
         ensureCaretVisible();
+        breakUndoGroup();
         return true;
     }
 
     const auto next = boundaryMap_.nextBoundary(cursorUtf8_);
     if (next == cursorUtf8_) {
+        if (clearedComposition) {
+            breakUndoGroup();
+        }
         return clearedComposition;
     }
 
@@ -548,6 +601,9 @@ bool InputBox::moveNext(bool extendSelection) {
         affinity_ = ::skia::textlayout::Affinity::kDownstream;
         resetSelectionToCursor();
         ensureCaretVisible();
+    }
+    if (clearedComposition || cursorUtf8_ != oldCursor || affinity_ != oldAffinity) {
+        breakUndoGroup();
     }
     return true;
 }
@@ -578,7 +634,42 @@ bool InputBox::hitTest(SkScalar x, SkScalar y, bool extendSelection) {
         resetSelectionToCursor();
         ensureCaretVisible();
     }
-    return clearedComposition || selectionChanged || cursorUtf8_ != oldCursor || affinity_ != oldAffinity;
+    const bool changed = clearedComposition || selectionChanged || cursorUtf8_ != oldCursor || affinity_ != oldAffinity;
+    if (changed) {
+        breakUndoGroup();
+    }
+    return changed;
+}
+
+bool InputBox::undo() {
+    if (undoStack_.empty()) {
+        return false;
+    }
+
+    auto group = std::move(undoStack_.back());
+    undoStack_.pop_back();
+    restoreEditState(group.before);
+    redoStack_.push_back(std::move(group));
+    breakUndoGroup();
+    return true;
+}
+
+bool InputBox::redo() {
+    if (redoStack_.empty()) {
+        return false;
+    }
+
+    auto group = std::move(redoStack_.back());
+    redoStack_.pop_back();
+    restoreEditState(group.after);
+    undoStack_.push_back(std::move(group));
+    pruneEditHistory(undoStack_);
+    breakUndoGroup();
+    return true;
+}
+
+void InputBox::breakUndoGroup() {
+    undoMergeBarrier_ = true;
 }
 
 void InputBox::ensureCaretVisible() {
@@ -1093,6 +1184,112 @@ void InputBox::replaceText(std::string text, size_t requestedCursor) {
     resetSelectionToCursor();
     paragraphDirty_ = true;
     ensureCaretVisible();
+}
+
+InputBox::EditState InputBox::captureEditState() const {
+    return EditState{
+            boundaryMap_.text(),
+            cursorUtf8_,
+            affinity_,
+            selectionAnchorUtf8_,
+            selectionFocusUtf8_,
+            selectionAnchorAffinity_,
+            selectionFocusAffinity_,
+    };
+}
+
+void InputBox::restoreEditState(const EditState& state) {
+    boundaryMap_.rebuild(state.text);
+    compositionText_.clear();
+    cursorUtf8_ = boundaryMap_.snapUtf8(std::min(state.cursorUtf8, boundaryMap_.utf8Length()),
+                                        TextBoundarySnapMode::Nearest);
+    affinity_ = state.affinity;
+    selectionAnchorUtf8_ = boundaryMap_.snapUtf8(std::min(state.selectionAnchorUtf8, boundaryMap_.utf8Length()),
+                                                 TextBoundarySnapMode::Nearest);
+    selectionFocusUtf8_ = boundaryMap_.snapUtf8(std::min(state.selectionFocusUtf8, boundaryMap_.utf8Length()),
+                                                TextBoundarySnapMode::Nearest);
+    selectionAnchorAffinity_ = state.selectionAnchorAffinity;
+    selectionFocusAffinity_ = state.selectionFocusAffinity;
+    paragraphDirty_ = true;
+    ensureCaretVisible();
+}
+
+void InputBox::recordEdit(const EditState& before, EditKind kind) {
+    const auto after = captureEditState();
+    if (editStateEquals(before, after)) {
+        return;
+    }
+
+    redoStack_.clear();
+    const auto now = std::chrono::steady_clock::now();
+    if (!undoStack_.empty() && canMergeEdit(undoStack_.back(), kind, before, now)) {
+        undoStack_.back().after = after;
+        undoStack_.back().updatedAt = now;
+    } else {
+        undoStack_.push_back(EditGroup{before, after, kind, now});
+    }
+    pruneEditHistory(undoStack_);
+    undoMergeBarrier_ = false;
+}
+
+void InputBox::clearEditHistory() {
+    undoStack_.clear();
+    redoStack_.clear();
+    breakUndoGroup();
+}
+
+bool InputBox::canMergeEdit(const EditGroup& group,
+                            EditKind kind,
+                            const EditState& before,
+                            std::chrono::steady_clock::time_point now) const {
+    if (undoMergeBarrier_ || group.kind != kind || !isMergeableEditKind(kind)) {
+        return false;
+    }
+    if (!editStateEquals(group.after, before)) {
+        return false;
+    }
+    return now - group.updatedAt <= kEditMergeTimeout;
+}
+
+void InputBox::pruneEditHistory(std::vector<EditGroup>& stack) {
+    while (stack.size() > kMaxEditHistoryGroups) {
+        stack.erase(stack.begin());
+    }
+    while (stack.size() > 1 && editHistoryByteCost(stack) > kMaxEditHistoryBytes) {
+        stack.erase(stack.begin());
+    }
+}
+
+bool InputBox::isMergeableEditKind(EditKind kind) {
+    return kind == EditKind::Typing ||
+           kind == EditKind::DeleteBackward ||
+           kind == EditKind::DeleteForward;
+}
+
+bool InputBox::editStateEquals(const EditState& left, const EditState& right) {
+    return left.text == right.text &&
+           left.cursorUtf8 == right.cursorUtf8 &&
+           left.affinity == right.affinity &&
+           left.selectionAnchorUtf8 == right.selectionAnchorUtf8 &&
+           left.selectionFocusUtf8 == right.selectionFocusUtf8 &&
+           left.selectionAnchorAffinity == right.selectionAnchorAffinity &&
+           left.selectionFocusAffinity == right.selectionFocusAffinity;
+}
+
+size_t InputBox::editStateByteCost(const EditState& state) {
+    return state.text.size() + 6 * sizeof(size_t) + 3 * sizeof(int32_t);
+}
+
+size_t InputBox::editGroupByteCost(const EditGroup& group) {
+    return editStateByteCost(group.before) + editStateByteCost(group.after);
+}
+
+size_t InputBox::editHistoryByteCost(const std::vector<EditGroup>& stack) {
+    size_t total = 0;
+    for (const auto& group: stack) {
+        total += editGroupByteCost(group);
+    }
+    return total;
 }
 
 void InputBox::markCompositionDirty() {

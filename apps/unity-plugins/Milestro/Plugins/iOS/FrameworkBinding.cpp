@@ -465,6 +465,21 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxDeleteForward(milestro::sk
     return MilestroSkiaTextlayoutInputBoxDeleteForward(inputBox, changed);
 }
 
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxUndo(milestro::skia::textlayout::InputBox* inputBox,
+                                                           int32_t& changed) {
+    return MilestroSkiaTextlayoutInputBoxUndo(inputBox, changed);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxRedo(milestro::skia::textlayout::InputBox* inputBox,
+                                                           int32_t& changed) {
+    return MilestroSkiaTextlayoutInputBoxRedo(inputBox, changed);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxBreakUndoGroup(
+        milestro::skia::textlayout::InputBox* inputBox) {
+    return MilestroSkiaTextlayoutInputBoxBreakUndoGroup(inputBox);
+}
+
 int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxMovePrevious(milestro::skia::textlayout::InputBox* inputBox,
                                                                    int32_t& changed) {
     return MilestroSkiaTextlayoutInputBoxMovePrevious(inputBox, changed);

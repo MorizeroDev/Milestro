@@ -12,6 +12,7 @@
 #include "modules/skparagraph/include/Paragraph.h"
 #include "modules/skunicode/include/SkUnicode.h"
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -144,6 +145,9 @@ public:
     bool movePrevious(bool extendSelection = false);
     bool moveNext(bool extendSelection = false);
     bool hitTest(SkScalar x, SkScalar y, bool extendSelection = false);
+    bool undo();
+    bool redo();
+    void breakUndoGroup();
 
     void ensureCaretVisible();
     InputBoxCaretRect getCaretRect();
@@ -177,6 +181,36 @@ private:
     ::skia::textlayout::Affinity selectionAnchorAffinity_ = ::skia::textlayout::Affinity::kDownstream;
     ::skia::textlayout::Affinity selectionFocusAffinity_ = ::skia::textlayout::Affinity::kDownstream;
 
+    enum class EditKind {
+        Typing,
+        DeleteBackward,
+        DeleteForward,
+        DeleteSelection,
+        ReplaceSelection,
+        ImeCommit,
+    };
+
+    struct EditState {
+        std::string text;
+        size_t cursorUtf8 = 0;
+        ::skia::textlayout::Affinity affinity = ::skia::textlayout::Affinity::kDownstream;
+        size_t selectionAnchorUtf8 = 0;
+        size_t selectionFocusUtf8 = 0;
+        ::skia::textlayout::Affinity selectionAnchorAffinity = ::skia::textlayout::Affinity::kDownstream;
+        ::skia::textlayout::Affinity selectionFocusAffinity = ::skia::textlayout::Affinity::kDownstream;
+    };
+
+    struct EditGroup {
+        EditState before;
+        EditState after;
+        EditKind kind = EditKind::Typing;
+        std::chrono::steady_clock::time_point updatedAt;
+    };
+
+    std::vector<EditGroup> undoStack_;
+    std::vector<EditGroup> redoStack_;
+    bool undoMergeBarrier_ = true;
+
     static std::string sanitizeSingleLine(const char* text, size_t length);
 
     void configureInputParagraphMetrics();
@@ -200,6 +234,20 @@ private:
     bool deleteSelection();
     SkScalar contentWidth();
     void replaceText(std::string text, size_t requestedCursor);
+    EditState captureEditState() const;
+    void restoreEditState(const EditState& state);
+    void recordEdit(const EditState& before, EditKind kind);
+    void clearEditHistory();
+    bool canMergeEdit(const EditGroup& group,
+                      EditKind kind,
+                      const EditState& before,
+                      std::chrono::steady_clock::time_point now) const;
+    void pruneEditHistory(std::vector<EditGroup>& stack);
+    static bool isMergeableEditKind(EditKind kind);
+    static bool editStateEquals(const EditState& left, const EditState& right);
+    static size_t editStateByteCost(const EditState& state);
+    static size_t editGroupByteCost(const EditGroup& group);
+    static size_t editHistoryByteCost(const std::vector<EditGroup>& stack);
     void markCompositionDirty();
 };
 

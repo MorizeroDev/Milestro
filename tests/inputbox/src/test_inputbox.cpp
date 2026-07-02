@@ -343,6 +343,156 @@ TEST_F(InputBoxTest, SelectAllReplacesFullText) {
     EXPECT_FALSE(inputBox->hasSelection());
 }
 
+TEST_F(InputBoxTest, ContinuousTypingUndoRedoUsesSingleGroup) {
+    auto inputBox = MakeInputBox();
+
+    inputBox->insertText("a", 1);
+    inputBox->insertText("b", 1);
+    inputBox->insertText("c", 1);
+
+    EXPECT_EQ(inputBox->getText(), "abc");
+    ASSERT_TRUE(inputBox->undo());
+    EXPECT_EQ(inputBox->getText(), "");
+    EXPECT_EQ(inputBox->getCursorUtf8(), 0U);
+
+    ASSERT_TRUE(inputBox->redo());
+    EXPECT_EQ(inputBox->getText(), "abc");
+    EXPECT_EQ(inputBox->getCursorUtf8(), 3U);
+}
+
+TEST_F(InputBoxTest, MovementBreaksTypingUndoGroup) {
+    auto inputBox = MakeInputBox();
+
+    inputBox->insertText("a", 1);
+    inputBox->insertText("b", 1);
+    inputBox->insertText("c", 1);
+    ASSERT_TRUE(inputBox->movePrevious());
+    inputBox->insertText("X", 1);
+
+    EXPECT_EQ(inputBox->getText(), "abXc");
+    ASSERT_TRUE(inputBox->undo());
+    EXPECT_EQ(inputBox->getText(), "abc");
+    EXPECT_EQ(inputBox->getCursorUtf8(), 2U);
+
+    ASSERT_TRUE(inputBox->undo());
+    EXPECT_EQ(inputBox->getText(), "");
+}
+
+TEST_F(InputBoxTest, SelectionReplacementUndoRestoresSelectionAndRedoRestoresCaret) {
+    auto inputBox = MakeInputBox();
+    inputBox->setText("abcd", 4);
+
+    ASSERT_TRUE(inputBox->setSelectionUtf8(1,
+                                           3,
+                                           skia::textlayout::Affinity::kDownstream,
+                                           skia::textlayout::Affinity::kDownstream));
+    inputBox->insertText("X", 1);
+    EXPECT_EQ(inputBox->getText(), "aXd");
+    EXPECT_FALSE(inputBox->hasSelection());
+    EXPECT_EQ(inputBox->getCursorUtf8(), 2U);
+
+    ASSERT_TRUE(inputBox->undo());
+    EXPECT_EQ(inputBox->getText(), "abcd");
+    auto selection = inputBox->getSelection();
+    ASSERT_TRUE(selection.hasSelection);
+    EXPECT_EQ(selection.startUtf8, 1U);
+    EXPECT_EQ(selection.endUtf8, 3U);
+    EXPECT_EQ(inputBox->getCursorUtf8(), 3U);
+
+    ASSERT_TRUE(inputBox->redo());
+    EXPECT_EQ(inputBox->getText(), "aXd");
+    EXPECT_FALSE(inputBox->hasSelection());
+    EXPECT_EQ(inputBox->getCursorUtf8(), 2U);
+}
+
+TEST_F(InputBoxTest, RepeatedBackspaceAndDeleteUndoRestoreDeletedRuns) {
+    auto inputBox = MakeInputBox();
+    inputBox->setText("abcd", 4);
+    inputBox->setCursorUtf8(4, skia::textlayout::Affinity::kDownstream);
+
+    ASSERT_TRUE(inputBox->deleteBackward());
+    ASSERT_TRUE(inputBox->deleteBackward());
+    EXPECT_EQ(inputBox->getText(), "ab");
+
+    ASSERT_TRUE(inputBox->undo());
+    EXPECT_EQ(inputBox->getText(), "abcd");
+    EXPECT_EQ(inputBox->getCursorUtf8(), 4U);
+
+    inputBox->breakUndoGroup();
+    inputBox->setCursorUtf8(0, skia::textlayout::Affinity::kDownstream);
+    ASSERT_TRUE(inputBox->deleteForward());
+    ASSERT_TRUE(inputBox->deleteForward());
+    EXPECT_EQ(inputBox->getText(), "cd");
+
+    ASSERT_TRUE(inputBox->undo());
+    EXPECT_EQ(inputBox->getText(), "abcd");
+    EXPECT_EQ(inputBox->getCursorUtf8(), 0U);
+}
+
+TEST_F(InputBoxTest, ImeCommitIsSingleUndoGroupAndPreeditIsNotHistory) {
+    const std::string composition = "\xE4\xBD\xA0";
+    auto inputBox = MakeInputBox();
+
+    ASSERT_TRUE(inputBox->setComposition("n", 1));
+    ASSERT_TRUE(inputBox->setComposition("ni", 2));
+    EXPECT_FALSE(inputBox->undo());
+
+    ASSERT_TRUE(inputBox->commitComposition(composition.c_str(), composition.size()));
+    EXPECT_EQ(inputBox->getText(), composition);
+
+    ASSERT_TRUE(inputBox->undo());
+    EXPECT_EQ(inputBox->getText(), "");
+
+    ASSERT_TRUE(inputBox->redo());
+    EXPECT_EQ(inputBox->getText(), composition);
+}
+
+TEST_F(InputBoxTest, NewEditAfterUndoClearsRedoStack) {
+    auto inputBox = MakeInputBox();
+
+    inputBox->insertText("a", 1);
+    inputBox->breakUndoGroup();
+    inputBox->insertText("b", 1);
+    EXPECT_EQ(inputBox->getText(), "ab");
+
+    ASSERT_TRUE(inputBox->undo());
+    EXPECT_EQ(inputBox->getText(), "a");
+    inputBox->insertText("c", 1);
+    EXPECT_EQ(inputBox->getText(), "ac");
+    EXPECT_FALSE(inputBox->redo());
+}
+
+TEST_F(InputBoxTest, ProgrammaticSetTextClearsEditHistory) {
+    auto inputBox = MakeInputBox();
+
+    inputBox->insertText("abc", 3);
+    ASSERT_TRUE(inputBox->undo());
+    ASSERT_TRUE(inputBox->redo());
+
+    inputBox->setText("reset", 5);
+    EXPECT_EQ(inputBox->getText(), "reset");
+    EXPECT_FALSE(inputBox->undo());
+    EXPECT_FALSE(inputBox->redo());
+}
+
+TEST_F(InputBoxTest, UndoRedoPreservesRepresentativeUnicodeClusters) {
+    const std::string text =
+            "e\xCC\x81"
+            "\xF0\x9F\xA4\x94"
+            "\xF0\xB0\xBB\x9D"
+            "\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x92";
+    auto inputBox = MakeInputBox();
+
+    inputBox->insertText(text.c_str(), text.size());
+    EXPECT_EQ(inputBox->getText(), text);
+
+    ASSERT_TRUE(inputBox->undo());
+    EXPECT_EQ(inputBox->getText(), "");
+
+    ASSERT_TRUE(inputBox->redo());
+    EXPECT_EQ(inputBox->getText(), text);
+}
+
 TEST_F(InputBoxTest, SelectedTextAbiReturnsClusterSafeUtf8Slice) {
     auto inputBox = MakeInputBox();
     const std::string family =

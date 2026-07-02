@@ -380,6 +380,18 @@ namespace Milestro.Binding
         internal static extern unsafe long SkiaTextlayoutInputBoxDeleteForward(IntPtr inputBox, out int changed);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxUndo")]
+        internal static extern unsafe long SkiaTextlayoutInputBoxUndo(IntPtr inputBox, out int changed);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxRedo")]
+        internal static extern unsafe long SkiaTextlayoutInputBoxRedo(IntPtr inputBox, out int changed);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxBreakUndoGroup")]
+        internal static extern unsafe long SkiaTextlayoutInputBoxBreakUndoGroup(IntPtr inputBox);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxMovePrevious")]
         internal static extern unsafe long SkiaTextlayoutInputBoxMovePrevious(IntPtr inputBox, out int changed);
 

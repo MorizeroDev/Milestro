@@ -372,6 +372,7 @@ namespace Milestro.Components
             caretVisible = false;
             if (inputBox != null)
             {
+                inputBox.BreakUndoGroup();
                 inputBox.ClearComposition();
                 inputBox.ClearSelection();
                 inputBox.SetCaretVisible(false);
@@ -455,19 +456,24 @@ namespace Milestro.Components
                 return false;
             }
 
+            if (TryHandleUndoRedoShortcut(out var historyChanged))
+            {
+                return historyChanged;
+            }
+
             if (TryHandleClipboardShortcut(out var clipboardChanged))
             {
                 return clipboardChanged;
             }
 
             var changed = false;
-            if (IsSelectAllShortcutDown())
+            if (InputBoxShortcutUtil.IsSelectAllShortcutDown())
             {
                 ResetSurrogateInputState();
                 changed |= inputBox.SelectAll();
             }
 
-            var extendSelection = IsSelectionModifierPressed();
+            var extendSelection = InputBoxShortcutUtil.IsSelectionModifierPressed();
             if (ShouldProcessRepeatingKey(KeyCode.LeftArrow, ref nextLeftRepeatTime))
             {
                 ResetSurrogateInputState();
@@ -491,6 +497,33 @@ namespace Milestro.Components
             return changed;
         }
 
+        private bool TryHandleUndoRedoShortcut(out bool changed)
+        {
+            changed = false;
+            if (inputBox == null)
+            {
+                return false;
+            }
+
+            if (InputBoxShortcutUtil.IsUndoShortcutDown())
+            {
+                ResetSurrogateInputState();
+                ResetKeyRepeatState();
+                changed = inputBox.Undo();
+                return true;
+            }
+
+            if (InputBoxShortcutUtil.IsRedoShortcutDown())
+            {
+                ResetSurrogateInputState();
+                ResetKeyRepeatState();
+                changed = inputBox.Redo();
+                return true;
+            }
+
+            return false;
+        }
+
         private bool TryHandleClipboardShortcut(out bool changed)
         {
             changed = false;
@@ -499,7 +532,7 @@ namespace Milestro.Components
                 return false;
             }
 
-            if (IsCopyShortcutDown())
+            if (InputBoxShortcutUtil.IsCopyShortcutDown())
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
@@ -511,7 +544,7 @@ namespace Milestro.Components
                 return true;
             }
 
-            if (IsCutShortcutDown())
+            if (InputBoxShortcutUtil.IsCutShortcutDown())
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
@@ -522,11 +555,13 @@ namespace Milestro.Components
 
                 var selectedText = inputBox.SelectedText;
                 GUIUtility.systemCopyBuffer = selectedText;
+                inputBox.BreakUndoGroup();
                 changed = inputBox.DeleteForward();
+                inputBox.BreakUndoGroup();
                 return true;
             }
 
-            if (IsPasteShortcutDown())
+            if (InputBoxShortcutUtil.IsPasteShortcutDown())
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
@@ -536,68 +571,14 @@ namespace Milestro.Components
                     return true;
                 }
 
+                inputBox.BreakUndoGroup();
                 inputBox.InsertText(clipboardText);
+                inputBox.BreakUndoGroup();
                 changed = true;
                 return true;
             }
 
             return false;
-        }
-
-        private static bool IsSelectionModifierPressed()
-        {
-            return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-        }
-
-        private static bool IsCommandOrControlPressed()
-        {
-            return Input.GetKey(KeyCode.LeftControl) ||
-                   Input.GetKey(KeyCode.RightControl) ||
-                   Input.GetKey(KeyCode.LeftCommand) ||
-                   Input.GetKey(KeyCode.RightCommand);
-        }
-
-        private static bool IsControlPressed()
-        {
-            return Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
-        }
-
-        private static bool IsSelectAllShortcutDown()
-        {
-            return IsCommandOrControlPressed() && Input.GetKeyDown(KeyCode.A);
-        }
-
-        private static bool IsCopyShortcutDown()
-        {
-            return (IsCommandOrControlPressed() && Input.GetKeyDown(KeyCode.C)) ||
-                   (IsControlPressed() && Input.GetKeyDown(KeyCode.Insert));
-        }
-
-        private static bool IsCutShortcutDown()
-        {
-            return (IsCommandOrControlPressed() && Input.GetKeyDown(KeyCode.X)) ||
-                   (IsSelectionModifierPressed() && Input.GetKeyDown(KeyCode.Delete));
-        }
-
-        private static bool IsPasteShortcutDown()
-        {
-            return (IsCommandOrControlPressed() && Input.GetKeyDown(KeyCode.V)) ||
-                   (IsSelectionModifierPressed() && Input.GetKeyDown(KeyCode.Insert));
-        }
-
-        private static bool IsCommittedTextShortcutSuppressed()
-        {
-            if (IsCommandOrControlPressed() &&
-                (Input.GetKeyDown(KeyCode.A) ||
-                 Input.GetKeyDown(KeyCode.C) ||
-                 Input.GetKeyDown(KeyCode.V) ||
-                 Input.GetKeyDown(KeyCode.X)))
-            {
-                return true;
-            }
-
-            return (IsSelectionModifierPressed() || IsControlPressed()) &&
-                   (Input.GetKeyDown(KeyCode.Delete) || Input.GetKeyDown(KeyCode.Insert));
         }
 
         private bool ShouldProcessRepeatingKey(KeyCode keyCode, ref float nextRepeatTime)
@@ -816,7 +797,7 @@ namespace Milestro.Components
 
         private string ReadCommittedText()
         {
-            if (IsCommittedTextShortcutSuppressed())
+            if (InputBoxShortcutUtil.IsCommittedTextShortcutSuppressed())
             {
                 ResetSurrogateInputState();
                 return string.Empty;

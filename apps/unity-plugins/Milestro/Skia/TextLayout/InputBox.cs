@@ -324,6 +324,26 @@ namespace Milestro.Skia.TextLayout
             return changed != 0;
         }
 
+        public bool Undo()
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxUndo(Ptr, out var changed));
+            return changed != 0;
+        }
+
+        public bool Redo()
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxRedo(Ptr, out var changed));
+            return changed != 0;
+        }
+
+        public void BreakUndoGroup()
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxBreakUndoGroup(Ptr));
+        }
+
         public bool MovePrevious(bool extendSelection = false)
         {
             ThrowIfDisposed();

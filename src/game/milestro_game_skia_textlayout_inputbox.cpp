@@ -198,6 +198,30 @@ int64_t MilestroSkiaTextlayoutInputBoxDeleteForward(milestro::skia::textlayout::
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutInputBoxUndo(milestro::skia::textlayout::InputBox *inputBox,
+                                           int32_t &changed) try {
+    changed = inputBox->undo() ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxRedo(milestro::skia::textlayout::InputBox *inputBox,
+                                           int32_t &changed) try {
+    changed = inputBox->redo() ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxBreakUndoGroup(
+        milestro::skia::textlayout::InputBox *inputBox) try {
+    inputBox->breakUndoGroup();
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutInputBoxMovePrevious(milestro::skia::textlayout::InputBox *inputBox,
                                                    int32_t &changed) try {
     changed = inputBox->movePrevious() ? 1 : 0;
