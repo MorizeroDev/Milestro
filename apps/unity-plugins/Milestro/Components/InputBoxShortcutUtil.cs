@@ -1,84 +1,112 @@
+using Milestro.Configuration;
 using UnityEngine;
 
 namespace Milestro.Components
 {
     internal static class InputBoxShortcutUtil
     {
-        internal static bool IsSelectionModifierPressed()
+        internal static bool IsSelectionExtendDown()
         {
             return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
         }
 
-        internal static bool IsCommandOrControlPressed()
+        private static bool IsSelectionModifierPressed()
         {
-            return Input.GetKey(KeyCode.LeftControl) ||
-                   Input.GetKey(KeyCode.RightControl) ||
-                   Input.GetKey(KeyCode.LeftCommand) ||
-                   Input.GetKey(KeyCode.RightCommand);
+            return IsSelectionExtendDown();
         }
 
-        internal static bool IsControlPressed()
+        private static bool IsControlPressed()
         {
             return Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
         }
 
-        internal static bool IsUndoShortcutDown()
+        private static bool IsCommandPressed()
         {
-            return IsCommandOrControlPressed() &&
-                   !IsSelectionModifierPressed() &&
+            return Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand);
+        }
+
+        private static bool IsAltPressed()
+        {
+            return Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+        }
+
+        private static bool IsExactCommandOrControlModifier(bool shift)
+        {
+            return IsControlPressed() != IsCommandPressed() &&
+                   IsSelectionModifierPressed() == shift &&
+                   !IsAltPressed();
+        }
+
+        private static bool IsExactControlModifier(bool shift)
+        {
+            return IsControlPressed() &&
+                   !IsCommandPressed() &&
+                   IsSelectionModifierPressed() == shift &&
+                   !IsAltPressed();
+        }
+
+        private static bool IsExactShiftOnlyModifier()
+        {
+            return IsSelectionModifierPressed() &&
+                   !IsControlPressed() &&
+                   !IsCommandPressed() &&
+                   !IsAltPressed();
+        }
+
+        private static bool IsClipboardCommandModifier()
+        {
+            return IsExactCommandOrControlModifier(false) ||
+                   (InputBoxShortcutConfiguration.AcceptShiftClipboardShortcuts &&
+                    IsExactCommandOrControlModifier(true));
+        }
+
+        internal static bool IsUndoDown()
+        {
+            return IsExactCommandOrControlModifier(false) &&
                    Input.GetKeyDown(KeyCode.Z);
         }
 
-        internal static bool IsRedoShortcutDown()
+        internal static bool IsRedoDown()
         {
-            return (IsCommandOrControlPressed() &&
-                    IsSelectionModifierPressed() &&
+            return (InputBoxShortcutConfiguration.AcceptRedoWithShiftZ &&
+                    IsExactCommandOrControlModifier(true) &&
                     Input.GetKeyDown(KeyCode.Z)) ||
-                   (IsControlPressed() && Input.GetKeyDown(KeyCode.Y));
+                   (InputBoxShortcutConfiguration.AcceptRedoWithControlY &&
+                    IsExactControlModifier(false) &&
+                    Input.GetKeyDown(KeyCode.Y));
         }
 
-        internal static bool IsSelectAllShortcutDown()
+        internal static bool IsSelectAllDown()
         {
-            return IsCommandOrControlPressed() && Input.GetKeyDown(KeyCode.A);
+            return IsExactCommandOrControlModifier(false) && Input.GetKeyDown(KeyCode.A);
         }
 
-        internal static bool IsCopyShortcutDown()
+        internal static bool IsCopyDown()
         {
-            return (IsCommandOrControlPressed() && Input.GetKeyDown(KeyCode.C)) ||
-                   (IsControlPressed() && Input.GetKeyDown(KeyCode.Insert));
+            return (IsClipboardCommandModifier() && Input.GetKeyDown(KeyCode.C)) ||
+                   (IsExactControlModifier(false) && Input.GetKeyDown(KeyCode.Insert));
         }
 
-        internal static bool IsCutShortcutDown()
+        internal static bool IsCutDown()
         {
-            return (IsCommandOrControlPressed() && Input.GetKeyDown(KeyCode.X)) ||
-                   (IsSelectionModifierPressed() && Input.GetKeyDown(KeyCode.Delete));
+            return (IsClipboardCommandModifier() && Input.GetKeyDown(KeyCode.X)) ||
+                   (IsExactShiftOnlyModifier() && Input.GetKeyDown(KeyCode.Delete));
         }
 
-        internal static bool IsPasteShortcutDown()
+        internal static bool IsPasteDown()
         {
-            return (IsCommandOrControlPressed() && Input.GetKeyDown(KeyCode.V)) ||
-                   (IsSelectionModifierPressed() && Input.GetKeyDown(KeyCode.Insert));
+            return (IsClipboardCommandModifier() && Input.GetKeyDown(KeyCode.V)) ||
+                   (IsExactShiftOnlyModifier() && Input.GetKeyDown(KeyCode.Insert));
         }
 
         internal static bool IsCommittedTextShortcutSuppressed()
         {
-            if (IsCommandOrControlPressed() &&
-                (Input.GetKeyDown(KeyCode.A) ||
-                 Input.GetKeyDown(KeyCode.C) ||
-                 Input.GetKeyDown(KeyCode.V) ||
-                 Input.GetKeyDown(KeyCode.X) ||
-                 Input.GetKeyDown(KeyCode.Z)))
-            {
-                return true;
-            }
-
-            if (IsControlPressed() && Input.GetKeyDown(KeyCode.Y))
-            {
-                return true;
-            }
-
-            return (IsSelectionModifierPressed() || IsControlPressed()) &&
-                   (Input.GetKeyDown(KeyCode.Delete) || Input.GetKeyDown(KeyCode.Insert));
+            return IsUndoDown() ||
+                   IsRedoDown() ||
+                   IsSelectAllDown() ||
+                   IsCopyDown() ||
+                   IsCutDown() ||
+                   IsPasteDown();
         }
     }
 }

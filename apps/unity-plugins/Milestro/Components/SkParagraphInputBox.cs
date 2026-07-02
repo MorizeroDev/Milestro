@@ -467,13 +467,13 @@ namespace Milestro.Components
             }
 
             var changed = false;
-            if (InputBoxShortcutUtil.IsSelectAllShortcutDown())
+            if (InputBoxShortcutUtil.IsSelectAllDown())
             {
                 ResetSurrogateInputState();
                 changed |= inputBox.SelectAll();
             }
 
-            var extendSelection = InputBoxShortcutUtil.IsSelectionModifierPressed();
+            var extendSelection = InputBoxShortcutUtil.IsSelectionExtendDown();
             if (ShouldProcessRepeatingKey(KeyCode.LeftArrow, ref nextLeftRepeatTime))
             {
                 ResetSurrogateInputState();
@@ -505,7 +505,7 @@ namespace Milestro.Components
                 return false;
             }
 
-            if (InputBoxShortcutUtil.IsUndoShortcutDown())
+            if (InputBoxShortcutUtil.IsUndoDown())
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
@@ -513,7 +513,7 @@ namespace Milestro.Components
                 return true;
             }
 
-            if (InputBoxShortcutUtil.IsRedoShortcutDown())
+            if (InputBoxShortcutUtil.IsRedoDown())
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
@@ -532,7 +532,7 @@ namespace Milestro.Components
                 return false;
             }
 
-            if (InputBoxShortcutUtil.IsCopyShortcutDown())
+            if (InputBoxShortcutUtil.IsCopyDown())
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
@@ -544,7 +544,7 @@ namespace Milestro.Components
                 return true;
             }
 
-            if (InputBoxShortcutUtil.IsCutShortcutDown())
+            if (InputBoxShortcutUtil.IsCutDown())
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
@@ -561,7 +561,7 @@ namespace Milestro.Components
                 return true;
             }
 
-            if (InputBoxShortcutUtil.IsPasteShortcutDown())
+            if (InputBoxShortcutUtil.IsPasteDown())
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
