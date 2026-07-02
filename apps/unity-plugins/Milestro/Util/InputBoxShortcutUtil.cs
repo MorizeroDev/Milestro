@@ -1,7 +1,7 @@
 using Milestro.Configuration;
 using UnityEngine;
 
-namespace Milestro.Components
+namespace Milestro.Util
 {
     internal static class InputBoxShortcutUtil
     {

@@ -2,9 +2,10 @@ using Milestro.Skia.TextLayout;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace Milestro.Components
+namespace Milestro.Experimental.Components
 {
-    public class SkParagraphMeshTextBox : MaskableGraphic
+    [AddComponentMenu("Milestro/Experimental/Mesh Text Box")]
+    public class MeshTextBox : MaskableGraphic
     {
         private Paragraph? paragraphField = null;
 

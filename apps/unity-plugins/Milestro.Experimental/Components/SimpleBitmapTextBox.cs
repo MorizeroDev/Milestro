@@ -5,9 +5,10 @@ using Milestro.Skia.TextLayout;
 using UnityEngine;
 using UnityEngine.Serialization;
 
-namespace Milestro.Components
+namespace Milestro.Experimental.Components
 {
-    public class SimpleBitmapTextBox : SkParagraphBitmapTextBox
+    [AddComponentMenu("Milestro/Experimental/Simple Bitmap Text Box")]
+    public class SimpleBitmapTextBox : BitmapTextBox
     {
         [TextArea(3, 10)]
         [SerializeField]
