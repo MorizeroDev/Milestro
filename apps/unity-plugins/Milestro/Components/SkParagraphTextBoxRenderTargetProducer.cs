@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using Milestro.Extensions;
 using Milestro.Model;
 using Milestro.Skia;
-using Milestro.Skia.TextLayout;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -48,13 +46,18 @@ namespace Milestro.Components
         private string m_locale = "zh-Hans";
 
         [NonSerialized] private RectTransform? rectTransformCache;
-        [NonSerialized] private Paragraph? paragraph;
+        [NonSerialized] private SkParagraphTextBoxRenderTargetCore? renderTarget;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
-        [NonSerialized] private bool m_havePropertiesChanged = true;
 #if UNITY_EDITOR
         [NonSerialized] private bool m_editorRebuildQueued;
 #endif
-        [NonSerialized] private int layoutWidth = 640;
+
+        public override Texture? OutputTexture => renderTarget?.OutputTexture;
+        public override Rect OutputUvRect => renderTarget?.OutputUvRect ?? new Rect(0f, 0f, 1f, 1f);
+        public override int OutputWidth => renderTarget?.OutputWidth ?? 0;
+        public override int OutputHeight => renderTarget?.OutputHeight ?? 0;
+        public override bool HasOutput => renderTarget?.HasOutput ?? false;
+        public override long OutputVersion => renderTarget?.OutputVersion ?? 0;
 
         public string content
         {
@@ -62,7 +65,7 @@ namespace Milestro.Components
             set
             {
                 m_content = value ?? "";
-                m_havePropertiesChanged = true;
+                MarkPropertiesChanged();
             }
         }
 
@@ -72,7 +75,7 @@ namespace Milestro.Components
             set
             {
                 m_fontFamilies = value ?? new List<string>();
-                m_havePropertiesChanged = true;
+                MarkPropertiesChanged();
             }
         }
 
@@ -82,7 +85,7 @@ namespace Milestro.Components
             set
             {
                 m_textAlign = value;
-                m_havePropertiesChanged = true;
+                MarkPropertiesChanged();
             }
         }
 
@@ -92,7 +95,7 @@ namespace Milestro.Components
             set
             {
                 m_textDirection = value;
-                m_havePropertiesChanged = true;
+                MarkPropertiesChanged();
             }
         }
 
@@ -102,7 +105,7 @@ namespace Milestro.Components
             set
             {
                 m_size = value;
-                m_havePropertiesChanged = true;
+                MarkPropertiesChanged();
             }
         }
 
@@ -112,7 +115,7 @@ namespace Milestro.Components
             set
             {
                 m_textColor = value;
-                m_havePropertiesChanged = true;
+                MarkPropertiesChanged();
             }
         }
 
@@ -122,7 +125,7 @@ namespace Milestro.Components
             set
             {
                 m_locale = value ?? "";
-                m_havePropertiesChanged = true;
+                MarkPropertiesChanged();
             }
         }
 
@@ -132,7 +135,7 @@ namespace Milestro.Components
             set
             {
                 m_colorSpaceOverride = value ? ColorSpace.Linear : ColorSpace.Gamma;
-                m_havePropertiesChanged = true;
+                MarkPropertiesChanged();
             }
         }
 
@@ -142,11 +145,10 @@ namespace Milestro.Components
             RebuildResources(forceText: true);
         }
 
-        protected override void OnDisable()
+        protected virtual void OnDisable()
         {
-            base.OnDisable();
-            paragraph = null;
-            m_havePropertiesChanged = true;
+            renderTarget?.Dispose();
+            renderTarget = null;
         }
 
         private void Update()
@@ -157,7 +159,7 @@ namespace Milestro.Components
 #if UNITY_EDITOR
         private void OnValidate()
         {
-            m_havePropertiesChanged = true;
+            MarkPropertiesChanged();
             if (isActiveAndEnabled)
             {
                 QueueEditorRebuild();
@@ -172,7 +174,7 @@ namespace Milestro.Components
                 return;
             }
 
-            m_havePropertiesChanged = true;
+            MarkPropertiesChanged();
 #if UNITY_EDITOR
             QueueEditorRebuild();
 #endif
@@ -204,32 +206,7 @@ namespace Milestro.Components
 
         private void RebuildResources(bool forceText)
         {
-            var needsDraw = false;
-            var sizePixels = CurrentSize();
-            var propertiesChanged = m_havePropertiesChanged;
-            if (EnsureRenderTarget(sizePixels, SurfaceColorSpace()))
-            {
-                needsDraw = true;
-            }
-
-            if (forceText || paragraph == null || propertiesChanged)
-            {
-                paragraph = BuildParagraph(content);
-                needsDraw = true;
-            }
-
-            if (needsDraw)
-            {
-                ValidateMargin();
-                ResizeParagraph(paragraph);
-                if (!TrySubmitRenderCommands(BuildRenderCommands()))
-                {
-                    m_havePropertiesChanged = true;
-                    return;
-                }
-            }
-
-            m_havePropertiesChanged = false;
+            RenderTarget.Rebuild(CurrentSize(), SurfaceColorSpace(), CurrentSettings(), forceText, this);
         }
 
         private Vector2Int CurrentSize()
@@ -250,51 +227,16 @@ namespace Milestro.Components
             return m_colorSpaceOverride ?? UnitySkiaRenderTextureDescriptor.DefaultColorSpace;
         }
 
-        protected virtual Paragraph BuildParagraph(string text)
+        private SkParagraphTextBoxRenderTargetSettings CurrentSettings()
         {
-            ParagraphStyle paragraphStyle = new ParagraphStyle();
-            paragraphStyle.TextAlign = (int)textAlign;
-            paragraphStyle.TextDirection = (int)textDirection;
-
-            TextStyle textStyle = new TextStyle();
-            textStyle.SetFontFamilies(fontFamilies);
-            textStyle.FontSize = size;
-            textStyle.Locale = locale;
-            textStyle.Color = textColor;
-
-            var parser = new RichTextParser.RichTextParser();
-            parser.ParseText(text ?? "");
-            var segments = parser.ConvertToSegments();
-            var result = segments.ToParagraph(paragraphStyle, textStyle);
-            ResizeParagraph(result, true);
-            return result;
-        }
-
-        private void ValidateMargin()
-        {
-            if (m_margin.left < 0) m_margin.left = 0;
-            if (m_margin.top < 0) m_margin.top = 0;
-            if (m_margin.right < 0) m_margin.right = 0;
-            if (m_margin.bottom < 0) m_margin.bottom = 0;
-        }
-
-        private void ResizeParagraph(Paragraph? targetParagraph, bool force = false)
-        {
-            if (targetParagraph == null)
-            {
-                return;
-            }
-
-            var rectTransform = RectTransformComponent();
-            var rectWidth = rectTransform != null ? rectTransform.rect.width : 1f;
-            var newLayoutWidth = Math.Max(1, Mathf.CeilToInt(rectWidth) - m_margin.horizontal);
-            if (newLayoutWidth == layoutWidth && !force)
-            {
-                return;
-            }
-
-            layoutWidth = newLayoutWidth;
-            targetParagraph.Layout(layoutWidth);
+            return new SkParagraphTextBoxRenderTargetSettings(m_content,
+                m_margin,
+                m_fontFamilies,
+                m_textAlign,
+                m_textDirection,
+                m_size,
+                m_textColor,
+                m_locale);
         }
 
         private RectTransform? RectTransformComponent()
@@ -307,19 +249,22 @@ namespace Milestro.Components
             return rectTransformCache;
         }
 
-        private UnitySkiaRenderCommandList BuildRenderCommands()
+        private SkParagraphTextBoxRenderTargetCore RenderTarget
         {
-            var commands = new UnitySkiaRenderCommandList();
-            if (paragraph != null)
+            get
             {
-                commands.DrawParagraph(paragraph, new Vector2(m_margin.left, m_margin.top));
-            }
-            else
-            {
-                Debug.LogWarning("No paragraph selected", this);
-            }
+                if (renderTarget == null)
+                {
+                    renderTarget = new SkParagraphTextBoxRenderTargetCore();
+                }
 
-            return commands;
+                return renderTarget;
+            }
+        }
+
+        private void MarkPropertiesChanged()
+        {
+            RenderTarget.MarkPropertiesChanged();
         }
     }
 }
