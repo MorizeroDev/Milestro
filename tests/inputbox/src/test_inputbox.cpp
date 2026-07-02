@@ -173,6 +173,37 @@ TEST_F(InputBoxTest, CaretMetricsHitTestAndHorizontalScrollAreNative) {
               inputBox->snapUtf8(inputBox->getCursorUtf8(), milestro_text::TextBoundarySnapMode::Nearest));
 }
 
+TEST_F(InputBoxTest, EmptyTextCaretUsesTextMetricsInsteadOfViewportHeight) {
+    auto inputBox = MakeInputBox();
+    inputBox->setViewport(320, 96);
+    inputBox->setText("", 0);
+
+    const auto caret = inputBox->getCaretRect();
+    EXPECT_GT(caret.right, caret.left);
+    EXPECT_GT(caret.bottom, caret.top);
+    EXPECT_LT(caret.bottom - caret.top, 96.0f);
+}
+
+TEST_F(InputBoxTest, MixedScriptInputKeepsSingleLineBaselineStable) {
+    auto inputBox = MakeInputBox();
+    inputBox->setViewport(320, 96);
+
+    inputBox->setText("123", 3);
+    milestro_text::InputBoxLineMetrics asciiMetrics;
+    ASSERT_TRUE(inputBox->getLineMetrics(0, asciiMetrics));
+    const auto asciiCaret = inputBox->getCaretRect();
+
+    const std::string mixed = "123\xE4\xB8\xAD\xE6\x96\x87";
+    inputBox->setText(mixed.c_str(), mixed.size());
+    milestro_text::InputBoxLineMetrics mixedMetrics;
+    ASSERT_TRUE(inputBox->getLineMetrics(0, mixedMetrics));
+    const auto mixedCaret = inputBox->getCaretRect();
+
+    EXPECT_NEAR(mixedMetrics.baseline, asciiMetrics.baseline, 0.5f);
+    EXPECT_NEAR(mixedCaret.top, asciiCaret.top, 0.5f);
+    EXPECT_NEAR(mixedCaret.bottom, asciiCaret.bottom, 0.5f);
+}
+
 TEST_F(InputBoxTest, CompositionIsTransientUntilCommit) {
     const std::string committed = "ab";
     const std::string composition = "\xE6\x97\xA5";

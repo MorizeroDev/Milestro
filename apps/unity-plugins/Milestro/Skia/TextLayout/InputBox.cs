@@ -180,7 +180,7 @@ namespace Milestro.Skia.TextLayout
         public void SetText(string text)
         {
             ThrowIfDisposed();
-            var bytes = Encoding.UTF8.GetBytes(text ?? string.Empty);
+            var bytes = GetUtf8Bytes(text);
             unsafe
             {
                 fixed (byte* ptr = bytes)
@@ -226,7 +226,7 @@ namespace Milestro.Skia.TextLayout
         public void InsertText(string text)
         {
             ThrowIfDisposed();
-            var bytes = Encoding.UTF8.GetBytes(text ?? string.Empty);
+            var bytes = GetUtf8Bytes(text);
             unsafe
             {
                 fixed (byte* ptr = bytes)
@@ -240,7 +240,7 @@ namespace Milestro.Skia.TextLayout
         public bool SetComposition(string text)
         {
             ThrowIfDisposed();
-            var bytes = Encoding.UTF8.GetBytes(text ?? string.Empty);
+            var bytes = GetUtf8Bytes(text);
             unsafe
             {
                 fixed (byte* ptr = bytes)
@@ -255,7 +255,7 @@ namespace Milestro.Skia.TextLayout
         public bool CommitComposition(string text)
         {
             ThrowIfDisposed();
-            var bytes = Encoding.UTF8.GetBytes(text ?? string.Empty);
+            var bytes = GetUtf8Bytes(text);
             unsafe
             {
                 fixed (byte* ptr = bytes)
@@ -450,6 +450,49 @@ namespace Milestro.Skia.TextLayout
             {
                 throw new ObjectDisposedException(nameof(InputBox));
             }
+        }
+
+        private static byte[] GetUtf8Bytes(string text)
+        {
+            return Encoding.UTF8.GetBytes(RemoveUnpairedSurrogates(text ?? string.Empty));
+        }
+
+        private static string RemoveUnpairedSurrogates(string input)
+        {
+            if (string.IsNullOrEmpty(input))
+            {
+                return string.Empty;
+            }
+
+            var builder = new StringBuilder(input.Length);
+            var changed = false;
+            for (var i = 0; i < input.Length; ++i)
+            {
+                var ch = input[i];
+                if (char.IsHighSurrogate(ch))
+                {
+                    if (i + 1 < input.Length && char.IsLowSurrogate(input[i + 1]))
+                    {
+                        builder.Append(ch);
+                        builder.Append(input[i + 1]);
+                        ++i;
+                        continue;
+                    }
+
+                    changed = true;
+                    continue;
+                }
+
+                if (char.IsLowSurrogate(ch))
+                {
+                    changed = true;
+                    continue;
+                }
+
+                builder.Append(ch);
+            }
+
+            return changed ? builder.ToString() : input;
         }
 
         private static string ReadNativeUtf8(IntPtr ptr, ulong size)

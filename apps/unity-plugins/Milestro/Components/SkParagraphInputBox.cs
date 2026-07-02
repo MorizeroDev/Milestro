@@ -426,10 +426,21 @@ namespace Milestro.Components
                 return false;
             }
 
-            var compositionText = Input.compositionString ?? "";
-            if (compositionText.Length > 0)
+            var rawCompositionText = Input.compositionString ?? "";
+            if (rawCompositionText.Length > 0)
             {
                 compositionActive = true;
+                var compositionText = RemoveUnpairedSurrogates(rawCompositionText);
+                if (compositionText.Length == 0)
+                {
+                    if (lastCompositionText.Length == 0)
+                    {
+                        return false;
+                    }
+
+                    lastCompositionText = "";
+                    return inputBox.ClearComposition();
+                }
                 if (compositionText == lastCompositionText)
                 {
                     return false;
@@ -447,6 +458,44 @@ namespace Milestro.Components
             compositionActive = false;
             lastCompositionText = "";
             return inputBox.ClearComposition();
+        }
+
+        private static string RemoveUnpairedSurrogates(string input)
+        {
+            if (string.IsNullOrEmpty(input))
+            {
+                return string.Empty;
+            }
+
+            var builder = new StringBuilder(input.Length);
+            var changed = false;
+            for (var i = 0; i < input.Length; ++i)
+            {
+                var ch = input[i];
+                if (char.IsHighSurrogate(ch))
+                {
+                    if (i + 1 < input.Length && char.IsLowSurrogate(input[i + 1]))
+                    {
+                        builder.Append(ch);
+                        builder.Append(input[i + 1]);
+                        ++i;
+                        continue;
+                    }
+
+                    changed = true;
+                    continue;
+                }
+
+                if (char.IsLowSurrogate(ch))
+                {
+                    changed = true;
+                    continue;
+                }
+
+                builder.Append(ch);
+            }
+
+            return changed ? builder.ToString() : input;
         }
 
         private void UpdateCompositionCursorPosition()

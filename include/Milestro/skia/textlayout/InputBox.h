@@ -154,6 +154,7 @@ private:
 
     static std::string sanitizeSingleLine(const char* text, size_t length);
 
+    void configureInputParagraphMetrics();
     void rebuildParagraphIfNeeded();
     std::unique_ptr<::skia::textlayout::Paragraph> buildParagraph() const;
     std::unique_ptr<::skia::textlayout::Paragraph> buildParagraphForText(const std::string& text) const;

@@ -19,6 +19,13 @@ namespace {
 constexpr SkScalar kSingleLineLayoutWidth = 1048576.0f;
 constexpr SkScalar kCaretScrollPadding = 2.0f;
 constexpr SkScalar kCompositionUnderlineHeight = 1.5f;
+constexpr SkScalar kFallbackAscentRatio = 0.8f;
+
+struct VerticalMetrics {
+    SkScalar ascent = 0.0f;
+    SkScalar descent = 0.0f;
+    SkScalar height = 0.0f;
+};
 
 bool IsUtf8Continuation(unsigned char value) {
     return (value & 0xC0U) == 0x80U;
@@ -37,9 +44,39 @@ SkScalar ClampScalar(SkScalar value, SkScalar minValue, SkScalar maxValue) {
     return std::min(std::max(value, minValue), maxValue);
 }
 
+bool IsFinitePositive(SkScalar value) {
+    return std::isfinite(value) && value > 0.0f;
+}
+
 bool HasGlyphClusterStart(SkUnicode::CodeUnitFlags flags) {
     return (flags & SkUnicode::CodeUnitFlags::kGlyphClusterStart) ==
            SkUnicode::CodeUnitFlags::kGlyphClusterStart;
+}
+
+VerticalMetrics ResolveStyleVerticalMetrics(const ::skia::textlayout::TextStyle& textStyle) {
+    const SkScalar fontSize = IsFinitePositive(textStyle.getFontSize()) ? textStyle.getFontSize() : 1.0f;
+
+    SkFontMetrics fontMetrics;
+    textStyle.getFontMetrics(&fontMetrics);
+
+    auto ascent = std::isfinite(fontMetrics.fAscent) && fontMetrics.fAscent < 0.0f ? -fontMetrics.fAscent : 0.0f;
+    auto descent = std::isfinite(fontMetrics.fDescent) && fontMetrics.fDescent > 0.0f ? fontMetrics.fDescent : 0.0f;
+    const auto leading = std::isfinite(fontMetrics.fLeading) && fontMetrics.fLeading > 0.0f ? fontMetrics.fLeading : 0.0f;
+
+    if (!IsFinitePositive(ascent) && !IsFinitePositive(descent)) {
+        ascent = fontSize * kFallbackAscentRatio;
+        descent = fontSize - ascent;
+    } else if (!IsFinitePositive(ascent)) {
+        ascent = std::max(fontSize - descent, fontSize * kFallbackAscentRatio);
+    } else if (!IsFinitePositive(descent)) {
+        descent = std::max(fontSize - ascent, fontSize * (1.0f - kFallbackAscentRatio));
+    }
+
+    return VerticalMetrics{
+            ascent,
+            descent,
+            std::max(fontSize, ascent + descent + leading),
+    };
 }
 
 } // namespace
@@ -230,7 +267,7 @@ void TextBoundaryMap::rebuildBoundaries() {
 }
 
 InputBox::InputBox() {
-    paragraphStyle_.setMaxLines(1);
+    configureInputParagraphMetrics();
 }
 
 InputBox::InputBox(ParagraphStyle* paragraphStyle, TextStyle* textStyle) : InputBox() {
@@ -242,7 +279,7 @@ InputBox::InputBox(ParagraphStyle* paragraphStyle, TextStyle* textStyle) : Input
         textStyle_ = textStyle->spawn();
         paragraphStyle_.setTextStyle(textStyle_);
     }
-    paragraphStyle_.setMaxLines(1);
+    configureInputParagraphMetrics();
 }
 
 void InputBox::setText(const char* text, size_t length) {
@@ -422,7 +459,7 @@ InputBoxCaretRect InputBox::getCaretRectForDisplayOffset(size_t displayUtf8) {
     InputBoxCaretRect rect;
     if (paragraph_ == nullptr) {
         rect.right = caretWidth_;
-        rect.bottom = viewportHeight_;
+        rect.bottom = ToFloat(ResolveStyleVerticalMetrics(textStyle_).height);
         return rect;
     }
 
@@ -440,8 +477,17 @@ InputBoxCaretRect InputBox::getCaretRectForDisplayOffset(size_t displayUtf8) {
     }
 
     const bool hasLineMetrics = paragraph_->getLineMetricsAt(lineNumber, &lineMetrics);
-    const float top = hasLineMetrics ? ToFloat(lineMetrics.fBaseline - lineMetrics.fAscent) : 0.0f;
-    const float bottom = hasLineMetrics ? ToFloat(lineMetrics.fBaseline + lineMetrics.fDescent) : viewportHeight_;
+    const auto fallbackMetrics = ResolveStyleVerticalMetrics(textStyle_);
+    auto top = 0.0f;
+    auto bottom = ToFloat(fallbackMetrics.height);
+    if (hasLineMetrics) {
+        top = ToFloat(lineMetrics.fBaseline - lineMetrics.fAscent);
+        bottom = ToFloat(lineMetrics.fBaseline + lineMetrics.fDescent);
+        if (!(bottom > top)) {
+            top = 0.0f;
+            bottom = ToFloat(fallbackMetrics.height);
+        }
+    }
 
     SkScalar x = 0.0f;
     if (utf16Length > 0) {
@@ -626,6 +672,26 @@ std::string InputBox::sanitizeSingleLine(const char* text, size_t length) {
         result.push_back(text[i]);
     }
     return result;
+}
+
+void InputBox::configureInputParagraphMetrics() {
+    paragraphStyle_.setMaxLines(1);
+    paragraphStyle_.setTextStyle(textStyle_);
+
+    auto strutStyle = paragraphStyle_.getStrutStyle();
+    strutStyle.setStrutEnabled(true);
+    strutStyle.setForceStrutHeight(true);
+    strutStyle.setFontFamilies(textStyle_.getFontFamilies());
+    strutStyle.setFontStyle(textStyle_.getFontStyle());
+    if (IsFinitePositive(textStyle_.getFontSize())) {
+        strutStyle.setFontSize(textStyle_.getFontSize());
+    }
+    if (IsFinitePositive(textStyle_.getHeight())) {
+        strutStyle.setHeight(textStyle_.getHeight());
+    }
+    strutStyle.setHeightOverride(textStyle_.getHeightOverride());
+    strutStyle.setHalfLeading(textStyle_.getHalfLeading());
+    paragraphStyle_.setStrutStyle(strutStyle);
 }
 
 void InputBox::rebuildParagraphIfNeeded() {
