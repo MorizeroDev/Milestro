@@ -45,6 +45,11 @@ namespace Milestro.Components
         private float m_size = 36;
 
         [SerializeField]
+        [FormerlySerializedAs("weight")]
+        [Range(0, 1000)]
+        private int m_weight = 400;
+
+        [SerializeField]
         [FormerlySerializedAs("color")]
         private Color m_textColor = Color.white;
 
@@ -107,6 +112,16 @@ namespace Milestro.Components
             set
             {
                 m_size = value;
+                MarkPropertiesChanged();
+            }
+        }
+
+        public int weight
+        {
+            get => m_weight;
+            set
+            {
+                m_weight = value;
                 MarkPropertiesChanged();
             }
         }
@@ -233,6 +248,7 @@ namespace Milestro.Components
                 m_textAlign,
                 m_textDirection,
                 m_size,
+                m_weight,
                 m_textColor,
                 m_locale);
         }

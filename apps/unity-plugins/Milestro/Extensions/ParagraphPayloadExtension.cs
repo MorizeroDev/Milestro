@@ -31,10 +31,10 @@ namespace Milestro.Extensions
 
             ret.Decoration = (t.Underline ? 0x1 : 0x0) + (t.Strikethrough ? 0x2 : 0x0);
 
-            ret.GetFontStyle(out int weight, out int width, out int slant);
-            if (t.Bold)
+            baseTextStyle.GetFontStyle(out int weight, out int width, out int slant);
+            if (t.FontWeight.HasValue)
             {
-                weight = 700;
+                weight = t.FontWeight.Value;
             }
 
             if (t.Italic)

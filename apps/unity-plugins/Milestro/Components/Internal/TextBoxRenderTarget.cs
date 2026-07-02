@@ -117,6 +117,11 @@ namespace Milestro.Components.Internal
             textStyle.FontSize = settings.Size;
             textStyle.Locale = settings.Locale;
             textStyle.Color = settings.TextColor;
+            if (settings.Weight > 0 && settings.Weight <= 1000)
+            {
+                textStyle.GetFontStyle(out int weight, out int width, out int slant);
+                textStyle.SetFontStyle(settings.Weight, width, slant);
+            }
 
             var parser = new RichTextParser.RichTextParser();
             parser.ParseText(settings.Content);

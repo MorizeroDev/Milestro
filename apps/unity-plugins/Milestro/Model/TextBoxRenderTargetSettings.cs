@@ -11,6 +11,7 @@ namespace Milestro.Model
             TextAlign textAlign,
             TextDirection textDirection,
             float size,
+            int weight,
             Color textColor,
             string locale)
         {
@@ -20,6 +21,7 @@ namespace Milestro.Model
             TextAlign = textAlign;
             TextDirection = textDirection;
             Size = size;
+            Weight = weight;
             TextColor = textColor;
             Locale = locale ?? "";
         }
@@ -30,6 +32,7 @@ namespace Milestro.Model
         public TextAlign TextAlign { get; }
         public TextDirection TextDirection { get; }
         public float Size { get; }
+        public int Weight { get; }
         public Color TextColor { get; }
         public string Locale { get; }
     }

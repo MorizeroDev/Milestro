@@ -40,7 +40,7 @@ namespace Milestro.RichTextParser
         //     kBlack_Weight       =  900,
         //     kExtraBlack_Weight  = 1000,
         // };
-        public bool Bold { get; set; } = false;
+        public int? FontWeight { get; set; } = null;
 
         public Color? Color { get; set; } = null;
         public float FontSize { get; set; } = -1;
@@ -54,7 +54,7 @@ namespace Milestro.RichTextParser
             ret.Strikethrough = Strikethrough;
 
             ret.Italic = Italic;
-            ret.Bold = Bold;
+            ret.FontWeight = FontWeight;
             ret.Color = Color;
             ret.FontSize = FontSize;
 
@@ -66,9 +66,9 @@ namespace Milestro.RichTextParser
         public string GenerateRichText()
         {
             var sb = new StringBuilder();
-            if (Bold)
+            if (FontWeight.HasValue)
             {
-                sb.Append("<b>");
+                sb.Append("<font weight=\"").Append(FontWeight.Value).Append("\">");
             }
 
             if (Italic)
