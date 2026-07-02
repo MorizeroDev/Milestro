@@ -604,14 +604,13 @@ namespace Milestro.Components
         private string ReadCommittedText()
         {
             var queuedGuiInput = TakeQueuedGuiCommittedInput();
-            var legacyInput = queuedGuiInput.Length == 0 ? Input.inputString : RemoveSupplementaryPlaceholders(Input.inputString);
-            var filteredLegacyInput = FilterCommittedInput(legacyInput);
             if (queuedGuiInput.Length == 0)
             {
-                return filteredLegacyInput;
+                return FilterCommittedInput(Input.inputString);
             }
 
-            return filteredLegacyInput.Length == 0 ? queuedGuiInput : filteredLegacyInput + queuedGuiInput;
+            var mergedInput = MergeSupplementaryFallback(Input.inputString, queuedGuiInput);
+            return FilterCommittedInput(mergedInput, keepReplacementCharacter: true);
         }
 
         private string TakeQueuedGuiCommittedInput()
@@ -638,28 +637,66 @@ namespace Milestro.Components
             ClearPendingGuiHighSurrogate();
         }
 
-        private static string RemoveSupplementaryPlaceholders(string input)
+        private static string MergeSupplementaryFallback(string legacyInput, string queuedInput)
         {
-            if (string.IsNullOrEmpty(input))
+            if (string.IsNullOrEmpty(legacyInput))
             {
-                return string.Empty;
+                return queuedInput ?? string.Empty;
             }
 
-            var builder = new StringBuilder(input.Length);
-            var changed = false;
-            for (var i = 0; i < input.Length; ++i)
+            if (string.IsNullOrEmpty(queuedInput))
             {
-                var ch = input[i];
-                if (char.IsSurrogate(ch) || ch == '\ufffd')
+                return legacyInput;
+            }
+
+            var builder = new StringBuilder(legacyInput.Length + queuedInput.Length);
+            var queuedIndex = 0;
+            for (var i = 0; i < legacyInput.Length; ++i)
+            {
+                var ch = legacyInput[i];
+                if (IsSupplementaryPlaceholder(ch))
                 {
-                    changed = true;
+                    var placeholderCount = 1;
+                    while (i + 1 < legacyInput.Length && IsSupplementaryPlaceholder(legacyInput[i + 1]))
+                    {
+                        ++i;
+                        ++placeholderCount;
+                    }
+
+                    var replacementCount = Math.Max(1, (placeholderCount + 1) / 2);
+                    for (var j = 0; j < replacementCount && queuedIndex < queuedInput.Length; ++j)
+                    {
+                        AppendNextQueuedGuiScalar(builder, queuedInput, ref queuedIndex);
+                    }
                     continue;
                 }
 
                 builder.Append(ch);
             }
 
-            return changed ? builder.ToString() : input;
+            while (queuedIndex < queuedInput.Length)
+            {
+                AppendNextQueuedGuiScalar(builder, queuedInput, ref queuedIndex);
+            }
+
+            return builder.ToString();
+        }
+
+        private static bool IsSupplementaryPlaceholder(char ch)
+        {
+            return char.IsSurrogate(ch) || ch == ReplacementCharacter;
+        }
+
+        private static void AppendNextQueuedGuiScalar(StringBuilder builder, string queuedInput, ref int index)
+        {
+            var ch = queuedInput[index++];
+            builder.Append(ch);
+            if (char.IsHighSurrogate(ch) &&
+                index < queuedInput.Length &&
+                char.IsLowSurrogate(queuedInput[index]))
+            {
+                builder.Append(queuedInput[index++]);
+            }
         }
 
         private void ResetSurrogateInputState()
@@ -671,7 +708,7 @@ namespace Milestro.Components
             queuedGuiCommittedInput.Length = 0;
         }
 
-        private string FilterCommittedInput(string input)
+        private string FilterCommittedInput(string input, bool keepReplacementCharacter = false)
         {
             var committedInput = input ?? string.Empty;
             var hasInput = committedInput.Length > 0;
@@ -707,7 +744,7 @@ namespace Milestro.Components
                     ClearPendingHighSurrogate();
                     continue;
                 }
-                if (ch == ReplacementCharacter)
+                if (ch == ReplacementCharacter && !keepReplacementCharacter)
                 {
                     continue;
                 }
