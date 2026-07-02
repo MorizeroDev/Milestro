@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Text;
 using Milestro.Binding;
+using Milestro.Model;
 using UnityEngine;
 
 namespace Milestro.Skia.TextLayout
@@ -396,9 +397,9 @@ namespace Milestro.Skia.TextLayout
             {
                 ThrowIfDisposed();
                 ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxGetSelectedText(Ptr,
-                    out var ptr,
-                    out var size));
-                return ReadNativeUtf8(ptr, size);
+                    out var value));
+                using var ret = new BytesWrapper(value);
+                return ret.GetString();
             }
         }
 

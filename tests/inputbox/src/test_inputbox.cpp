@@ -1,5 +1,6 @@
 #include "Milestro/skia/FontRegistry.h"
 #include "Milestro/game/milestro_game_interface.h"
+#include "Milestro/game/milestro_game_model.h"
 #include "Milestro/skia/textlayout/InputBox.h"
 #include "Milestro/skia/textlayout/ParagraphStyle.h"
 #include "Milestro/skia/textlayout/TextStyle.h"
@@ -354,16 +355,18 @@ TEST_F(InputBoxTest, SelectedTextAbiReturnsClusterSafeUtf8Slice) {
                                            skia::textlayout::Affinity::kDownstream,
                                            skia::textlayout::Affinity::kDownstream));
 
-    uint8_t* ptr = nullptr;
-    uint64_t size = 0;
-    ASSERT_EQ(MilestroSkiaTextlayoutInputBoxGetSelectedText(inputBox.get(), ptr, size), 0);
-    ASSERT_NE(ptr, nullptr);
-    EXPECT_EQ(std::string(reinterpret_cast<char*>(ptr), static_cast<size_t>(size)), family);
+    milestro::game::model::BytesWrapper* selectedText = nullptr;
+    ASSERT_EQ(MilestroSkiaTextlayoutInputBoxGetSelectedText(inputBox.get(), selectedText), 0);
+    ASSERT_NE(selectedText, nullptr);
+    std::unique_ptr<milestro::game::model::BytesWrapper> selectedTextOwner(selectedText);
+    EXPECT_EQ(std::string(reinterpret_cast<char *>(selectedTextOwner->GetPtr()), selectedTextOwner->GetSize()), family);
 
     ASSERT_TRUE(inputBox->clearSelection());
-    ASSERT_EQ(MilestroSkiaTextlayoutInputBoxGetSelectedText(inputBox.get(), ptr, size), 0);
-    EXPECT_EQ(ptr, nullptr);
-    EXPECT_EQ(size, 0U);
+    selectedText = nullptr;
+    ASSERT_EQ(MilestroSkiaTextlayoutInputBoxGetSelectedText(inputBox.get(), selectedText), 0);
+    ASSERT_NE(selectedText, nullptr);
+    selectedTextOwner.reset(selectedText);
+    EXPECT_EQ(selectedTextOwner->GetSize(), 0U);
 }
 
 TEST_F(InputBoxTest, RightAlignedSelectionRectsUseParagraphGeometry) {

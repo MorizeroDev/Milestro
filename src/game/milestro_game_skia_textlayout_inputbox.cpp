@@ -1,4 +1,5 @@
 #include <Milestro/game/milestro_game_interface.h>
+#include <Milestro/game/milestro_game_model.h>
 
 #include "Milestro/skia/textlayout/InputBox.h"
 #include "milestro_game_retcode.h"
@@ -306,16 +307,15 @@ int64_t MilestroSkiaTextlayoutInputBoxGetSelection(milestro::skia::textlayout::I
 }
 
 int64_t MilestroSkiaTextlayoutInputBoxGetSelectedText(milestro::skia::textlayout::InputBox *inputBox,
-                                                      uint8_t *&ptr,
-                                                      uint64_t &size) try {
-    ptr = nullptr;
-    size = 0;
+                                                      milestro::game::model::BytesWrapper *&ret) try {
+    ret = nullptr;
     if (inputBox == nullptr) {
         return MILESTRO_API_RET_FAILED;
     }
 
     const auto selection = inputBox->getSelection();
     if (!selection.hasSelection) {
+        ret = new milestro::game::model::BytesWrapper(std::string());
         return MILESTRO_API_RET_OK;
     }
 
@@ -324,8 +324,8 @@ int64_t MilestroSkiaTextlayoutInputBoxGetSelectedText(milestro::skia::textlayout
         return MILESTRO_API_RET_FAILED;
     }
 
-    ptr = reinterpret_cast<uint8_t *>(const_cast<char *>(text.data() + selection.startUtf8));
-    size = selection.endUtf8 - selection.startUtf8;
+    ret = new milestro::game::model::BytesWrapper(text.substr(selection.startUtf8,
+                                                             selection.endUtf8 - selection.startUtf8));
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;

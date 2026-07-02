@@ -275,8 +275,7 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetSelection(milestro::skia::
                                                                 int32_t &hasSelection);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetSelectedText(
         milestro::skia::textlayout::InputBox *inputBox,
-        [[milize::CSharpType("IntPtr")]] uint8_t *&ptr,
-        uint64_t &size);
+        milestro::game::model::BytesWrapper *&ret);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetSelectionUtf8(
         milestro::skia::textlayout::InputBox *inputBox,
         uint64_t anchorUtf8,
