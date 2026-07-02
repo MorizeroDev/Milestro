@@ -59,7 +59,7 @@ namespace Milestro.Components
         [FormerlySerializedAs("locale")]
         private string m_locale = "zh-Hans";
 
-        [NonSerialized] private RectTransform rectTransform;
+        [NonSerialized] private RectTransform rectTransformCache;
         [NonSerialized] private UnityAutoRenderTextureSurface? surface;
         [NonSerialized] private InputBox? inputBox;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
@@ -122,7 +122,7 @@ namespace Milestro.Components
         protected override void OnEnable()
         {
             base.OnEnable();
-            rectTransform = GetComponent<RectTransform>();
+            rectTransformCache = GetComponent<RectTransform>();
             styleDirty = true;
             layoutDirty = true;
             paintDirty = true;
@@ -167,7 +167,7 @@ namespace Milestro.Components
             Focus();
 
             if (inputBox == null ||
-                !RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform,
+                !RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransformCache,
                     eventData.position,
                     eventData.pressEventCamera,
                     out var localPoint))
@@ -527,15 +527,15 @@ namespace Milestro.Components
 
         private void UpdateCompositionCursorPosition()
         {
-            if (inputBox == null || rectTransform == null)
+            if (inputBox == null || rectTransformCache == null)
             {
                 return;
             }
 
             var rect = inputBox.GetCompositionRect();
             var metrics = inputBox.GetMetrics();
-            var localPoint = ContentPointToLocalPoint(new Vector2(rect.right - metrics.ScrollX, rect.bottom));
-            var worldPoint = rectTransform.TransformPoint(localPoint);
+            var localPoint = ContentPointToLocalPoint(new Vector2(rect.xMax - metrics.ScrollX, rect.yMax));
+            var worldPoint = rectTransformCache.TransformPoint(localPoint);
             var camera = canvas == null || canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
             Input.compositionCursorPos = RectTransformUtility.WorldToScreenPoint(camera, worldPoint);
         }
@@ -875,14 +875,14 @@ namespace Milestro.Components
 
         private Vector2Int CurrentSize()
         {
-            var rect = rectTransform.rect;
+            var rect = rectTransformCache.rect;
             return new Vector2Int(Mathf.Max(1, Mathf.CeilToInt(rect.width)),
                 Mathf.Max(1, Mathf.CeilToInt(rect.height)));
         }
 
         private Vector2 ContentSize()
         {
-            var rect = rectTransform.rect;
+            var rect = rectTransformCache.rect;
             return new Vector2(Mathf.Max(1, Mathf.CeilToInt(rect.width) - m_margin.horizontal),
                 Mathf.Max(1, Mathf.CeilToInt(rect.height) - m_margin.vertical));
         }
@@ -895,14 +895,14 @@ namespace Milestro.Components
 
         private Vector2 ToContentPoint(Vector2 localPoint)
         {
-            var rect = rectTransform.rect;
+            var rect = rectTransformCache.rect;
             return new Vector2(localPoint.x - rect.xMin - m_margin.left,
                 rect.yMax - localPoint.y - m_margin.top);
         }
 
         private Vector2 ContentPointToLocalPoint(Vector2 contentPoint)
         {
-            var rect = rectTransform.rect;
+            var rect = rectTransformCache.rect;
             return new Vector2(rect.xMin + m_margin.left + contentPoint.x,
                 rect.yMax - m_margin.top - contentPoint.y);
         }

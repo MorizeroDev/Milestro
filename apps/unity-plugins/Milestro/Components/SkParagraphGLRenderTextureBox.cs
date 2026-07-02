@@ -53,7 +53,7 @@ namespace Milestro.Components
         private string m_locale = "zh-Hans";
 
 
-        [NonSerialized] private RectTransform rectTransform;
+        [NonSerialized] private RectTransform rectTransformCache;
         [NonSerialized] private UnityAutoRenderTextureSurface? surface;
         [NonSerialized] private Paragraph? paragraph;
         [NonSerialized] private MilestroImage image;
@@ -148,7 +148,7 @@ namespace Milestro.Components
         protected override void OnEnable()
         {
             base.OnEnable();
-            rectTransform = GetComponent<RectTransform>();
+            rectTransformCache = GetComponent<RectTransform>();
             RebuildResources(forceText: true);
         }
 
@@ -256,7 +256,7 @@ namespace Milestro.Components
 
         private Vector2Int CurrentSize()
         {
-            var rect = rectTransform.rect;
+            var rect = rectTransformCache.rect;
             return new Vector2Int(Mathf.Max(1, Mathf.CeilToInt(rect.width)),
                 Mathf.Max(1, Mathf.CeilToInt(rect.height)));
         }
@@ -297,7 +297,7 @@ namespace Milestro.Components
         private void ResizeParagraph(Paragraph paragraph, bool force = false)
         {
             var newLayoutWidth =
-                Math.Max(1, Mathf.CeilToInt(rectTransform.rect.width) - m_margin.horizontal);
+                Math.Max(1, Mathf.CeilToInt(rectTransformCache.rect.width) - m_margin.horizontal);
             if (newLayoutWidth == layoutWidth && !force) return;
             layoutWidth = newLayoutWidth;
             paragraph.Layout(layoutWidth);
