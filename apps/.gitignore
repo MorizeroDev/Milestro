@@ -1,5 +1,9 @@
-# Ignore Unity Plugins Binary
+# ignore Unity Plugins Binary
 unity-plugins/Milestro/Plugins/**
 !unity-plugins/Milestro/Plugins/iOS.meta
 !unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp
 !unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp.meta
+
+# ignore icudtl
+unity-plugins/Resources/Milestro/icudtl.dat.bytes
+unity-plugins/Resources/Milestro/icudtl.dat.bytes.meta
