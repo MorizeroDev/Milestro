@@ -541,9 +541,8 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxGetSelection(milestro::ski
                                                       hasSelection);
 }
 
-int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxGetSelectedText(
-        milestro::skia::textlayout::InputBox* inputBox,
-        milestro::game::model::BytesWrapper*& ret) {
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxGetSelectedText(milestro::skia::textlayout::InputBox* inputBox,
+                                                                      milestro::game::model::BytesWrapper*& ret) {
     return MilestroSkiaTextlayoutInputBoxGetSelectedText(inputBox, ret);
 }
 
