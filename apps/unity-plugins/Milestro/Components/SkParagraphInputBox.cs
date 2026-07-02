@@ -13,9 +13,23 @@ using UnityEngine.Serialization;
 
 namespace Milestro.Components
 {
+    public enum InputBoxTextAlignment
+    {
+        Left,
+        Center,
+        Right
+    }
+
     [DisallowMultipleComponent]
     [RequireComponent(typeof(CanvasRenderer))]
-    public class SkParagraphInputBox : SkiaRenderTextureGraphic, IPointerClickHandler, ISelectHandler, IDeselectHandler
+    public class SkParagraphInputBox : SkiaRenderTextureGraphic,
+        IPointerDownHandler,
+        IPointerClickHandler,
+        IBeginDragHandler,
+        IDragHandler,
+        IEndDragHandler,
+        ISelectHandler,
+        IDeselectHandler
     {
         private const float KeyRepeatInitialDelay = 0.42f;
         private const float KeyRepeatInterval = 0.045f;
@@ -48,8 +62,14 @@ namespace Milestro.Components
         private Color m_caretColor = Color.white;
 
         [SerializeField]
+        private Color m_selectionColor = new Color(0.2f, 0.49f, 1.0f, 0.4f);
+
+        [SerializeField]
         [FormerlySerializedAs("caretWidth")]
         private float m_caretWidth = 2;
+
+        [SerializeField]
+        private InputBoxTextAlignment m_textAlignment = InputBoxTextAlignment.Left;
 
         [SerializeField]
         [FormerlySerializedAs("blinkInterval")]
@@ -80,6 +100,7 @@ namespace Milestro.Components
         [NonSerialized] private float nextRightRepeatTime;
         [NonSerialized] private float nextBackspaceRepeatTime;
         [NonSerialized] private float nextDeleteRepeatTime;
+        [NonSerialized] private bool pointerSelecting;
 #if UNITY_EDITOR
         [NonSerialized] private bool m_editorRebuildQueued;
 #endif
@@ -115,6 +136,39 @@ namespace Milestro.Components
             set
             {
                 m_colorSpaceOverride = value ? ColorSpace.Linear : ColorSpace.Gamma;
+                paintDirty = true;
+            }
+        }
+
+        public InputBoxTextAlignment textAlignment
+        {
+            get => m_textAlignment;
+            set
+            {
+                if (m_textAlignment == value)
+                {
+                    return;
+                }
+
+                m_textAlignment = value;
+                styleDirty = true;
+                layoutDirty = true;
+                paintDirty = true;
+            }
+        }
+
+        public Color selectionColor
+        {
+            get => m_selectionColor;
+            set
+            {
+                if (m_selectionColor == value)
+                {
+                    return;
+                }
+
+                m_selectionColor = value;
+                inputBox?.SetSelectionColor(m_selectionColor);
                 paintDirty = true;
             }
         }
@@ -161,7 +215,40 @@ namespace Milestro.Components
             RebuildResources();
         }
 
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            pointerSelecting = false;
+            HitTestPointer(eventData, false);
+        }
+
         public void OnPointerClick(PointerEventData eventData)
+        {
+            if (pointerSelecting)
+            {
+                return;
+            }
+
+            HitTestPointer(eventData, false);
+        }
+
+        public void OnBeginDrag(PointerEventData eventData)
+        {
+            pointerSelecting = true;
+            HitTestPointer(eventData, true);
+        }
+
+        public void OnDrag(PointerEventData eventData)
+        {
+            pointerSelecting = true;
+            HitTestPointer(eventData, true);
+        }
+
+        public void OnEndDrag(PointerEventData eventData)
+        {
+            pointerSelecting = false;
+        }
+
+        private void HitTestPointer(PointerEventData eventData, bool extendSelection)
         {
             EventSystem.current?.SetSelectedGameObject(gameObject, eventData);
             Focus();
@@ -175,13 +262,17 @@ namespace Milestro.Components
                 return;
             }
 
-            inputBox.HitTest(ToContentPoint(localPoint));
+            var changed = inputBox.HitTest(ToContentPoint(localPoint), extendSelection);
             compositionActive = false;
             lastCompositionText = "";
             ResetSurrogateInputState();
             ResetKeyRepeatState();
             m_text = inputBox.Text;
             ResetBlink();
+            if (changed)
+            {
+                layoutDirty = true;
+            }
             paintDirty = true;
         }
 
@@ -282,6 +373,7 @@ namespace Milestro.Components
             if (inputBox != null)
             {
                 inputBox.ClearComposition();
+                inputBox.ClearSelection();
                 inputBox.SetCaretVisible(false);
             }
             paintDirty = true;
@@ -364,15 +456,22 @@ namespace Milestro.Components
             }
 
             var changed = false;
+            if (IsSelectAllShortcutDown())
+            {
+                ResetSurrogateInputState();
+                changed |= inputBox.SelectAll();
+            }
+
+            var extendSelection = IsSelectionModifierPressed();
             if (ShouldProcessRepeatingKey(KeyCode.LeftArrow, ref nextLeftRepeatTime))
             {
                 ResetSurrogateInputState();
-                changed |= inputBox.MovePrevious();
+                changed |= inputBox.MovePrevious(extendSelection);
             }
             if (ShouldProcessRepeatingKey(KeyCode.RightArrow, ref nextRightRepeatTime))
             {
                 ResetSurrogateInputState();
-                changed |= inputBox.MoveNext();
+                changed |= inputBox.MoveNext(extendSelection);
             }
             if (ShouldProcessRepeatingKey(KeyCode.Backspace, ref nextBackspaceRepeatTime))
             {
@@ -385,6 +484,24 @@ namespace Milestro.Components
                 changed |= inputBox.DeleteForward();
             }
             return changed;
+        }
+
+        private static bool IsSelectionModifierPressed()
+        {
+            return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+        }
+
+        private static bool IsCommandOrControlPressed()
+        {
+            return Input.GetKey(KeyCode.LeftControl) ||
+                   Input.GetKey(KeyCode.RightControl) ||
+                   Input.GetKey(KeyCode.LeftCommand) ||
+                   Input.GetKey(KeyCode.RightCommand);
+        }
+
+        private static bool IsSelectAllShortcutDown()
+        {
+            return IsCommandOrControlPressed() && Input.GetKeyDown(KeyCode.A);
         }
 
         private bool ShouldProcessRepeatingKey(KeyCode keyCode, ref float nextRepeatTime)
@@ -881,7 +998,7 @@ namespace Milestro.Components
             RetireInputBox();
 
             var paragraphStyle = new ParagraphStyle();
-            paragraphStyle.TextAlign = (int)TextAlign.Left;
+            paragraphStyle.TextAlign = (int)ToParagraphTextAlign(m_textAlignment);
             paragraphStyle.MaxLines = 1;
 
             var textStyle = new TextStyle();
@@ -896,8 +1013,23 @@ namespace Milestro.Components
             compositionActive = false;
             lastCompositionText = "";
             inputBox.SetCaretColor(m_caretColor);
+            inputBox.SetSelectionColor(m_selectionColor);
             inputBox.SetCaretWidth(m_caretWidth);
             inputBox.SetViewport(ContentSize());
+        }
+
+        private static TextAlign ToParagraphTextAlign(InputBoxTextAlignment alignment)
+        {
+            switch (alignment)
+            {
+                case InputBoxTextAlignment.Center:
+                    return TextAlign.Center;
+                case InputBoxTextAlignment.Right:
+                    return TextAlign.Right;
+                case InputBoxTextAlignment.Left:
+                default:
+                    return TextAlign.Left;
+            }
         }
 
         private UnitySkiaRenderCommandList BuildRenderCommands()

@@ -412,6 +412,15 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxSetCaretColor(milestro::sk
     return MilestroSkiaTextlayoutInputBoxSetCaretColor(inputBox, r, g, b, a);
 }
 
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxSetSelectionColor(
+        milestro::skia::textlayout::InputBox* inputBox,
+        int32_t r,
+        int32_t g,
+        int32_t b,
+        int32_t a) {
+    return MilestroSkiaTextlayoutInputBoxSetSelectionColor(inputBox, r, g, b, a);
+}
+
 int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxSetCaretWidth(milestro::skia::textlayout::InputBox* inputBox,
                                                                     float width) {
     return MilestroSkiaTextlayoutInputBoxSetCaretWidth(inputBox, width);
@@ -470,11 +479,34 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxMoveNext(milestro::skia::t
     return MilestroSkiaTextlayoutInputBoxMoveNext(inputBox, changed);
 }
 
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxMovePreviousExtendingSelection(
+        milestro::skia::textlayout::InputBox* inputBox,
+        int32_t extendSelection,
+        int32_t& changed) {
+    return MilestroSkiaTextlayoutInputBoxMovePreviousExtendingSelection(inputBox, extendSelection, changed);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxMoveNextExtendingSelection(
+        milestro::skia::textlayout::InputBox* inputBox,
+        int32_t extendSelection,
+        int32_t& changed) {
+    return MilestroSkiaTextlayoutInputBoxMoveNextExtendingSelection(inputBox, extendSelection, changed);
+}
+
 int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxHitTest(milestro::skia::textlayout::InputBox* inputBox,
                                                               float x,
                                                               float y,
                                                               int32_t& changed) {
     return MilestroSkiaTextlayoutInputBoxHitTest(inputBox, x, y, changed);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxHitTestExtendingSelection(
+        milestro::skia::textlayout::InputBox* inputBox,
+        float x,
+        float y,
+        int32_t extendSelection,
+        int32_t& changed) {
+    return MilestroSkiaTextlayoutInputBoxHitTestExtendingSelection(inputBox, x, y, extendSelection, changed);
 }
 
 int64_t
@@ -493,6 +525,51 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxSetCursorUtf8(milestro::sk
                                                                     uint64_t utf8Offset,
                                                                     int32_t affinity) {
     return MilestroSkiaTextlayoutInputBoxSetCursorUtf8(inputBox, utf8Offset, affinity);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxGetSelection(
+        milestro::skia::textlayout::InputBox* inputBox,
+        uint64_t& anchorUtf8,
+        uint64_t& focusUtf8,
+        uint64_t& startUtf8,
+        uint64_t& endUtf8,
+        int32_t& anchorAffinity,
+        int32_t& focusAffinity,
+        int32_t& hasSelection) {
+    return MilestroSkiaTextlayoutInputBoxGetSelection(inputBox,
+                                                      anchorUtf8,
+                                                      focusUtf8,
+                                                      startUtf8,
+                                                      endUtf8,
+                                                      anchorAffinity,
+                                                      focusAffinity,
+                                                      hasSelection);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxSetSelectionUtf8(
+        milestro::skia::textlayout::InputBox* inputBox,
+        uint64_t anchorUtf8,
+        uint64_t focusUtf8,
+        int32_t anchorAffinity,
+        int32_t focusAffinity,
+        int32_t& changed) {
+    return MilestroSkiaTextlayoutInputBoxSetSelectionUtf8(inputBox,
+                                                          anchorUtf8,
+                                                          focusUtf8,
+                                                          anchorAffinity,
+                                                          focusAffinity,
+                                                          changed);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxClearSelection(
+        milestro::skia::textlayout::InputBox* inputBox,
+        int32_t& changed) {
+    return MilestroSkiaTextlayoutInputBoxClearSelection(inputBox, changed);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxSelectAll(milestro::skia::textlayout::InputBox* inputBox,
+                                                                int32_t& changed) {
+    return MilestroSkiaTextlayoutInputBoxSelectAll(inputBox, changed);
 }
 
 int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxUtf8ToUtf16(milestro::skia::textlayout::InputBox* inputBox,

@@ -114,6 +114,20 @@ int64_t MilestroSkiaTextlayoutInputBoxSetCaretColor(milestro::skia::textlayout::
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutInputBoxSetSelectionColor(milestro::skia::textlayout::InputBox *inputBox,
+                                                        int32_t r,
+                                                        int32_t g,
+                                                        int32_t b,
+                                                        int32_t a) try {
+    inputBox->setSelectionColor(SkColorSetARGB(static_cast<U8CPU>(a),
+                                               static_cast<U8CPU>(r),
+                                               static_cast<U8CPU>(g),
+                                               static_cast<U8CPU>(b)));
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutInputBoxSetCaretWidth(milestro::skia::textlayout::InputBox *inputBox,
                                                     float width) try {
     inputBox->setCaretWidth(width);
@@ -199,11 +213,43 @@ int64_t MilestroSkiaTextlayoutInputBoxMoveNext(milestro::skia::textlayout::Input
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutInputBoxMovePreviousExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed) try {
+    changed = inputBox->movePrevious(extendSelection != 0) ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxMoveNextExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed) try {
+    changed = inputBox->moveNext(extendSelection != 0) ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutInputBoxHitTest(milestro::skia::textlayout::InputBox *inputBox,
                                               float x,
                                               float y,
                                               int32_t &changed) try {
     changed = inputBox->hitTest(x, y) ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxHitTestExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        float x,
+        float y,
+        int32_t extendSelection,
+        int32_t &changed) try {
+    changed = inputBox->hitTest(x, y, extendSelection != 0) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
@@ -233,6 +279,60 @@ int64_t MilestroSkiaTextlayoutInputBoxSetCursorUtf8(milestro::skia::textlayout::
                                                     uint64_t utf8Offset,
                                                     int32_t affinity) try {
     inputBox->setCursorUtf8(static_cast<size_t>(utf8Offset), ToAffinity(affinity));
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxGetSelection(milestro::skia::textlayout::InputBox *inputBox,
+                                                   uint64_t &anchorUtf8,
+                                                   uint64_t &focusUtf8,
+                                                   uint64_t &startUtf8,
+                                                   uint64_t &endUtf8,
+                                                   int32_t &anchorAffinity,
+                                                   int32_t &focusAffinity,
+                                                   int32_t &hasSelection) try {
+    const auto selection = inputBox->getSelection();
+    anchorUtf8 = selection.anchorUtf8;
+    focusUtf8 = selection.focusUtf8;
+    startUtf8 = selection.startUtf8;
+    endUtf8 = selection.endUtf8;
+    anchorAffinity = selection.anchorAffinity;
+    focusAffinity = selection.focusAffinity;
+    hasSelection = selection.hasSelection ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxSetSelectionUtf8(
+        milestro::skia::textlayout::InputBox *inputBox,
+        uint64_t anchorUtf8,
+        uint64_t focusUtf8,
+        int32_t anchorAffinity,
+        int32_t focusAffinity,
+        int32_t &changed) try {
+    changed = inputBox->setSelectionUtf8(static_cast<size_t>(anchorUtf8),
+                                         static_cast<size_t>(focusUtf8),
+                                         ToAffinity(anchorAffinity),
+                                         ToAffinity(focusAffinity)) ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxClearSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t &changed) try {
+    changed = inputBox->clearSelection() ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxSelectAll(milestro::skia::textlayout::InputBox *inputBox,
+                                                int32_t &changed) try {
+    changed = inputBox->selectAll() ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;

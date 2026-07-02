@@ -207,6 +207,11 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetCaretColor(milestro::skia:
                                                                  int32_t g,
                                                                  int32_t b,
                                                                  int32_t a);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetSelectionColor(milestro::skia::textlayout::InputBox *inputBox,
+                                                                     int32_t r,
+                                                                     int32_t g,
+                                                                     int32_t b,
+                                                                     int32_t a);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetCaretWidth(milestro::skia::textlayout::InputBox *inputBox,
                                                                  float width);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetCaretVisible(milestro::skia::textlayout::InputBox *inputBox,
@@ -233,10 +238,24 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMovePrevious(milestro::skia::
                                                                 int32_t &changed);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMoveNext(milestro::skia::textlayout::InputBox *inputBox,
                                                             int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMovePreviousExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMoveNextExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxHitTest(milestro::skia::textlayout::InputBox *inputBox,
                                                            float x,
                                                            float y,
                                                            int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxHitTestExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        float x,
+        float y,
+        int32_t extendSelection,
+        int32_t &changed);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxEnsureCaretVisible(
         milestro::skia::textlayout::InputBox *inputBox);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetCursor(milestro::skia::textlayout::InputBox *inputBox,
@@ -246,6 +265,26 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetCursor(milestro::skia::tex
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetCursorUtf8(milestro::skia::textlayout::InputBox *inputBox,
                                                                  uint64_t utf8Offset,
                                                                  int32_t affinity);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetSelection(milestro::skia::textlayout::InputBox *inputBox,
+                                                                uint64_t &anchorUtf8,
+                                                                uint64_t &focusUtf8,
+                                                                uint64_t &startUtf8,
+                                                                uint64_t &endUtf8,
+                                                                int32_t &anchorAffinity,
+                                                                int32_t &focusAffinity,
+                                                                int32_t &hasSelection);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetSelectionUtf8(
+        milestro::skia::textlayout::InputBox *inputBox,
+        uint64_t anchorUtf8,
+        uint64_t focusUtf8,
+        int32_t anchorAffinity,
+        int32_t focusAffinity,
+        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxClearSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSelectAll(milestro::skia::textlayout::InputBox *inputBox,
+                                                             int32_t &changed);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxUtf8ToUtf16(milestro::skia::textlayout::InputBox *inputBox,
                                                                uint64_t utf8Offset,
                                                                uint64_t &utf16Offset);

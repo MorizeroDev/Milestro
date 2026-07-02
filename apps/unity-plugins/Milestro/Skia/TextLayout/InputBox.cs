@@ -27,6 +27,34 @@ namespace Milestro.Skia.TextLayout
         }
     }
 
+    public readonly struct InputBoxSelection
+    {
+        public readonly ulong AnchorUtf8;
+        public readonly ulong FocusUtf8;
+        public readonly ulong StartUtf8;
+        public readonly ulong EndUtf8;
+        public readonly int AnchorAffinity;
+        public readonly int FocusAffinity;
+        public readonly bool HasSelection;
+
+        public InputBoxSelection(ulong anchorUtf8,
+            ulong focusUtf8,
+            ulong startUtf8,
+            ulong endUtf8,
+            int anchorAffinity,
+            int focusAffinity,
+            bool hasSelection)
+        {
+            AnchorUtf8 = anchorUtf8;
+            FocusUtf8 = focusUtf8;
+            StartUtf8 = startUtf8;
+            EndUtf8 = endUtf8;
+            AnchorAffinity = anchorAffinity;
+            FocusAffinity = focusAffinity;
+            HasSelection = hasSelection;
+        }
+    }
+
     public readonly struct InputBoxMetrics
     {
         public readonly float Height;
@@ -211,6 +239,13 @@ namespace Milestro.Skia.TextLayout
                 BindingC.SkiaTextlayoutInputBoxSetCaretColor(Ptr, color.r, color.g, color.b, color.a));
         }
 
+        public void SetSelectionColor(Color32 color)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutInputBoxSetSelectionColor(Ptr, color.r, color.g, color.b, color.a));
+        }
+
         public void SetCaretWidth(float width)
         {
             ThrowIfDisposed();
@@ -288,25 +323,35 @@ namespace Milestro.Skia.TextLayout
             return changed != 0;
         }
 
-        public bool MovePrevious()
-        {
-            ThrowIfDisposed();
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxMovePrevious(Ptr, out var changed));
-            return changed != 0;
-        }
-
-        public bool MoveNext()
-        {
-            ThrowIfDisposed();
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxMoveNext(Ptr, out var changed));
-            return changed != 0;
-        }
-
-        public bool HitTest(Vector2 localPosition)
+        public bool MovePrevious(bool extendSelection = false)
         {
             ThrowIfDisposed();
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutInputBoxHitTest(Ptr, localPosition.x, localPosition.y, out var changed));
+                BindingC.SkiaTextlayoutInputBoxMovePreviousExtendingSelection(Ptr,
+                    extendSelection ? 1 : 0,
+                    out var changed));
+            return changed != 0;
+        }
+
+        public bool MoveNext(bool extendSelection = false)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutInputBoxMoveNextExtendingSelection(Ptr,
+                    extendSelection ? 1 : 0,
+                    out var changed));
+            return changed != 0;
+        }
+
+        public bool HitTest(Vector2 localPosition, bool extendSelection = false)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutInputBoxHitTestExtendingSelection(Ptr,
+                    localPosition.x,
+                    localPosition.y,
+                    extendSelection ? 1 : 0,
+                    out var changed));
             return changed != 0;
         }
 
@@ -320,6 +365,58 @@ namespace Milestro.Skia.TextLayout
         {
             ThrowIfDisposed();
             ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxSetCursorUtf8(Ptr, utf8Offset, affinity));
+        }
+
+        public InputBoxSelection Selection
+        {
+            get
+            {
+                ThrowIfDisposed();
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxGetSelection(Ptr,
+                    out var anchorUtf8,
+                    out var focusUtf8,
+                    out var startUtf8,
+                    out var endUtf8,
+                    out var anchorAffinity,
+                    out var focusAffinity,
+                    out var hasSelection));
+                return new InputBoxSelection(anchorUtf8,
+                    focusUtf8,
+                    startUtf8,
+                    endUtf8,
+                    anchorAffinity,
+                    focusAffinity,
+                    hasSelection != 0);
+            }
+        }
+
+        public bool SetSelectionUtf8(ulong anchorUtf8,
+            ulong focusUtf8,
+            int anchorAffinity = 1,
+            int focusAffinity = 1)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxSetSelectionUtf8(Ptr,
+                anchorUtf8,
+                focusUtf8,
+                anchorAffinity,
+                focusAffinity,
+                out var changed));
+            return changed != 0;
+        }
+
+        public bool ClearSelection()
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxClearSelection(Ptr, out var changed));
+            return changed != 0;
+        }
+
+        public bool SelectAll()
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxSelectAll(Ptr, out var changed));
+            return changed != 0;
         }
 
         public ulong Utf8ToUtf16(ulong utf8Offset)

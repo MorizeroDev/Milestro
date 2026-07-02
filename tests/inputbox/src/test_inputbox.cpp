@@ -38,7 +38,8 @@ int RegisterFontsInDirectory(const fs::path& dirPath) {
     return successCount;
 }
 
-std::unique_ptr<milestro_text::InputBox> MakeInputBox() {
+std::unique_ptr<milestro_text::InputBox> MakeInputBox(
+        ::skia::textlayout::TextAlign textAlign = ::skia::textlayout::TextAlign::kLeft) {
     auto textStyle = std::make_unique<milestro_text::TextStyle>();
     std::vector<SkString> fontFamilies;
     fontFamilies.emplace_back("Source Han Sans VF");
@@ -51,6 +52,7 @@ std::unique_ptr<milestro_text::InputBox> MakeInputBox() {
     auto paragraphStyle = std::make_unique<milestro_text::ParagraphStyle>();
     paragraphStyle->setTextStyle(textStyle.get());
     paragraphStyle->setMaxLines(1);
+    paragraphStyle->setTextAlign(textAlign);
 
     auto inputBox = std::make_unique<milestro_text::InputBox>(paragraphStyle.get(), textStyle.get());
     inputBox->setViewport(320, 64);
@@ -249,4 +251,110 @@ TEST_F(InputBoxTest, EmptyCommitUsesCurrentCompositionText) {
     ASSERT_TRUE(inputBox->commitComposition(nullptr, 0));
     EXPECT_EQ(inputBox->getText(), composition);
     EXPECT_EQ(inputBox->getCursorUtf8(), composition.size());
+}
+
+TEST_F(InputBoxTest, SelectionReplacementUsesClusterBoundaries) {
+    const std::string family =
+            "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7";
+    const std::string text = "a" + family + "b";
+    auto inputBox = MakeInputBox();
+    inputBox->setText(text.c_str(), text.size());
+
+    ASSERT_TRUE(inputBox->setSelectionUtf8(1,
+                                           1 + family.size(),
+                                           skia::textlayout::Affinity::kDownstream,
+                                           skia::textlayout::Affinity::kDownstream));
+    const auto selection = inputBox->getSelection();
+    ASSERT_TRUE(selection.hasSelection);
+    EXPECT_EQ(selection.startUtf8, 1U);
+    EXPECT_EQ(selection.endUtf8, 1U + family.size());
+
+    inputBox->insertText("X", 1);
+    EXPECT_EQ(inputBox->getText(), "aXb");
+    EXPECT_EQ(inputBox->getCursorUtf8(), 2U);
+    EXPECT_FALSE(inputBox->hasSelection());
+}
+
+TEST_F(InputBoxTest, DeleteBackwardAndForwardRemoveSelectionFirst) {
+    auto inputBox = MakeInputBox();
+    inputBox->setText("abcd", 4);
+
+    ASSERT_TRUE(inputBox->setSelectionUtf8(1,
+                                           3,
+                                           skia::textlayout::Affinity::kDownstream,
+                                           skia::textlayout::Affinity::kDownstream));
+    ASSERT_TRUE(inputBox->deleteBackward());
+    EXPECT_EQ(inputBox->getText(), "ad");
+    EXPECT_EQ(inputBox->getCursorUtf8(), 1U);
+    EXPECT_FALSE(inputBox->hasSelection());
+
+    inputBox->setText("abcd", 4);
+    ASSERT_TRUE(inputBox->setSelectionUtf8(1,
+                                           3,
+                                           skia::textlayout::Affinity::kDownstream,
+                                           skia::textlayout::Affinity::kDownstream));
+    ASSERT_TRUE(inputBox->deleteForward());
+    EXPECT_EQ(inputBox->getText(), "ad");
+    EXPECT_EQ(inputBox->getCursorUtf8(), 1U);
+    EXPECT_FALSE(inputBox->hasSelection());
+}
+
+TEST_F(InputBoxTest, MovementCanExtendAndCollapseSelection) {
+    auto inputBox = MakeInputBox();
+    inputBox->setText("abcd", 4);
+    inputBox->setCursorUtf8(1, skia::textlayout::Affinity::kDownstream);
+
+    ASSERT_TRUE(inputBox->moveNext(true));
+    auto selection = inputBox->getSelection();
+    ASSERT_TRUE(selection.hasSelection);
+    EXPECT_EQ(selection.anchorUtf8, 1U);
+    EXPECT_EQ(selection.focusUtf8, 2U);
+    EXPECT_EQ(selection.startUtf8, 1U);
+    EXPECT_EQ(selection.endUtf8, 2U);
+
+    ASSERT_TRUE(inputBox->moveNext(false));
+    selection = inputBox->getSelection();
+    EXPECT_FALSE(selection.hasSelection);
+    EXPECT_EQ(inputBox->getCursorUtf8(), 2U);
+
+    ASSERT_TRUE(inputBox->movePrevious(true));
+    selection = inputBox->getSelection();
+    ASSERT_TRUE(selection.hasSelection);
+    EXPECT_EQ(selection.startUtf8, 1U);
+    EXPECT_EQ(selection.endUtf8, 2U);
+}
+
+TEST_F(InputBoxTest, SelectAllReplacesFullText) {
+    const std::string text = "ab\xE6\x97\xA5";
+    auto inputBox = MakeInputBox();
+    inputBox->setText(text.c_str(), text.size());
+
+    ASSERT_TRUE(inputBox->selectAll());
+    auto selection = inputBox->getSelection();
+    ASSERT_TRUE(selection.hasSelection);
+    EXPECT_EQ(selection.startUtf8, 0U);
+    EXPECT_EQ(selection.endUtf8, text.size());
+
+    inputBox->insertText("x", 1);
+    EXPECT_EQ(inputBox->getText(), "x");
+    EXPECT_EQ(inputBox->getCursorUtf8(), 1U);
+    EXPECT_FALSE(inputBox->hasSelection());
+}
+
+TEST_F(InputBoxTest, RightAlignedSelectionRectsUseParagraphGeometry) {
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kRight);
+    inputBox->setViewport(320, 64);
+
+    const auto emptyCaret = inputBox->getCaretRect();
+    EXPECT_GT(emptyCaret.left, 300.0f);
+
+    inputBox->setText("abc", 3);
+
+    ASSERT_TRUE(inputBox->selectAll());
+    const auto rects = inputBox->getSelectionRects();
+    ASSERT_FALSE(rects.empty());
+    EXPECT_GT(rects.front().left, 1.0f);
+
+    ASSERT_TRUE(inputBox->hitTest(319, 18));
+    EXPECT_GT(inputBox->getCursorUtf8(), 0U);
 }

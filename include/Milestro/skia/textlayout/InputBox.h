@@ -57,6 +57,16 @@ struct InputBoxLineMetrics {
     uint64_t lineNumber = 0;
 };
 
+struct InputBoxSelection {
+    uint64_t anchorUtf8 = 0;
+    uint64_t focusUtf8 = 0;
+    uint64_t startUtf8 = 0;
+    uint64_t endUtf8 = 0;
+    int32_t anchorAffinity = 0;
+    int32_t focusAffinity = 0;
+    bool hasSelection = false;
+};
+
 class InputBoxDrawSnapshot;
 
 class MILESTRO_API TextBoundaryMap {
@@ -101,6 +111,7 @@ public:
 
     void setViewport(SkScalar width, SkScalar height);
     void setCaretColor(SkColor color) { caretColor_ = color; }
+    void setSelectionColor(SkColor color) { selectionColor_ = color; }
     void setCaretWidth(SkScalar width);
     void setCaretVisible(bool visible) { caretVisible_ = visible; }
 
@@ -120,15 +131,24 @@ public:
     bool commitComposition(const char* text, size_t length);
     bool clearComposition();
     bool hasComposition() const { return !compositionText_.empty(); }
+    InputBoxSelection getSelection() const;
+    bool hasSelection() const;
+    bool setSelectionUtf8(size_t anchorUtf8,
+                          size_t focusUtf8,
+                          ::skia::textlayout::Affinity anchorAffinity,
+                          ::skia::textlayout::Affinity focusAffinity);
+    bool clearSelection();
+    bool selectAll();
     bool deleteBackward();
     bool deleteForward();
-    bool movePrevious();
-    bool moveNext();
-    bool hitTest(SkScalar x, SkScalar y);
+    bool movePrevious(bool extendSelection = false);
+    bool moveNext(bool extendSelection = false);
+    bool hitTest(SkScalar x, SkScalar y, bool extendSelection = false);
 
     void ensureCaretVisible();
     InputBoxCaretRect getCaretRect();
     InputBoxCaretRect getCompositionRect();
+    std::vector<InputBoxCaretRect> getSelectionRects();
     InputBoxMetrics getMetrics();
     size_t getLineCount();
     bool getLineMetrics(size_t lineNumber, InputBoxLineMetrics& metrics);
@@ -148,9 +168,14 @@ private:
     SkScalar scrollX_ = 0.0f;
     SkScalar caretWidth_ = 2.0f;
     SkColor caretColor_ = SK_ColorWHITE;
+    SkColor selectionColor_ = SkColorSetARGB(0x66, 0x33, 0x7D, 0xFF);
     bool caretVisible_ = true;
     bool paragraphDirty_ = true;
     std::string compositionText_;
+    size_t selectionAnchorUtf8_ = 0;
+    size_t selectionFocusUtf8_ = 0;
+    ::skia::textlayout::Affinity selectionAnchorAffinity_ = ::skia::textlayout::Affinity::kDownstream;
+    ::skia::textlayout::Affinity selectionFocusAffinity_ = ::skia::textlayout::Affinity::kDownstream;
 
     static std::string sanitizeSingleLine(const char* text, size_t length);
 
@@ -163,9 +188,15 @@ private:
     size_t displayCaretUtf8() const;
     size_t displayCompositionStartUtf8() const;
     size_t displayCompositionEndUtf8() const;
+    size_t displayCompositionReplacedEndUtf8() const;
     size_t committedUtf8FromDisplay(size_t displayUtf8) const;
     InputBoxCaretRect getCaretRectForDisplayOffset(size_t displayUtf8);
-    SkScalar paragraphLayoutWidth() const;
+    std::vector<InputBoxCaretRect> getRectsForDisplayRange(size_t startUtf8, size_t endUtf8);
+    size_t selectionStartUtf8() const;
+    size_t selectionEndUtf8() const;
+    void resetSelectionToCursor();
+    bool replaceSelectionWith(std::string replacement);
+    bool deleteSelection();
     SkScalar contentWidth();
     void replaceText(std::string text, size_t requestedCursor);
     void markCompositionDirty();
@@ -177,8 +208,10 @@ public:
                          InputBoxCaretRect caretRect,
                          InputBoxMetrics metrics,
                          InputBoxCaretRect compositionRect,
+                         std::vector<InputBoxCaretRect> selectionRects,
                          SkScalar caretWidth,
                          SkColor caretColor,
+                         SkColor selectionColor,
                          bool caretVisible,
                          bool compositionVisible);
 
@@ -189,8 +222,10 @@ private:
     InputBoxCaretRect caretRect_;
     InputBoxMetrics metrics_;
     InputBoxCaretRect compositionRect_;
+    std::vector<InputBoxCaretRect> selectionRects_;
     SkScalar caretWidth_ = 1.0f;
     SkColor caretColor_ = SK_ColorWHITE;
+    SkColor selectionColor_ = SkColorSetARGB(0x66, 0x33, 0x7D, 0xFF);
     bool caretVisible_ = false;
     bool compositionVisible_ = false;
 };
