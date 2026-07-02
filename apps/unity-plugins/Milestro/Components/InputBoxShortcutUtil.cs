@@ -99,7 +99,12 @@ namespace Milestro.Components
                    (IsExactShiftOnlyModifier() && Input.GetKeyDown(KeyCode.Insert));
         }
 
-        internal static bool IsCommittedTextShortcutSuppressed()
+        internal static bool IsCommittedTextInputSuppressed()
+        {
+            return IsCommittedTextShortcutSuppressed() || IsEditingKeyPressed();
+        }
+
+        private static bool IsCommittedTextShortcutSuppressed()
         {
             return IsUndoDown() ||
                    IsRedoDown() ||
@@ -107,6 +112,20 @@ namespace Milestro.Components
                    IsCopyDown() ||
                    IsCutDown() ||
                    IsPasteDown();
+        }
+
+        private static bool IsEditingKeyPressed()
+        {
+            return Input.GetKey(KeyCode.LeftArrow) ||
+                   Input.GetKey(KeyCode.RightArrow) ||
+                   Input.GetKey(KeyCode.UpArrow) ||
+                   Input.GetKey(KeyCode.DownArrow) ||
+                   Input.GetKey(KeyCode.Backspace) ||
+                   Input.GetKey(KeyCode.Delete) ||
+                   Input.GetKey(KeyCode.Home) ||
+                   Input.GetKey(KeyCode.End) ||
+                   Input.GetKey(KeyCode.PageUp) ||
+                   Input.GetKey(KeyCode.PageDown);
         }
     }
 }

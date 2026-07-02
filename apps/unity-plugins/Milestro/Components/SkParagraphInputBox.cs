@@ -766,6 +766,12 @@ namespace Milestro.Components
             return char.IsControl(ch) || ch == '\u007f';
         }
 
+        private static bool IsCommittedTextFunctionKey(char ch)
+        {
+            // Unity/macOS can surface non-text function keys as AppKit private-use chars.
+            return ch >= '\uf700' && ch <= '\uf747';
+        }
+
         private void QueueSupplementaryGuiCharacter(char ch)
         {
             ExpirePendingGuiHighSurrogateToQueue();
@@ -797,7 +803,7 @@ namespace Milestro.Components
 
         private string ReadCommittedText()
         {
-            if (InputBoxShortcutUtil.IsCommittedTextShortcutSuppressed())
+            if (InputBoxShortcutUtil.IsCommittedTextInputSuppressed())
             {
                 ResetSurrogateInputState();
                 return string.Empty;
@@ -939,7 +945,7 @@ namespace Milestro.Components
                     i = SkipEscapeSequence(committedInput, i) - 1;
                     continue;
                 }
-                if (IsCommittedTextControl(ch))
+                if (IsCommittedTextControl(ch) || IsCommittedTextFunctionKey(ch))
                 {
                     ClearPendingHighSurrogate();
                     continue;
