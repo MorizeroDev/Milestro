@@ -719,13 +719,13 @@ namespace Milestro.Components
                         continue;
                     }
 
-                    if (i + 1 >= input.Length)
+                    if (i + 1 >= committedInput.Length)
                     {
                         SetPendingHighSurrogate(ch);
                         continue;
                     }
 
-                    var low = input[i + 1];
+                    var low = committedInput[i + 1];
                     if (char.IsLowSurrogate(low))
                     {
                         builder.Append(ch);
