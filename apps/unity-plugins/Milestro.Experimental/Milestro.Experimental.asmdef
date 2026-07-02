@@ -1,0 +1,16 @@
+{
+    "name": "Milestro.Experimental",
+    "rootNamespace": "",
+    "references": [
+        "Milestro"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

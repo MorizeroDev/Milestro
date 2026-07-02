@@ -1,8 +1,8 @@
 using UnityEngine;
 
-namespace Milestro.Components
+namespace Milestro.Components.Internal
 {
-    public abstract class SkiaRenderTargetProducer : MonoBehaviour
+    public abstract class RenderTargetProducer : MonoBehaviour
     {
         public abstract Texture? OutputTexture { get; }
         public abstract Rect OutputUvRect { get; }

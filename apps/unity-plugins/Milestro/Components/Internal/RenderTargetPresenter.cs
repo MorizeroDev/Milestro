@@ -1,18 +1,18 @@
 using System;
 using UnityEngine;
-using UnityEngine.UI;
 
-namespace Milestro.Components
+namespace Milestro.Components.Internal
 {
     [DisallowMultipleComponent]
     [RequireComponent(typeof(CanvasRenderer))]
-    public class SkiaCanvasRenderTargetPresenter : SkiaRenderTextureGraphic
+    [AddComponentMenu("Milestro/Internal/Render Target Presenter")]
+    public class RenderTargetPresenter : RenderTextureGraphic
     {
-        [SerializeField] private SkiaRenderTargetProducer? m_producer;
+        [SerializeField] private RenderTargetProducer? m_producer;
 
         [NonSerialized] private long observedOutputVersion = long.MinValue;
 
-        public SkiaRenderTargetProducer? Producer
+        public RenderTargetProducer? Producer
         {
             get => m_producer;
             set
@@ -42,9 +42,10 @@ namespace Milestro.Components
             observedOutputVersion = long.MinValue;
         }
 
-        private void Reset()
+        protected override void Reset()
         {
-            m_producer = GetComponent<SkiaRenderTargetProducer>();
+            base.Reset();
+            m_producer = GetComponent<RenderTargetProducer>();
         }
 
         private void Update()
@@ -91,14 +92,14 @@ namespace Milestro.Components
             observedOutputVersion = outputVersion;
         }
 
-        private SkiaRenderTargetProducer? ResolveProducer()
+        private RenderTargetProducer? ResolveProducer()
         {
             if (m_producer != null)
             {
                 return m_producer;
             }
 
-            return GetComponent<SkiaRenderTargetProducer>();
+            return GetComponent<RenderTargetProducer>();
         }
     }
 }

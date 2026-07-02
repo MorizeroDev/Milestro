@@ -2,9 +2,10 @@ using System.Collections.Generic;
 using Milestro.Skia.TextLayout;
 using UnityEngine;
 
-namespace Milestro.Components
+namespace Milestro.Experimental.Components
 {
-    public class SimpleMeshTextBox : SkParagraphMeshTextBox
+    [AddComponentMenu("Milestro/Experimental/Simple Mesh Text Box")]
+    public class SimpleMeshTextBox : MeshTextBox
     {
         [TextArea(3, 10)][SerializeField] string content = "";
 

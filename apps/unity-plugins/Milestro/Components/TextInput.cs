@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Milestro.Components.Internal;
 using Milestro.Model;
 using Milestro.Skia;
 using Milestro.Skia.TextLayout;
+using Milestro.Util;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -13,7 +15,7 @@ using UnityEngine.Serialization;
 
 namespace Milestro.Components
 {
-    public enum InputBoxTextAlignment
+    public enum TextInputAlignment
     {
         Left,
         Center,
@@ -22,7 +24,8 @@ namespace Milestro.Components
 
     [DisallowMultipleComponent]
     [RequireComponent(typeof(CanvasRenderer))]
-    public class SkParagraphInputBox : SkiaRenderTextureGraphic,
+    [AddComponentMenu("Milestro/Text Input")]
+    public class TextInput : RenderTextureGraphic,
         IPointerDownHandler,
         IPointerClickHandler,
         IBeginDragHandler,
@@ -69,7 +72,7 @@ namespace Milestro.Components
         private float m_caretWidth = 2;
 
         [SerializeField]
-        private InputBoxTextAlignment m_textAlignment = InputBoxTextAlignment.Left;
+        private TextInputAlignment m_textAlignment = TextInputAlignment.Left;
 
         [SerializeField]
         [FormerlySerializedAs("blinkInterval")]
@@ -140,7 +143,7 @@ namespace Milestro.Components
             }
         }
 
-        public InputBoxTextAlignment textAlignment
+        public TextInputAlignment textAlignment
         {
             get => m_textAlignment;
             set
@@ -1107,15 +1110,15 @@ namespace Milestro.Components
             inputBox.SetViewport(ContentSize());
         }
 
-        private static TextAlign ToParagraphTextAlign(InputBoxTextAlignment alignment)
+        private static TextAlign ToParagraphTextAlign(TextInputAlignment alignment)
         {
             switch (alignment)
             {
-                case InputBoxTextAlignment.Center:
+                case TextInputAlignment.Center:
                     return TextAlign.Center;
-                case InputBoxTextAlignment.Right:
+                case TextInputAlignment.Right:
                     return TextAlign.Right;
-                case InputBoxTextAlignment.Left:
+                case TextInputAlignment.Left:
                 default:
                     return TextAlign.Left;
             }

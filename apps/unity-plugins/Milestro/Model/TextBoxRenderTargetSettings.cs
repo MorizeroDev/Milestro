@@ -1,12 +1,11 @@
 using System.Collections.Generic;
-using Milestro.Model;
 using UnityEngine;
 
-namespace Milestro.Components
+namespace Milestro.Model
 {
-    internal readonly struct SkParagraphTextBoxRenderTargetSettings
+    internal readonly struct TextBoxRenderTargetSettings
     {
-        public SkParagraphTextBoxRenderTargetSettings(string content,
+        public TextBoxRenderTargetSettings(string content,
             RectOffset margin,
             List<string> fontFamilies,
             TextAlign textAlign,

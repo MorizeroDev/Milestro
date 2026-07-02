@@ -1,0 +1,5 @@
+# Ignore Unity Plugins Binary
+unity-plugins/Milestro/Plugins/**
+!unity-plugins/Milestro/Plugins/iOS.meta
+!unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp
+!unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp.meta

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Milestro.Components.Internal;
 using Milestro.Model;
 using Milestro.Skia;
 #if UNITY_EDITOR
@@ -10,7 +11,8 @@ using UnityEngine.Serialization;
 
 namespace Milestro.Components
 {
-    public class SkParagraphGLRenderTextureBox : SkiaRenderTextureGraphic
+    [AddComponentMenu("Milestro/Text Box")]
+    public class TextBox : RenderTextureGraphic
     {
         [TextArea(3, 10)]
         [SerializeField]
@@ -52,7 +54,7 @@ namespace Milestro.Components
 
 
         [NonSerialized] private RectTransform rectTransformCache;
-        [NonSerialized] private SkParagraphTextBoxRenderTargetCore? renderTarget;
+        [NonSerialized] private TextBoxRenderTarget? renderTarget;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
         [NonSerialized] private long observedOutputVersion = long.MinValue;
 #if UNITY_EDITOR
@@ -223,9 +225,9 @@ namespace Milestro.Components
             return m_colorSpaceOverride ?? UnitySkiaRenderTextureDescriptor.DefaultColorSpace;
         }
 
-        private SkParagraphTextBoxRenderTargetSettings CurrentSettings()
+        private TextBoxRenderTargetSettings CurrentSettings()
         {
-            return new SkParagraphTextBoxRenderTargetSettings(m_content,
+            return new TextBoxRenderTargetSettings(m_content,
                 m_margin,
                 m_fontFamilies,
                 m_textAlign,
@@ -235,13 +237,13 @@ namespace Milestro.Components
                 m_locale);
         }
 
-        private SkParagraphTextBoxRenderTargetCore RenderTarget
+        private TextBoxRenderTarget RenderTarget
         {
             get
             {
                 if (renderTarget == null)
                 {
-                    renderTarget = new SkParagraphTextBoxRenderTargetCore();
+                    renderTarget = new TextBoxRenderTarget();
                     observedOutputVersion = long.MinValue;
                 }
 

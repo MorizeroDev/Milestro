@@ -2,17 +2,17 @@ using System;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace Milestro.Components
+namespace Milestro.Components.Internal
 {
     [DisallowMultipleComponent]
     [RequireComponent(typeof(CanvasRenderer))]
-    public abstract class SkiaRenderTextureGraphic : MaskableGraphic
+    public abstract class RenderTextureGraphic : MaskableGraphic
     {
         [NonSerialized] private Texture? texture;
         [NonSerialized] private Rect uvRect = new Rect(0, 0, 1, 1);
         [NonSerialized] private bool warnedSiblingGraphic;
 
-        protected SkiaRenderTextureGraphic()
+        protected RenderTextureGraphic()
         {
             useLegacyMeshGeneration = false;
         }

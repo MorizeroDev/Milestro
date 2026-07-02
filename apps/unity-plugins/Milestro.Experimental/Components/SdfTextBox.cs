@@ -4,9 +4,10 @@ using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace Milestro.Components
+namespace Milestro.Experimental.Components
 {
-    public class SkParagraphSdfTextBox : MonoBehaviour
+    [AddComponentMenu("Milestro/Experimental/SDF Text Box")]
+    public class SdfTextBox : MonoBehaviour
     {
         const int SK_DistanceFieldPad = 4;
 

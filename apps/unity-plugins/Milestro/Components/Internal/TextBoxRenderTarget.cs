@@ -1,12 +1,13 @@
 using System;
 using Milestro.Extensions;
+using Milestro.Model;
 using Milestro.Skia;
 using Milestro.Skia.TextLayout;
 using UnityEngine;
 
-namespace Milestro.Components
+namespace Milestro.Components.Internal
 {
-    internal sealed class SkParagraphTextBoxRenderTargetCore : IDisposable
+    internal sealed class TextBoxRenderTarget : IDisposable
     {
         private static readonly Rect DefaultUvRect = new Rect(0f, 0f, 1f, 1f);
 
@@ -30,7 +31,7 @@ namespace Milestro.Components
 
         public bool Rebuild(Vector2Int sizePixels,
             ColorSpace colorSpace,
-            SkParagraphTextBoxRenderTargetSettings settings,
+            TextBoxRenderTargetSettings settings,
             bool forceText,
             UnityEngine.Object? logContext)
         {
@@ -105,7 +106,7 @@ namespace Milestro.Components
             return true;
         }
 
-        private Paragraph BuildParagraph(SkParagraphTextBoxRenderTargetSettings settings)
+        private Paragraph BuildParagraph(TextBoxRenderTargetSettings settings)
         {
             ParagraphStyle paragraphStyle = new ParagraphStyle();
             paragraphStyle.TextAlign = (int)settings.TextAlign;
@@ -134,7 +135,7 @@ namespace Milestro.Components
         }
 
         private void ResizeParagraph(Paragraph? targetParagraph,
-            SkParagraphTextBoxRenderTargetSettings settings,
+            TextBoxRenderTargetSettings settings,
             bool force = false)
         {
             if (targetParagraph == null)
@@ -152,7 +153,7 @@ namespace Milestro.Components
             targetParagraph.Layout(layoutWidth);
         }
 
-        private UnitySkiaRenderCommandList BuildRenderCommands(SkParagraphTextBoxRenderTargetSettings settings,
+        private UnitySkiaRenderCommandList BuildRenderCommands(TextBoxRenderTargetSettings settings,
             UnityEngine.Object? logContext)
         {
             var commands = new UnitySkiaRenderCommandList();

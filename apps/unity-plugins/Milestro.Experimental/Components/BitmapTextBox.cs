@@ -1,16 +1,16 @@
 using System;
 using System.Runtime.InteropServices;
-using Milestro.Model;
+using Milestro.Experimental.Model;
 using Milestro.Skia.TextLayout;
-using Milestro.Util;
+using Milestro.Experimental.Util;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-namespace Milestro.Components
+namespace Milestro.Experimental.Components
 {
     [RequireComponent(typeof(Image))]
-    public abstract class SkParagraphBitmapTextBox : UIBehaviour
+    public abstract class BitmapTextBox : UIBehaviour
     {
         public Paragraph Paragraph { get; set; }
 
