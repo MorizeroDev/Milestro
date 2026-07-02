@@ -375,3 +375,35 @@ TEST_F(InputBoxTest, SelectionRectsUseUniformLineHeightAcrossFontRuns) {
         EXPECT_GT(rect.right, rect.left);
     }
 }
+
+TEST_F(InputBoxTest, SingleLineGeometryUsesStableBaselineInViewport) {
+    auto inputBox = MakeInputBox();
+    inputBox->setViewport(320, 96);
+    inputBox->setText("abc", 3);
+
+    const auto metrics = inputBox->getMetrics();
+    const auto caret = inputBox->getCaretRect();
+    milestro_text::InputBoxLineMetrics lineMetrics;
+    ASSERT_TRUE(inputBox->getLineMetrics(0, lineMetrics));
+    const auto baseline = caret.top + lineMetrics.ascent;
+    ASSERT_GT(metrics.viewportHeight, metrics.height);
+    EXPECT_GT(caret.top, 0.0f);
+    EXPECT_LT(caret.bottom, metrics.viewportHeight);
+
+    const std::string mixedText = "A\xF0\x9F\xA4\x94\xE6\x97\xA5" "B";
+    inputBox->setText(mixedText.c_str(), mixedText.size());
+    const auto mixedCaret = inputBox->getCaretRect();
+    milestro_text::InputBoxLineMetrics mixedLineMetrics;
+    ASSERT_TRUE(inputBox->getLineMetrics(0, mixedLineMetrics));
+    EXPECT_NEAR(mixedCaret.top + mixedLineMetrics.ascent, baseline, 0.001f);
+
+    ASSERT_TRUE(inputBox->selectAll());
+    const auto rects = inputBox->getSelectionRects();
+    ASSERT_FALSE(rects.empty());
+    for (const auto& rect: rects) {
+        EXPECT_NEAR(rect.top, mixedCaret.top, 0.001f);
+        EXPECT_NEAR(rect.bottom, mixedCaret.bottom, 0.001f);
+    }
+
+    EXPECT_TRUE(inputBox->hitTest(1.0f, (mixedCaret.top + mixedCaret.bottom) * 0.5f));
+}

@@ -194,6 +194,7 @@ private:
     std::vector<InputBoxCaretRect> getRectsForDisplayRange(size_t startUtf8, size_t endUtf8);
     size_t selectionStartUtf8() const;
     size_t selectionEndUtf8() const;
+    SkScalar visualOffsetY();
     void resetSelectionToCursor();
     bool replaceSelectionWith(std::string replacement);
     bool deleteSelection();
@@ -210,6 +211,7 @@ public:
                          InputBoxCaretRect compositionRect,
                          std::vector<InputBoxCaretRect> selectionRects,
                          SkScalar caretWidth,
+                         SkScalar visualOffsetY,
                          SkColor caretColor,
                          SkColor selectionColor,
                          bool caretVisible,
@@ -224,6 +226,7 @@ private:
     InputBoxCaretRect compositionRect_;
     std::vector<InputBoxCaretRect> selectionRects_;
     SkScalar caretWidth_ = 1.0f;
+    SkScalar visualOffsetY_ = 0.0f;
     SkColor caretColor_ = SK_ColorWHITE;
     SkColor selectionColor_ = SkColorSetARGB(0x66, 0x33, 0x7D, 0xFF);
     bool caretVisible_ = false;

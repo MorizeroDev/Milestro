@@ -48,6 +48,21 @@ bool IsFinitePositive(SkScalar value) {
     return std::isfinite(value) && value > 0.0f;
 }
 
+SkScalar DefaultBaselineY(SkScalar viewportHeight, const VerticalMetrics& metrics) {
+    if (!IsFinitePositive(viewportHeight) || !IsFinitePositive(metrics.height)) {
+        return metrics.ascent;
+    }
+
+    return std::max<SkScalar>(0.0f, (viewportHeight - metrics.height) * 0.5f) + metrics.ascent;
+}
+
+SkScalar BaselineOffsetY(SkScalar viewportHeight, SkScalar lineBaseline, const VerticalMetrics& metrics) {
+    if (!std::isfinite(lineBaseline)) {
+        return 0.0f;
+    }
+    return DefaultBaselineY(viewportHeight, metrics) - lineBaseline;
+}
+
 SkScalar EmptyCaretX(::skia::textlayout::TextAlign align, SkScalar viewportWidth, SkScalar caretWidth) {
     const auto maxLeft = std::max<SkScalar>(0.0f, viewportWidth - caretWidth);
     switch (align) {
@@ -545,7 +560,7 @@ bool InputBox::hitTest(SkScalar x, SkScalar y, bool extendSelection) {
 
     const auto oldCursor = cursorUtf8_;
     const auto oldAffinity = affinity_;
-    const auto hit = paragraph_->getGlyphPositionAtCoordinate(x + scrollX_, y);
+    const auto hit = paragraph_->getGlyphPositionAtCoordinate(x + scrollX_, y - visualOffsetY());
     const auto displayMap = displayBoundaryMap();
     const auto displayUtf8 = displayMap.utf16ToUtf8(hit.position < 0 ? 0 : static_cast<size_t>(hit.position));
     const auto utf8 = committedUtf8FromDisplay(displayUtf8);
@@ -643,8 +658,9 @@ InputBoxCaretRect InputBox::getCaretRectForDisplayOffset(size_t displayUtf8) {
 
     rect.left = x;
     rect.right = x + caretWidth_;
-    rect.top = top;
-    rect.bottom = bottom;
+    const auto offsetY = visualOffsetY();
+    rect.top = top + offsetY;
+    rect.bottom = bottom + offsetY;
     return rect;
 }
 
@@ -674,11 +690,12 @@ InputBoxCaretRect InputBox::getCompositionRect() {
         rect.join(boxes[i].rect);
     }
 
+    const auto offsetY = visualOffsetY();
     return InputBoxCaretRect{
             ToFloat(rect.left()),
-            ToFloat(rect.top()),
+            ToFloat(rect.top() + offsetY),
             ToFloat(rect.right()),
-            ToFloat(rect.bottom()),
+            ToFloat(rect.bottom() + offsetY),
     };
 }
 
@@ -748,6 +765,7 @@ void InputBox::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, S
     const auto clipWidth = width > 0.0f ? width : viewportWidth_;
     const auto clipHeight = height > 0.0f ? height : viewportHeight_;
     canvas->clipRect(SkRect::MakeXYWH(x, y, clipWidth, clipHeight));
+    const auto offsetY = visualOffsetY();
 
     const auto selectionRects = getSelectionRects();
     if (!selectionRects.empty()) {
@@ -764,7 +782,7 @@ void InputBox::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, S
     }
 
     if (paragraph_ != nullptr) {
-        paragraph_->paint(canvas, x - scrollX_, y);
+        paragraph_->paint(canvas, x - scrollX_, y + offsetY);
     }
 
     if (!compositionText_.empty()) {
@@ -808,6 +826,7 @@ std::unique_ptr<InputBoxDrawSnapshot> InputBox::createDrawSnapshot() {
                                                   compositionRect,
                                                   std::move(selectionRects),
                                                   caretWidth_,
+                                                  visualOffsetY(),
                                                   caretColor_,
                                                   selectionColor_,
                                                   caretVisible_,
@@ -960,9 +979,10 @@ std::vector<InputBoxCaretRect> InputBox::getRectsForDisplayRange(size_t startUtf
                                               ::skia::textlayout::RectWidthStyle::kTight);
 
     // Keep SkParagraph's visual x slices, but normalize highlight height across font fallback runs.
+    const auto offsetY = visualOffsetY();
     const auto fallbackMetrics = ResolveStyleVerticalMetrics(textStyle_);
-    auto selectionTop = 0.0f;
-    auto selectionBottom = ToFloat(fallbackMetrics.height);
+    auto selectionTop = ToFloat(offsetY);
+    auto selectionBottom = ToFloat(offsetY + fallbackMetrics.height);
     ::skia::textlayout::LineMetrics lineMetrics;
     auto lineProbeUtf16 = startUtf16;
     const auto utf16Length = displayMap.utf16Length();
@@ -974,11 +994,11 @@ std::vector<InputBoxCaretRect> InputBox::getRectsForDisplayRange(size_t startUtf
         lineNumber = 0;
     }
     if (paragraph_->getLineMetricsAt(lineNumber, &lineMetrics)) {
-        selectionTop = ToFloat(lineMetrics.fBaseline - lineMetrics.fAscent);
-        selectionBottom = ToFloat(lineMetrics.fBaseline + lineMetrics.fDescent);
+        selectionTop = ToFloat(lineMetrics.fBaseline - lineMetrics.fAscent + offsetY);
+        selectionBottom = ToFloat(lineMetrics.fBaseline + lineMetrics.fDescent + offsetY);
         if (!(selectionBottom > selectionTop)) {
-            selectionTop = 0.0f;
-            selectionBottom = ToFloat(fallbackMetrics.height);
+            selectionTop = ToFloat(offsetY);
+            selectionBottom = ToFloat(offsetY + fallbackMetrics.height);
         }
     }
 
@@ -1009,6 +1029,21 @@ size_t InputBox::selectionEndUtf8() const {
     const auto anchor = boundaryMap_.snapUtf8(selectionAnchorUtf8_, TextBoundarySnapMode::Nearest);
     const auto focus = boundaryMap_.snapUtf8(selectionFocusUtf8_, TextBoundarySnapMode::Nearest);
     return std::max(anchor, focus);
+}
+
+SkScalar InputBox::visualOffsetY() {
+    rebuildParagraphIfNeeded();
+    const auto verticalMetrics = ResolveStyleVerticalMetrics(textStyle_);
+    if (paragraph_ == nullptr) {
+        return BaselineOffsetY(viewportHeight_, verticalMetrics.ascent, verticalMetrics);
+    }
+
+    ::skia::textlayout::LineMetrics lineMetrics;
+    if (!paragraph_->getLineMetricsAt(0, &lineMetrics)) {
+        return BaselineOffsetY(viewportHeight_, verticalMetrics.ascent, verticalMetrics);
+    }
+
+    return BaselineOffsetY(viewportHeight_, lineMetrics.fBaseline, verticalMetrics);
 }
 
 void InputBox::resetSelectionToCursor() {
@@ -1070,6 +1105,7 @@ InputBoxDrawSnapshot::InputBoxDrawSnapshot(std::unique_ptr<::skia::textlayout::P
                                            InputBoxCaretRect compositionRect,
                                            std::vector<InputBoxCaretRect> selectionRects,
                                            SkScalar caretWidth,
+                                           SkScalar visualOffsetY,
                                            SkColor caretColor,
                                            SkColor selectionColor,
                                            bool caretVisible,
@@ -1080,6 +1116,7 @@ InputBoxDrawSnapshot::InputBoxDrawSnapshot(std::unique_ptr<::skia::textlayout::P
           compositionRect_(compositionRect),
           selectionRects_(std::move(selectionRects)),
           caretWidth_(caretWidth),
+          visualOffsetY_(visualOffsetY),
           caretColor_(caretColor),
           selectionColor_(selectionColor),
           caretVisible_(caretVisible),
@@ -1109,7 +1146,7 @@ void InputBoxDrawSnapshot::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkSca
     }
 
     if (paragraph_ != nullptr) {
-        paragraph_->paint(canvas, x - metrics_.scrollX, y);
+        paragraph_->paint(canvas, x - metrics_.scrollX, y + visualOffsetY_);
     }
 
     if (compositionVisible_) {
