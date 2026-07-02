@@ -358,3 +358,20 @@ TEST_F(InputBoxTest, RightAlignedSelectionRectsUseParagraphGeometry) {
     ASSERT_TRUE(inputBox->hitTest(319, 18));
     EXPECT_GT(inputBox->getCursorUtf8(), 0U);
 }
+
+TEST_F(InputBoxTest, SelectionRectsUseUniformLineHeightAcrossFontRuns) {
+    auto inputBox = MakeInputBox();
+    const std::string text = "A\xF0\x9F\xA4\x94\xE6\x97\xA5" "B";
+    inputBox->setText(text.c_str(), text.size());
+
+    ASSERT_TRUE(inputBox->selectAll());
+    const auto caret = inputBox->getCaretRect();
+    const auto rects = inputBox->getSelectionRects();
+    ASSERT_GE(rects.size(), 2U);
+
+    for (const auto& rect: rects) {
+        EXPECT_NEAR(rect.top, caret.top, 0.001f);
+        EXPECT_NEAR(rect.bottom, caret.bottom, 0.001f);
+        EXPECT_GT(rect.right, rect.left);
+    }
+}

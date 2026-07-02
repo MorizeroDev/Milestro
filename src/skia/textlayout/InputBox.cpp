@@ -959,6 +959,29 @@ std::vector<InputBoxCaretRect> InputBox::getRectsForDisplayRange(size_t startUtf
                                               ::skia::textlayout::RectHeightStyle::kTight,
                                               ::skia::textlayout::RectWidthStyle::kTight);
 
+    // Keep SkParagraph's visual x slices, but normalize highlight height across font fallback runs.
+    const auto fallbackMetrics = ResolveStyleVerticalMetrics(textStyle_);
+    auto selectionTop = 0.0f;
+    auto selectionBottom = ToFloat(fallbackMetrics.height);
+    ::skia::textlayout::LineMetrics lineMetrics;
+    auto lineProbeUtf16 = startUtf16;
+    const auto utf16Length = displayMap.utf16Length();
+    if (utf16Length > 0 && lineProbeUtf16 >= utf16Length) {
+        lineProbeUtf16 = utf16Length - 1;
+    }
+    auto lineNumber = paragraph_->getLineNumberAtUTF16Offset(lineProbeUtf16);
+    if (lineNumber < 0) {
+        lineNumber = 0;
+    }
+    if (paragraph_->getLineMetricsAt(lineNumber, &lineMetrics)) {
+        selectionTop = ToFloat(lineMetrics.fBaseline - lineMetrics.fAscent);
+        selectionBottom = ToFloat(lineMetrics.fBaseline + lineMetrics.fDescent);
+        if (!(selectionBottom > selectionTop)) {
+            selectionTop = 0.0f;
+            selectionBottom = ToFloat(fallbackMetrics.height);
+        }
+    }
+
     std::vector<InputBoxCaretRect> rects;
     rects.reserve(boxes.size());
     for (const auto& box: boxes) {
@@ -968,9 +991,9 @@ std::vector<InputBoxCaretRect> InputBox::getRectsForDisplayRange(size_t startUtf
 
         rects.push_back(InputBoxCaretRect{
                 ToFloat(box.rect.left()),
-                ToFloat(box.rect.top()),
+                selectionTop,
                 ToFloat(box.rect.right()),
-                ToFloat(box.rect.bottom()),
+                selectionBottom,
         });
     }
     return rects;
