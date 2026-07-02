@@ -130,6 +130,16 @@ namespace Milestro.Components.Internal
             }
         }
 
+        public RectOffset margin
+        {
+            get => m_margin;
+            set
+            {
+                m_margin = value ?? new RectOffset();
+                MarkPropertiesChanged();
+            }
+        }
+
         public bool srgb
         {
             get => SurfaceColorSpace() == ColorSpace.Linear;
