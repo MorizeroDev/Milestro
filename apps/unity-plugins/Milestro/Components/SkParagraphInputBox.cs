@@ -330,6 +330,7 @@ namespace Milestro.Components
         private void ReadKeyboardInput()
         {
             var changed = false;
+            var hadCompositionBeforeInput = compositionActive || !string.IsNullOrEmpty(Input.compositionString);
             var committedText = ReadCommittedText();
             if (committedText.Length > 0 && inputBox != null)
             {
@@ -350,13 +351,13 @@ namespace Milestro.Components
                 changed |= UpdateComposition();
             }
 
-            changed |= ReadEditingKeys();
+            changed |= ReadEditingKeys(hadCompositionBeforeInput);
             ApplyInputChange(changed);
         }
 
-        private bool ReadEditingKeys()
+        private bool ReadEditingKeys(bool suppressForComposition)
         {
-            if (compositionActive || inputBox == null)
+            if (suppressForComposition || compositionActive || inputBox == null)
             {
                 ResetKeyRepeatState();
                 return false;
@@ -672,14 +673,15 @@ namespace Milestro.Components
 
         private string FilterCommittedInput(string input)
         {
-            var hasInput = !string.IsNullOrEmpty(input);
+            var committedInput = input ?? string.Empty;
+            var hasInput = committedInput.Length > 0;
             var hasExpiredPendingHigh = IsPendingSurrogateExpired(pendingHighSurrogate, pendingHighSurrogateTime);
             if (!hasInput && !hasExpiredPendingHigh)
             {
                 return string.Empty;
             }
 
-            var builder = new StringBuilder((input?.Length ?? 0) + (hasExpiredPendingHigh ? 1 : 0));
+            var builder = new StringBuilder(committedInput.Length + (hasExpiredPendingHigh ? 1 : 0));
             if (hasExpiredPendingHigh)
             {
                 builder.Append(ReplacementCharacter);
@@ -691,13 +693,13 @@ namespace Milestro.Components
                 return builder.ToString();
             }
 
-            for (var i = 0; i < input.Length; ++i)
+            for (var i = 0; i < committedInput.Length; ++i)
             {
-                var ch = input[i];
+                var ch = committedInput[i];
                 if (ch == '\u001b')
                 {
                     ClearPendingHighSurrogate();
-                    i = SkipEscapeSequence(input, i) - 1;
+                    i = SkipEscapeSequence(committedInput, i) - 1;
                     continue;
                 }
                 if (IsCommittedTextControl(ch))
