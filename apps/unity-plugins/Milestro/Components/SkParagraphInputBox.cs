@@ -70,6 +70,8 @@ namespace Milestro.Components
         [NonSerialized] private bool compositionActive;
         [NonSerialized] private string lastCompositionText = "";
         [NonSerialized] private char pendingHighSurrogate;
+        [NonSerialized] private char pendingGuiHighSurrogate;
+        [NonSerialized] private readonly StringBuilder queuedSupplementaryInput = new StringBuilder();
         [NonSerialized] private float nextLeftRepeatTime;
         [NonSerialized] private float nextRightRepeatTime;
         [NonSerialized] private float nextBackspaceRepeatTime;
@@ -96,7 +98,7 @@ namespace Milestro.Components
                 }
                 compositionActive = false;
                 lastCompositionText = "";
-                pendingHighSurrogate = '\0';
+                ResetSurrogateInputState();
                 ResetKeyRepeatState();
                 layoutDirty = true;
                 paintDirty = true;
@@ -172,11 +174,29 @@ namespace Milestro.Components
             inputBox.HitTest(ToContentPoint(localPoint));
             compositionActive = false;
             lastCompositionText = "";
-            pendingHighSurrogate = '\0';
+            ResetSurrogateInputState();
             ResetKeyRepeatState();
             m_text = inputBox.Text;
             ResetBlink();
             paintDirty = true;
+        }
+
+        private void OnGUI()
+        {
+            // Legacy Input.inputString can replacement-encode supplementary-plane text;
+            // IMGUI text events can still expose the original surrogate halves.
+            if (!focused || !CanReadInput())
+            {
+                return;
+            }
+
+            var currentEvent = Event.current;
+            if (currentEvent == null || currentEvent.type != EventType.KeyDown)
+            {
+                return;
+            }
+
+            QueueSupplementaryGuiCharacter(currentEvent.character);
         }
 
         public void OnSelect(BaseEventData eventData)
@@ -251,7 +271,7 @@ namespace Milestro.Components
             focused = false;
             compositionActive = false;
             lastCompositionText = "";
-            pendingHighSurrogate = '\0';
+            ResetSurrogateInputState();
             ResetKeyRepeatState();
             Input.imeCompositionMode = IMECompositionMode.Auto;
             caretVisible = false;
@@ -306,7 +326,7 @@ namespace Milestro.Components
         private void ReadKeyboardInput()
         {
             var changed = false;
-            var committedText = FilterCommittedInput(Input.inputString);
+            var committedText = FilterCommittedInput(CommittedInputWithSupplementaryFallback(Input.inputString));
             if (committedText.Length > 0 && inputBox != null)
             {
                 if (compositionActive)
@@ -341,22 +361,22 @@ namespace Milestro.Components
             var changed = false;
             if (ShouldProcessRepeatingKey(KeyCode.LeftArrow, ref nextLeftRepeatTime))
             {
-                pendingHighSurrogate = '\0';
+                ResetSurrogateInputState();
                 changed |= inputBox.MovePrevious();
             }
             if (ShouldProcessRepeatingKey(KeyCode.RightArrow, ref nextRightRepeatTime))
             {
-                pendingHighSurrogate = '\0';
+                ResetSurrogateInputState();
                 changed |= inputBox.MoveNext();
             }
             if (ShouldProcessRepeatingKey(KeyCode.Backspace, ref nextBackspaceRepeatTime))
             {
-                pendingHighSurrogate = '\0';
+                ResetSurrogateInputState();
                 changed |= inputBox.DeleteBackward();
             }
             if (ShouldProcessRepeatingKey(KeyCode.Delete, ref nextDeleteRepeatTime))
             {
-                pendingHighSurrogate = '\0';
+                ResetSurrogateInputState();
                 changed |= inputBox.DeleteForward();
             }
             return changed;
@@ -545,6 +565,78 @@ namespace Milestro.Components
             return char.IsControl(ch) || ch == '\u007f';
         }
 
+        private void QueueSupplementaryGuiCharacter(char ch)
+        {
+            if (ch == '\0')
+            {
+                return;
+            }
+
+            if (char.IsHighSurrogate(ch))
+            {
+                pendingGuiHighSurrogate = ch;
+                return;
+            }
+
+            if (char.IsLowSurrogate(ch))
+            {
+                if (pendingGuiHighSurrogate != '\0')
+                {
+                    queuedSupplementaryInput.Append(pendingGuiHighSurrogate);
+                    queuedSupplementaryInput.Append(ch);
+                    pendingGuiHighSurrogate = '\0';
+                }
+                return;
+            }
+
+            pendingGuiHighSurrogate = '\0';
+        }
+
+        private string CommittedInputWithSupplementaryFallback(string input)
+        {
+            if (queuedSupplementaryInput.Length == 0)
+            {
+                return input;
+            }
+
+            var supplemental = queuedSupplementaryInput.ToString();
+            queuedSupplementaryInput.Length = 0;
+
+            var filteredLegacyInput = RemoveSupplementaryPlaceholders(input);
+            return filteredLegacyInput.Length == 0 ? supplemental : filteredLegacyInput + supplemental;
+        }
+
+        private static string RemoveSupplementaryPlaceholders(string input)
+        {
+            if (string.IsNullOrEmpty(input))
+            {
+                return string.Empty;
+            }
+
+            var builder = new StringBuilder(input.Length);
+            var changed = false;
+            for (var i = 0; i < input.Length; ++i)
+            {
+                var ch = input[i];
+                if (char.IsSurrogate(ch) || ch == '\ufffd')
+                {
+                    changed = true;
+                    continue;
+                }
+
+                builder.Append(ch);
+            }
+
+            return changed ? builder.ToString() : input;
+        }
+
+        private void ResetSurrogateInputState()
+        {
+            pendingHighSurrogate = '\0';
+            pendingGuiHighSurrogate = '\0';
+            queuedSupplementaryInput.Length = 0;
+        }
+
         private string FilterCommittedInput(string input)
         {
             if (string.IsNullOrEmpty(input))
@@ -562,7 +654,7 @@ namespace Milestro.Components
                     i = SkipEscapeSequence(input, i) - 1;
                     continue;
                 }
-                if (IsCommittedTextControl(ch))
+                if (IsCommittedTextControl(ch) || ch == '\ufffd')
                 {
                     pendingHighSurrogate = '\0';
                     continue;
