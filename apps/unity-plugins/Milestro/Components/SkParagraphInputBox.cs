@@ -19,6 +19,8 @@ namespace Milestro.Components
     {
         private const float KeyRepeatInitialDelay = 0.42f;
         private const float KeyRepeatInterval = 0.045f;
+        private const float SurrogatePairTimeout = 2.5f;
+        private const char ReplacementCharacter = '\ufffd';
 
         [TextArea(1, 1)]
         [SerializeField]
@@ -70,8 +72,10 @@ namespace Milestro.Components
         [NonSerialized] private bool compositionActive;
         [NonSerialized] private string lastCompositionText = "";
         [NonSerialized] private char pendingHighSurrogate;
+        [NonSerialized] private float pendingHighSurrogateTime;
         [NonSerialized] private char pendingGuiHighSurrogate;
-        [NonSerialized] private readonly StringBuilder queuedSupplementaryInput = new StringBuilder();
+        [NonSerialized] private float pendingGuiHighSurrogateTime;
+        [NonSerialized] private readonly StringBuilder queuedGuiCommittedInput = new StringBuilder();
         [NonSerialized] private float nextLeftRepeatTime;
         [NonSerialized] private float nextRightRepeatTime;
         [NonSerialized] private float nextBackspaceRepeatTime;
@@ -326,7 +330,7 @@ namespace Milestro.Components
         private void ReadKeyboardInput()
         {
             var changed = false;
-            var committedText = FilterCommittedInput(CommittedInputWithSupplementaryFallback(Input.inputString));
+            var committedText = ReadCommittedText();
             if (committedText.Length > 0 && inputBox != null)
             {
                 if (compositionActive)
@@ -449,6 +453,7 @@ namespace Milestro.Components
             var rawCompositionText = Input.compositionString ?? "";
             if (rawCompositionText.Length > 0)
             {
+                ResetSurrogateInputState();
                 compositionActive = true;
                 var compositionText = RemoveUnpairedSurrogates(rawCompositionText);
                 if (compositionText.Length == 0)
@@ -477,6 +482,7 @@ namespace Milestro.Components
 
             compositionActive = false;
             lastCompositionText = "";
+            ResetSurrogateInputState();
             return inputBox.ClearComposition();
         }
 
@@ -567,6 +573,8 @@ namespace Milestro.Components
 
         private void QueueSupplementaryGuiCharacter(char ch)
         {
+            ExpirePendingGuiHighSurrogateToQueue();
+
             if (ch == '\0')
             {
                 return;
@@ -574,7 +582,7 @@ namespace Milestro.Components
 
             if (char.IsHighSurrogate(ch))
             {
-                pendingGuiHighSurrogate = ch;
+                SetPendingGuiHighSurrogate(ch);
                 return;
             }
 
@@ -582,28 +590,51 @@ namespace Milestro.Components
             {
                 if (pendingGuiHighSurrogate != '\0')
                 {
-                    queuedSupplementaryInput.Append(pendingGuiHighSurrogate);
-                    queuedSupplementaryInput.Append(ch);
-                    pendingGuiHighSurrogate = '\0';
+                    queuedGuiCommittedInput.Append(pendingGuiHighSurrogate);
+                    queuedGuiCommittedInput.Append(ch);
+                    ClearPendingGuiHighSurrogate();
                 }
                 return;
             }
 
-            pendingGuiHighSurrogate = '\0';
+            ClearPendingGuiHighSurrogate();
         }
 
-        private string CommittedInputWithSupplementaryFallback(string input)
+        private string ReadCommittedText()
         {
-            if (queuedSupplementaryInput.Length == 0)
+            var queuedGuiInput = TakeQueuedGuiCommittedInput();
+            var legacyInput = queuedGuiInput.Length == 0 ? Input.inputString : RemoveSupplementaryPlaceholders(Input.inputString);
+            var filteredLegacyInput = FilterCommittedInput(legacyInput);
+            if (queuedGuiInput.Length == 0)
             {
-                return input;
+                return filteredLegacyInput;
             }
 
-            var supplemental = queuedSupplementaryInput.ToString();
-            queuedSupplementaryInput.Length = 0;
+            return filteredLegacyInput.Length == 0 ? queuedGuiInput : filteredLegacyInput + queuedGuiInput;
+        }
 
-            var filteredLegacyInput = RemoveSupplementaryPlaceholders(input);
-            return filteredLegacyInput.Length == 0 ? supplemental : filteredLegacyInput + supplemental;
+        private string TakeQueuedGuiCommittedInput()
+        {
+            ExpirePendingGuiHighSurrogateToQueue();
+            if (queuedGuiCommittedInput.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            var queuedInput = queuedGuiCommittedInput.ToString();
+            queuedGuiCommittedInput.Length = 0;
+            return queuedInput;
+        }
+
+        private void ExpirePendingGuiHighSurrogateToQueue()
+        {
+            if (!IsPendingSurrogateExpired(pendingGuiHighSurrogate, pendingGuiHighSurrogateTime))
+            {
+                return;
+            }
+
+            queuedGuiCommittedInput.Append(ReplacementCharacter);
+            ClearPendingGuiHighSurrogate();
         }
 
         private static string RemoveSupplementaryPlaceholders(string input)
@@ -633,43 +664,62 @@ namespace Milestro.Components
         private void ResetSurrogateInputState()
         {
             pendingHighSurrogate = '\0';
+            pendingHighSurrogateTime = 0;
             pendingGuiHighSurrogate = '\0';
-            queuedSupplementaryInput.Length = 0;
+            pendingGuiHighSurrogateTime = 0;
+            queuedGuiCommittedInput.Length = 0;
         }
 
         private string FilterCommittedInput(string input)
         {
-            if (string.IsNullOrEmpty(input))
+            var hasInput = !string.IsNullOrEmpty(input);
+            var hasExpiredPendingHigh = IsPendingSurrogateExpired(pendingHighSurrogate, pendingHighSurrogateTime);
+            if (!hasInput && !hasExpiredPendingHigh)
             {
                 return string.Empty;
             }
 
-            var builder = new StringBuilder(input.Length + (pendingHighSurrogate == '\0' ? 0 : 1));
+            var builder = new StringBuilder((input?.Length ?? 0) + (hasExpiredPendingHigh ? 1 : 0));
+            if (hasExpiredPendingHigh)
+            {
+                builder.Append(ReplacementCharacter);
+                ClearPendingHighSurrogate();
+            }
+
+            if (!hasInput)
+            {
+                return builder.ToString();
+            }
+
             for (var i = 0; i < input.Length; ++i)
             {
                 var ch = input[i];
                 if (ch == '\u001b')
                 {
-                    pendingHighSurrogate = '\0';
+                    ClearPendingHighSurrogate();
                     i = SkipEscapeSequence(input, i) - 1;
                     continue;
                 }
-                if (IsCommittedTextControl(ch) || ch == '\ufffd')
+                if (IsCommittedTextControl(ch))
                 {
-                    pendingHighSurrogate = '\0';
+                    ClearPendingHighSurrogate();
+                    continue;
+                }
+                if (ch == ReplacementCharacter)
+                {
                     continue;
                 }
                 if (char.IsHighSurrogate(ch))
                 {
                     if (pendingHighSurrogate != '\0')
                     {
-                        pendingHighSurrogate = ch;
+                        SetPendingHighSurrogate(ch);
                         continue;
                     }
 
                     if (i + 1 >= input.Length)
                     {
-                        pendingHighSurrogate = ch;
+                        SetPendingHighSurrogate(ch);
                         continue;
                     }
 
@@ -682,7 +732,7 @@ namespace Milestro.Components
                     }
                     else
                     {
-                        pendingHighSurrogate = ch;
+                        SetPendingHighSurrogate(ch);
                     }
                     continue;
                 }
@@ -692,14 +742,43 @@ namespace Milestro.Components
                     {
                         builder.Append(pendingHighSurrogate);
                         builder.Append(ch);
-                        pendingHighSurrogate = '\0';
+                        ClearPendingHighSurrogate();
                     }
                     continue;
                 }
-                pendingHighSurrogate = '\0';
+                ClearPendingHighSurrogate();
                 builder.Append(ch);
             }
             return builder.ToString();
+        }
+
+        private static bool IsPendingSurrogateExpired(char pending, float pendingTime)
+        {
+            return pending != '\0' && Time.unscaledTime - pendingTime >= SurrogatePairTimeout;
+        }
+
+        private void SetPendingHighSurrogate(char ch)
+        {
+            pendingHighSurrogate = ch;
+            pendingHighSurrogateTime = Time.unscaledTime;
+        }
+
+        private void ClearPendingHighSurrogate()
+        {
+            pendingHighSurrogate = '\0';
+            pendingHighSurrogateTime = 0;
+        }
+
+        private void SetPendingGuiHighSurrogate(char ch)
+        {
+            pendingGuiHighSurrogate = ch;
+            pendingGuiHighSurrogateTime = Time.unscaledTime;
+        }
+
+        private void ClearPendingGuiHighSurrogate()
+        {
+            pendingGuiHighSurrogate = '\0';
+            pendingGuiHighSurrogateTime = 0;
         }
 
         private void RebuildResources()
