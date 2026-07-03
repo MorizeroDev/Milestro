@@ -150,6 +150,7 @@ public:
     void breakUndoGroup();
 
     void ensureCaretVisible();
+    bool scrollByX(SkScalar delta);
     InputBoxCaretRect getCaretRect();
     InputBoxCaretRect getCompositionRect();
     std::vector<InputBoxCaretRect> getSelectionRects();
@@ -229,6 +230,8 @@ private:
     size_t selectionStartUtf8() const;
     size_t selectionEndUtf8() const;
     SkScalar visualOffsetY();
+    InputBoxCaretRect activeEnsureVisibleRect();
+    void ensureRectVisible(const InputBoxCaretRect& rect);
     void resetSelectionToCursor();
     bool replaceSelectionWith(std::string replacement);
     bool deleteSelection();

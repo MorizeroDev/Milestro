@@ -214,6 +214,13 @@ namespace Milestro.Skia.TextLayout
             ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxEnsureCaretVisible(NativePtr));
         }
 
+        public bool ScrollByX(float delta)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxScrollByX(NativePtr, delta, out var changed));
+            return changed != 0;
+        }
+
         public void SetCursorUtf8(ulong utf8Offset, int affinity = 1)
         {
             ThrowIfDisposed();

@@ -24,12 +24,14 @@ namespace Milestro.Components
         IBeginDragHandler,
         IDragHandler,
         IEndDragHandler,
+        IScrollHandler,
         ISelectHandler,
         IDeselectHandler
     {
         private const float KeyRepeatInitialDelay = 0.42f;
         private const float KeyRepeatInterval = 0.045f;
         private const float SurrogatePairTimeout = 2.5f;
+        private const float ScrollWheelStepPixels = 48f;
         private const char ReplacementCharacter = '\ufffd';
 
         [TextArea(1, 1)]
@@ -121,7 +123,6 @@ namespace Milestro.Components
                 lastCompositionText = "";
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
-                layoutDirty = true;
                 paintDirty = true;
             }
         }
@@ -244,6 +245,75 @@ namespace Milestro.Components
             pointerSelecting = false;
         }
 
+        public void OnScroll(PointerEventData eventData)
+        {
+            if (eventData == null)
+            {
+                return;
+            }
+
+            var horizontalDelta = ResolveHorizontalScrollDelta(eventData.scrollDelta);
+            if (Mathf.Approximately(horizontalDelta, 0f))
+            {
+                PassScrollToParent(eventData);
+                return;
+            }
+
+            RebuildResources();
+            if (inputBox == null)
+            {
+                PassScrollToParent(eventData);
+                return;
+            }
+
+            if (!inputBox.ScrollByX(horizontalDelta * ScrollWheelStepPixels))
+            {
+                PassScrollToParent(eventData);
+                return;
+            }
+
+            paintDirty = true;
+            RebuildResources();
+            eventData.Use();
+        }
+
+        private static float ResolveHorizontalScrollDelta(Vector2 scrollDelta)
+        {
+            // Unity scrollDelta is input-device movement. InputBox scrollX is a content-space
+            // viewport offset, so positive scrollX reveals content to the right and moves text
+            // left visually. Invert device deltas before applying them to scrollX.
+            if (IsFinite(scrollDelta.x) && !Mathf.Approximately(scrollDelta.x, 0f))
+            {
+                return -scrollDelta.x;
+            }
+
+            if (!IsHorizontalScrollModifierDown() ||
+                !IsFinite(scrollDelta.y) ||
+                Mathf.Approximately(scrollDelta.y, 0f))
+            {
+                return 0f;
+            }
+
+            // Shift+wheel maps vertical wheel movement onto the same horizontal content offset:
+            // wheel down (negative Y) increases scrollX and reveals content to the right.
+            return -scrollDelta.y;
+        }
+
+        private static bool IsHorizontalScrollModifierDown()
+        {
+            return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+        }
+
+        private void PassScrollToParent(PointerEventData eventData)
+        {
+            if (eventData.used || transform.parent == null)
+            {
+                return;
+            }
+
+            ExecuteEvents.ExecuteHierarchy(transform.parent.gameObject, eventData, ExecuteEvents.scrollHandler);
+        }
+
         private void HitTestPointer(PointerEventData eventData, bool extendSelection)
         {
             EventSystem.current?.SetSelectedGameObject(gameObject, eventData);
@@ -265,10 +335,6 @@ namespace Milestro.Components
             ResetKeyRepeatState();
             m_text = inputBox.Text;
             ResetBlink();
-            if (changed)
-            {
-                layoutDirty = true;
-            }
             paintDirty = true;
         }
 
@@ -627,7 +693,6 @@ namespace Milestro.Components
                 m_text = inputBox.Text;
                 inputBox.EnsureCaretVisible();
                 ResetBlink();
-                layoutDirty = true;
                 paintDirty = true;
             }
         }
@@ -1101,6 +1166,11 @@ namespace Milestro.Components
             inputBox.SetSelectionColor(m_selectionColor);
             inputBox.SetCaretWidth(m_caretWidth);
             inputBox.SetViewport(ContentSize());
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
         private static TextAlign ToParagraphTextAlign(TextInputAlignment alignment)

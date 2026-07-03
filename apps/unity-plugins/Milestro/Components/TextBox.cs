@@ -1,5 +1,6 @@
 using System;
 using Milestro.Components.Internal;
+using Milestro.Util;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -12,10 +13,14 @@ namespace Milestro.Components
     public class TextBox : RenderTextureGraphic, IScrollHandler
     {
         private const float DefaultScrollWheelStepPixels = 48f;
+        private const float DefaultScrollTweenDurationSeconds = 0.14f;
 
         [SerializeField] private float m_scrollWheelStepPixels = DefaultScrollWheelStepPixels;
+        [SerializeField] private bool m_smoothScroll = true;
+        [SerializeField][Min(0f)] private float m_scrollTweenDurationSeconds = DefaultScrollTweenDurationSeconds;
 
         [NonSerialized] private TextBoxRenderTextureProducer? producerCache;
+        [NonSerialized] private readonly ScrollTween scrollTween = new ScrollTween();
         [NonSerialized] private long observedOutputVersion = long.MinValue;
 #if UNITY_EDITOR
         [NonSerialized] private bool m_editorApplyQueued;
@@ -30,13 +35,17 @@ namespace Milestro.Components
         protected override void OnDisable()
         {
             base.OnDisable();
+            scrollTween.Cancel();
             Texture = null;
             observedOutputVersion = long.MinValue;
         }
 
         private void Update()
         {
-            EnsureConfigured(forceText: false, forceApply: false);
+            var producer = ProducerComponent();
+            producer.RebuildOutput(forceText: false);
+            TickScrollTween(producer);
+            ApplyProducerOutput(producer, force: false);
         }
 
         protected override void Reset()
@@ -52,6 +61,9 @@ namespace Milestro.Components
             m_scrollWheelStepPixels = IsFinite(m_scrollWheelStepPixels)
                 ? Mathf.Max(1f, m_scrollWheelStepPixels)
                 : DefaultScrollWheelStepPixels;
+            m_scrollTweenDurationSeconds = IsFinite(m_scrollTweenDurationSeconds)
+                ? Mathf.Max(0f, m_scrollTweenDurationSeconds)
+                : DefaultScrollTweenDurationSeconds;
             if (this && gameObject != null)
             {
                 EnsureConfigured(forceText: true, forceApply: true);
@@ -68,6 +80,7 @@ namespace Milestro.Components
             }
 
             EnsureConfigured(forceText: false, forceApply: true);
+            scrollTween.Cancel();
             SetVerticesDirty();
 #if UNITY_EDITOR
             QueueEditorApply();
@@ -115,7 +128,8 @@ namespace Milestro.Components
             var producer = ProducerComponent();
             producer.RebuildOutput(forceText: false);
             ApplyProducerOutput(producer, force: false);
-            var previousScrollY = producer.scrollY;
+            scrollTween.CancelIfExternallyMoved(producer.scrollY);
+            var previousScrollY = scrollTween.IsActive ? scrollTween.Target : producer.scrollY;
             var stepPixels = IsFinite(m_scrollWheelStepPixels)
                 ? Mathf.Max(1f, m_scrollWheelStepPixels)
                 : DefaultScrollWheelStepPixels;
@@ -124,13 +138,50 @@ namespace Milestro.Components
                 producer.maxScrollY);
             if (Mathf.Approximately(previousScrollY, nextScrollY))
             {
+                if (scrollTween.IsActive)
+                {
+                    eventData.Use();
+                }
+
+                return;
+            }
+
+            ScrollToY(producer, nextScrollY);
+            eventData.Use();
+        }
+
+        private void ScrollToY(TextBoxRenderTextureProducer producer, float nextScrollY)
+        {
+            if (!Application.isPlaying || !m_smoothScroll || ScrollTweenDurationSeconds() <= 0f)
+            {
+                scrollTween.Cancel();
+                producer.scrollY = nextScrollY;
+                producer.RebuildOutput(forceText: false);
+                ApplyProducerOutput(producer, force: true);
+                return;
+            }
+
+            scrollTween.Start(producer.scrollY, nextScrollY);
+        }
+
+        private void TickScrollTween(TextBoxRenderTextureProducer producer)
+        {
+            if (!scrollTween.IsActive)
+            {
+                return;
+            }
+
+            if (!scrollTween.Tick(producer.scrollY,
+                    producer.maxScrollY,
+                    Time.deltaTime,
+                    ScrollTweenDurationSeconds(),
+                    out var nextScrollY))
+            {
                 return;
             }
 
             producer.scrollY = nextScrollY;
             producer.RebuildOutput(forceText: false);
-            ApplyProducerOutput(producer, force: true);
-            eventData.Use();
         }
 
         private TextBoxRenderTextureProducer ProducerComponent()
@@ -211,6 +262,13 @@ namespace Milestro.Components
         private static bool IsFinite(float value)
         {
             return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+
+        private float ScrollTweenDurationSeconds()
+        {
+            return IsFinite(m_scrollTweenDurationSeconds)
+                ? Mathf.Max(0f, m_scrollTweenDurationSeconds)
+                : DefaultScrollTweenDurationSeconds;
         }
     }
 }

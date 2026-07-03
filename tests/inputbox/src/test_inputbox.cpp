@@ -65,6 +65,24 @@ std::u16string ToUtf16(const std::string& text) {
     return SkUnicode::convertUtf8ToUtf16(text.c_str(), static_cast<int>(text.size()));
 }
 
+void ExpectSingleLineHorizontalOverflow(const std::string& text) {
+    auto inputBox = MakeInputBox();
+    inputBox->setViewport(180, 64);
+    inputBox->setText(text.c_str(), text.size());
+    inputBox->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
+
+    const auto metrics = inputBox->getMetrics();
+    const auto caret = inputBox->getCaretRect();
+    EXPECT_EQ(inputBox->getLineCount(), 1U);
+    EXPECT_GT(metrics.contentWidth, metrics.viewportWidth);
+    EXPECT_GT(metrics.scrollX, 0.0f);
+    EXPECT_GE(caret.left - metrics.scrollX, -0.001f);
+    EXPECT_LE(caret.right - metrics.scrollX, metrics.viewportWidth + 0.001f);
+
+    milestro_text::InputBoxLineMetrics secondLineMetrics;
+    EXPECT_FALSE(inputBox->getLineMetrics(1, secondLineMetrics));
+}
+
 } // namespace
 
 class InputBoxTest : public ::testing::Test {
@@ -175,6 +193,77 @@ TEST_F(InputBoxTest, CaretMetricsHitTestAndHorizontalScrollAreNative) {
     EXPECT_LT(inputBox->getCursorUtf8(), text.size());
     EXPECT_EQ(inputBox->getCursorUtf8(),
               inputBox->snapUtf8(inputBox->getCursorUtf8(), milestro_text::TextBoundarySnapMode::Nearest));
+}
+
+TEST_F(InputBoxTest, CompositionEnsureVisibleUsesScrolledContentViewport) {
+    const std::string text = "ASCII long horizontal input 1234567890";
+    const std::string composition = "\xE6\x97\xA5\xE6\x9C\xAC";
+    auto inputBox = MakeInputBox();
+    inputBox->setViewport(160, 64);
+    inputBox->setText(text.c_str(), text.size());
+    inputBox->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
+
+    ASSERT_TRUE(inputBox->setComposition(composition.c_str(), composition.size()));
+    const auto metrics = inputBox->getMetrics();
+    const auto compositionRect = inputBox->getCompositionRect();
+    EXPECT_GT(metrics.scrollX, 0.0f);
+    EXPECT_GE(compositionRect.left - metrics.scrollX, -0.001f);
+    EXPECT_LE(compositionRect.right - metrics.scrollX, metrics.viewportWidth + 0.001f);
+}
+
+TEST_F(InputBoxTest, ManualHorizontalScrollClampsAndLeavesEnsureVisibleIntact) {
+    const std::string text = "ASCII long horizontal input 1234567890";
+    auto inputBox = MakeInputBox();
+    inputBox->setViewport(120, 64);
+    inputBox->setText(text.c_str(), text.size());
+    inputBox->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
+
+    const auto initialMetrics = inputBox->getMetrics();
+    ASSERT_GT(initialMetrics.contentWidth, initialMetrics.viewportWidth);
+    ASSERT_GT(initialMetrics.scrollX, 0.0f);
+    const auto maxScrollX = initialMetrics.contentWidth - initialMetrics.viewportWidth;
+
+    EXPECT_TRUE(inputBox->scrollByX(-100000.0f));
+    EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollX, 0.0f);
+    EXPECT_FALSE(inputBox->scrollByX(-1.0f));
+
+    EXPECT_TRUE(inputBox->scrollByX(maxScrollX * 2.0f));
+    EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollX, maxScrollX);
+    EXPECT_FALSE(inputBox->scrollByX(1.0f));
+
+    EXPECT_TRUE(inputBox->scrollByX(-100000.0f));
+    EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollX, 0.0f);
+    inputBox->ensureCaretVisible();
+    EXPECT_GT(inputBox->getMetrics().scrollX, 0.0f);
+}
+
+TEST_F(InputBoxTest, ManualHorizontalScrollDoesNotConsumeWhenContentFits) {
+    auto inputBox = MakeInputBox();
+    inputBox->setViewport(320, 64);
+    inputBox->setText("short", 5);
+
+    const auto metrics = inputBox->getMetrics();
+    ASSERT_FLOAT_EQ(metrics.scrollX, 0.0f);
+    ASSERT_FLOAT_EQ(metrics.contentWidth, metrics.viewportWidth);
+    EXPECT_FALSE(inputBox->scrollByX(48.0f));
+    EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollX, 0.0f);
+}
+
+TEST_F(InputBoxTest, MixedEmojiCjkAndLongNumberStaySingleLineWithHorizontalScroll) {
+    const std::string firstRuntimeCase =
+            "\xF0\x9F\xA4\x94 \xF0\xB0\xBB\x9D \xF0\x9F\xAB\x84 \xF0\x9F\xA4\xB0 "
+            "\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x92 "
+            "\xE6\xB5\x8B\xE8\xAF\x95 123 "
+            "3.14159265358979323846264338327950288419716939937510";
+    const std::string secondRuntimeCase =
+            "\xF0\x9F\xA4\x94 \xF0\xB0\xBB\x9D \xF0\x9F\xAB\x84 \xF0\x9F\xA4\xB0 "
+            "\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x92 "
+            "\xE6\xB5\x8B\xE8\xAF\x95 123 "
+            "\xE5\x95\x8A\xE5\x90\xA7\xE6\xAC\xA1\xE7\x9A\x84\xE9\xA2\x9D\xE4\xBD\x9B\xE6\xAD\x8C "
+            "3.14159265358979323846264338327950288";
+
+    ExpectSingleLineHorizontalOverflow(firstRuntimeCase);
+    ExpectSingleLineHorizontalOverflow(secondRuntimeCase);
 }
 
 TEST_F(InputBoxTest, EmptyTextCaretUsesTextMetricsInsteadOfViewportHeight) {

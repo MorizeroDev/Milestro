@@ -2,6 +2,7 @@
     "name": "Milestro",
     "rootNamespace": "",
     "references": [
+        "com.morizero.milease",
         "party.para.util.colors",
         "party.para.util.unitynative"
     ],

@@ -17,6 +17,7 @@ namespace milestro::skia::textlayout {
 namespace {
 
 constexpr SkScalar kSingleLineLayoutWidth = 1048576.0f;
+constexpr SkScalar kSingleLineLayoutPadding = 64.0f;
 constexpr SkScalar kCaretScrollPadding = 2.0f;
 constexpr SkScalar kCompositionUnderlineHeight = 1.5f;
 constexpr SkScalar kFallbackAscentRatio = 0.8f;
@@ -64,6 +65,38 @@ SkScalar BaselineOffsetY(SkScalar viewportHeight, SkScalar lineBaseline, const V
         return 0.0f;
     }
     return DefaultBaselineY(viewportHeight, metrics) - lineBaseline;
+}
+
+SkScalar ResolveSingleLineContentWidth(::skia::textlayout::Paragraph* paragraph, const std::string& text) {
+    if (paragraph == nullptr) {
+        return 0.0f;
+    }
+
+    auto width = static_cast<double>(std::max<SkScalar>(paragraph->getLongestLine(), paragraph->getMaxIntrinsicWidth()));
+
+    ::skia::textlayout::LineMetrics lineMetrics;
+    if (paragraph->getLineMetricsAt(0, &lineMetrics)) {
+        width = std::max(width, static_cast<double>(lineMetrics.fWidth));
+    }
+
+    const auto displayMap = TextBoundaryMap(text);
+    const auto utf16Length = displayMap.utf16Length();
+    if (utf16Length > 0) {
+        auto boxes = paragraph->getRectsForRange(0,
+                                                  static_cast<unsigned>(utf16Length),
+                                                  ::skia::textlayout::RectHeightStyle::kTight,
+                                                  ::skia::textlayout::RectWidthStyle::kTight);
+        for (const auto& box: boxes) {
+            width = std::max(width, static_cast<double>(box.rect.right()));
+        }
+
+        ::skia::textlayout::Paragraph::GlyphInfo glyphInfo;
+        if (paragraph->getGlyphInfoAtUTF16Offset(utf16Length - 1, &glyphInfo)) {
+            width = std::max(width, static_cast<double>(glyphInfo.fGraphemeLayoutBounds.right()));
+        }
+    }
+
+    return std::isfinite(width) && width > 0.0f ? static_cast<float>(width) : 0.0f;
 }
 
 SkScalar EmptyCaretX(::skia::textlayout::TextAlign align, SkScalar viewportWidth, SkScalar caretWidth) {
@@ -674,17 +707,21 @@ void InputBox::breakUndoGroup() {
 
 void InputBox::ensureCaretVisible() {
     rebuildParagraphIfNeeded();
-    const auto width = contentWidth();
-    const auto maxScroll = std::max<SkScalar>(0.0f, width - viewportWidth_);
-    auto caret = getCaretRect();
+    ensureRectVisible(activeEnsureVisibleRect());
+}
 
-    if (caret.left - scrollX_ < kCaretScrollPadding) {
-        scrollX_ = caret.left - kCaretScrollPadding;
-    } else if (caret.right - scrollX_ > viewportWidth_ - kCaretScrollPadding) {
-        scrollX_ = caret.right - viewportWidth_ + kCaretScrollPadding;
+bool InputBox::scrollByX(SkScalar delta) {
+    if (!std::isfinite(delta)) {
+        return false;
     }
 
-    scrollX_ = ClampScalar(scrollX_, 0.0f, maxScroll);
+    // scrollX is a content-space viewport offset: positive scrollX moves the viewport right,
+    // which makes text paint farther left inside the clipped InputBox.
+    rebuildParagraphIfNeeded();
+    const auto previous = scrollX_;
+    const auto maxScroll = std::max<SkScalar>(0.0f, contentWidth() - viewportWidth_);
+    scrollX_ = ClampScalar(scrollX_ + delta, 0.0f, maxScroll);
+    return scrollX_ != previous;
 }
 
 InputBoxCaretRect InputBox::getCaretRect() {
@@ -984,9 +1021,8 @@ std::unique_ptr<::skia::textlayout::Paragraph> InputBox::buildParagraphForText(c
     builder->addText(text.c_str(), text.size());
     auto paragraph = builder->Build();
     paragraph->layout(kSingleLineLayoutWidth);
-    const auto measuredWidth =
-            std::max<SkScalar>(paragraph->getLongestLine(), paragraph->getMaxIntrinsicWidth());
-    paragraph->layout(std::max(viewportWidth_, measuredWidth));
+    const auto measuredWidth = ResolveSingleLineContentWidth(paragraph.get(), text);
+    paragraph->layout(std::max(viewportWidth_, std::ceil(measuredWidth + kSingleLineLayoutPadding)));
     return paragraph;
 }
 
@@ -1137,6 +1173,44 @@ SkScalar InputBox::visualOffsetY() {
     return BaselineOffsetY(viewportHeight_, lineMetrics.fBaseline, verticalMetrics);
 }
 
+InputBoxCaretRect InputBox::activeEnsureVisibleRect() {
+    if (!compositionText_.empty()) {
+        return getCompositionRect();
+    }
+
+    return getCaretRect();
+}
+
+void InputBox::ensureRectVisible(const InputBoxCaretRect& rect) {
+    const auto width = contentWidth();
+    const auto maxScroll = std::max<SkScalar>(0.0f, width - viewportWidth_);
+    const auto left = static_cast<SkScalar>(std::min(rect.left, rect.right));
+    const auto right = static_cast<SkScalar>(std::max(rect.left, rect.right));
+    if (!std::isfinite(left) || !std::isfinite(right)) {
+        scrollX_ = ClampScalar(scrollX_, 0.0f, maxScroll);
+        return;
+    }
+
+    const auto visibleLeft = kCaretScrollPadding;
+    const auto visibleRight = std::max<SkScalar>(visibleLeft, viewportWidth_ - kCaretScrollPadding);
+    const auto visibleWidth = std::max<SkScalar>(0.0f, visibleRight - visibleLeft);
+    const auto rectWidth = std::max<SkScalar>(0.0f, right - left);
+
+    if (rectWidth <= visibleWidth) {
+        if (left - scrollX_ < visibleLeft) {
+            scrollX_ = left - visibleLeft;
+        } else if (right - scrollX_ > visibleRight) {
+            scrollX_ = right - visibleRight;
+        }
+    } else if (right - scrollX_ > visibleRight) {
+        scrollX_ = right - visibleRight;
+    } else if (left - scrollX_ < visibleLeft) {
+        scrollX_ = left - visibleLeft;
+    }
+
+    scrollX_ = ClampScalar(scrollX_, 0.0f, maxScroll);
+}
+
 void InputBox::resetSelectionToCursor() {
     selectionAnchorUtf8_ = boundaryMap_.snapUtf8(cursorUtf8_, TextBoundarySnapMode::Nearest);
     selectionFocusUtf8_ = selectionAnchorUtf8_;
@@ -1172,7 +1246,8 @@ SkScalar InputBox::contentWidth() {
         return viewportWidth_;
     }
 
-    return std::max(viewportWidth_, std::max(paragraph_->getLongestLine(), paragraph_->getMaxIntrinsicWidth()));
+    return std::max(viewportWidth_, std::ceil(ResolveSingleLineContentWidth(paragraph_.get(), displayText()) +
+                                              kSingleLineLayoutPadding));
 }
 
 void InputBox::replaceText(std::string text, size_t requestedCursor) {

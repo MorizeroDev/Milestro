@@ -266,6 +266,10 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxHitTestExtendingSelection(
         int32_t &changed);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxEnsureCaretVisible(
         milestro::skia::textlayout::InputBox *inputBox);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxScrollByX(
+        milestro::skia::textlayout::InputBox *inputBox,
+        float delta,
+        int32_t &changed);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetCursor(milestro::skia::textlayout::InputBox *inputBox,
                                                              uint64_t &utf8Offset,
                                                              uint64_t &utf16Offset,

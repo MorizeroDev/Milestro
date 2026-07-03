@@ -431,6 +431,10 @@ namespace Milestro.Binding
         internal static extern unsafe long SkiaTextlayoutInputBoxEnsureCaretVisible(IntPtr inputBox);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxScrollByX")]
+        internal static extern unsafe long SkiaTextlayoutInputBoxScrollByX(IntPtr inputBox, float delta, out int changed);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxGetCursor")]
         internal static extern unsafe long
         SkiaTextlayoutInputBoxGetCursor(IntPtr inputBox, out ulong utf8Offset, out ulong utf16Offset, out int affinity);

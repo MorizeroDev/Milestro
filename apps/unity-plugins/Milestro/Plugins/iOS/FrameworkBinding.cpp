@@ -529,6 +529,12 @@ FrameworkBindingMilestroSkiaTextlayoutInputBoxEnsureCaretVisible(milestro::skia:
     return MilestroSkiaTextlayoutInputBoxEnsureCaretVisible(inputBox);
 }
 
+int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxScrollByX(milestro::skia::textlayout::InputBox* inputBox,
+                                                                float delta,
+                                                                int32_t& changed) {
+    return MilestroSkiaTextlayoutInputBoxScrollByX(inputBox, delta, changed);
+}
+
 int64_t FrameworkBindingMilestroSkiaTextlayoutInputBoxGetCursor(milestro::skia::textlayout::InputBox* inputBox,
                                                                 uint64_t& utf8Offset,
                                                                 uint64_t& utf16Offset,

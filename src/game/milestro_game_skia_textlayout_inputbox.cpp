@@ -288,6 +288,16 @@ int64_t MilestroSkiaTextlayoutInputBoxEnsureCaretVisible(
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutInputBoxScrollByX(
+        milestro::skia::textlayout::InputBox *inputBox,
+        float delta,
+        int32_t &changed) try {
+    changed = inputBox->scrollByX(delta) ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutInputBoxGetCursor(milestro::skia::textlayout::InputBox *inputBox,
                                                 uint64_t &utf8Offset,
                                                 uint64_t &utf16Offset,
