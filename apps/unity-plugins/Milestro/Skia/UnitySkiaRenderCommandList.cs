@@ -22,6 +22,10 @@ namespace Milestro.Skia
             public float Y;
             public float Width;
             public float Height;
+            public float ClipX;
+            public float ClipY;
+            public float ClipWidth;
+            public float ClipHeight;
             public object KeepAlive;
             public bool SnapshotInputBox;
         }
@@ -45,6 +49,27 @@ namespace Milestro.Skia
                 Resource = paragraph.NativePtr,
                 X = position.x,
                 Y = position.y,
+                KeepAlive = paragraph
+            });
+        }
+
+        public void DrawParagraph(Paragraph paragraph, Vector2 position, Rect clipRect)
+        {
+            if (paragraph == null)
+            {
+                return;
+            }
+
+            commands.Add(new Command
+            {
+                Kind = CommandKind.Paragraph,
+                Resource = paragraph.NativePtr,
+                X = position.x,
+                Y = position.y,
+                ClipX = clipRect.x,
+                ClipY = clipRect.y,
+                ClipWidth = clipRect.width,
+                ClipHeight = clipRect.height,
                 KeepAlive = paragraph
             });
         }

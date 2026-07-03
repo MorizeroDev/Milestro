@@ -41,6 +41,10 @@ namespace Milestro.Skia
             public float Y;
             public float Width;
             public float Height;
+            public float ClipX;
+            public float ClipY;
+            public float ClipWidth;
+            public float ClipHeight;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -382,7 +386,11 @@ namespace Milestro.Skia
                         X = command.X,
                         Y = command.Y,
                         Width = command.Width,
-                        Height = command.Height
+                        Height = command.Height,
+                        ClipX = command.ClipX,
+                        ClipY = command.ClipY,
+                        ClipWidth = command.ClipWidth,
+                        ClipHeight = command.ClipHeight
                     };
                     Marshal.StructureToPtr(payload, IntPtr.Add(commandsPtr, i * commandSize), false);
                     keepAliveList.Add(keepAlive);

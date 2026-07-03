@@ -4,12 +4,17 @@ using Milestro.Components.Internal;
 using UnityEditor;
 #endif
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace Milestro.Components
 {
     [AddComponentMenu("Milestro/Text Box")]
-    public class TextBox : RenderTextureGraphic
+    public class TextBox : RenderTextureGraphic, IScrollHandler
     {
+        private const float DefaultScrollWheelStepPixels = 48f;
+
+        [SerializeField] private float m_scrollWheelStepPixels = DefaultScrollWheelStepPixels;
+
         [NonSerialized] private TextBoxRenderTextureProducer? producerCache;
         [NonSerialized] private long observedOutputVersion = long.MinValue;
 #if UNITY_EDITOR
@@ -44,6 +49,9 @@ namespace Milestro.Components
         protected override void OnValidate()
         {
             base.OnValidate();
+            m_scrollWheelStepPixels = IsFinite(m_scrollWheelStepPixels)
+                ? Mathf.Max(1f, m_scrollWheelStepPixels)
+                : DefaultScrollWheelStepPixels;
             if (this && gameObject != null)
             {
                 EnsureConfigured(forceText: true, forceApply: true);
@@ -95,6 +103,34 @@ namespace Milestro.Components
             var producer = ProducerComponent();
             producer.RebuildOutput(forceText);
             ApplyProducerOutput(producer, forceApply);
+        }
+
+        public void OnScroll(PointerEventData eventData)
+        {
+            if (eventData == null || Mathf.Approximately(eventData.scrollDelta.y, 0f))
+            {
+                return;
+            }
+
+            var producer = ProducerComponent();
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: false);
+            var previousScrollY = producer.scrollY;
+            var stepPixels = IsFinite(m_scrollWheelStepPixels)
+                ? Mathf.Max(1f, m_scrollWheelStepPixels)
+                : DefaultScrollWheelStepPixels;
+            var nextScrollY = Mathf.Clamp(previousScrollY - eventData.scrollDelta.y * stepPixels,
+                0f,
+                producer.maxScrollY);
+            if (Mathf.Approximately(previousScrollY, nextScrollY))
+            {
+                return;
+            }
+
+            producer.scrollY = nextScrollY;
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: true);
+            eventData.Use();
         }
 
         private TextBoxRenderTextureProducer ProducerComponent()
@@ -170,6 +206,11 @@ namespace Milestro.Components
                 EditorUtility.SetDirty(target);
             }
 #endif
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
     }
 }

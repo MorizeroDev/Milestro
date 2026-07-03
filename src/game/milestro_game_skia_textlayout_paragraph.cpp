@@ -19,6 +19,13 @@ int64_t MilestroSkiaTextlayoutParagraphLayout(milestro::skia::textlayout::Paragr
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutParagraphGetHeight(milestro::skia::textlayout::Paragraph *p, float &height) try {
+    height = p->getHeight();
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutParagraphPaint(milestro::skia::textlayout::Paragraph *p,
                                              milestro::skia::Canvas *canvas,
                                              float x, float y) try {

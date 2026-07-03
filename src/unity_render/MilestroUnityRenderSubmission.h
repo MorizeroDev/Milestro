@@ -20,6 +20,10 @@ struct MilestroUnityDrawCommand {
     float y = 0.0f;
     float width = 0.0f;
     float height = 0.0f;
+    float clipX = 0.0f;
+    float clipY = 0.0f;
+    float clipWidth = 0.0f;
+    float clipHeight = 0.0f;
 };
 
 struct MilestroUnityRenderSubmission {

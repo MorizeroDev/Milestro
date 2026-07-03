@@ -168,6 +168,8 @@ MILESTRO_API int64_t MilestroSkiaImageDestroy(milestro::skia::Image *&ret);
 
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphDestroy(milestro::skia::textlayout::Paragraph *&ret);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphLayout(milestro::skia::textlayout::Paragraph *p, float width);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetHeight(milestro::skia::textlayout::Paragraph *p,
+                                                              float &height);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphPaint(milestro::skia::textlayout::Paragraph *p,
                                                           milestro::skia::Canvas *canvas,
                                                           float x, float y);

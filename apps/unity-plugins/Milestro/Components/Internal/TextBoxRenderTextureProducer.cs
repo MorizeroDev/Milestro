@@ -42,6 +42,10 @@ namespace Milestro.Components.Internal
         [SerializeField]
         private string m_locale = "zh-Hans";
 
+        [SerializeField]
+        [Min(0f)]
+        private float m_scrollY;
+
         [NonSerialized] private RectTransform? rectTransformCache;
         [NonSerialized] private TextBoxRenderTarget? renderTarget;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
@@ -55,6 +59,9 @@ namespace Milestro.Components.Internal
         public override int OutputHeight => renderTarget?.OutputHeight ?? 0;
         public override bool HasOutput => renderTarget?.HasOutput ?? false;
         public override long OutputVersion => renderTarget?.OutputVersion ?? 0;
+        public float contentHeight => renderTarget?.ContentSize.y ?? 0f;
+        public float viewportHeight => renderTarget?.ViewportSize.y ?? 0f;
+        public float maxScrollY => renderTarget?.MaxScrollOffset.y ?? 0f;
 
         public string content
         {
@@ -156,6 +163,22 @@ namespace Milestro.Components.Internal
             }
         }
 
+        public float scrollY
+        {
+            get => m_scrollY;
+            set => SetScrollY(value);
+        }
+
+        public void ScrollByY(float delta)
+        {
+            if (Mathf.Approximately(delta, 0f))
+            {
+                return;
+            }
+
+            SetScrollY(m_scrollY + delta);
+        }
+
         protected virtual void OnEnable()
         {
             rectTransformCache = GetComponent<RectTransform>();
@@ -176,6 +199,7 @@ namespace Milestro.Components.Internal
 #if UNITY_EDITOR
         private void OnValidate()
         {
+            m_scrollY = IsFinite(m_scrollY) ? Mathf.Max(0f, m_scrollY) : 0f;
             MarkPropertiesChanged();
             if (isActiveAndEnabled)
             {
@@ -223,7 +247,17 @@ namespace Milestro.Components.Internal
 
         private void RebuildResources(bool forceText)
         {
-            RenderTarget.Rebuild(CurrentSize(), SurfaceColorSpace(), CurrentSettings(), forceText, this);
+            RenderTarget.Rebuild(CurrentSize(),
+                SurfaceColorSpace(),
+                CurrentSettings(),
+                new Vector2(0f, m_scrollY),
+                forceText,
+                this);
+            var nextScrollY = RenderTarget.ScrollOffset.y;
+            if (!Mathf.Approximately(m_scrollY, nextScrollY))
+            {
+                m_scrollY = nextScrollY;
+            }
         }
 
         public void RebuildOutput(bool forceText)
@@ -288,6 +322,23 @@ namespace Milestro.Components.Internal
         private void MarkPropertiesChanged()
         {
             RenderTarget.MarkPropertiesChanged();
+        }
+
+        private void SetScrollY(float value)
+        {
+            var nextScrollY = IsFinite(value) ? Mathf.Max(0f, value) : 0f;
+            if (Mathf.Approximately(m_scrollY, nextScrollY))
+            {
+                return;
+            }
+
+            m_scrollY = nextScrollY;
+            RenderTarget.MarkPaintChanged();
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
     }
 }

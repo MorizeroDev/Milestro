@@ -23,6 +23,10 @@ public :
         paragraph->layout(width);
     }
 
+    SkScalar getHeight() const {
+        return paragraph->getHeight();
+    }
+
     uint64_t splitGlyph(SkScalar x, SkScalar y, void* context,
                                  MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback = nullptr);
 

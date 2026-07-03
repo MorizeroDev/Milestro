@@ -328,6 +328,11 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphLayout(milestro::skia::te
     return MilestroSkiaTextlayoutParagraphLayout(p, width);
 }
 
+int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphGetHeight(milestro::skia::textlayout::Paragraph* p,
+                                                                 float& height) {
+    return MilestroSkiaTextlayoutParagraphGetHeight(p, height);
+}
+
 int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphPaint(milestro::skia::textlayout::Paragraph* p,
                                                              milestro::skia::Canvas* canvas,
                                                              float x,

@@ -281,6 +281,10 @@ namespace Milestro.Binding
         internal static extern unsafe long SkiaTextlayoutParagraphLayout(IntPtr p, float width);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphGetHeight")]
+        internal static extern unsafe long SkiaTextlayoutParagraphGetHeight(IntPtr p, out float height);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphPaint")]
         internal static extern unsafe long SkiaTextlayoutParagraphPaint(IntPtr p, IntPtr canvas, float x, float y);
 

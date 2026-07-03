@@ -32,6 +32,14 @@ namespace Milestro.Skia.TextLayout
             ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphLayout(NativePtr, width));
         }
 
+        public float Height
+        {
+            get
+            {
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphGetHeight(NativePtr, out var ret));
+                return ret;
+            }
+        }
 
         public void Paint(Canvas canvas, Vector2 position)
         {

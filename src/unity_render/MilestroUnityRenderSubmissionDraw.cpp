@@ -40,6 +40,14 @@ void DrawParagraphCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& comm
         return;
     }
 
+    if (command.clipWidth > 0.0f && command.clipHeight > 0.0f) {
+        canvas->save();
+        canvas->clipRect(SkRect::MakeXYWH(command.clipX, command.clipY, command.clipWidth, command.clipHeight));
+        paragraph->paint(canvas, command.x, command.y);
+        canvas->restore();
+        return;
+    }
+
     paragraph->paint(canvas, command.x, command.y);
 }
 

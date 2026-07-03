@@ -13,9 +13,15 @@ namespace Milestro.Components.Internal
 
         private UnityAutoRenderTextureSurface? surface;
         private Paragraph? paragraph;
-        private bool propertiesChanged = true;
+        private bool layoutChanged = true;
+        private bool paintChanged = true;
         private int layoutWidth = 640;
+        private float paragraphHeight;
         private long outputVersion;
+        private Vector2 scrollOffset;
+        private Vector2 contentSize;
+        private Vector2 viewportSize;
+        private Vector2 maxScrollOffset;
 
         public Texture? OutputTexture => surface?.Texture;
         public Rect OutputUvRect => surface?.DisplayUvRect ?? DefaultUvRect;
@@ -23,39 +29,54 @@ namespace Milestro.Components.Internal
         public int OutputHeight => surface?.Height ?? 0;
         public bool HasOutput => surface?.Texture != null;
         public long OutputVersion => outputVersion;
+        public Vector2 ScrollOffset => scrollOffset;
+        public Vector2 ContentSize => contentSize;
+        public Vector2 ViewportSize => viewportSize;
+        public Vector2 MaxScrollOffset => maxScrollOffset;
 
         public void MarkPropertiesChanged()
         {
-            propertiesChanged = true;
+            layoutChanged = true;
+            paintChanged = true;
+        }
+
+        public void MarkPaintChanged()
+        {
+            paintChanged = true;
         }
 
         public bool Rebuild(Vector2Int sizePixels,
             ColorSpace colorSpace,
             TextBoxRenderTargetSettings settings,
+            Vector2 requestedScrollOffset,
             bool forceText,
             UnityEngine.Object? logContext)
         {
+            ValidateMargin(settings.Margin);
+
             var needsDraw = EnsureSurface(sizePixels, colorSpace);
-            if (forceText || paragraph == null || propertiesChanged)
+            if (forceText || paragraph == null || layoutChanged)
             {
                 paragraph = BuildParagraph(settings);
                 needsDraw = true;
             }
 
+            needsDraw |= ResizeParagraph(paragraph, settings);
+            needsDraw |= UpdateScrollMetrics(settings, requestedScrollOffset);
+            needsDraw |= paintChanged;
             if (!needsDraw)
             {
                 return true;
             }
 
-            ValidateMargin(settings.Margin);
-            ResizeParagraph(paragraph, settings);
             if (!TrySubmit(BuildRenderCommands(settings, logContext)))
             {
-                propertiesChanged = true;
+                paintChanged = true;
                 return false;
             }
 
-            propertiesChanged = false;
+            layoutChanged = false;
+            paintChanged = false;
             return true;
         }
 
@@ -64,7 +85,13 @@ namespace Milestro.Components.Internal
             surface?.Dispose();
             surface = null;
             paragraph = null;
-            propertiesChanged = true;
+            layoutChanged = true;
+            paintChanged = true;
+            paragraphHeight = 0f;
+            scrollOffset = Vector2.zero;
+            contentSize = Vector2.zero;
+            viewportSize = Vector2.zero;
+            maxScrollOffset = Vector2.zero;
             MarkOutputChanged();
         }
 
@@ -139,23 +166,63 @@ namespace Milestro.Components.Internal
             if (margin.bottom < 0) margin.bottom = 0;
         }
 
-        private void ResizeParagraph(Paragraph? targetParagraph,
+        private bool ResizeParagraph(Paragraph? targetParagraph,
             TextBoxRenderTargetSettings settings,
             bool force = false)
         {
             if (targetParagraph == null)
             {
-                return;
+                return false;
             }
 
-            var newLayoutWidth = Math.Max(1, OutputWidth - settings.Margin.horizontal);
+            var newLayoutWidth = ContentViewportWidth(settings);
             if (newLayoutWidth == layoutWidth && !force)
             {
-                return;
+                return false;
             }
 
             layoutWidth = newLayoutWidth;
             targetParagraph.Layout(layoutWidth);
+            paragraphHeight = Mathf.Max(0f, targetParagraph.Height);
+            return true;
+        }
+
+        private bool UpdateScrollMetrics(TextBoxRenderTargetSettings settings, Vector2 requestedScrollOffset)
+        {
+            var nextViewportSize = new Vector2(ContentViewportWidth(settings), ContentViewportHeight(settings));
+            var nextContentSize = new Vector2(nextViewportSize.x, paragraph != null ? paragraphHeight : 0f);
+            var nextMaxScrollOffset = new Vector2(
+                Mathf.Max(0f, nextContentSize.x - nextViewportSize.x),
+                Mathf.Max(0f, nextContentSize.y - nextViewportSize.y));
+            var nextScrollOffset = new Vector2(
+                Mathf.Clamp(IsFinite(requestedScrollOffset.x) ? requestedScrollOffset.x : 0f, 0f, nextMaxScrollOffset.x),
+                Mathf.Clamp(IsFinite(requestedScrollOffset.y) ? requestedScrollOffset.y : 0f, 0f, nextMaxScrollOffset.y));
+
+            var changed = viewportSize != nextViewportSize ||
+                          contentSize != nextContentSize ||
+                          maxScrollOffset != nextMaxScrollOffset ||
+                          scrollOffset != nextScrollOffset;
+
+            viewportSize = nextViewportSize;
+            contentSize = nextContentSize;
+            maxScrollOffset = nextMaxScrollOffset;
+            scrollOffset = nextScrollOffset;
+            return changed;
+        }
+
+        private int ContentViewportWidth(TextBoxRenderTargetSettings settings)
+        {
+            return Math.Max(1, OutputWidth - settings.Margin.horizontal);
+        }
+
+        private int ContentViewportHeight(TextBoxRenderTargetSettings settings)
+        {
+            return Math.Max(1, OutputHeight - settings.Margin.vertical);
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
         private UnitySkiaRenderCommandList BuildRenderCommands(TextBoxRenderTargetSettings settings,
@@ -164,7 +231,13 @@ namespace Milestro.Components.Internal
             var commands = new UnitySkiaRenderCommandList();
             if (paragraph != null)
             {
-                commands.DrawParagraph(paragraph, new Vector2(settings.Margin.left, settings.Margin.top));
+                var clipRect = new Rect(settings.Margin.left,
+                    settings.Margin.top,
+                    viewportSize.x,
+                    viewportSize.y);
+                var paintPosition = new Vector2(settings.Margin.left - scrollOffset.x,
+                    settings.Margin.top - scrollOffset.y);
+                commands.DrawParagraph(paragraph, paintPosition, clipRect);
             }
             else
             {
