@@ -1,85 +1,175 @@
 # Milestro
 
-Milestro is a native text rendering plugin for Unity.
+Milestro is a native Skia text rendering stack for Unity.
 
-The goal of this project is to bypass Unity's built-in text rendering pipeline and render text directly with Skia. Milestro gives Unity projects a lower-level path for text layout, glyph processing, rasterization, and render target output while keeping a C# API available inside Unity.
+The project bypasses Unity's built-in text rendering path and lets Unity call a
+native C++ layer for paragraph layout, glyph processing, rasterization, Unicode
+utilities, and render-target output.
 
-## What This Project Does
+Milestro is still a proof-of-concept. The APIs and Unity component surfaces are
+usable, but the repository is organized for active development rather than as a
+finished UPM package.
 
-Milestro provides:
+## What It Provides
 
-- A native C++ library built around Skia text layout and rendering.
-- Unity C# bindings for the native Milestro API.
-- Unity components for rendering Skia paragraphs through bitmap textures, render textures, mesh geometry, and SDF data.
-- Rich text parsing helpers for converting styled markup into paragraph payloads.
-- Font registration and font family access through the native layer.
-- Glyph extraction utilities for paths, vertices, bounds, and custom rendering workflows.
-- Unity native rendering integration for platform graphics backends.
+- A native C++ library built around Skia, SkParagraph, SkSVG, and ICU.
+- A C-compatible game/plugin API in `include/Milestro/game/milestro_game_interface.h`.
+- Generated Unity C# bindings in `apps/unity-plugins/Milestro/Binding/BindingC.cs`.
+- An iOS framework/static-link bridge in `apps/unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp`.
+- Managed Unity wrappers for Skia canvas, images, paths, SVG, fonts, text layout, render textures, and Unicode helpers.
+- Unity components for UI text, world-space text, and editable text input.
+- Rich text parsing helpers for a small XML-like tag set.
+- Native Unity render-event integration for selected graphics backends.
 
-In short: Milestro lets Unity ask Skia to shape and render text, instead of relying on Unity's normal text rendering stack.
+## Unity Installation
 
-## Why
+The Unity assets live under `apps/unity-plugins/`. Treat this directory as the
+contents of a Unity `Assets/` folder, or copy/link the directories you need into
+your project.
 
-Unity's built-in text path is convenient, but it can be limiting when a project needs direct control over:
+Before importing Milestro, add the external ParaParty packages to the Unity
+project's `Packages/manifest.json`:
 
-- Text shaping and paragraph layout.
-- Font fallback and font registration.
-- Rendering text into custom textures or render targets.
-- Converting text to paths, meshes, or SDF data.
+```json
+{
+  "dependencies": {
+    "party.para.util.colors": "https://github.com/ParaParty/ParaPartyUtil.git?path=Colors",
+    "party.para.util.unitynative": "https://github.com/ParaParty/ParaPartyUtil.git?path=UnityNative"
+  }
+}
+```
 
-Milestro exists to make those workflows available from Unity.
+These are required by `Milestro.asmdef`: `party.para.util.colors` is used by the
+rich text color parser, and `party.para.util.unitynative` is used by managed
+native-object wrappers and native callback helpers.
 
-## Architecture
+The Unity code also uses `Newtonsoft.Json`. Keep Unity's Newtonsoft Json package
+available if your project does not already provide that assembly.
+
+Runtime assets needed by the current code:
+
+- Native plugin binary named for `DllImport("libMilestro")` on non-iOS targets.
+- iOS builds use `DllImport("__Internal")` with the `FrameworkBinding` entry-point prefix.
+- ICU data copied to `Assets/Resources/Milestro/icudtl.dat.bytes`. In this repo
+  the source data is `ext/icu-cmake/common/icudtl.dat`, and the Unity target path
+  maps to `apps/unity-plugins/Resources/Milestro/icudtl.dat.bytes`.
+
+See [docs/unity.md](docs/unity.md) for the full Unity integration notes.
+
+## Main Unity APIs
+
+Stable component entry points:
+
+- `Milestro.Components.TextBox`: UI `Graphic` that renders text into a
+  render texture through Skia.
+- `Milestro.Components.WorldSpaceTextBox`: world-space quad presenter backed by
+  the same text render-target pipeline.
+- `Milestro.Components.TextInput`: editable UI text input backed by the native
+  `InputBox` text model.
+
+Lower-level managed wrappers:
+
+- `Milestro.Skia`: canvas, image, font registry, typeface, path, SVG, vertex data,
+  Unity render texture surfaces, and render command lists.
+- `Milestro.Skia.TextLayout`: paragraph style, text style, strut style,
+  paragraph builder, paragraph, font collection, and input box wrappers.
+- `Milestro.Unicode`: ICU loading, normalization, segmentation, transliteration,
+  case mapping, and collation helpers.
+- `Milestro.RichTextParser`: markup parsing into paragraph payloads.
+
+`apps/unity-plugins/Milestro.Experimental/` contains older experimental bitmap,
+mesh, and SDF text components. Keep it optional unless you are working on those
+paths directly.
+
+## Native Architecture
 
 Milestro is split into a native layer and a Unity layer.
 
-### Native Layer
+Native layer:
 
-The native layer is written in C++ and exposes a C-compatible interface for Unity and generated bindings.
+- `src/skia/` and `include/Milestro/skia/`: C++ wrappers for Skia canvas,
+  images, fonts, typefaces, paths, SVG, vertex data, and text layout.
+- `src/skia/unicode/`: Skia Unicode bridge code.
+- `src/unicode/` and `include/Milestro/unicode/`: ICU-backed Unicode helpers.
+- `src/io/` and `include/Milestro/io/`: native IO helpers.
+- `src/game/` and `include/Milestro/game/`: exported plugin API used by Unity.
+- `src/unity_render/`: Unity native render-event integration.
 
-Main areas:
+Unity layer:
 
-- `src/skia/` and `include/Milestro/skia/`: Skia wrappers for canvas, images, fonts, typefaces, paths, SVG, vertex data, and text layout.
-- `src/icu/` and `include/Milestro/icu/`: ICU-related helpers.
-- `src/game/` and `include/Milestro/game/`: exported plugin API used by Unity/C#.
-- `src/unity_render/`: Unity native rendering integration.
+- `apps/unity-plugins/Milestro/Binding/`: generated C# P/Invoke bindings.
+- `apps/unity-plugins/Milestro/Skia/`: managed Skia and render-target wrappers.
+- `apps/unity-plugins/Milestro/Skia/TextLayout/`: managed paragraph and input-box APIs.
+- `apps/unity-plugins/Milestro/Unicode/`: managed ICU and Unicode helpers.
+- `apps/unity-plugins/Milestro/Components/`: Unity components.
+- `apps/unity-plugins/Milestro/RichTextParser/`: XML-like rich text parsing.
+- `apps/unity-plugins/Milestro.Editor/`: editor menu utilities.
 
-### Unity Layer
+## Build And Tooling
 
-The Unity layer lives under `apps/unity-plugins/Milestro/`.
+Milestro uses CMake for native code and Gradle for C header to C# binding
+generation.
 
-Main areas:
+Skia is not vendored in this repository. Build Skia separately and pass either
+its library output directory or its CMake directory to Milestro:
 
-- `Binding/`: C# bindings to the exported native API.
-- `Skia/`: managed wrappers for native Skia objects.
-- `Skia/TextLayout/`: paragraph, paragraph builder, paragraph style, text style, and font collection APIs.
-- `Components/`: Unity components for rendering paragraphs.
-- `RichTextParser/`: markup parsing into styled text payloads.
-- `Model/`: shared text and rendering data models.
-- `ColorUniverse/`: color conversion and parsing helpers.
+```sh
+cmake -S . -B cmake-build-relwithdebinfo -G Ninja \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DMILESTRO_SKIA_LIB_PATH=/path/to/skia/out/build \
+  -DMILESTRO_SKIA_INCLUDE_PATH=/path/to/skia
+
+cmake --build cmake-build-relwithdebinfo --target Milestro
+```
+
+Useful targets:
+
+- `Milestro`: native shared or static library.
+- `MilestroCli`: optional CLI target, enabled by default.
+- `H2CS`: regenerates Unity binding files from the public C++ API.
+- Native tests under `tests/`, enabled by default with `MILESTRO_ENABLE_TESTS=ON`.
+
+Regenerate bindings after changing `include/Milestro/game/milestro_game_interface.h`:
+
+```sh
+./gradlew h2cs
+```
+
+Format C# Unity sources:
+
+```sh
+./gradlew format
+```
+
+See [docs/build.md](docs/build.md) for CMake options, test commands, and the
+current Windows build flow.
+
+## Render Backend Status
+
+The render-target path is platform-dependent:
+
+- Apple builds compile the Metal backend.
+- Windows builds compile the Direct3D 12 backend.
+- Android enables OpenGLES3 and Vulkan backends when the platform libraries are found.
+- Desktop OpenGL and desktop Vulkan are experimental CMake options:
+  `MILESTRO_ENABLE_DESKTOP_OPENGL_RENDER` and
+  `MILESTRO_ENABLE_DESKTOP_VULKAN_RENDER`.
+
+`UnityAutoRenderTextureSurface` currently auto-selects Metal, Direct3D 12,
+OpenGLES3, or OpenGLCore from Unity's active graphics device. MSAA render targets
+are not supported yet.
 
 ## Repository Layout
 
 ```text
 apps/
   cmd/                  Native CLI entry point
-  unity-plugins/        Unity C# plugin code
+  unity-plugins/        Unity C# plugin code and Unity resources
 cmake/                  CMake helper modules
 docs/                   Project documentation
-ext/                    Vendored third-party dependencies
+ext/                    Vendored third-party dependencies except Skia
 include/Milestro/       Public native headers
-scripts/                Release and maintenance scripts
+scripts/                Release and symbol-management scripts
 src/                    Native implementation
 tests/                  Native tests and test data
 ```
-
-## Supported Platforms
-
-Milestro is currently in the proof-of-concept stage.
-
-The target Unity graphics backends are:
-
-- Metal
-- Direct3D 12
-- Vulkan
-- OpenGL
