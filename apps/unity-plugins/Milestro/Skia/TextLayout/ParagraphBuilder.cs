@@ -1,47 +1,50 @@
 using System;
 using System.Text;
 using Milestro.Binding;
+using Paraparty.UnityNative.Base;
 
 namespace Milestro.Skia.TextLayout
 {
-    public class ParagraphBuilder
+    public class ParagraphBuilder : DisposableNativeObject
     {
-        public IntPtr Ptr { get; private set; }
-
         public ParagraphBuilder(ParagraphStyle paragraphStyle)
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphBuilderCreate(out var ptr, paragraphStyle.Ptr));
-            Ptr = ptr;
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphBuilderCreate(out ptr, paragraphStyle.NativePtr));
         }
 
-        ~ParagraphBuilder()
+        protected override void DisposeUnmanaged()
         {
-            var ptr = Ptr;
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphBuilderDestroy(out ptr));
-            Ptr = ptr;
+            if (ptr != IntPtr.Zero)
+            {
+                var nativePtr = ptr;
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphBuilderDestroy(out nativePtr));
+                ptr = nativePtr;
+            }
+
+            base.DisposeUnmanaged();
         }
 
         public void PushStyle(TextStyle textStyle)
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphBuilderPushStyle(Ptr, textStyle.Ptr));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphBuilderPushStyle(NativePtr, textStyle.NativePtr));
         }
 
         public void Pop()
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphBuilderPop(Ptr));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphBuilderPop(NativePtr));
         }
 
         public void AddText(string text)
         {
             var payload = Encoding.UTF8.GetBytes(text);
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutParagraphBuilderAddText(Ptr, payload, (ulong)payload.Length)
+                BindingC.SkiaTextlayoutParagraphBuilderAddText(NativePtr, payload, (ulong)payload.Length)
             );
         }
 
         public Paragraph Build()
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphBuilderBuild(Ptr, out var paragraphPtr));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphBuilderBuild(NativePtr, out var paragraphPtr));
             return new Paragraph(paragraphPtr);
         }
     }

@@ -7,25 +7,23 @@ namespace Milestro.Unicode
 {
     public class StringComparator : DisposableNativeObject
     {
-        public IntPtr Ptr { get; private set; }
-
         internal StringComparator(IntPtr ptr)
+            : base(ptr)
         {
-            Ptr = ptr;
         }
 
         public unsafe StringComparator(string collation)
         {
             var s = collation.CStr();
-            ExitCodeUtil.ThrowIfFailed(BindingC.StringComparatorCreate(out var ptr, s));
-            Ptr = ptr;
+            ExitCodeUtil.ThrowIfFailed(BindingC.StringComparatorCreate(out ptr, s));
         }
 
         protected override void DisposeUnmanaged()
         {
-            var tPtr = Ptr;
-            ExitCodeUtil.ThrowIfFailed(BindingC.StringComparatorDestroy(ref tPtr));
-            Ptr = tPtr;
+            if (ptr != IntPtr.Zero)
+            {
+                ExitCodeUtil.ThrowIfFailed(BindingC.StringComparatorDestroy(ref ptr));
+            }
 
             base.DisposeUnmanaged();
         }
@@ -35,7 +33,7 @@ namespace Milestro.Unicode
             var ap = a.CStr();
             var bp = b.CStr();
 
-            ExitCodeUtil.ThrowIfFailed(BindingC.StringComparatorCompare(Ptr, out var result, ap, bp));
+            ExitCodeUtil.ThrowIfFailed(BindingC.StringComparatorCompare(NativePtr, out var result, ap, bp));
             return result;
         }
     }

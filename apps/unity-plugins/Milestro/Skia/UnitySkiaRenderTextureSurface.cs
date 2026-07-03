@@ -370,7 +370,7 @@ namespace Milestro.Skia
                         }
 
                         var snapshot = inputBox.CreateDrawSnapshot();
-                        resource = snapshot.Ptr;
+                        resource = snapshot.NativePtr;
                         keepAlive = snapshot;
                         ownedList.Add(snapshot);
                     }

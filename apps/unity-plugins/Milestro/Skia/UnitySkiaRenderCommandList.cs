@@ -42,7 +42,7 @@ namespace Milestro.Skia
             commands.Add(new Command
             {
                 Kind = CommandKind.Paragraph,
-                Resource = paragraph.Ptr,
+                Resource = paragraph.NativePtr,
                 X = position.x,
                 Y = position.y,
                 KeepAlive = paragraph
@@ -59,7 +59,7 @@ namespace Milestro.Skia
             commands.Add(new Command
             {
                 Kind = CommandKind.Image,
-                Resource = image.Ptr,
+                Resource = image.NativePtr,
                 X = rect.x,
                 Y = rect.y,
                 Width = rect.width,
@@ -78,7 +78,7 @@ namespace Milestro.Skia
             commands.Add(new Command
             {
                 Kind = CommandKind.Image,
-                Resource = image.Ptr,
+                Resource = image.NativePtr,
                 X = position.x,
                 Y = position.y,
                 KeepAlive = image

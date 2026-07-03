@@ -3,30 +3,34 @@ using System.Collections.Generic;
 using System.Text;
 using Milestro.Binding;
 using Newtonsoft.Json;
+using Paraparty.UnityNative.Base;
 
 namespace Milestro.Skia
 {
-    public class TypeFace
+    public class TypeFace : DisposableNativeObject
     {
-        public IntPtr Ptr { get; private set; }
-
         internal TypeFace(IntPtr typeFace)
+            : base(typeFace)
         {
-            Ptr = typeFace;
         }
 
-        ~TypeFace()
+        protected override void DisposeUnmanaged()
         {
-            var ptr = Ptr;
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTypefaceDestroy(out ptr));
-            Ptr = ptr;
+            if (ptr != IntPtr.Zero)
+            {
+                var nativePtr = ptr;
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTypefaceDestroy(out nativePtr));
+                ptr = nativePtr;
+            }
+
+            base.DisposeUnmanaged();
         }
 
         public List<FontFamilyName> GetFontFamilyNames()
         {
             var ret = new byte[4096];
             ulong needed;
-            var err = BindingC.SkiaTypefaceGetFamilyNames(Ptr, ret, 4096, out needed);
+            var err = BindingC.SkiaTypefaceGetFamilyNames(NativePtr, ret, 4096, out needed);
             if (err < 0)
             {
                 throw new Exception("SkiaTypeFaceGetFamilyNames Error");

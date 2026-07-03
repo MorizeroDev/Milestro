@@ -1,13 +1,12 @@
 using System;
 using Milestro.Binding;
+using Paraparty.UnityNative.Base;
 using UnityEngine;
 
 namespace Milestro.Skia
 {
-    public class MilestroImage : IDisposable
+    public class MilestroImage : DisposableNativeObject
     {
-        public IntPtr Ptr { get; private set; }
-
         /// <summary>
         /// 
         /// </summary>
@@ -15,8 +14,7 @@ namespace Milestro.Skia
         /// <param name="size"></param>
         public unsafe MilestroImage(void* data, ulong size)
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaImageCreate(out var ptr, data, size));
-            Ptr = ptr;
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaImageCreate(out ptr, data, size));
         }
 
         /// <summary>
@@ -54,7 +52,7 @@ namespace Milestro.Skia
         /// <param name="targetColorType"></param>
         public void SetColorType(int targetColorType)
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaImageSetColorType(Ptr, targetColorType));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaImageSetColorType(NativePtr, targetColorType));
         }
 
         public int Width
@@ -62,7 +60,7 @@ namespace Milestro.Skia
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaImageGetWidth(Ptr, out var ret)
+                    BindingC.SkiaImageGetWidth(NativePtr, out var ret)
                 );
                 return ret;
             }
@@ -73,21 +71,22 @@ namespace Milestro.Skia
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaImageGetHeight(Ptr, out var ret)
+                    BindingC.SkiaImageGetHeight(NativePtr, out var ret)
                 );
                 return ret;
             }
         }
 
-        ~MilestroImage()
+        protected override void DisposeUnmanaged()
         {
-        }
+            if (ptr != IntPtr.Zero)
+            {
+                var nativePtr = ptr;
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaImageDestroy(out nativePtr));
+                ptr = nativePtr;
+            }
 
-        public void Dispose()
-        {
-            var ptr = Ptr;
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaImageDestroy(out ptr));
-            Ptr = ptr;
+            base.DisposeUnmanaged();
         }
     }
 }

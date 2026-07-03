@@ -3,43 +3,47 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Milestro.Binding;
 using Newtonsoft.Json;
+using Paraparty.UnityNative.Base;
 using UnityEngine;
 
 namespace Milestro.Skia.TextLayout
 {
-    public class Paragraph
+    public class Paragraph : DisposableNativeObject
     {
-        public IntPtr Ptr { get; private set; }
-
         internal Paragraph(IntPtr ptr)
+            : base(ptr)
         {
-            Ptr = ptr;
         }
 
-        ~Paragraph()
+        protected override void DisposeUnmanaged()
         {
-            var ptr = Ptr;
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphDestroy(out ptr));
-            Ptr = ptr;
+            if (ptr != IntPtr.Zero)
+            {
+                var nativePtr = ptr;
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphDestroy(out nativePtr));
+                ptr = nativePtr;
+            }
+
+            base.DisposeUnmanaged();
         }
 
         public void Layout(float width)
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphLayout(Ptr, width));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphLayout(NativePtr, width));
         }
 
 
         public void Paint(Canvas canvas, Vector2 position)
         {
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutParagraphPaint(Ptr, canvas.Ptr, position.x, position.y)
+                BindingC.SkiaTextlayoutParagraphPaint(NativePtr, canvas.NativePtr, position.x, position.y)
             );
         }
 
         public void SplitGlypl(IntPtr context, Vector2 position,
             MilestroCTypes.SkiaTextlayoutParagraphSplitGlyphCallback callback)
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphSplitGlyph(Ptr,
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphSplitGlyph(NativePtr,
                 context,
                 position.x, position.y, callback
             ));
@@ -51,7 +55,7 @@ namespace Milestro.Skia.TextLayout
             float x, float y,
             void* distanceField)
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphToSDF(Ptr,
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphToSDF(NativePtr,
                 sdfWidth, sdfHeight, sdfScale,
                 x, y,
                 distanceField
@@ -60,7 +64,7 @@ namespace Milestro.Skia.TextLayout
 
         public Path ToPath(float x, float y)
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphToPath(Ptr, out var pathPtr, x, y));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphToPath(NativePtr, out var pathPtr, x, y));
             return new Path(pathPtr);
         }
     }

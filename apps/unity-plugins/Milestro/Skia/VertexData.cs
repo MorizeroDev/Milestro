@@ -1,26 +1,26 @@
 using System;
 using Milestro.Binding;
+using Paraparty.UnityNative.Base;
 
 namespace Milestro.Skia.TextLayout
 {
-    public class VertexData : IDisposable
+    public class VertexData : DisposableNativeObject
     {
-        public IntPtr Ptr { get; private set; }
-
         internal VertexData(IntPtr data)
+            : base(data)
         {
-            Ptr = data;
         }
 
-        public void Dispose()
+        protected override void DisposeUnmanaged()
         {
-            var ptr = Ptr;
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaVertexDataDestroy(out ptr));
-            Ptr = ptr;
-        }
+            if (ptr != IntPtr.Zero)
+            {
+                var nativePtr = ptr;
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaVertexDataDestroy(out nativePtr));
+                ptr = nativePtr;
+            }
 
-        ~VertexData()
-        {
+            base.DisposeUnmanaged();
         }
 
         public ulong VertexCount
@@ -28,7 +28,7 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaVertexDataGetVertexCount(Ptr, out var ret)
+                    BindingC.SkiaVertexDataGetVertexCount(NativePtr, out var ret)
                 );
                 return ret;
             }
@@ -39,7 +39,7 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaVertexDataGetVertexSize(Ptr, out var ret)
+                    BindingC.SkiaVertexDataGetVertexSize(NativePtr, out var ret)
                 );
                 return ret;
             }
@@ -50,7 +50,7 @@ namespace Milestro.Skia.TextLayout
             var ret = new float[VertexCount * VertexSize / sizeof(float)];
             fixed (void* ptr = ret)
             {
-                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaVertexDataFillData(Ptr, ptr));
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaVertexDataFillData(NativePtr, ptr));
             }
 
             return ret;

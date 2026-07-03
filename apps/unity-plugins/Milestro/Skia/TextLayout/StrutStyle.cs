@@ -2,53 +2,56 @@ using System;
 using System.Collections.Generic;
 using Milestro.Binding;
 using Paraparty.UnityNative;
+using Paraparty.UnityNative.Base;
 
 namespace Milestro.Skia.TextLayout
 {
     /// <summary>
     /// 虽然你看到这里是引用类型，但是实际上用的时候是值类型
     /// </summary>
-    public class StrutStyle
+    public class StrutStyle : DisposableNativeObject
     {
-        public IntPtr Ptr { get; private set; }
-
         internal StrutStyle(IntPtr ptr)
+            : base(ptr)
         {
-            Ptr = ptr;
         }
 
         public StrutStyle()
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutStrutStyleCreate(out var ptr));
-            Ptr = ptr;
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutStrutStyleCreate(out ptr));
         }
 
-        ~StrutStyle()
+        protected override void DisposeUnmanaged()
         {
-            var ptr = Ptr;
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutStrutStyleDestroy(out ptr));
-            Ptr = ptr;
+            if (ptr != IntPtr.Zero)
+            {
+                var nativePtr = ptr;
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutStrutStyleDestroy(out nativePtr));
+                ptr = nativePtr;
+            }
+
+            base.DisposeUnmanaged();
         }
 
         public unsafe void SetFontFamilies(List<string> fontFamily)
         {
             using var families = new UnmanagedStringArray(fontFamily);
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutStrutStyleSetFontFamilies(Ptr, families.Ptr, families.Length)
+                BindingC.SkiaTextlayoutStrutStyleSetFontFamilies(NativePtr, families.Ptr, families.Length)
             );
         }
 
         public void GetFontStyle(out int weight, out int width, out int slant)
         {
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutStrutStyleGetFontStyle(Ptr, out weight, out width, out slant)
+                BindingC.SkiaTextlayoutStrutStyleGetFontStyle(NativePtr, out weight, out width, out slant)
             );
         }
 
         public void SetFontStyle(int weight, int width, int slant)
         {
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutStrutStyleSetFontStyle(Ptr, weight, width, slant)
+                BindingC.SkiaTextlayoutStrutStyleSetFontStyle(NativePtr, weight, width, slant)
             );
         }
 
@@ -57,13 +60,13 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutStrutStyleGetFontSize(Ptr, out var ret)
+                    BindingC.SkiaTextlayoutStrutStyleGetFontSize(NativePtr, out var ret)
                 );
                 return ret;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutStrutStyleSetFontSize(Ptr, value)
+                    BindingC.SkiaTextlayoutStrutStyleSetFontSize(NativePtr, value)
                 );
         }
 
@@ -72,13 +75,13 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutStrutStyleGetHeight(Ptr, out var ret)
+                    BindingC.SkiaTextlayoutStrutStyleGetHeight(NativePtr, out var ret)
                 );
                 return ret;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutStrutStyleSetHeight(Ptr, value)
+                    BindingC.SkiaTextlayoutStrutStyleSetHeight(NativePtr, value)
                 );
         }
 
@@ -87,13 +90,13 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutStrutStyleGetStrutEnabled(Ptr, out var ret)
+                    BindingC.SkiaTextlayoutStrutStyleGetStrutEnabled(NativePtr, out var ret)
                 );
                 return ret != 0;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutStrutStyleSetStrutEnabled(Ptr, value ? 1 : 0)
+                    BindingC.SkiaTextlayoutStrutStyleSetStrutEnabled(NativePtr, value ? 1 : 0)
                 );
         }
 
@@ -102,13 +105,13 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutStrutStyleGetForceStrutHeight(Ptr, out var ret)
+                    BindingC.SkiaTextlayoutStrutStyleGetForceStrutHeight(NativePtr, out var ret)
                 );
                 return ret != 0;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutStrutStyleSetForceStrutHeight(Ptr, value ? 1 : 0)
+                    BindingC.SkiaTextlayoutStrutStyleSetForceStrutHeight(NativePtr, value ? 1 : 0)
                 );
         }
 
@@ -117,13 +120,13 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutStrutStyleGetHeightOverride(Ptr, out var ret)
+                    BindingC.SkiaTextlayoutStrutStyleGetHeightOverride(NativePtr, out var ret)
                 );
                 return ret != 0;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutStrutStyleSetHeightOverride(Ptr, value ? 1 : 0)
+                    BindingC.SkiaTextlayoutStrutStyleSetHeightOverride(NativePtr, value ? 1 : 0)
                 );
         }
 
@@ -132,13 +135,13 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutStrutStyleGetHalfLeading(Ptr, out var ret)
+                    BindingC.SkiaTextlayoutStrutStyleGetHalfLeading(NativePtr, out var ret)
                 );
                 return ret != 0;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutStrutStyleSetHalfLeading(Ptr, value ? 1 : 0)
+                    BindingC.SkiaTextlayoutStrutStyleSetHalfLeading(NativePtr, value ? 1 : 0)
                 );
         }
     }

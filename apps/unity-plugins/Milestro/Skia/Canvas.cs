@@ -1,16 +1,16 @@
 using System;
 using Milestro.Binding;
+using Paraparty.UnityNative.Base;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
 namespace Milestro.Skia
 {
-    public class Canvas : IDisposable
+    public class Canvas : DisposableNativeObject
     {
         public int Width { get; }
         public int Height { get; }
-        public IntPtr Ptr { get; private set; }
 
         /// <summary>
         /// 在当前对象中申请 Bitmap。Canvas 拥有 Texture 的所有权。
@@ -21,8 +21,7 @@ namespace Milestro.Skia
         {
             Width = width;
             Height = height;
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaCanvasCreate(out var ptr, width, height));
-            Ptr = ptr;
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaCanvasCreate(out ptr, width, height));
         }
 
         /// <summary>
@@ -36,31 +35,31 @@ namespace Milestro.Skia
             Width = tex.width;
             Height = tex.height;
             var pixel = tex.GetPixelData<Color32>(0);
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaCanvasCreateWithMemory(out var ptr, Width, Height,
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaCanvasCreateWithMemory(out ptr, Width, Height,
                 pixel.GetUnsafePtr(), verticalFlip ? 1 : 0, clearPixels ? 1 : 0)
             );
-            Ptr = ptr;
         }
 
-        ~Canvas()
+        protected override void DisposeUnmanaged()
         {
-        }
+            if (ptr != IntPtr.Zero)
+            {
+                var nativePtr = ptr;
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaCanvasDestroy(out nativePtr));
+                ptr = nativePtr;
+            }
 
-        public void Dispose()
-        {
-            var ptr = Ptr;
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaCanvasDestroy(out ptr));
-            Ptr = ptr;
+            base.DisposeUnmanaged();
         }
 
         public void DrawImageSimple(MilestroImage image, Vector2 position)
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaCanvasDrawImageSimple(Ptr, image.Ptr, position.x, position.y));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaCanvasDrawImageSimple(NativePtr, image.NativePtr, position.x, position.y));
         }
 
         public void DrawImage(MilestroImage image, Rect src, Rect dst)
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaCanvasDrawImage(Ptr, image.Ptr,
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaCanvasDrawImage(NativePtr, image.NativePtr,
                 src.xMin, src.yMin, src.xMax, src.yMax,
                 dst.xMin, dst.yMin, dst.xMax, dst.yMax
             ));
@@ -76,7 +75,7 @@ namespace Milestro.Skia
         {
             var tex = new Texture2D(Width, Height, TextureFormat.RGBA32, false);
             var pixel = tex.GetPixelData<Color32>(0);
-            if (BindingC.SkiaCanvasGetTexture(Ptr, pixel.GetUnsafePtr()) < 0)
+            if (BindingC.SkiaCanvasGetTexture(NativePtr, pixel.GetUnsafePtr()) < 0)
             {
                 Object.DestroyImmediate(tex);
                 throw new Exception("get texture failed");

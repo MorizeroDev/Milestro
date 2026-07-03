@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Milestro.Binding;
 using Milestro.Model;
 using Paraparty.UnityNative;
+using Paraparty.UnityNative.Base;
 using UnityEngine;
 
 namespace Milestro.Skia.TextLayout
@@ -10,26 +11,28 @@ namespace Milestro.Skia.TextLayout
     /// <summary>
     /// 虽然你看到这里是引用类型，但是实际上用的时候是值类型。也就是说你可以 PushStyle 之后改一下这个对象，然后再 Push 一次
     /// </summary>
-    public class TextStyle
+    public class TextStyle : DisposableNativeObject
     {
-        public IntPtr Ptr { get; private set; }
-
         internal TextStyle(IntPtr ptr)
+            : base(ptr)
         {
-            Ptr = ptr;
         }
 
         public TextStyle()
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleCreate(out var ptr));
-            Ptr = ptr;
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleCreate(out ptr));
         }
 
-        ~TextStyle()
+        protected override void DisposeUnmanaged()
         {
-            var ptr = Ptr;
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleDestroy(out ptr));
-            Ptr = ptr;
+            if (ptr != IntPtr.Zero)
+            {
+                var nativePtr = ptr;
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleDestroy(out nativePtr));
+                ptr = nativePtr;
+            }
+
+            base.DisposeUnmanaged();
         }
 
         public Color32 Color
@@ -40,7 +43,7 @@ namespace Milestro.Skia.TextLayout
                 int g = 0;
                 int b = 0;
                 int a = 0;
-                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleGetColor(Ptr, out r, out g, out b, out a));
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleGetColor(NativePtr, out r, out g, out b, out a));
                 return new Color32((byte)r, (byte)g, (byte)b, (byte)a);
             }
             set
@@ -49,7 +52,7 @@ namespace Milestro.Skia.TextLayout
                 int g = value.g;
                 int b = value.b;
                 int a = value.a;
-                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleSetColor(Ptr, r, g, b, a));
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleSetColor(NativePtr, r, g, b, a));
             }
         }
 
@@ -57,20 +60,20 @@ namespace Milestro.Skia.TextLayout
         {
             get
             {
-                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleGetDecoration(Ptr, out var ret));
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleGetDecoration(NativePtr, out var ret));
                 return ret;
             }
-            set => ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleSetDecoration(Ptr, value));
+            set => ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleSetDecoration(NativePtr, value));
         }
 
         public int DecorationMode
         {
             get
             {
-                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleGetDecorationMode(Ptr, out var ret));
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleGetDecorationMode(NativePtr, out var ret));
                 return ret;
             }
-            set => ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleSetDecorationMode(Ptr, value));
+            set => ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleSetDecorationMode(NativePtr, value));
         }
 
         public Color32 DecorationColor
@@ -82,7 +85,7 @@ namespace Milestro.Skia.TextLayout
                 int b = 0;
                 int a = 0;
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleGetDecorationColor(Ptr, out r, out g, out b, out a));
+                    BindingC.SkiaTextlayoutTextStyleGetDecorationColor(NativePtr, out r, out g, out b, out a));
                 return new Color32((byte)r, (byte)g, (byte)b, (byte)a);
             }
             set
@@ -91,7 +94,7 @@ namespace Milestro.Skia.TextLayout
                 int g = value.g;
                 int b = value.b;
                 int a = value.a;
-                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleSetDecorationColor(Ptr, r, g, b, a));
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleSetDecorationColor(NativePtr, r, g, b, a));
             }
         }
 
@@ -99,10 +102,10 @@ namespace Milestro.Skia.TextLayout
         {
             get
             {
-                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleGetDecorationStyle(Ptr, out var ret));
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleGetDecorationStyle(NativePtr, out var ret));
                 return ret;
             }
-            set => ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleSetDecorationStyle(Ptr, value));
+            set => ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleSetDecorationStyle(NativePtr, value));
         }
 
         public float DecorationThicknessMultiplier
@@ -110,25 +113,25 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleGetDecorationThicknessMultiplier(Ptr, out var ret));
+                    BindingC.SkiaTextlayoutTextStyleGetDecorationThicknessMultiplier(NativePtr, out var ret));
                 return ret;
             }
             set => ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutTextStyleSetDecorationThicknessMultiplier(Ptr, value)
+                BindingC.SkiaTextlayoutTextStyleSetDecorationThicknessMultiplier(NativePtr, value)
             );
         }
 
         public void GetFontStyle(out int weight, out int width, out int slant)
         {
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutTextStyleGetFontStyle(Ptr, out weight, out width, out slant)
+                BindingC.SkiaTextlayoutTextStyleGetFontStyle(NativePtr, out weight, out width, out slant)
             );
         }
 
         public void SetFontStyle(int weight, int width, int slant)
         {
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutTextStyleSetFontStyle(Ptr, weight, width, slant)
+                BindingC.SkiaTextlayoutTextStyleSetFontStyle(NativePtr, weight, width, slant)
             );
         }
 
@@ -154,7 +157,7 @@ namespace Milestro.Skia.TextLayout
             float offsetY = offset.y;
 
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutTextStyleAddShadow(Ptr,
+                BindingC.SkiaTextlayoutTextStyleAddShadow(NativePtr,
                     colorR, colorG, colorB, colorA,
                     offsetX, offsetY,
                     blurSigma
@@ -166,7 +169,7 @@ namespace Milestro.Skia.TextLayout
         public void ResetShadow()
         {
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutTextStyleResetShadow(Ptr)
+                BindingC.SkiaTextlayoutTextStyleResetShadow(NativePtr)
             );
             _cachedTextShadow.Clear();
         }
@@ -181,7 +184,7 @@ namespace Milestro.Skia.TextLayout
         public ulong GetFontFeatureNumber()
         {
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutTextStyleGetFontFeatureNumber(Ptr, out var ret)
+                BindingC.SkiaTextlayoutTextStyleGetFontFeatureNumber(NativePtr, out var ret)
             );
             return ret;
         }
@@ -190,14 +193,14 @@ namespace Milestro.Skia.TextLayout
         {
             var featureCStr = feature.CStr();
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutTextStyleAddFontFeature(Ptr, featureCStr, value)
+                BindingC.SkiaTextlayoutTextStyleAddFontFeature(NativePtr, featureCStr, value)
             );
         }
 
         public void ResetFontFeature()
         {
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutTextStyleResetFontFeatures(Ptr)
+                BindingC.SkiaTextlayoutTextStyleResetFontFeatures(NativePtr)
             );
         }
 
@@ -206,13 +209,13 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleGetFontSize(Ptr, out var ret)
+                    BindingC.SkiaTextlayoutTextStyleGetFontSize(NativePtr, out var ret)
                 );
                 return ret;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleSetFontSize(Ptr, value)
+                    BindingC.SkiaTextlayoutTextStyleSetFontSize(NativePtr, value)
                 );
         }
 
@@ -223,7 +226,7 @@ namespace Milestro.Skia.TextLayout
         {
             using var families = new UnmanagedStringArray(fontFamily);
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutTextStyleSetFontFamilies(Ptr, families.Ptr, families.Length)
+                BindingC.SkiaTextlayoutTextStyleSetFontFamilies(NativePtr, families.Ptr, families.Length)
             );
             _cachedFontFamily = fontFamily;
         }
@@ -238,13 +241,13 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleGetBaselineShift(Ptr, out var ret)
+                    BindingC.SkiaTextlayoutTextStyleGetBaselineShift(NativePtr, out var ret)
                 );
                 return ret;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleSetBaselineShift(Ptr, value)
+                    BindingC.SkiaTextlayoutTextStyleSetBaselineShift(NativePtr, value)
                 );
         }
 
@@ -253,13 +256,13 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleGetHeight(Ptr, out var ret)
+                    BindingC.SkiaTextlayoutTextStyleGetHeight(NativePtr, out var ret)
                 );
                 return ret;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleSetHeight(Ptr, value)
+                    BindingC.SkiaTextlayoutTextStyleSetHeight(NativePtr, value)
                 );
         }
 
@@ -269,13 +272,13 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleGetHeightOverride(Ptr, out var ret)
+                    BindingC.SkiaTextlayoutTextStyleGetHeightOverride(NativePtr, out var ret)
                 );
                 return ret != 0;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleSetHeightOverride(Ptr, value ? 1 : 0)
+                    BindingC.SkiaTextlayoutTextStyleSetHeightOverride(NativePtr, value ? 1 : 0)
                 );
         }
 
@@ -284,13 +287,13 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleGetHalfLeading(Ptr, out var ret)
+                    BindingC.SkiaTextlayoutTextStyleGetHalfLeading(NativePtr, out var ret)
                 );
                 return ret != 0;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleSetHalfLeading(Ptr, value ? 1 : 0)
+                    BindingC.SkiaTextlayoutTextStyleSetHalfLeading(NativePtr, value ? 1 : 0)
                 );
         }
 
@@ -299,13 +302,13 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleGetLetterSpacing(Ptr, out var ret)
+                    BindingC.SkiaTextlayoutTextStyleGetLetterSpacing(NativePtr, out var ret)
                 );
                 return ret;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleSetLetterSpacing(Ptr, value)
+                    BindingC.SkiaTextlayoutTextStyleSetLetterSpacing(NativePtr, value)
                 );
         }
 
@@ -314,13 +317,13 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleGetWordSpacing(Ptr, out var ret)
+                    BindingC.SkiaTextlayoutTextStyleGetWordSpacing(NativePtr, out var ret)
                 );
                 return ret;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleSetWordSpacing(Ptr, value)
+                    BindingC.SkiaTextlayoutTextStyleSetWordSpacing(NativePtr, value)
                 );
         }
 
@@ -328,7 +331,7 @@ namespace Milestro.Skia.TextLayout
         {
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleSetTypeface(Ptr, value.Ptr)
+                    BindingC.SkiaTextlayoutTextStyleSetTypeface(NativePtr, value.NativePtr)
                 );
         }
 
@@ -340,7 +343,7 @@ namespace Milestro.Skia.TextLayout
             {
                 var s = value.CStr();
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleSetLocale(Ptr, s)
+                    BindingC.SkiaTextlayoutTextStyleSetLocale(NativePtr, s)
                 );
                 _cachedLocale = value;
             }
@@ -351,10 +354,10 @@ namespace Milestro.Skia.TextLayout
         {
             get
             {
-                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleGetTextBaseline(Ptr, out var ret));
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleGetTextBaseline(NativePtr, out var ret));
                 return ret;
             }
-            set => ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleSetTextBaseline(Ptr, value));
+            set => ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleSetTextBaseline(NativePtr, value));
         }
 
 
@@ -363,7 +366,7 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleIsPlaceholder(Ptr, out var ret)
+                    BindingC.SkiaTextlayoutTextStyleIsPlaceholder(NativePtr, out var ret)
                 );
                 return ret != 0;
             }
@@ -372,7 +375,7 @@ namespace Milestro.Skia.TextLayout
         public void SetPlaceHolder()
         {
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutTextStyleSetPlaceholder(Ptr)
+                BindingC.SkiaTextlayoutTextStyleSetPlaceholder(NativePtr)
             );
         }
     }

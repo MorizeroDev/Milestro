@@ -7,14 +7,10 @@ namespace Milestro.Skia.TextLayout
     {
         public IntPtr Ptr { get; private set; }
 
+        // Borrowed native pointer; Font does not own or destroy it.
         public Font(IntPtr font)
         {
             Ptr = font;
-        }
-
-        ~Font()
-        {
-            // Nop
         }
 
         public Path GetPath(ushort glyphId)

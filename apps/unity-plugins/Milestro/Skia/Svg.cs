@@ -1,23 +1,21 @@
 using System;
 using Milestro.Binding;
 using Paraparty.UnityNative;
+using Paraparty.UnityNative.Base;
 using UnityEngine;
 
 namespace Milestro.Skia.TextLayout
 {
-    public class Svg
+    public class Svg : DisposableNativeObject
     {
-        public IntPtr Ptr { get; private set; }
-
         internal Svg(IntPtr ptr)
+            : base(ptr)
         {
-            Ptr = ptr;
         }
 
         public unsafe Svg(void* data, ulong size)
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaSvgCreate(out var ptr, data, size));
-            Ptr = ptr;
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaSvgCreate(out ptr, data, size));
         }
 
         /// <summary>
@@ -56,16 +54,21 @@ namespace Milestro.Skia.TextLayout
             return MakeFromBytes(data.CStr());
         }
 
-        ~Svg()
+        protected override void DisposeUnmanaged()
         {
-            var ptr = Ptr;
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaSvgDestroy(out ptr));
-            Ptr = ptr;
+            if (ptr != IntPtr.Zero)
+            {
+                var nativePtr = ptr;
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaSvgDestroy(out nativePtr));
+                ptr = nativePtr;
+            }
+
+            base.DisposeUnmanaged();
         }
 
         public void Render(Canvas canvas)
         {
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaSvgRender(Ptr, canvas.Ptr));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaSvgRender(NativePtr, canvas.NativePtr));
         }
     }
 }

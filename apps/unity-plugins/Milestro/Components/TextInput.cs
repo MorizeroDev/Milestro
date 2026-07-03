@@ -15,13 +15,6 @@ using UnityEngine.Serialization;
 
 namespace Milestro.Components
 {
-    public enum TextInputAlignment
-    {
-        Left,
-        Center,
-        Right
-    }
-
     [DisallowMultipleComponent]
     [RequireComponent(typeof(CanvasRenderer))]
     [AddComponentMenu("Milestro/Text Input")]

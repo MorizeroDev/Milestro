@@ -2,7 +2,8 @@
     "name": "Milestro.Experimental",
     "rootNamespace": "",
     "references": [
-        "Milestro"
+        "Milestro",
+        "party.para.util.unitynative"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
