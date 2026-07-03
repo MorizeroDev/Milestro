@@ -16,6 +16,7 @@ option(MILESTRO_SKIA_CMAKE "Skia cmake path")
 
 set(MILESTRO_REMAP_SOURCE_PREFIX "Milestro" CACHE STRING "Logical source root used in release debug info and __FILE__ remapping")
 set(MILESTRO_REMAP_BUILD_PREFIX "MilestroBuild" CACHE STRING "Logical build root used in release debug info and __FILE__ remapping")
+set(MILESTRO_UNITY_PLUGIN_OUTPUT_DIR "" CACHE PATH "Optional Unity plugin package output directory for the milestro_unity_plugin target")
 
 set(CMAKE_CXX_STANDARD 20)
 
@@ -135,6 +136,34 @@ foreach (OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_BINARY_DIR}/lib)
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_BINARY_DIR}/lib)
 endforeach (OUTPUTCONFIG)
+
+if (CMAKE_HOST_WIN32)
+    set(MILESTRO_GRADLE_WRAPPER "${PROJECT_SOURCE_DIR}/gradlew.bat")
+else ()
+    set(MILESTRO_GRADLE_WRAPPER "${PROJECT_SOURCE_DIR}/gradlew")
+endif ()
+
+set(MILESTRO_UNITY_PLUGIN_GRADLE_ARGS "packageUnityPlugin")
+if (MILESTRO_UNITY_PLUGIN_OUTPUT_DIR)
+    get_filename_component(MILESTRO_UNITY_PLUGIN_OUTPUT_DIR_ABSOLUTE
+            "${MILESTRO_UNITY_PLUGIN_OUTPUT_DIR}"
+            ABSOLUTE
+            BASE_DIR "${PROJECT_BINARY_DIR}"
+    )
+else ()
+    set(MILESTRO_UNITY_PLUGIN_OUTPUT_DIR_ABSOLUTE "${PROJECT_BINARY_DIR}/unity-plugin")
+endif ()
+
+list(APPEND MILESTRO_UNITY_PLUGIN_GRADLE_ARGS
+        "-PmilestroUnityPluginOutputDir=${MILESTRO_UNITY_PLUGIN_OUTPUT_DIR_ABSOLUTE}"
+)
+
+add_custom_target(milestro_unity_plugin
+        COMMAND "${MILESTRO_GRADLE_WRAPPER}" ${MILESTRO_UNITY_PLUGIN_GRADLE_ARGS}
+        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+        COMMENT "Packaging Milestro Unity plugin"
+        USES_TERMINAL
+)
 
 # Append our module directory to CMake
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")

@@ -6,4 +6,4 @@ unity-plugins/Milestro/Plugins/**
 
 # ignore icudtl
 unity-plugins/Resources/Milestro/icudtl.dat.bytes
-unity-plugins/Resources/Milestro/icudtl.dat.bytes.meta
+!unity-plugins/Resources/Milestro/icudtl.dat.bytes.meta

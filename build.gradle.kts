@@ -17,8 +17,65 @@ val h2csSourceFile = file("include/Milestro/game/milestro_game_interface.h")
 val h2csCsharpBindingOutputFile = file("apps/unity-plugins/Milestro/Binding/BindingC.cs")
 val h2csCppFrameworkBindingOutputFile = file("apps/unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp")
 val unityPluginsFormatSolutionFile = file("apps/unity-plugins/Milestro.UnityPlugins.Format.slnx")
+val unityPluginSourceDir = file("apps/unity-plugins")
+val unityPluginPackageOutputDir = providers.gradleProperty("milestroUnityPluginOutputDir")
+    .map { file(it) }
+    .orElse(layout.buildDirectory.dir("unity-plugin").map { it.asFile })
+val icuDataFile = file("ext/icu-cmake/common/icudtl.dat")
 
 tasks {
+    val syncUnityPluginMilestro = register<Sync>("syncUnityPluginMilestro") {
+        group = "build"
+        description = "Copies the Milestro Unity runtime assembly sources into the package output."
+
+        from(unityPluginSourceDir.resolve("Milestro"))
+        into(unityPluginPackageOutputDir.map { it.resolve("Milestro") })
+    }
+
+    val syncUnityPluginEditor = register<Sync>("syncUnityPluginEditor") {
+        group = "build"
+        description = "Copies the Milestro Unity editor assembly sources into the package output."
+
+        from(unityPluginSourceDir.resolve("Milestro.Editor"))
+        into(unityPluginPackageOutputDir.map { it.resolve("Milestro.Editor") })
+    }
+
+    val syncUnityPluginExperimental = register<Sync>("syncUnityPluginExperimental") {
+        group = "build"
+        description = "Copies the Milestro Unity experimental assembly sources into the package output."
+
+        from(unityPluginSourceDir.resolve("Milestro.Experimental"))
+        into(unityPluginPackageOutputDir.map { it.resolve("Milestro.Experimental") })
+    }
+
+    val syncUnityPluginResources = register<Sync>("syncUnityPluginResources") {
+        group = "build"
+        description = "Copies Milestro Unity resources and generates the ICU TextAsset."
+        duplicatesStrategy = DuplicatesStrategy.FAIL
+
+        from(unityPluginSourceDir.resolve("Resources"))
+        into(unityPluginPackageOutputDir.map { it.resolve("Resources") })
+        from(icuDataFile) {
+            into("Milestro")
+            rename { "icudtl.dat.bytes" }
+        }
+    }
+
+    register("packageUnityPlugin") {
+        group = "build"
+        description = "Packages Milestro Unity plugin sources and resources."
+        dependsOn(
+            syncUnityPluginMilestro,
+            syncUnityPluginEditor,
+            syncUnityPluginExperimental,
+            syncUnityPluginResources,
+        )
+
+        doLast {
+            logger.lifecycle("Packaged Milestro Unity plugin to ${unityPluginPackageOutputDir.get()}.")
+        }
+    }
+
     register("format-cs") {
         group = "formatting"
         description = "Formats C# files under apps/unity-plugins with dotnet format."
