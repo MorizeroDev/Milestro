@@ -90,6 +90,11 @@ int64_t MilestroSkiaTextlayoutParagraphStyleSetMaxLines(milestro::skia::textlayo
     return MILESTRO_API_RET_OK;
 }
 
+int64_t MilestroSkiaTextlayoutParagraphStyleClearMaxLines(milestro::skia::textlayout::ParagraphStyle *s) {
+    s->clearMaxLines();
+    return MILESTRO_API_RET_OK;
+}
+
 int64_t MilestroSkiaTextlayoutParagraphStyleSetEllipsis(milestro::skia::textlayout::ParagraphStyle *s,
                                                         uint8_t *ellipsis
 ) {

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Milestro.Components.Internal;
+using Milestro.Configuration;
 using Milestro.Model;
 using Milestro.Skia;
 using Milestro.Skia.TextLayout;
@@ -15,6 +16,18 @@ using UnityEngine.Serialization;
 
 namespace Milestro.Components
 {
+    public enum TextInputLineMode
+    {
+        SingleLine,
+        MultiLine,
+    }
+
+    public enum TextInputWrapMode
+    {
+        Wrap,
+        NoWrap,
+    }
+
     [DisallowMultipleComponent]
     [RequireComponent(typeof(CanvasRenderer))]
     [AddComponentMenu("Milestro/Text Input")]
@@ -28,13 +41,12 @@ namespace Milestro.Components
         ISelectHandler,
         IDeselectHandler
     {
-        private const float KeyRepeatInitialDelay = 0.42f;
-        private const float KeyRepeatInterval = 0.045f;
-        private const float SurrogatePairTimeout = 2.5f;
-        private const float ScrollWheelStepPixels = 48f;
         private const char ReplacementCharacter = '\ufffd';
+        private const float DefaultScrollWheelStepPixels = 48f;
+        private const float DefaultKeyboardScrollInterlockTimeoutSeconds = 0.03f;
+        private const float DefaultScrollTweenDurationSeconds = 0.14f;
 
-        [TextArea(1, 1)]
+        [TextArea(1, 8)]
         [SerializeField]
         [FormerlySerializedAs("text")]
         private string m_text = "";
@@ -70,6 +82,31 @@ namespace Milestro.Components
         private TextInputAlignment m_textAlignment = TextInputAlignment.Left;
 
         [SerializeField]
+        private TextInputLineMode m_lineMode = TextInputLineMode.SingleLine;
+
+        [SerializeField]
+        private TextInputWrapMode m_wrapMode = TextInputWrapMode.NoWrap;
+
+        [SerializeField]
+        private bool m_readOnly;
+
+        [SerializeField]
+        private bool m_maskInput;
+
+        [SerializeField]
+        private bool m_allowCopy = true;
+
+        [SerializeField]
+        private bool m_selectionEnabled = true;
+
+        [SerializeField]
+        private bool m_smoothScroll = true;
+
+        [SerializeField]
+        [Min(0f)]
+        private float m_scrollTweenDurationSeconds = DefaultScrollTweenDurationSeconds;
+
+        [SerializeField]
         [FormerlySerializedAs("blinkInterval")]
         private float m_blinkInterval = 0.5f;
 
@@ -93,12 +130,21 @@ namespace Milestro.Components
         [NonSerialized] private float pendingHighSurrogateTime;
         [NonSerialized] private char pendingGuiHighSurrogate;
         [NonSerialized] private float pendingGuiHighSurrogateTime;
+        [NonSerialized] private readonly ScrollAxisLock scrollAxisLock = new ScrollAxisLock();
+        [NonSerialized] private readonly ScrollTween scrollTweenX = new ScrollTween();
+        [NonSerialized] private readonly ScrollTween scrollTweenY = new ScrollTween();
         [NonSerialized] private readonly StringBuilder queuedGuiCommittedInput = new StringBuilder();
         [NonSerialized] private float nextLeftRepeatTime;
         [NonSerialized] private float nextRightRepeatTime;
+        [NonSerialized] private float nextUpRepeatTime;
+        [NonSerialized] private float nextDownRepeatTime;
+        [NonSerialized] private float nextHomeRepeatTime;
+        [NonSerialized] private float nextEndRepeatTime;
         [NonSerialized] private float nextBackspaceRepeatTime;
         [NonSerialized] private float nextDeleteRepeatTime;
         [NonSerialized] private bool pointerSelecting;
+        [NonSerialized] private bool keyboardScrollInterlockActive;
+        [NonSerialized] private float keyboardScrollInterlockUntilTime = -1f;
 #if UNITY_EDITOR
         [NonSerialized] private bool m_editorRebuildQueued;
 #endif
@@ -108,7 +154,7 @@ namespace Milestro.Components
             get => m_text;
             set
             {
-                var next = value ?? "";
+                var next = NormalizeTextForLineMode(value, m_lineMode);
                 if (m_text == next)
                 {
                     return;
@@ -119,10 +165,124 @@ namespace Milestro.Components
                 {
                     inputBox.Text = m_text;
                 }
+                CancelScrollTweens();
                 compositionActive = false;
                 lastCompositionText = "";
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
+                paintDirty = true;
+            }
+        }
+
+        public TextInputLineMode lineMode
+        {
+            get => m_lineMode;
+            set
+            {
+                if (m_lineMode == value)
+                {
+                    return;
+                }
+
+                m_lineMode = value;
+                CoerceWrapModeForLineMode();
+                var nextText = NormalizeTextForLineMode(m_text, m_lineMode);
+                if (m_text != nextText)
+                {
+                    m_text = nextText;
+                    if (inputBox != null)
+                    {
+                        inputBox.Text = m_text;
+                    }
+                }
+                compositionActive = false;
+                lastCompositionText = "";
+                ResetSurrogateInputState();
+                ResetKeyRepeatState();
+                CancelScrollTweens();
+                inputBox?.SetSoftWrap(EffectiveSoftWrap());
+                styleDirty = true;
+                layoutDirty = true;
+                paintDirty = true;
+            }
+        }
+
+        public TextInputWrapMode wrapMode
+        {
+            get => m_wrapMode;
+            set
+            {
+                if (m_wrapMode == value)
+                {
+                    return;
+                }
+
+                m_wrapMode = m_lineMode == TextInputLineMode.SingleLine ? TextInputWrapMode.NoWrap : value;
+                CancelScrollTweens();
+                inputBox?.SetSoftWrap(EffectiveSoftWrap());
+                layoutDirty = true;
+                paintDirty = true;
+            }
+        }
+
+        public bool readOnly
+        {
+            get => m_readOnly;
+            set
+            {
+                if (m_readOnly == value)
+                {
+                    return;
+                }
+
+                m_readOnly = value;
+                if (m_readOnly)
+                {
+                    ClearPendingTextInput();
+                    inputBox?.ClearComposition();
+                    inputBox?.BreakUndoGroup();
+                }
+                ApplyImeCompositionMode();
+                paintDirty = true;
+            }
+        }
+
+        public bool maskInput
+        {
+            get => m_maskInput;
+            set
+            {
+                if (m_maskInput == value)
+                {
+                    return;
+                }
+
+                m_maskInput = value;
+                CancelScrollTweens();
+                inputBox?.SetMaskInput(m_maskInput);
+                layoutDirty = true;
+                paintDirty = true;
+            }
+        }
+
+        public bool allowCopy
+        {
+            get => m_allowCopy;
+            set => m_allowCopy = value;
+        }
+
+        public bool selectionEnabled
+        {
+            get => m_selectionEnabled;
+            set
+            {
+                if (m_selectionEnabled == value)
+                {
+                    return;
+                }
+
+                m_selectionEnabled = value;
+                ClearSelectionIfDisabled();
                 paintDirty = true;
             }
         }
@@ -148,6 +308,7 @@ namespace Milestro.Components
                 }
 
                 m_textAlignment = value;
+                CancelScrollTweens();
                 styleDirty = true;
                 layoutDirty = true;
                 paintDirty = true;
@@ -189,6 +350,9 @@ namespace Milestro.Components
             RetireInputBox();
             surface?.Dispose();
             surface = null;
+            CancelScrollTweens();
+            scrollAxisLock.Reset();
+            ResetKeyboardScrollInterlock();
             styleDirty = true;
             layoutDirty = true;
             paintDirty = true;
@@ -207,6 +371,11 @@ namespace Milestro.Components
                 {
                     ReleaseInputFocus();
                 }
+            }
+
+            if (inputBox != null && !styleDirty && !layoutDirty)
+            {
+                TickScrollTweens(inputBox);
             }
 
             RebuildResources();
@@ -230,12 +399,17 @@ namespace Milestro.Components
 
         public void OnBeginDrag(PointerEventData eventData)
         {
-            pointerSelecting = true;
-            HitTestPointer(eventData, true);
+            pointerSelecting = m_selectionEnabled;
+            HitTestPointer(eventData, m_selectionEnabled);
         }
 
         public void OnDrag(PointerEventData eventData)
         {
+            if (!m_selectionEnabled)
+            {
+                return;
+            }
+
             pointerSelecting = true;
             HitTestPointer(eventData, true);
         }
@@ -252,70 +426,210 @@ namespace Milestro.Components
                 return;
             }
 
-            var horizontalDelta = ResolveHorizontalScrollDelta(eventData.scrollDelta);
-            if (Mathf.Approximately(horizontalDelta, 0f))
+            if (TrySuppressKeyboardInterlockedScroll(eventData))
             {
-                PassScrollToParent(eventData);
+                return;
+            }
+
+            var axis = scrollAxisLock.Resolve(eventData.scrollDelta,
+                ScrollEventUtil.IsHorizontalScrollModifierDown(),
+                out var contentOffsetDelta,
+                out var lockedScrollDelta);
+            if (axis == ScrollAxis.None)
+            {
+                ScrollEventUtil.PassScrollToParent(transform, eventData, lockedScrollDelta);
                 return;
             }
 
             RebuildResources();
             if (inputBox == null)
             {
-                PassScrollToParent(eventData);
+                ScrollEventUtil.PassScrollToParent(transform, eventData, lockedScrollDelta);
                 return;
             }
 
-            if (!inputBox.ScrollByX(horizontalDelta * ScrollWheelStepPixels))
+            var stepPixels = ScrollWheelStepPixels();
+            var handledX = (axis == ScrollAxis.Horizontal || axis == ScrollAxis.Free) &&
+                           TryScrollX(inputBox, contentOffsetDelta.x, stepPixels);
+            var handledY = (axis == ScrollAxis.Vertical || axis == ScrollAxis.Free) &&
+                           TryScrollY(inputBox, contentOffsetDelta.y, stepPixels);
+            if (!handledX && !handledY)
             {
-                PassScrollToParent(eventData);
+                ScrollEventUtil.PassScrollToParent(transform, eventData, lockedScrollDelta);
                 return;
             }
 
-            paintDirty = true;
-            RebuildResources();
+            if (!ShouldTweenScroll())
+            {
+                paintDirty = true;
+                RebuildResources();
+            }
+
+            if (axis == ScrollAxis.Free)
+            {
+                ScrollEventUtil.PassScrollToParent(transform,
+                    eventData,
+                    new Vector2(handledX ? 0f : lockedScrollDelta.x, handledY ? 0f : lockedScrollDelta.y));
+            }
+
             eventData.Use();
         }
 
-        private static float ResolveHorizontalScrollDelta(Vector2 scrollDelta)
+        private bool TryScrollX(InputBox editor, float contentOffsetDelta, float stepPixels)
         {
-            // Unity scrollDelta is input-device movement. InputBox scrollX is a content-space
-            // viewport offset, so positive scrollX reveals content to the right and moves text
-            // left visually. Invert device deltas before applying them to scrollX.
-            if (IsFinite(scrollDelta.x) && !Mathf.Approximately(scrollDelta.x, 0f))
+            if (Mathf.Approximately(contentOffsetDelta, 0f))
             {
-                return -scrollDelta.x;
+                return false;
             }
 
-            if (!IsHorizontalScrollModifierDown() ||
-                !IsFinite(scrollDelta.y) ||
-                Mathf.Approximately(scrollDelta.y, 0f))
+            var metrics = editor.GetMetrics();
+            scrollTweenX.CancelIfExternallyMoved(metrics.ScrollX);
+            var previousScrollX = scrollTweenX.IsActive ? scrollTweenX.Target : metrics.ScrollX;
+            var nextScrollX = Mathf.Clamp(previousScrollX + contentOffsetDelta * stepPixels,
+                0f,
+                MaxScrollX(metrics));
+            if (!Mathf.Approximately(previousScrollX, nextScrollX))
+            {
+                ScrollToX(editor, metrics, nextScrollX);
+                return true;
+            }
+
+            return scrollTweenX.IsActive;
+        }
+
+        private bool TryScrollY(InputBox editor, float contentOffsetDelta, float stepPixels)
+        {
+            if (Mathf.Approximately(contentOffsetDelta, 0f))
+            {
+                return false;
+            }
+
+            var metrics = editor.GetMetrics();
+            scrollTweenY.CancelIfExternallyMoved(metrics.ScrollY);
+            var previousScrollY = scrollTweenY.IsActive ? scrollTweenY.Target : metrics.ScrollY;
+            var nextScrollY = Mathf.Clamp(previousScrollY + contentOffsetDelta * stepPixels,
+                0f,
+                MaxScrollY(metrics));
+            if (!Mathf.Approximately(previousScrollY, nextScrollY))
+            {
+                ScrollToY(editor, metrics, nextScrollY);
+                return true;
+            }
+
+            return scrollTweenY.IsActive;
+        }
+
+        private void ScrollToX(InputBox editor, InputBoxMetrics metrics, float nextScrollX)
+        {
+            if (!ShouldTweenScroll())
+            {
+                scrollTweenX.Cancel();
+                if (editor.ScrollByX(nextScrollX - metrics.ScrollX))
+                {
+                    paintDirty = true;
+                }
+                return;
+            }
+
+            scrollTweenX.Start(metrics.ScrollX, nextScrollX);
+        }
+
+        private void ScrollToY(InputBox editor, InputBoxMetrics metrics, float nextScrollY)
+        {
+            if (!ShouldTweenScroll())
+            {
+                scrollTweenY.Cancel();
+                if (editor.ScrollByY(nextScrollY - metrics.ScrollY))
+                {
+                    paintDirty = true;
+                }
+                return;
+            }
+
+            scrollTweenY.Start(metrics.ScrollY, nextScrollY);
+        }
+
+        private void TickScrollTweens(InputBox editor)
+        {
+            if (!scrollTweenX.IsActive && !scrollTweenY.IsActive)
+            {
+                return;
+            }
+
+            var metrics = editor.GetMetrics();
+            var changed = false;
+            if (TickScrollTween(scrollTweenX, metrics.ScrollX, MaxScrollX(metrics), out var nextScrollX))
+            {
+                changed |= editor.ScrollByX(nextScrollX - metrics.ScrollX);
+            }
+
+            if (TickScrollTween(scrollTweenY, metrics.ScrollY, MaxScrollY(metrics), out var nextScrollY))
+            {
+                changed |= editor.ScrollByY(nextScrollY - metrics.ScrollY);
+            }
+
+            if (changed)
+            {
+                paintDirty = true;
+            }
+        }
+
+        private bool TickScrollTween(ScrollTween tween, float currentValue, float maxValue, out float nextValue)
+        {
+            return tween.Tick(currentValue,
+                maxValue,
+                Time.deltaTime,
+                ScrollTweenDurationSeconds(),
+                out nextValue);
+        }
+
+        private bool ShouldTweenScroll()
+        {
+            return Application.isPlaying && m_smoothScroll && ScrollTweenDurationSeconds() > 0f;
+        }
+
+        private void CancelScrollTweens()
+        {
+            scrollTweenX.Cancel();
+            scrollTweenY.Cancel();
+        }
+
+        private float ScrollTweenDurationSeconds()
+        {
+            return FloatUtil.IsFinite(m_scrollTweenDurationSeconds)
+                ? Mathf.Max(0f, m_scrollTweenDurationSeconds)
+                : DefaultScrollTweenDurationSeconds;
+        }
+
+        private static float ScrollWheelStepPixels()
+        {
+            var stepPixels = MilestroConfiguration.Configuration.TextInput.ScrollWheelStepPixels;
+            return FloatUtil.IsFinite(stepPixels) ? Mathf.Max(1f, stepPixels) : DefaultScrollWheelStepPixels;
+        }
+
+        private static float MaxScrollX(InputBoxMetrics metrics)
+        {
+            return MaxScroll(metrics.ContentWidth, metrics.ViewportWidth);
+        }
+
+        private static float MaxScrollY(InputBoxMetrics metrics)
+        {
+            return MaxScroll(metrics.Height, metrics.ViewportHeight);
+        }
+
+        private static float MaxScroll(float contentSize, float viewportSize)
+        {
+            if (!FloatUtil.IsFinite(contentSize) || !FloatUtil.IsFinite(viewportSize))
             {
                 return 0f;
             }
 
-            // Shift+wheel maps vertical wheel movement onto the same horizontal content offset:
-            // wheel down (negative Y) increases scrollX and reveals content to the right.
-            return -scrollDelta.y;
-        }
-
-        private static bool IsHorizontalScrollModifierDown()
-        {
-            return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-        }
-
-        private void PassScrollToParent(PointerEventData eventData)
-        {
-            if (eventData.used || transform.parent == null)
-            {
-                return;
-            }
-
-            ExecuteEvents.ExecuteHierarchy(transform.parent.gameObject, eventData, ExecuteEvents.scrollHandler);
+            return Mathf.Max(0f, contentSize - viewportSize);
         }
 
         private void HitTestPointer(PointerEventData eventData, bool extendSelection)
         {
+            CancelScrollTweens();
             EventSystem.current?.SetSelectedGameObject(gameObject, eventData);
             Focus();
 
@@ -328,7 +642,13 @@ namespace Milestro.Components
                 return;
             }
 
-            var changed = inputBox.HitTest(ToContentPoint(localPoint), extendSelection);
+            var contentPoint = ToContentPoint(localPoint);
+            var effectiveExtendSelection = extendSelection && m_selectionEnabled;
+            var changed = inputBox.HitTest(contentPoint, effectiveExtendSelection);
+            if (effectiveExtendSelection && TryAutoScrollForDrag(contentPoint))
+            {
+                changed |= inputBox.HitTest(contentPoint, true);
+            }
             compositionActive = false;
             lastCompositionText = "";
             ResetSurrogateInputState();
@@ -338,11 +658,37 @@ namespace Milestro.Components
             paintDirty = true;
         }
 
+        private bool TryAutoScrollForDrag(Vector2 contentPoint)
+        {
+            if (inputBox == null)
+            {
+                return false;
+            }
+
+            var contentHeight = ContentSize().y;
+            var deltaY = 0f;
+            if (contentPoint.y < 0f)
+            {
+                deltaY = contentPoint.y;
+            }
+            else if (contentPoint.y > contentHeight)
+            {
+                deltaY = contentPoint.y - contentHeight;
+            }
+
+            if (Mathf.Approximately(deltaY, 0f))
+            {
+                return false;
+            }
+
+            return inputBox.ScrollByY(deltaY);
+        }
+
         private void OnGUI()
         {
             // Legacy Input.inputString can replacement-encode supplementary-plane text;
             // IMGUI text events can still expose the original surrogate halves.
-            if (!focused || !CanReadInput())
+            if (!focused || m_readOnly || !CanReadInput())
             {
                 return;
             }
@@ -370,6 +716,20 @@ namespace Milestro.Components
         protected override void OnValidate()
         {
             base.OnValidate();
+            CoerceWrapModeForLineMode();
+            m_text = NormalizeTextForLineMode(m_text, m_lineMode);
+            if (m_readOnly)
+            {
+                ClearPendingTextInput();
+                inputBox?.ClearComposition();
+                inputBox?.BreakUndoGroup();
+            }
+            inputBox?.SetMaskInput(m_maskInput);
+            ClearSelectionIfDisabled();
+            ApplyImeCompositionMode();
+            m_scrollTweenDurationSeconds = FloatUtil.IsFinite(m_scrollTweenDurationSeconds)
+                ? Mathf.Max(0f, m_scrollTweenDurationSeconds)
+                : DefaultScrollTweenDurationSeconds;
             if (surface != null) UvRect = surface.DisplayUvRect;
             styleDirty = true;
             layoutDirty = true;
@@ -384,6 +744,8 @@ namespace Milestro.Components
             {
                 layoutDirty = true;
                 paintDirty = true;
+                CancelScrollTweens();
+                scrollAxisLock.Reset();
                 SetVerticesDirty();
 #if UNITY_EDITOR
                 QueueEditorRebuild();
@@ -418,7 +780,7 @@ namespace Milestro.Components
         private void Focus()
         {
             focused = true;
-            Input.imeCompositionMode = IMECompositionMode.On;
+            ApplyImeCompositionMode();
             ResetBlink();
             paintDirty = true;
         }
@@ -484,9 +846,19 @@ namespace Milestro.Components
 
         private void ReadKeyboardInput()
         {
+            if (m_readOnly)
+            {
+                ClearPendingTextInput();
+                var readOnlyChanged = ClearActiveComposition();
+                readOnlyChanged |= ReadEditingKeys(false, false);
+                ApplyInputChange(readOnlyChanged);
+                return;
+            }
+
             var changed = false;
             var hadCompositionBeforeInput = compositionActive || !string.IsNullOrEmpty(Input.compositionString);
             var committedText = ReadCommittedText();
+            var committedTextHadLineBreak = ContainsLineBreak(committedText);
             if (committedText.Length > 0 && inputBox != null)
             {
                 if (compositionActive)
@@ -506,11 +878,11 @@ namespace Milestro.Components
                 changed |= UpdateComposition();
             }
 
-            changed |= ReadEditingKeys(hadCompositionBeforeInput);
+            changed |= ReadEditingKeys(hadCompositionBeforeInput, committedTextHadLineBreak);
             ApplyInputChange(changed);
         }
 
-        private bool ReadEditingKeys(bool suppressForComposition)
+        private bool ReadEditingKeys(bool suppressForComposition, bool suppressEnterInsertion)
         {
             if (suppressForComposition || compositionActive || inputBox == null)
             {
@@ -529,13 +901,26 @@ namespace Milestro.Components
             }
 
             var changed = false;
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+            {
+                ResetSurrogateInputState();
+                if (!m_readOnly && m_lineMode == TextInputLineMode.MultiLine && !suppressEnterInsertion)
+                {
+                    inputBox.InsertText("\n");
+                    changed = true;
+                }
+            }
+
             if (InputBoxShortcutUtil.IsSelectAllDown())
             {
                 ResetSurrogateInputState();
-                changed |= inputBox.SelectAll();
+                if (m_selectionEnabled)
+                {
+                    changed |= inputBox.SelectAll();
+                }
             }
 
-            var extendSelection = InputBoxShortcutUtil.IsSelectionExtendDown();
+            var extendSelection = m_selectionEnabled && InputBoxShortcutUtil.IsSelectionExtendDown();
             if (ShouldProcessRepeatingKey(KeyCode.LeftArrow, ref nextLeftRepeatTime))
             {
                 ResetSurrogateInputState();
@@ -546,15 +931,45 @@ namespace Milestro.Components
                 ResetSurrogateInputState();
                 changed |= inputBox.MoveNext(extendSelection);
             }
+            if (ShouldProcessRepeatingKey(KeyCode.UpArrow, ref nextUpRepeatTime))
+            {
+                ResetSurrogateInputState();
+                changed |= inputBox.MoveUp(extendSelection);
+            }
+            if (ShouldProcessRepeatingKey(KeyCode.DownArrow, ref nextDownRepeatTime))
+            {
+                ResetSurrogateInputState();
+                changed |= inputBox.MoveDown(extendSelection);
+            }
+            if (ShouldProcessRepeatingKey(KeyCode.Home, ref nextHomeRepeatTime))
+            {
+                ResetSurrogateInputState();
+                changed |= InputBoxShortcutUtil.IsDocumentBoundaryModifierDown()
+                    ? inputBox.MoveDocumentStart(extendSelection)
+                    : inputBox.MoveLineStart(extendSelection);
+            }
+            if (ShouldProcessRepeatingKey(KeyCode.End, ref nextEndRepeatTime))
+            {
+                ResetSurrogateInputState();
+                changed |= InputBoxShortcutUtil.IsDocumentBoundaryModifierDown()
+                    ? inputBox.MoveDocumentEnd(extendSelection)
+                    : inputBox.MoveLineEnd(extendSelection);
+            }
             if (ShouldProcessRepeatingKey(KeyCode.Backspace, ref nextBackspaceRepeatTime))
             {
                 ResetSurrogateInputState();
-                changed |= inputBox.DeleteBackward();
+                if (!m_readOnly)
+                {
+                    changed |= inputBox.DeleteBackward();
+                }
             }
             if (ShouldProcessRepeatingKey(KeyCode.Delete, ref nextDeleteRepeatTime))
             {
                 ResetSurrogateInputState();
-                changed |= inputBox.DeleteForward();
+                if (!m_readOnly)
+                {
+                    changed |= inputBox.DeleteForward();
+                }
             }
             return changed;
         }
@@ -571,6 +986,10 @@ namespace Milestro.Components
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
+                if (m_readOnly)
+                {
+                    return true;
+                }
                 changed = inputBox.Undo();
                 return true;
             }
@@ -579,6 +998,10 @@ namespace Milestro.Components
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
+                if (m_readOnly)
+                {
+                    return true;
+                }
                 changed = inputBox.Redo();
                 return true;
             }
@@ -598,6 +1021,11 @@ namespace Milestro.Components
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
+                if (!m_allowCopy)
+                {
+                    return true;
+                }
+
                 var selectedText = inputBox.SelectedText;
                 if (selectedText.Length > 0)
                 {
@@ -610,6 +1038,11 @@ namespace Milestro.Components
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
+                if (!m_allowCopy)
+                {
+                    return true;
+                }
+
                 if (!inputBox.Selection.HasSelection)
                 {
                     return true;
@@ -617,6 +1050,11 @@ namespace Milestro.Components
 
                 var selectedText = inputBox.SelectedText;
                 GUIUtility.systemCopyBuffer = selectedText;
+                if (m_readOnly)
+                {
+                    return true;
+                }
+
                 inputBox.BreakUndoGroup();
                 changed = inputBox.DeleteForward();
                 inputBox.BreakUndoGroup();
@@ -627,7 +1065,12 @@ namespace Milestro.Components
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
-                var clipboardText = GUIUtility.systemCopyBuffer ?? "";
+                if (m_readOnly)
+                {
+                    return true;
+                }
+
+                var clipboardText = NormalizeTextForLineMode(GUIUtility.systemCopyBuffer, m_lineMode);
                 if (clipboardText.Length == 0)
                 {
                     return true;
@@ -643,12 +1086,46 @@ namespace Milestro.Components
             return false;
         }
 
+        private bool ClearActiveComposition()
+        {
+            compositionActive = false;
+            lastCompositionText = "";
+            return inputBox != null && inputBox.ClearComposition();
+        }
+
+        private void ClearPendingTextInput()
+        {
+            compositionActive = false;
+            lastCompositionText = "";
+            ResetSurrogateInputState();
+        }
+
+        private void ClearSelectionIfDisabled()
+        {
+            if (m_selectionEnabled || inputBox == null)
+            {
+                return;
+            }
+
+            inputBox.ClearSelection();
+        }
+
+        private void ApplyImeCompositionMode()
+        {
+            if (!focused)
+            {
+                return;
+            }
+
+            Input.imeCompositionMode = m_readOnly ? IMECompositionMode.Off : IMECompositionMode.On;
+        }
+
         private bool ShouldProcessRepeatingKey(KeyCode keyCode, ref float nextRepeatTime)
         {
             var now = Time.unscaledTime;
             if (Input.GetKeyDown(keyCode))
             {
-                nextRepeatTime = now + KeyRepeatInitialDelay;
+                nextRepeatTime = now + MilestroConfiguration.Configuration.TextInput.KeyRepeatInitialDelay;
                 return true;
             }
 
@@ -660,7 +1137,7 @@ namespace Milestro.Components
 
             if (nextRepeatTime <= 0)
             {
-                nextRepeatTime = now + KeyRepeatInitialDelay;
+                nextRepeatTime = now + MilestroConfiguration.Configuration.TextInput.KeyRepeatInitialDelay;
                 return false;
             }
 
@@ -669,7 +1146,7 @@ namespace Milestro.Components
                 return false;
             }
 
-            nextRepeatTime = now + KeyRepeatInterval;
+            nextRepeatTime = now + MilestroConfiguration.Configuration.TextInput.KeyRepeatInterval;
             return true;
         }
 
@@ -677,6 +1154,10 @@ namespace Milestro.Components
         {
             nextLeftRepeatTime = 0;
             nextRightRepeatTime = 0;
+            nextUpRepeatTime = 0;
+            nextDownRepeatTime = 0;
+            nextHomeRepeatTime = 0;
+            nextEndRepeatTime = 0;
             nextBackspaceRepeatTime = 0;
             nextDeleteRepeatTime = 0;
         }
@@ -692,9 +1173,66 @@ namespace Milestro.Components
             {
                 m_text = inputBox.Text;
                 inputBox.EnsureCaretVisible();
+                CancelScrollTweens();
+                BeginKeyboardScrollInterlock();
                 ResetBlink();
                 paintDirty = true;
             }
+        }
+
+        private bool TrySuppressKeyboardInterlockedScroll(PointerEventData eventData)
+        {
+            if (!keyboardScrollInterlockActive)
+            {
+                return false;
+            }
+
+            var now = Time.unscaledTime;
+            if (!IsHorizontalCaretNavigationDown() && now > keyboardScrollInterlockUntilTime)
+            {
+                ResetKeyboardScrollInterlock();
+                return false;
+            }
+
+            if (!HasHorizontalContentScroll(eventData.scrollDelta, ScrollEventUtil.IsHorizontalScrollModifierDown()))
+            {
+                return false;
+            }
+
+            scrollAxisLock.Reset();
+            eventData.Use();
+            return true;
+        }
+
+        private void BeginKeyboardScrollInterlock()
+        {
+            keyboardScrollInterlockActive = true;
+            keyboardScrollInterlockUntilTime = Time.unscaledTime + KeyboardScrollInterlockTimeoutSeconds();
+            scrollAxisLock.Reset();
+        }
+
+        private void ResetKeyboardScrollInterlock()
+        {
+            keyboardScrollInterlockActive = false;
+            keyboardScrollInterlockUntilTime = -1f;
+        }
+
+        private static bool HasHorizontalContentScroll(Vector2 scrollDelta, bool forceHorizontal)
+        {
+            var hasHorizontalDelta = FloatUtil.IsFinite(scrollDelta.x) && !Mathf.Approximately(scrollDelta.x, 0f);
+            var hasVerticalDelta = FloatUtil.IsFinite(scrollDelta.y) && !Mathf.Approximately(scrollDelta.y, 0f);
+            return hasHorizontalDelta || (forceHorizontal && hasVerticalDelta);
+        }
+
+        private static float KeyboardScrollInterlockTimeoutSeconds()
+        {
+            var timeoutSeconds = MilestroConfiguration.Configuration.TextInput.KeyboardScrollInterlockTimeoutSeconds;
+            return FloatUtil.IsFinite(timeoutSeconds) ? Mathf.Max(0f, timeoutSeconds) : DefaultKeyboardScrollInterlockTimeoutSeconds;
+        }
+
+        private static bool IsHorizontalCaretNavigationDown()
+        {
+            return Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.RightArrow);
         }
 
         private bool UpdateComposition()
@@ -711,7 +1249,8 @@ namespace Milestro.Components
             {
                 ResetSurrogateInputState();
                 compositionActive = true;
-                var compositionText = RemoveUnpairedSurrogates(rawCompositionText);
+                var compositionText = NormalizeTextForLineMode(Utf16Util.RemoveUnpairedSurrogates(rawCompositionText),
+                    m_lineMode);
                 if (compositionText.Length == 0)
                 {
                     if (lastCompositionText.Length == 0)
@@ -742,44 +1281,6 @@ namespace Milestro.Components
             return inputBox.ClearComposition();
         }
 
-        private static string RemoveUnpairedSurrogates(string input)
-        {
-            if (string.IsNullOrEmpty(input))
-            {
-                return string.Empty;
-            }
-
-            var builder = new StringBuilder(input.Length);
-            var changed = false;
-            for (var i = 0; i < input.Length; ++i)
-            {
-                var ch = input[i];
-                if (char.IsHighSurrogate(ch))
-                {
-                    if (i + 1 < input.Length && char.IsLowSurrogate(input[i + 1]))
-                    {
-                        builder.Append(ch);
-                        builder.Append(input[i + 1]);
-                        ++i;
-                        continue;
-                    }
-
-                    changed = true;
-                    continue;
-                }
-
-                if (char.IsLowSurrogate(ch))
-                {
-                    changed = true;
-                    continue;
-                }
-
-                builder.Append(ch);
-            }
-
-            return changed ? builder.ToString() : input;
-        }
-
         private void UpdateCompositionCursorPosition()
         {
             if (inputBox == null || rectTransformCache == null)
@@ -789,7 +1290,8 @@ namespace Milestro.Components
 
             var rect = inputBox.GetCompositionRect();
             var metrics = inputBox.GetMetrics();
-            var localPoint = ContentPointToLocalPoint(new Vector2(rect.xMax - metrics.ScrollX, rect.yMax));
+            var localPoint = ContentPointToLocalPoint(new Vector2(rect.xMax - metrics.ScrollX,
+                rect.yMax - metrics.ScrollY));
             var worldPoint = rectTransformCache.TransformPoint(localPoint);
             var camera = canvas == null || canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
             Input.compositionCursorPos = RectTransformUtility.WorldToScreenPoint(camera, worldPoint);
@@ -824,6 +1326,11 @@ namespace Milestro.Components
 
         private static bool IsCommittedTextControl(char ch)
         {
+            if (ch == '\n' || ch == '\r')
+            {
+                return false;
+            }
+
             return char.IsControl(ch) || ch == '\u007f';
         }
 
@@ -1006,6 +1513,19 @@ namespace Milestro.Components
                     i = SkipEscapeSequence(committedInput, i) - 1;
                     continue;
                 }
+                if (ch == '\r' || ch == '\n')
+                {
+                    ClearPendingHighSurrogate();
+                    if (m_lineMode == TextInputLineMode.MultiLine)
+                    {
+                        builder.Append('\n');
+                    }
+                    if (ch == '\r' && i + 1 < committedInput.Length && committedInput[i + 1] == '\n')
+                    {
+                        ++i;
+                    }
+                    continue;
+                }
                 if (IsCommittedTextControl(ch) || IsCommittedTextAppKitFunctionKey(ch))
                 {
                     ClearPendingHighSurrogate();
@@ -1058,9 +1578,60 @@ namespace Milestro.Components
             return builder.ToString();
         }
 
+        private static string NormalizeTextForLineMode(string input, TextInputLineMode lineMode)
+        {
+            var text = input ?? string.Empty;
+            if (text.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            var builder = new StringBuilder(text.Length);
+            for (var i = 0; i < text.Length; ++i)
+            {
+                var ch = text[i];
+                if (ch == '\r' || ch == '\n')
+                {
+                    if (lineMode == TextInputLineMode.MultiLine)
+                    {
+                        builder.Append('\n');
+                    }
+                    if (ch == '\r' && i + 1 < text.Length && text[i + 1] == '\n')
+                    {
+                        ++i;
+                    }
+                    continue;
+                }
+
+                builder.Append(ch);
+            }
+
+            return builder.ToString();
+        }
+
+        private static bool ContainsLineBreak(string input)
+        {
+            return !string.IsNullOrEmpty(input) && input.IndexOf('\n') >= 0;
+        }
+
+        private void CoerceWrapModeForLineMode()
+        {
+            if (m_lineMode == TextInputLineMode.SingleLine)
+            {
+                m_wrapMode = TextInputWrapMode.NoWrap;
+            }
+        }
+
+        private bool EffectiveSoftWrap()
+        {
+            return m_lineMode == TextInputLineMode.MultiLine && m_wrapMode == TextInputWrapMode.Wrap;
+        }
+
         private static bool IsPendingSurrogateExpired(char pending, float pendingTime)
         {
-            return pending != '\0' && Time.unscaledTime - pendingTime >= SurrogatePairTimeout;
+            return pending != '\0' &&
+                   Time.unscaledTime - pendingTime >=
+                   MilestroConfiguration.Configuration.TextInput.SurrogatePairTimeout;
         }
 
         private void SetPendingHighSurrogate(char ch)
@@ -1122,6 +1693,7 @@ namespace Milestro.Components
             ValidateMargin();
             if (layoutDirty)
             {
+                CancelScrollTweens();
                 inputBox.SetViewport(ContentSize());
                 inputBox.EnsureCaretVisible();
                 layoutDirty = false;
@@ -1149,7 +1721,14 @@ namespace Milestro.Components
 
             var paragraphStyle = new ParagraphStyle();
             paragraphStyle.TextAlign = (int)ToParagraphTextAlign(m_textAlignment);
-            paragraphStyle.MaxLines = 1;
+            if (m_lineMode == TextInputLineMode.SingleLine)
+            {
+                paragraphStyle.MaxLines = 1;
+            }
+            else
+            {
+                paragraphStyle.ClearMaxLines();
+            }
 
             var textStyle = new TextStyle();
             textStyle.SetFontFamilies(m_fontFamilies);
@@ -1159,6 +1738,10 @@ namespace Milestro.Components
             paragraphStyle.SetTextStyle(textStyle);
 
             inputBox = new InputBox(paragraphStyle, textStyle);
+            CoerceWrapModeForLineMode();
+            m_text = NormalizeTextForLineMode(m_text, m_lineMode);
+            inputBox.SetSoftWrap(EffectiveSoftWrap());
+            inputBox.SetMaskInput(m_maskInput);
             inputBox.Text = m_text;
             compositionActive = false;
             lastCompositionText = "";
@@ -1166,11 +1749,7 @@ namespace Milestro.Components
             inputBox.SetSelectionColor(m_selectionColor);
             inputBox.SetCaretWidth(m_caretWidth);
             inputBox.SetViewport(ContentSize());
-        }
-
-        private static bool IsFinite(float value)
-        {
-            return !float.IsNaN(value) && !float.IsInfinity(value);
+            ClearSelectionIfDisabled();
         }
 
         private static TextAlign ToParagraphTextAlign(TextInputAlignment alignment)
@@ -1254,6 +1833,7 @@ namespace Milestro.Components
         {
             var oldInputBox = inputBox;
             inputBox = null;
+            CancelScrollTweens();
             if (oldInputBox == null)
             {
                 return;

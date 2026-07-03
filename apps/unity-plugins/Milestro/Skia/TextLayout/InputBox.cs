@@ -1,8 +1,8 @@
 using System;
-using System.Runtime.InteropServices;
 using System.Text;
 using Milestro.Binding;
 using Milestro.Model;
+using Milestro.Util;
 using Paraparty.UnityNative.Base;
 using UnityEngine;
 
@@ -21,8 +21,9 @@ namespace Milestro.Skia.TextLayout
             get
             {
                 ThrowIfDisposed();
-                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxGetText(NativePtr, out var ptr, out var size));
-                return ReadNativeUtf8(ptr, size);
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxGetText(NativePtr, out var value));
+                using var ret = new BytesWrapper(value);
+                return ret.GetString();
             }
             set => SetText(value);
         }
@@ -36,6 +37,28 @@ namespace Milestro.Skia.TextLayout
                     BindingC.SkiaTextlayoutInputBoxGetCursor(NativePtr, out var utf8, out var utf16, out var affinity));
                 return new InputBoxCaret(utf8, utf16, affinity);
             }
+        }
+
+        public bool SoftWrap
+        {
+            get
+            {
+                ThrowIfDisposed();
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxGetSoftWrap(NativePtr, out var ret));
+                return ret != 0;
+            }
+            set => SetSoftWrap(value);
+        }
+
+        public bool MaskInput
+        {
+            get
+            {
+                ThrowIfDisposed();
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxGetMaskInput(NativePtr, out var ret));
+                return ret != 0;
+            }
+            set => SetMaskInput(value);
         }
 
         public void SetText(string text)
@@ -63,6 +86,18 @@ namespace Milestro.Skia.TextLayout
         {
             ThrowIfDisposed();
             ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxSetViewport(NativePtr, size.x, size.y));
+        }
+
+        public void SetSoftWrap(bool softWrap)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxSetSoftWrap(NativePtr, softWrap ? 1 : 0));
+        }
+
+        public void SetMaskInput(bool maskInput)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxSetMaskInput(NativePtr, maskInput ? 1 : 0));
         }
 
         public void SetCaretColor(Color32 color)
@@ -196,6 +231,66 @@ namespace Milestro.Skia.TextLayout
             return changed != 0;
         }
 
+        public bool MoveUp(bool extendSelection = false)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutInputBoxMoveUpExtendingSelection(NativePtr,
+                    extendSelection ? 1 : 0,
+                    out var changed));
+            return changed != 0;
+        }
+
+        public bool MoveDown(bool extendSelection = false)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutInputBoxMoveDownExtendingSelection(NativePtr,
+                    extendSelection ? 1 : 0,
+                    out var changed));
+            return changed != 0;
+        }
+
+        public bool MoveLineStart(bool extendSelection = false)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutInputBoxMoveLineStartExtendingSelection(NativePtr,
+                    extendSelection ? 1 : 0,
+                    out var changed));
+            return changed != 0;
+        }
+
+        public bool MoveLineEnd(bool extendSelection = false)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutInputBoxMoveLineEndExtendingSelection(NativePtr,
+                    extendSelection ? 1 : 0,
+                    out var changed));
+            return changed != 0;
+        }
+
+        public bool MoveDocumentStart(bool extendSelection = false)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutInputBoxMoveDocumentStartExtendingSelection(NativePtr,
+                    extendSelection ? 1 : 0,
+                    out var changed));
+            return changed != 0;
+        }
+
+        public bool MoveDocumentEnd(bool extendSelection = false)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutInputBoxMoveDocumentEndExtendingSelection(NativePtr,
+                    extendSelection ? 1 : 0,
+                    out var changed));
+            return changed != 0;
+        }
+
         public bool HitTest(Vector2 localPosition, bool extendSelection = false)
         {
             ThrowIfDisposed();
@@ -218,6 +313,13 @@ namespace Milestro.Skia.TextLayout
         {
             ThrowIfDisposed();
             ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxScrollByX(NativePtr, delta, out var changed));
+            return changed != 0;
+        }
+
+        public bool ScrollByY(float delta)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxScrollByY(NativePtr, delta, out var changed));
             return changed != 0;
         }
 
@@ -345,6 +447,7 @@ namespace Milestro.Skia.TextLayout
                 out var maxIntrinsicWidth,
                 out var contentWidth,
                 out var scrollX,
+                out var scrollY,
                 out var viewportWidth,
                 out var viewportHeight));
             return new InputBoxMetrics(height,
@@ -353,6 +456,7 @@ namespace Milestro.Skia.TextLayout
                 maxIntrinsicWidth,
                 contentWidth,
                 scrollX,
+                scrollY,
                 viewportWidth,
                 viewportHeight);
         }
@@ -401,62 +505,7 @@ namespace Milestro.Skia.TextLayout
 
         private static byte[] GetUtf8Bytes(string text)
         {
-            return Encoding.UTF8.GetBytes(RemoveUnpairedSurrogates(text ?? string.Empty));
-        }
-
-        private static string RemoveUnpairedSurrogates(string input)
-        {
-            if (string.IsNullOrEmpty(input))
-            {
-                return string.Empty;
-            }
-
-            var builder = new StringBuilder(input.Length);
-            var changed = false;
-            for (var i = 0; i < input.Length; ++i)
-            {
-                var ch = input[i];
-                if (char.IsHighSurrogate(ch))
-                {
-                    if (i + 1 < input.Length && char.IsLowSurrogate(input[i + 1]))
-                    {
-                        builder.Append(ch);
-                        builder.Append(input[i + 1]);
-                        ++i;
-                        continue;
-                    }
-
-                    changed = true;
-                    continue;
-                }
-
-                if (char.IsLowSurrogate(ch))
-                {
-                    changed = true;
-                    continue;
-                }
-
-                builder.Append(ch);
-            }
-
-            return changed ? builder.ToString() : input;
-        }
-
-        private static string ReadNativeUtf8(IntPtr ptr, ulong size)
-        {
-            if (ptr == IntPtr.Zero || size == 0)
-            {
-                return string.Empty;
-            }
-
-            if (size > int.MaxValue)
-            {
-                throw new Exception("Native UTF-8 string is too large.");
-            }
-
-            var bytes = new byte[(int)size];
-            Marshal.Copy(ptr, bytes, 0, bytes.Length);
-            return Encoding.UTF8.GetString(bytes);
+            return Encoding.UTF8.GetBytes(Utf16Util.RemoveUnpairedSurrogates(text ?? string.Empty));
         }
     }
 }

@@ -27,6 +27,14 @@ public :
         return paragraph->getHeight();
     }
 
+    SkScalar getLongestLine() const {
+        return paragraph->getLongestLine();
+    }
+
+    SkScalar getMaxIntrinsicWidth() const {
+        return paragraph->getMaxIntrinsicWidth();
+    }
+
     uint64_t splitGlyph(SkScalar x, SkScalar y, void* context,
                                  MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback = nullptr);
 

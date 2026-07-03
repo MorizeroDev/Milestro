@@ -1,5 +1,6 @@
 using System;
 using Milestro.Components.Internal;
+using Milestro.Configuration;
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditorInternal;
@@ -219,7 +220,9 @@ namespace Milestro.Components
                 return generatedMaterial;
             }
 
-            var resourceMaterial = Resources.Load<Material>(DefaultMaterialResourcePath);
+            var resourceMaterial =
+                Resources.Load<Material>(
+                    MilestroConfiguration.Configuration.WorldSpaceTextBox.DefaultMaterialResourcePath);
             if (resourceMaterial != null)
             {
                 generatedMaterial = new Material(resourceMaterial)

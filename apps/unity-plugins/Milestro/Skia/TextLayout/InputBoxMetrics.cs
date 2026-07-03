@@ -8,6 +8,7 @@ namespace Milestro.Skia.TextLayout
         public readonly float MaxIntrinsicWidth;
         public readonly float ContentWidth;
         public readonly float ScrollX;
+        public readonly float ScrollY;
         public readonly float ViewportWidth;
         public readonly float ViewportHeight;
 
@@ -17,6 +18,7 @@ namespace Milestro.Skia.TextLayout
             float maxIntrinsicWidth,
             float contentWidth,
             float scrollX,
+            float scrollY,
             float viewportWidth,
             float viewportHeight)
         {
@@ -26,6 +28,7 @@ namespace Milestro.Skia.TextLayout
             MaxIntrinsicWidth = maxIntrinsicWidth;
             ContentWidth = contentWidth;
             ScrollX = scrollX;
+            ScrollY = scrollY;
             ViewportWidth = viewportWidth;
             ViewportHeight = viewportHeight;
         }

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Text;
 using Milestro.Binding;
 using Paraparty.UnityNative;
 
@@ -30,7 +29,7 @@ namespace Milestro.Skia
                     ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFamilyInfoGetName(familyInfo,
                         out var namePtr,
                         out var nameSize));
-                    fontFamilyNames.Add(ReadNativeUtf8(namePtr, nameSize));
+                    fontFamilyNames.Add(ReadBorrowedFontRegistryUtf8(namePtr, nameSize));
                 }
 
                 return fontFamilyNames;
@@ -88,8 +87,8 @@ namespace Milestro.Skia
 
             return new FontFaceInfo
             {
-                SourcePath = ReadNativeUtf8(sourcePathPtr, sourcePathSize),
-                FamilyName = ReadNativeUtf8(familyNamePtr, familyNameSize),
+                SourcePath = ReadBorrowedFontRegistryUtf8(sourcePathPtr, sourcePathSize),
+                FamilyName = ReadBorrowedFontRegistryUtf8(familyNamePtr, familyNameSize),
                 FaceIndex = faceIndex,
                 InstanceIndex = instanceIndex,
                 PackedIndex = packedIndex,
@@ -100,8 +99,10 @@ namespace Milestro.Skia
             };
         }
 
-        private static string ReadNativeUtf8(IntPtr ptr, ulong size)
+        private static string ReadBorrowedFontRegistryUtf8(IntPtr ptr, ulong size)
         {
+            // Font registry getters expose borrowed string buffers owned by the current native list/info.
+            // Do not route these through BytesWrapper: that would copy into a native wrapper before C# reads it.
             if (ptr == IntPtr.Zero || size == 0)
             {
                 return string.Empty;
@@ -112,9 +113,7 @@ namespace Milestro.Skia
                 throw new Exception("Native UTF-8 string is too large.");
             }
 
-            var bytes = new byte[(int)size];
-            Marshal.Copy(ptr, bytes, 0, bytes.Length);
-            return Encoding.UTF8.GetString(bytes);
+            return Marshal.PtrToStringUTF8(ptr, (int)size);
         }
 
         private static int ToListCapacity(ulong size)

@@ -3,6 +3,7 @@ using Milestro.Extensions;
 using Milestro.Model;
 using Milestro.Skia;
 using Milestro.Skia.TextLayout;
+using Milestro.Util;
 using UnityEngine;
 
 namespace Milestro.Components.Internal
@@ -10,6 +11,8 @@ namespace Milestro.Components.Internal
     internal sealed class TextBoxRenderTarget : IDisposable
     {
         private static readonly Rect DefaultUvRect = new Rect(0f, 0f, 1f, 1f);
+        private const float NoWrapProbeLayoutWidth = 1048576f;
+        private const float NoWrapLayoutPadding = 1f;
 
         private UnityAutoRenderTextureSurface? surface;
         private Paragraph? paragraph;
@@ -17,6 +20,7 @@ namespace Milestro.Components.Internal
         private bool paintChanged = true;
         private int layoutWidth = 640;
         private float paragraphHeight;
+        private float paragraphContentWidth;
         private long outputVersion;
         private Vector2 scrollOffset;
         private Vector2 contentSize;
@@ -88,6 +92,7 @@ namespace Milestro.Components.Internal
             layoutChanged = true;
             paintChanged = true;
             paragraphHeight = 0f;
+            paragraphContentWidth = 0f;
             scrollOffset = Vector2.zero;
             contentSize = Vector2.zero;
             viewportSize = Vector2.zero;
@@ -175,7 +180,36 @@ namespace Milestro.Components.Internal
                 return false;
             }
 
+            if (settings.WrapMode == TextBoxWrapMode.NoWrap)
+            {
+                return ResizeNoWrapParagraph(targetParagraph, settings, force);
+            }
+
             var newLayoutWidth = ContentViewportWidth(settings);
+            if (newLayoutWidth == layoutWidth && !force)
+            {
+                return false;
+            }
+
+            layoutWidth = newLayoutWidth;
+            paragraphContentWidth = layoutWidth;
+            targetParagraph.Layout(layoutWidth);
+            paragraphHeight = Mathf.Max(0f, targetParagraph.Height);
+            return true;
+        }
+
+        private bool ResizeNoWrapParagraph(Paragraph targetParagraph,
+            TextBoxRenderTargetSettings settings,
+            bool force)
+        {
+            var viewportWidth = ContentViewportWidth(settings);
+            if (force)
+            {
+                targetParagraph.Layout(NoWrapProbeLayoutWidth);
+                paragraphContentWidth = MeasureNoWrapContentWidth(targetParagraph);
+            }
+
+            var newLayoutWidth = ResolveNoWrapLayoutWidth(viewportWidth, paragraphContentWidth);
             if (newLayoutWidth == layoutWidth && !force)
             {
                 return false;
@@ -190,13 +224,16 @@ namespace Milestro.Components.Internal
         private bool UpdateScrollMetrics(TextBoxRenderTargetSettings settings, Vector2 requestedScrollOffset)
         {
             var nextViewportSize = new Vector2(ContentViewportWidth(settings), ContentViewportHeight(settings));
-            var nextContentSize = new Vector2(nextViewportSize.x, paragraph != null ? paragraphHeight : 0f);
+            var nextContentWidth = settings.WrapMode == TextBoxWrapMode.NoWrap
+                ? Mathf.Max(nextViewportSize.x, paragraph != null ? layoutWidth : 0f)
+                : nextViewportSize.x;
+            var nextContentSize = new Vector2(nextContentWidth, paragraph != null ? paragraphHeight : 0f);
             var nextMaxScrollOffset = new Vector2(
                 Mathf.Max(0f, nextContentSize.x - nextViewportSize.x),
                 Mathf.Max(0f, nextContentSize.y - nextViewportSize.y));
             var nextScrollOffset = new Vector2(
-                Mathf.Clamp(IsFinite(requestedScrollOffset.x) ? requestedScrollOffset.x : 0f, 0f, nextMaxScrollOffset.x),
-                Mathf.Clamp(IsFinite(requestedScrollOffset.y) ? requestedScrollOffset.y : 0f, 0f, nextMaxScrollOffset.y));
+                Mathf.Clamp(FloatUtil.IsFinite(requestedScrollOffset.x) ? requestedScrollOffset.x : 0f, 0f, nextMaxScrollOffset.x),
+                Mathf.Clamp(FloatUtil.IsFinite(requestedScrollOffset.y) ? requestedScrollOffset.y : 0f, 0f, nextMaxScrollOffset.y));
 
             var changed = viewportSize != nextViewportSize ||
                           contentSize != nextContentSize ||
@@ -220,9 +257,31 @@ namespace Milestro.Components.Internal
             return Math.Max(1, OutputHeight - settings.Margin.vertical);
         }
 
-        private static bool IsFinite(float value)
+        private static float MeasureNoWrapContentWidth(Paragraph targetParagraph)
         {
-            return !float.IsNaN(value) && !float.IsInfinity(value);
+            var longestLine = targetParagraph.LongestLine;
+            var maxIntrinsicWidth = targetParagraph.MaxIntrinsicWidth;
+            var width = Mathf.Max(FloatUtil.IsFinite(longestLine) ? longestLine : 0f,
+                FloatUtil.IsFinite(maxIntrinsicWidth) ? maxIntrinsicWidth : 0f);
+            return Mathf.Max(0f, Mathf.Ceil(width));
+        }
+
+        private static int ResolveNoWrapLayoutWidth(int viewportWidth, float contentWidth)
+        {
+            var paddedContentWidth = FloatUtil.IsFinite(contentWidth) && contentWidth > 0f
+                ? contentWidth + NoWrapLayoutPadding
+                : 0f;
+            return Mathf.Max(viewportWidth, CeilToPositiveInt(paddedContentWidth));
+        }
+
+        private static int CeilToPositiveInt(float value)
+        {
+            if (!FloatUtil.IsFinite(value) || value <= 0f)
+            {
+                return 1;
+            }
+
+            return value >= int.MaxValue ? int.MaxValue : Mathf.CeilToInt(value);
         }
 
         private UnitySkiaRenderCommandList BuildRenderCommands(TextBoxRenderTargetSettings settings,

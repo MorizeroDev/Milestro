@@ -5,6 +5,8 @@
 #include "TextStyle.h"
 #include "Milestro/common/milestro_export_macros.h"
 
+#include <limits>
+
 namespace milestro::skia::textlayout {
 
 class MILESTRO_API StrutStyle {
@@ -66,6 +68,7 @@ public:
 
     size_t getMaxLines() const { return style.getMaxLines(); }
     void setMaxLines(size_t maxLines) { style.setMaxLines(maxLines); }
+    void clearMaxLines() { style.setMaxLines(std::numeric_limits<size_t>::max()); }
 
     SkString getEllipsis() const { return style.getEllipsis(); }
 //    std::u16string getEllipsisUtf16() const { return style.getEllipsisUtf16(); }

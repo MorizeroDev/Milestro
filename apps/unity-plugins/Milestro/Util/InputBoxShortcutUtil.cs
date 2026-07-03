@@ -56,7 +56,7 @@ namespace Milestro.Util
         private static bool IsClipboardCommandModifier()
         {
             return IsExactCommandOrControlModifier(false) ||
-                   (InputBoxShortcutConfiguration.AcceptShiftClipboardShortcuts &&
+                   (MilestroConfiguration.Configuration.InputBoxShortcut.AcceptShiftClipboardShortcuts &&
                     IsExactCommandOrControlModifier(true));
         }
 
@@ -68,10 +68,10 @@ namespace Milestro.Util
 
         internal static bool IsRedoDown()
         {
-            return (InputBoxShortcutConfiguration.AcceptRedoWithShiftZ &&
+            return (MilestroConfiguration.Configuration.InputBoxShortcut.AcceptRedoWithShiftZ &&
                     IsExactCommandOrControlModifier(true) &&
                     Input.GetKeyDown(KeyCode.Z)) ||
-                   (InputBoxShortcutConfiguration.AcceptRedoWithControlY &&
+                   (MilestroConfiguration.Configuration.InputBoxShortcut.AcceptRedoWithControlY &&
                     IsExactControlModifier(false) &&
                     Input.GetKeyDown(KeyCode.Y));
         }
@@ -79,6 +79,11 @@ namespace Milestro.Util
         internal static bool IsSelectAllDown()
         {
             return IsExactCommandOrControlModifier(false) && Input.GetKeyDown(KeyCode.A);
+        }
+
+        internal static bool IsDocumentBoundaryModifierDown()
+        {
+            return IsControlPressed() != IsCommandPressed() && !IsAltPressed();
         }
 
         internal static bool IsCopyDown()

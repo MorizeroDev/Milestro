@@ -15,6 +15,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -41,6 +42,7 @@ struct InputBoxMetrics {
     float maxIntrinsicWidth = 0.0f;
     float contentWidth = 0.0f;
     float scrollX = 0.0f;
+    float scrollY = 0.0f;
     float viewportWidth = 0.0f;
     float viewportHeight = 0.0f;
 };
@@ -106,11 +108,16 @@ class MILESTRO_API InputBox {
 public:
     InputBox();
     InputBox(ParagraphStyle* paragraphStyle, TextStyle* textStyle);
+    ~InputBox();
 
     void setText(const char* text, size_t length);
     const std::string& getText() const { return boundaryMap_.text(); }
 
     void setViewport(SkScalar width, SkScalar height);
+    void setSoftWrap(bool softWrap);
+    bool getSoftWrap() const { return softWrap_; }
+    void setMaskInput(bool maskInput);
+    bool getMaskInput() const { return maskInput_; }
     void setCaretColor(SkColor color) { caretColor_ = color; }
     void setSelectionColor(SkColor color) { selectionColor_ = color; }
     void setCaretWidth(SkScalar width);
@@ -144,6 +151,12 @@ public:
     bool deleteForward();
     bool movePrevious(bool extendSelection = false);
     bool moveNext(bool extendSelection = false);
+    bool moveUp(bool extendSelection = false);
+    bool moveDown(bool extendSelection = false);
+    bool moveLineStart(bool extendSelection = false);
+    bool moveLineEnd(bool extendSelection = false);
+    bool moveDocumentStart(bool extendSelection = false);
+    bool moveDocumentEnd(bool extendSelection = false);
     bool hitTest(SkScalar x, SkScalar y, bool extendSelection = false);
     bool undo();
     bool redo();
@@ -151,6 +164,7 @@ public:
 
     void ensureCaretVisible();
     bool scrollByX(SkScalar delta);
+    bool scrollByY(SkScalar delta);
     InputBoxCaretRect getCaretRect();
     InputBoxCaretRect getCompositionRect();
     std::vector<InputBoxCaretRect> getSelectionRects();
@@ -171,10 +185,14 @@ private:
     SkScalar viewportWidth_ = 1.0f;
     SkScalar viewportHeight_ = 1.0f;
     SkScalar scrollX_ = 0.0f;
+    SkScalar scrollY_ = 0.0f;
     SkScalar caretWidth_ = 2.0f;
     SkColor caretColor_ = SK_ColorWHITE;
     SkColor selectionColor_ = SkColorSetARGB(0x66, 0x33, 0x7D, 0xFF);
     bool caretVisible_ = true;
+    bool softWrap_ = true;
+    bool maskInput_ = false;
+    bool centerSingleLineVertically_ = true;
     bool paragraphDirty_ = true;
     std::string compositionText_;
     size_t selectionAnchorUtf8_ = 0;
@@ -211,8 +229,9 @@ private:
     std::vector<EditGroup> undoStack_;
     std::vector<EditGroup> redoStack_;
     bool undoMergeBarrier_ = true;
+    SkScalar preferredCaretX_ = std::numeric_limits<SkScalar>::quiet_NaN();
 
-    static std::string sanitizeSingleLine(const char* text, size_t length);
+    static std::string sanitizePlainText(const char* text, size_t length);
 
     void configureInputParagraphMetrics();
     void rebuildParagraphIfNeeded();
@@ -227,12 +246,31 @@ private:
     size_t committedUtf8FromDisplay(size_t displayUtf8) const;
     InputBoxCaretRect getCaretRectForDisplayOffset(size_t displayUtf8);
     std::vector<InputBoxCaretRect> getRectsForDisplayRange(size_t startUtf8, size_t endUtf8);
+    bool resolveLineMetricsForDisplayUtf8(size_t displayUtf8,
+                                          ::skia::textlayout::Affinity affinity,
+                                          ::skia::textlayout::LineMetrics& lineMetrics,
+                                          int& lineNumber);
+    bool getLineMetricsAt(int lineNumber, ::skia::textlayout::LineMetrics& lineMetrics) const;
+    size_t displayUtf8ForLineX(int lineNumber,
+                               SkScalar x,
+                               ::skia::textlayout::Affinity& affinity);
+    SkScalar caretXForDisplayOffset(size_t displayUtf8,
+                                    const ::skia::textlayout::LineMetrics& lineMetrics,
+                                    const TextBoundaryMap& displayMap);
+    bool moveToUtf8(size_t targetUtf8,
+                    ::skia::textlayout::Affinity targetAffinity,
+                    bool extendSelection,
+                    bool resetPreferredCaretX);
+    bool moveVertical(int lineDelta, bool extendSelection);
     size_t selectionStartUtf8() const;
     size_t selectionEndUtf8() const;
     SkScalar visualOffsetY();
+    SkScalar contentHeight();
+    SkScalar maxScrollY();
     InputBoxCaretRect activeEnsureVisibleRect();
     void ensureRectVisible(const InputBoxCaretRect& rect);
     void resetSelectionToCursor();
+    void resetPreferredCaretX();
     bool replaceSelectionWith(std::string replacement);
     bool deleteSelection();
     SkScalar contentWidth();

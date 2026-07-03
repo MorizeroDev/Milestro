@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Milestro.Model;
 using Milestro.Skia;
+using Milestro.Util;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -30,6 +31,9 @@ namespace Milestro.Components.Internal
         private TextDirection m_textDirection = TextDirection.Ltr;
 
         [SerializeField]
+        private TextBoxWrapMode m_wrapMode = TextBoxWrapMode.Wrap;
+
+        [SerializeField]
         private float m_size = 36;
 
         [SerializeField]
@@ -42,13 +46,11 @@ namespace Milestro.Components.Internal
         [SerializeField]
         private string m_locale = "zh-Hans";
 
-        [SerializeField]
-        [Min(0f)]
-        private float m_scrollY;
-
         [NonSerialized] private RectTransform? rectTransformCache;
         [NonSerialized] private TextBoxRenderTarget? renderTarget;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
+        [NonSerialized] private float m_scrollX;
+        [NonSerialized] private float m_scrollY;
 #if UNITY_EDITOR
         [NonSerialized] private bool m_editorRebuildQueued;
 #endif
@@ -59,8 +61,11 @@ namespace Milestro.Components.Internal
         public override int OutputHeight => renderTarget?.OutputHeight ?? 0;
         public override bool HasOutput => renderTarget?.HasOutput ?? false;
         public override long OutputVersion => renderTarget?.OutputVersion ?? 0;
+        public float contentWidth => renderTarget?.ContentSize.x ?? 0f;
         public float contentHeight => renderTarget?.ContentSize.y ?? 0f;
+        public float viewportWidth => renderTarget?.ViewportSize.x ?? 0f;
         public float viewportHeight => renderTarget?.ViewportSize.y ?? 0f;
+        public float maxScrollX => renderTarget?.MaxScrollOffset.x ?? 0f;
         public float maxScrollY => renderTarget?.MaxScrollOffset.y ?? 0f;
 
         public string content
@@ -99,6 +104,16 @@ namespace Milestro.Components.Internal
             set
             {
                 m_textDirection = value;
+                MarkPropertiesChanged();
+            }
+        }
+
+        public TextBoxWrapMode wrapMode
+        {
+            get => m_wrapMode;
+            set
+            {
+                m_wrapMode = value;
                 MarkPropertiesChanged();
             }
         }
@@ -163,10 +178,26 @@ namespace Milestro.Components.Internal
             }
         }
 
+        public float scrollX
+        {
+            get => m_scrollX;
+            set => SetScrollX(value);
+        }
+
         public float scrollY
         {
             get => m_scrollY;
             set => SetScrollY(value);
+        }
+
+        public void ScrollByX(float delta)
+        {
+            if (Mathf.Approximately(delta, 0f))
+            {
+                return;
+            }
+
+            SetScrollX(m_scrollX + delta);
         }
 
         public void ScrollByY(float delta)
@@ -199,7 +230,8 @@ namespace Milestro.Components.Internal
 #if UNITY_EDITOR
         private void OnValidate()
         {
-            m_scrollY = IsFinite(m_scrollY) ? Mathf.Max(0f, m_scrollY) : 0f;
+            m_scrollX = FloatUtil.IsFinite(m_scrollX) ? Mathf.Max(0f, m_scrollX) : 0f;
+            m_scrollY = FloatUtil.IsFinite(m_scrollY) ? Mathf.Max(0f, m_scrollY) : 0f;
             MarkPropertiesChanged();
             if (isActiveAndEnabled)
             {
@@ -250,9 +282,15 @@ namespace Milestro.Components.Internal
             RenderTarget.Rebuild(CurrentSize(),
                 SurfaceColorSpace(),
                 CurrentSettings(),
-                new Vector2(0f, m_scrollY),
+                new Vector2(m_scrollX, m_scrollY),
                 forceText,
                 this);
+            var nextScrollX = RenderTarget.ScrollOffset.x;
+            if (!Mathf.Approximately(m_scrollX, nextScrollX))
+            {
+                m_scrollX = nextScrollX;
+            }
+
             var nextScrollY = RenderTarget.ScrollOffset.y;
             if (!Mathf.Approximately(m_scrollY, nextScrollY))
             {
@@ -290,6 +328,7 @@ namespace Milestro.Components.Internal
                 m_fontFamilies,
                 m_textAlign,
                 m_textDirection,
+                m_wrapMode,
                 m_size,
                 m_weight,
                 m_textColor,
@@ -324,9 +363,21 @@ namespace Milestro.Components.Internal
             RenderTarget.MarkPropertiesChanged();
         }
 
+        private void SetScrollX(float value)
+        {
+            var nextScrollX = FloatUtil.IsFinite(value) ? Mathf.Max(0f, value) : 0f;
+            if (Mathf.Approximately(m_scrollX, nextScrollX))
+            {
+                return;
+            }
+
+            m_scrollX = nextScrollX;
+            RenderTarget.MarkPaintChanged();
+        }
+
         private void SetScrollY(float value)
         {
-            var nextScrollY = IsFinite(value) ? Mathf.Max(0f, value) : 0f;
+            var nextScrollY = FloatUtil.IsFinite(value) ? Mathf.Max(0f, value) : 0f;
             if (Mathf.Approximately(m_scrollY, nextScrollY))
             {
                 return;
@@ -336,9 +387,5 @@ namespace Milestro.Components.Internal
             RenderTarget.MarkPaintChanged();
         }
 
-        private static bool IsFinite(float value)
-        {
-            return !float.IsNaN(value) && !float.IsInfinity(value);
-        }
     }
 }

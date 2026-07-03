@@ -113,6 +113,13 @@ namespace Milestro.Skia.TextLayout
                 );
         }
 
+        public void ClearMaxLines()
+        {
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutParagraphStyleClearMaxLines(NativePtr)
+            );
+        }
+
         public void SetEllipsis(string s)
         {
             var cstr = s.CStr();

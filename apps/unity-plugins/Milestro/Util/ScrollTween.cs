@@ -88,12 +88,12 @@ namespace Milestro.Util
 
         private static float ClampScroll(float value, float maxValue)
         {
-            if (!IsFinite(value))
+            if (!FloatUtil.IsFinite(value))
             {
                 return 0f;
             }
 
-            return Mathf.Clamp(value, 0f, IsFinite(maxValue) ? Mathf.Max(0f, maxValue) : 0f);
+            return Mathf.Clamp(value, 0f, FloatUtil.IsFinite(maxValue) ? Mathf.Max(0f, maxValue) : 0f);
         }
 
         private static bool NearlyEqual(float a, float b)
@@ -101,9 +101,5 @@ namespace Milestro.Util
             return Mathf.Abs(a - b) <= 0.01f;
         }
 
-        private static bool IsFinite(float value)
-        {
-            return !float.IsNaN(value) && !float.IsInfinity(value);
-        }
     }
 }

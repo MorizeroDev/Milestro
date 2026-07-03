@@ -26,6 +26,22 @@ int64_t MilestroSkiaTextlayoutParagraphGetHeight(milestro::skia::textlayout::Par
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutParagraphGetLongestLine(milestro::skia::textlayout::Paragraph *p,
+                                                      float &longestLine) try {
+    longestLine = p->getLongestLine();
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutParagraphGetMaxIntrinsicWidth(milestro::skia::textlayout::Paragraph *p,
+                                                            float &maxIntrinsicWidth) try {
+    maxIntrinsicWidth = p->getMaxIntrinsicWidth();
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutParagraphPaint(milestro::skia::textlayout::Paragraph *p,
                                              milestro::skia::Canvas *canvas,
                                              float x, float y) try {

@@ -41,6 +41,25 @@ namespace Milestro.Skia.TextLayout
             }
         }
 
+        public float LongestLine
+        {
+            get
+            {
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphGetLongestLine(NativePtr, out var ret));
+                return ret;
+            }
+        }
+
+        public float MaxIntrinsicWidth
+        {
+            get
+            {
+                ExitCodeUtil.ThrowIfFailed(
+                    BindingC.SkiaTextlayoutParagraphGetMaxIntrinsicWidth(NativePtr, out var ret));
+                return ret;
+            }
+        }
+
         public void Paint(Canvas canvas, Vector2 position)
         {
             ExitCodeUtil.ThrowIfFailed(

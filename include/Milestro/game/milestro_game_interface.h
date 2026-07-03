@@ -68,6 +68,8 @@ MILESTRO_API int64_t MilestroSkiaFontFamilyListGetElementAt(milestro::skia::Mile
                                                             uint64_t index);
 MILESTRO_API int64_t MilestroSkiaFontFamilyInfoDestroy(
         [[milize::RefType("ref")]] milestro::skia::MilestroFontFamilyInfo *&ret);
+// Font registry string accessors intentionally return borrowed buffers instead of BytesWrapper.
+// The caller must read them before the owning list/info is destroyed; this avoids an extra native copy.
 MILESTRO_API int64_t MilestroSkiaFontFamilyInfoGetName(milestro::skia::MilestroFontFamilyInfo *ret,
                                                        [[milize::CSharpType("IntPtr")]] uint8_t *&ptr,
                                                        uint64_t &size);
@@ -170,6 +172,10 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphDestroy(milestro::skia::text
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphLayout(milestro::skia::textlayout::Paragraph *p, float width);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetHeight(milestro::skia::textlayout::Paragraph *p,
                                                               float &height);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetLongestLine(milestro::skia::textlayout::Paragraph *p,
+                                                                   float &longestLine);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetMaxIntrinsicWidth(milestro::skia::textlayout::Paragraph *p,
+                                                                         float &maxIntrinsicWidth);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphPaint(milestro::skia::textlayout::Paragraph *p,
                                                           milestro::skia::Canvas *canvas,
                                                           float x, float y);
@@ -199,11 +205,18 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetText(milestro::skia::textl
                                                            [[milize::CSharpType("void*")]] void *text,
                                                            uint64_t size);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetText(milestro::skia::textlayout::InputBox *inputBox,
-                                                           [[milize::CSharpType("IntPtr")]] uint8_t *&ptr,
-                                                           uint64_t &size);
+                                                           milestro::game::model::BytesWrapper *&value);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetViewport(milestro::skia::textlayout::InputBox *inputBox,
                                                                float width,
                                                                float height);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetSoftWrap(milestro::skia::textlayout::InputBox *inputBox,
+                                                               int32_t softWrap);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetSoftWrap(milestro::skia::textlayout::InputBox *inputBox,
+                                                               int32_t &softWrap);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetMaskInput(milestro::skia::textlayout::InputBox *inputBox,
+                                                                int32_t maskInput);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetMaskInput(milestro::skia::textlayout::InputBox *inputBox,
+                                                                int32_t &maskInput);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetCaretColor(milestro::skia::textlayout::InputBox *inputBox,
                                                                  int32_t r,
                                                                  int32_t g,
@@ -254,6 +267,30 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMoveNextExtendingSelection(
         milestro::skia::textlayout::InputBox *inputBox,
         int32_t extendSelection,
         int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMoveUpExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMoveDownExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMoveLineStartExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMoveLineEndExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMoveDocumentStartExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxMoveDocumentEndExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxHitTest(milestro::skia::textlayout::InputBox *inputBox,
                                                            float x,
                                                            float y,
@@ -267,6 +304,10 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxHitTestExtendingSelection(
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxEnsureCaretVisible(
         milestro::skia::textlayout::InputBox *inputBox);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxScrollByX(
+        milestro::skia::textlayout::InputBox *inputBox,
+        float delta,
+        int32_t &changed);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxScrollByY(
         milestro::skia::textlayout::InputBox *inputBox,
         float delta,
         int32_t &changed);
@@ -327,6 +368,7 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetMetrics(milestro::skia::te
                                                               float &maxIntrinsicWidth,
                                                               float &contentWidth,
                                                               float &scrollX,
+                                                              float &scrollY,
                                                               float &viewportWidth,
                                                               float &viewportHeight);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetLineCount(milestro::skia::textlayout::InputBox *inputBox,
@@ -377,6 +419,7 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetMaxLines(milestro::s
                                                                      uint64_t &maxLines);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetMaxLines(milestro::skia::textlayout::ParagraphStyle *s,
                                                                      uint64_t maxLines);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleClearMaxLines(milestro::skia::textlayout::ParagraphStyle *s);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetEllipsis(milestro::skia::textlayout::ParagraphStyle *s,
                                                                      uint8_t *ellipsis);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetHeight(milestro::skia::textlayout::ParagraphStyle *s,

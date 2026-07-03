@@ -82,11 +82,8 @@ int64_t MilestroSkiaTextlayoutInputBoxSetText(milestro::skia::textlayout::InputB
 }
 
 int64_t MilestroSkiaTextlayoutInputBoxGetText(milestro::skia::textlayout::InputBox *inputBox,
-                                              uint8_t *&ptr,
-                                              uint64_t &size) try {
-    const auto &text = inputBox->getText();
-    ptr = reinterpret_cast<uint8_t *>(const_cast<char *>(text.data()));
-    size = text.size();
+                                              milestro::game::model::BytesWrapper *&value) try {
+    value = new milestro::game::model::BytesWrapper(inputBox->getText());
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
@@ -96,6 +93,38 @@ int64_t MilestroSkiaTextlayoutInputBoxSetViewport(milestro::skia::textlayout::In
                                                   float width,
                                                   float height) try {
     inputBox->setViewport(width, height);
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxSetSoftWrap(milestro::skia::textlayout::InputBox *inputBox,
+                                                  int32_t softWrap) try {
+    inputBox->setSoftWrap(softWrap != 0);
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxGetSoftWrap(milestro::skia::textlayout::InputBox *inputBox,
+                                                  int32_t &softWrap) try {
+    softWrap = inputBox->getSoftWrap() ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxSetMaskInput(milestro::skia::textlayout::InputBox *inputBox,
+                                                   int32_t maskInput) try {
+    inputBox->setMaskInput(maskInput != 0);
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxGetMaskInput(milestro::skia::textlayout::InputBox *inputBox,
+                                                   int32_t &maskInput) try {
+    maskInput = inputBox->getMaskInput() ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
@@ -258,6 +287,66 @@ int64_t MilestroSkiaTextlayoutInputBoxMoveNextExtendingSelection(
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutInputBoxMoveUpExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed) try {
+    changed = inputBox->moveUp(extendSelection != 0) ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxMoveDownExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed) try {
+    changed = inputBox->moveDown(extendSelection != 0) ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxMoveLineStartExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed) try {
+    changed = inputBox->moveLineStart(extendSelection != 0) ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxMoveLineEndExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed) try {
+    changed = inputBox->moveLineEnd(extendSelection != 0) ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxMoveDocumentStartExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed) try {
+    changed = inputBox->moveDocumentStart(extendSelection != 0) ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxMoveDocumentEndExtendingSelection(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t extendSelection,
+        int32_t &changed) try {
+    changed = inputBox->moveDocumentEnd(extendSelection != 0) ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutInputBoxHitTest(milestro::skia::textlayout::InputBox *inputBox,
                                               float x,
                                               float y,
@@ -293,6 +382,16 @@ int64_t MilestroSkiaTextlayoutInputBoxScrollByX(
         float delta,
         int32_t &changed) try {
     changed = inputBox->scrollByX(delta) ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxScrollByY(
+        milestro::skia::textlayout::InputBox *inputBox,
+        float delta,
+        int32_t &changed) try {
+    changed = inputBox->scrollByY(delta) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
@@ -463,6 +562,7 @@ int64_t MilestroSkiaTextlayoutInputBoxGetMetrics(milestro::skia::textlayout::Inp
                                                  float &maxIntrinsicWidth,
                                                  float &contentWidth,
                                                  float &scrollX,
+                                                 float &scrollY,
                                                  float &viewportWidth,
                                                  float &viewportHeight) try {
     const auto metrics = inputBox->getMetrics();
@@ -472,6 +572,7 @@ int64_t MilestroSkiaTextlayoutInputBoxGetMetrics(milestro::skia::textlayout::Inp
     maxIntrinsicWidth = metrics.maxIntrinsicWidth;
     contentWidth = metrics.contentWidth;
     scrollX = metrics.scrollX;
+    scrollY = metrics.scrollY;
     viewportWidth = metrics.viewportWidth;
     viewportHeight = metrics.viewportHeight;
     return MILESTRO_API_RET_OK;

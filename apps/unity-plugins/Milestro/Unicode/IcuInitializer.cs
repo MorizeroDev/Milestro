@@ -1,18 +1,16 @@
 using System;
-using System.IO;
+using Milestro.Configuration;
 using UnityEngine;
 
 namespace Milestro.Unicode
 {
-    public static class IcuConfiguration
+    internal static class IcuInitializer
     {
-        public static string IcudtlPath => Path.Combine(Application.persistentDataPath, "icudtl.dat");
-
         private static bool initialized;
 
         private static readonly Lazy<bool> InitDelegate = new Lazy<bool>(() =>
         {
-            var db = Resources.Load<TextAsset>("Milestro/icudtl.dat");
+            var db = Resources.Load<TextAsset>(MilestroConfiguration.Configuration.Icu.IcudtlResourcePath);
             if (!db)
             {
                 Debug.LogError("Failed to load icudtl.dat from Resources.");
@@ -52,12 +50,13 @@ namespace Milestro.Unicode
 
         private static bool MobileLoad(TextAsset db)
         {
-            File.WriteAllBytes(IcudtlPath, db.bytes);
+            var icudtlPath = MilestroConfiguration.Configuration.Icu.IcudtlPath;
+            System.IO.File.WriteAllBytes(icudtlPath, db.bytes);
 
-            Debug.Log($"loading ICU from {IcudtlPath}");
+            Debug.Log($"loading ICU from {icudtlPath}");
             try
             {
-                Icu.LoadIcuFronPath(IcudtlPath);
+                Icu.LoadIcuFronPath(icudtlPath);
             }
             catch (Exception e)
             {

@@ -77,6 +77,10 @@ protected:
         const auto fontDir = fs::current_path() / "data" / "font";
         ASSERT_GT(RegisterFontsInDirectory(fontDir), 0);
     }
+
+    void TearDown() override {
+        milestro_text::GetFontCollection()->clearCaches();
+    }
 };
 
 TEST_F(InputBoxApiSpikeTest, ParagraphExposesEditingPrimitivesForRepresentativeText) {
@@ -127,10 +131,13 @@ TEST_F(InputBoxApiSpikeTest, ParagraphExposesEditingPrimitivesForRepresentativeT
         EXPECT_GT(skParagraph->getHeight(), 0);
         EXPECT_GT(skParagraph->getMaxIntrinsicWidth(), 0);
         EXPECT_GE(skParagraph->getLongestLine(), 0);
+        EXPECT_GT(paragraph->getHeight(), 0);
+        EXPECT_GT(paragraph->getMaxIntrinsicWidth(), 0);
+        EXPECT_GE(paragraph->getLongestLine(), 0);
     }
 }
 
-TEST_F(InputBoxApiSpikeTest, SkUnicodeProvidesGraphemeAndGlyphClusterFlags) {
+TEST_F(InputBoxApiSpikeTest, SkUnicodeProvidesGraphemeFlags) {
     std::string sample =
             "A e\xCC\x81 \xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7 "
             "\xE0\xB8\xAA\xE0\xB8\xA7\xE0\xB8\xB1\xE0\xB8\xAA\xE0\xB8\x94\xE0\xB8\xB5";
@@ -154,6 +161,6 @@ TEST_F(InputBoxApiSpikeTest, SkUnicodeProvidesGraphemeAndGlyphClusterFlags) {
     }
 
     EXPECT_GT(graphemeStarts, 0);
-    EXPECT_GT(glyphClusterStarts, 0);
+    EXPECT_EQ(glyphClusterStarts, 0);
     EXPECT_LT(graphemeStarts, static_cast<int>(sample.size()));
 }

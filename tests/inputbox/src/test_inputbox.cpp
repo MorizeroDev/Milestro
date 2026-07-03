@@ -1,6 +1,7 @@
 #include "Milestro/skia/FontRegistry.h"
 #include "Milestro/game/milestro_game_interface.h"
 #include "Milestro/game/milestro_game_model.h"
+#include "Milestro/game/milestro_game_retcode.h"
 #include "Milestro/skia/textlayout/InputBox.h"
 #include "Milestro/skia/textlayout/ParagraphStyle.h"
 #include "Milestro/skia/textlayout/TextStyle.h"
@@ -8,7 +9,9 @@
 #include "include/core/SkString.h"
 #include "modules/skunicode/include/SkUnicode.h"
 
+#include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <gtest/gtest.h>
 #include <memory>
 #include <string>
@@ -41,10 +44,12 @@ int RegisterFontsInDirectory(const fs::path& dirPath) {
 }
 
 std::unique_ptr<milestro_text::InputBox> MakeInputBox(
-        ::skia::textlayout::TextAlign textAlign = ::skia::textlayout::TextAlign::kLeft) {
+        ::skia::textlayout::TextAlign textAlign = ::skia::textlayout::TextAlign::kLeft,
+        bool useMonospace = false,
+        bool unlimitedLines = false) {
     auto textStyle = std::make_unique<milestro_text::TextStyle>();
     std::vector<SkString> fontFamilies;
-    fontFamilies.emplace_back("Source Han Sans VF");
+    fontFamilies.emplace_back(useMonospace ? "Fira Code" : "Source Han Sans VF");
     fontFamilies.emplace_back("Noto Color Emoji");
     textStyle->setFontFamilies(fontFamilies);
     textStyle->setFontSize(36);
@@ -53,7 +58,11 @@ std::unique_ptr<milestro_text::InputBox> MakeInputBox(
 
     auto paragraphStyle = std::make_unique<milestro_text::ParagraphStyle>();
     paragraphStyle->setTextStyle(textStyle.get());
-    paragraphStyle->setMaxLines(1);
+    if (unlimitedLines) {
+        paragraphStyle->clearMaxLines();
+    } else {
+        paragraphStyle->setMaxLines(1);
+    }
     paragraphStyle->setTextAlign(textAlign);
 
     auto inputBox = std::make_unique<milestro_text::InputBox>(paragraphStyle.get(), textStyle.get());
@@ -65,7 +74,7 @@ std::u16string ToUtf16(const std::string& text) {
     return SkUnicode::convertUtf8ToUtf16(text.c_str(), static_cast<int>(text.size()));
 }
 
-void ExpectSingleLineHorizontalOverflow(const std::string& text) {
+void ExpectWrappedMultiLineNoHorizontalScroll(const std::string& text) {
     auto inputBox = MakeInputBox();
     inputBox->setViewport(180, 64);
     inputBox->setText(text.c_str(), text.size());
@@ -73,20 +82,46 @@ void ExpectSingleLineHorizontalOverflow(const std::string& text) {
 
     const auto metrics = inputBox->getMetrics();
     const auto caret = inputBox->getCaretRect();
-    EXPECT_EQ(inputBox->getLineCount(), 1U);
-    EXPECT_GT(metrics.contentWidth, metrics.viewportWidth);
-    EXPECT_GT(metrics.scrollX, 0.0f);
-    EXPECT_GE(caret.left - metrics.scrollX, -0.001f);
-    EXPECT_LE(caret.right - metrics.scrollX, metrics.viewportWidth + 0.001f);
+    EXPECT_GT(inputBox->getLineCount(), 1U);
+    EXPECT_FLOAT_EQ(metrics.contentWidth, metrics.viewportWidth);
+    EXPECT_FLOAT_EQ(metrics.scrollX, 0.0f);
+    EXPECT_GT(metrics.scrollY, 0.0f);
+    EXPECT_GE(caret.top - metrics.scrollY, -0.001f);
+    EXPECT_LE(caret.bottom - metrics.scrollY, metrics.viewportHeight + 0.001f);
 
     milestro_text::InputBoxLineMetrics secondLineMetrics;
-    EXPECT_FALSE(inputBox->getLineMetrics(1, secondLineMetrics));
+    EXPECT_TRUE(inputBox->getLineMetrics(1, secondLineMetrics));
+}
+
+void ExpectNoSelectionRectOverlap(const std::vector<milestro_text::InputBoxCaretRect>& rects) {
+    constexpr float epsilon = 0.001f;
+    for (size_t i = 0; i < rects.size(); ++i) {
+        for (size_t j = i + 1; j < rects.size(); ++j) {
+            const auto overlapWidth = std::min(rects[i].right, rects[j].right) -
+                                      std::max(rects[i].left, rects[j].left);
+            const auto overlapHeight = std::min(rects[i].bottom, rects[j].bottom) -
+                                       std::max(rects[i].top, rects[j].top);
+            EXPECT_FALSE(overlapWidth > epsilon && overlapHeight > epsilon)
+                    << "rect " << i << " overlaps rect " << j
+                    << " width=" << overlapWidth
+                    << " height=" << overlapHeight;
+        }
+    }
 }
 
 } // namespace
 
 class InputBoxTest : public ::testing::Test {
 protected:
+    static void SetUpTestSuite() {
+        std::ifstream icudtl(MILESTRO_TEST_ICUDTL_PATH, std::ios::binary);
+        ASSERT_TRUE(icudtl.is_open()) << MILESTRO_TEST_ICUDTL_PATH;
+        std::vector<uint8_t> data((std::istreambuf_iterator<char>(icudtl)),
+                                  std::istreambuf_iterator<char>());
+        ASSERT_FALSE(data.empty());
+        ASSERT_EQ(MilestroCopyAndLoadICU(data.data(), data.size(), nullptr), MILESTRO_API_RET_OK);
+    }
+
     void SetUp() override {
         const auto fontDir = fs::current_path() / "data" / "font";
         ASSERT_GT(RegisterFontsInDirectory(fontDir), 0);
@@ -175,7 +210,7 @@ TEST_F(InputBoxTest, DeleteForwardUsesThaiBoundaryInsteadOfRawBytes) {
     EXPECT_EQ(inputBox->getCursorUtf8(), 0U);
 }
 
-TEST_F(InputBoxTest, CaretMetricsHitTestAndHorizontalScrollAreNative) {
+TEST_F(InputBoxTest, CaretMetricsHitTestAndVerticalScrollAreNative) {
     const std::string text = "ASCII long horizontal input 1234567890";
     auto inputBox = MakeInputBox();
     inputBox->setViewport(80, 64);
@@ -184,10 +219,14 @@ TEST_F(InputBoxTest, CaretMetricsHitTestAndHorizontalScrollAreNative) {
 
     const auto metrics = inputBox->getMetrics();
     const auto caret = inputBox->getCaretRect();
-    EXPECT_GT(metrics.contentWidth, metrics.viewportWidth);
-    EXPECT_GT(metrics.scrollX, 0);
+    EXPECT_GT(inputBox->getLineCount(), 1U);
+    EXPECT_FLOAT_EQ(metrics.contentWidth, metrics.viewportWidth);
+    EXPECT_FLOAT_EQ(metrics.scrollX, 0.0f);
+    EXPECT_GT(metrics.scrollY, 0.0f);
     EXPECT_GT(caret.right, caret.left);
     EXPECT_GT(caret.bottom, caret.top);
+    EXPECT_GE(caret.top - metrics.scrollY, -0.001f);
+    EXPECT_LE(caret.bottom - metrics.scrollY, metrics.viewportHeight + 0.001f);
 
     EXPECT_TRUE(inputBox->hitTest(0, 18));
     EXPECT_LT(inputBox->getCursorUtf8(), text.size());
@@ -195,61 +234,62 @@ TEST_F(InputBoxTest, CaretMetricsHitTestAndHorizontalScrollAreNative) {
               inputBox->snapUtf8(inputBox->getCursorUtf8(), milestro_text::TextBoundarySnapMode::Nearest));
 }
 
-TEST_F(InputBoxTest, CompositionEnsureVisibleUsesScrolledContentViewport) {
-    const std::string text = "ASCII long horizontal input 1234567890";
+TEST_F(InputBoxTest, CompositionEnsureVisibleUsesScrolledVerticalViewport) {
+    const std::string text = "line one\nline two\nline three\nline four\nline five";
     const std::string composition = "\xE6\x97\xA5\xE6\x9C\xAC";
     auto inputBox = MakeInputBox();
-    inputBox->setViewport(160, 64);
+    inputBox->setViewport(160, 72);
     inputBox->setText(text.c_str(), text.size());
     inputBox->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
 
     ASSERT_TRUE(inputBox->setComposition(composition.c_str(), composition.size()));
     const auto metrics = inputBox->getMetrics();
     const auto compositionRect = inputBox->getCompositionRect();
-    EXPECT_GT(metrics.scrollX, 0.0f);
-    EXPECT_GE(compositionRect.left - metrics.scrollX, -0.001f);
-    EXPECT_LE(compositionRect.right - metrics.scrollX, metrics.viewportWidth + 0.001f);
+    EXPECT_FLOAT_EQ(metrics.scrollX, 0.0f);
+    EXPECT_GT(metrics.scrollY, 0.0f);
+    EXPECT_GE(compositionRect.top - metrics.scrollY, -0.001f);
+    EXPECT_LE(compositionRect.bottom - metrics.scrollY, metrics.viewportHeight + 0.001f);
 }
 
-TEST_F(InputBoxTest, ManualHorizontalScrollClampsAndLeavesEnsureVisibleIntact) {
-    const std::string text = "ASCII long horizontal input 1234567890";
+TEST_F(InputBoxTest, ManualVerticalScrollClampsAndLeavesEnsureVisibleIntact) {
+    const std::string text = "line one\nline two\nline three\nline four\nline five";
     auto inputBox = MakeInputBox();
-    inputBox->setViewport(120, 64);
+    inputBox->setViewport(160, 72);
     inputBox->setText(text.c_str(), text.size());
     inputBox->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
 
     const auto initialMetrics = inputBox->getMetrics();
-    ASSERT_GT(initialMetrics.contentWidth, initialMetrics.viewportWidth);
-    ASSERT_GT(initialMetrics.scrollX, 0.0f);
-    const auto maxScrollX = initialMetrics.contentWidth - initialMetrics.viewportWidth;
+    ASSERT_GT(initialMetrics.height, initialMetrics.viewportHeight);
+    ASSERT_GT(initialMetrics.scrollY, 0.0f);
+    const auto maxScrollY = std::ceil(initialMetrics.height - initialMetrics.viewportHeight);
 
-    EXPECT_TRUE(inputBox->scrollByX(-100000.0f));
-    EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollX, 0.0f);
-    EXPECT_FALSE(inputBox->scrollByX(-1.0f));
+    EXPECT_TRUE(inputBox->scrollByY(-100000.0f));
+    EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollY, 0.0f);
+    EXPECT_FALSE(inputBox->scrollByY(-1.0f));
 
-    EXPECT_TRUE(inputBox->scrollByX(maxScrollX * 2.0f));
-    EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollX, maxScrollX);
-    EXPECT_FALSE(inputBox->scrollByX(1.0f));
+    EXPECT_TRUE(inputBox->scrollByY(maxScrollY * 2.0f));
+    EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollY, maxScrollY);
+    EXPECT_FALSE(inputBox->scrollByY(1.0f));
 
-    EXPECT_TRUE(inputBox->scrollByX(-100000.0f));
-    EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollX, 0.0f);
+    EXPECT_TRUE(inputBox->scrollByY(-100000.0f));
+    EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollY, 0.0f);
     inputBox->ensureCaretVisible();
-    EXPECT_GT(inputBox->getMetrics().scrollX, 0.0f);
+    EXPECT_GT(inputBox->getMetrics().scrollY, 0.0f);
 }
 
-TEST_F(InputBoxTest, ManualHorizontalScrollDoesNotConsumeWhenContentFits) {
+TEST_F(InputBoxTest, ManualVerticalScrollDoesNotConsumeWhenContentFits) {
     auto inputBox = MakeInputBox();
     inputBox->setViewport(320, 64);
     inputBox->setText("short", 5);
 
     const auto metrics = inputBox->getMetrics();
-    ASSERT_FLOAT_EQ(metrics.scrollX, 0.0f);
-    ASSERT_FLOAT_EQ(metrics.contentWidth, metrics.viewportWidth);
-    EXPECT_FALSE(inputBox->scrollByX(48.0f));
-    EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollX, 0.0f);
+    ASSERT_FLOAT_EQ(metrics.scrollY, 0.0f);
+    ASSERT_LE(metrics.height, metrics.viewportHeight);
+    EXPECT_FALSE(inputBox->scrollByY(48.0f));
+    EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollY, 0.0f);
 }
 
-TEST_F(InputBoxTest, MixedEmojiCjkAndLongNumberStaySingleLineWithHorizontalScroll) {
+TEST_F(InputBoxTest, MixedEmojiCjkAndLongNumberWrapWithoutHorizontalScroll) {
     const std::string firstRuntimeCase =
             "\xF0\x9F\xA4\x94 \xF0\xB0\xBB\x9D \xF0\x9F\xAB\x84 \xF0\x9F\xA4\xB0 "
             "\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x92 "
@@ -262,8 +302,173 @@ TEST_F(InputBoxTest, MixedEmojiCjkAndLongNumberStaySingleLineWithHorizontalScrol
             "\xE5\x95\x8A\xE5\x90\xA7\xE6\xAC\xA1\xE7\x9A\x84\xE9\xA2\x9D\xE4\xBD\x9B\xE6\xAD\x8C "
             "3.14159265358979323846264338327950288";
 
-    ExpectSingleLineHorizontalOverflow(firstRuntimeCase);
-    ExpectSingleLineHorizontalOverflow(secondRuntimeCase);
+    ExpectWrappedMultiLineNoHorizontalScroll(firstRuntimeCase);
+    ExpectWrappedMultiLineNoHorizontalScroll(secondRuntimeCase);
+}
+
+TEST_F(InputBoxTest, WrapModeSoftWrapsLongTextWithoutHorizontalScroll) {
+    const std::string text = "soft wrap keeps this long text inside the viewport 12345678901234567890";
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true);
+    inputBox->setViewport(96, 72);
+    inputBox->setSoftWrap(true);
+    inputBox->setText(text.c_str(), text.size());
+    inputBox->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
+
+    const auto metrics = inputBox->getMetrics();
+    EXPECT_GT(inputBox->getLineCount(), 1U);
+    EXPECT_FLOAT_EQ(metrics.contentWidth, metrics.viewportWidth);
+    EXPECT_FLOAT_EQ(metrics.scrollX, 0.0f);
+    EXPECT_FALSE(inputBox->scrollByX(48.0f));
+    EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollX, 0.0f);
+}
+
+TEST_F(InputBoxTest, NoWrapModeKeepsLongNumberOnOneLineAndScrollsHorizontally) {
+    const std::string text = "12345678901234567890123456789012345678901234567890";
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true);
+    inputBox->setViewport(96, 72);
+    inputBox->setSoftWrap(false);
+    inputBox->setText(text.c_str(), text.size());
+    inputBox->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
+
+    const auto metrics = inputBox->getMetrics();
+    const auto caret = inputBox->getCaretRect();
+    EXPECT_EQ(inputBox->getLineCount(), 1U);
+    EXPECT_GT(metrics.contentWidth, metrics.viewportWidth);
+    EXPECT_GT(metrics.scrollX, 0.0f);
+    EXPECT_LE(caret.right - metrics.scrollX, metrics.viewportWidth + 0.001f);
+    EXPECT_GE(caret.left - metrics.scrollX, -0.001f);
+
+    EXPECT_TRUE(inputBox->scrollByX(-metrics.scrollX));
+    EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollX, 0.0f);
+}
+
+TEST_F(InputBoxTest, NoWrapModeOnlyBreaksAtHardNewlines) {
+    const std::string firstLine = "123456789012345678901234567890";
+    const std::string secondLine = "abc";
+    const std::string text = firstLine + "\n" + secondLine;
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true);
+    inputBox->setViewport(96, 160);
+    inputBox->setSoftWrap(false);
+    inputBox->setText(text.c_str(), text.size());
+
+    ASSERT_EQ(inputBox->getLineCount(), 2U);
+    milestro_text::InputBoxLineMetrics firstMetrics;
+    milestro_text::InputBoxLineMetrics secondMetrics;
+    ASSERT_TRUE(inputBox->getLineMetrics(0, firstMetrics));
+    ASSERT_TRUE(inputBox->getLineMetrics(1, secondMetrics));
+    EXPECT_EQ(firstMetrics.startUtf8, 0U);
+    EXPECT_EQ(firstMetrics.endUtf8, firstLine.size());
+    EXPECT_EQ(secondMetrics.startUtf8, firstLine.size() + 1U);
+    EXPECT_EQ(secondMetrics.endUtf8, text.size());
+    EXPECT_GT(inputBox->getMetrics().contentWidth, inputBox->getMetrics().viewportWidth);
+}
+
+TEST_F(InputBoxTest, NoWrapModeDoesNotSoftBreakMixedLineAfterTrailingNewlineInsert) {
+    const std::string text =
+            "\xF0\x9F\xA4\x94 \xF0\xB0\xBB\x9D \xF0\x9F\xAB\x84 \xF0\x9F\xA4\xB0 "
+            "\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x92 "
+            "\xE6\xB5\x8B\xE8\xAF\x95 123 "
+            "\xE5\x95\x8A\xE5\x90\xA7\xE6\xAC\xA1\xE7\x9A\x84\xE9\xA2\x9D\xE4\xBD\x9B\xE6\xAD\x8C "
+            "3.14159265358979323846264338327950288";
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    inputBox->setViewport(320, 160);
+    inputBox->setSoftWrap(false);
+    inputBox->setText(text.c_str(), text.size());
+    inputBox->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
+    ASSERT_GT(inputBox->getMetrics().scrollX, 0.0f);
+
+    inputBox->insertText("\n", 1);
+
+    EXPECT_EQ(inputBox->getText(), text + "\n");
+    EXPECT_EQ(inputBox->getCursorUtf8(), text.size() + 1U);
+    ASSERT_GE(inputBox->getLineCount(), 1U);
+    milestro_text::InputBoxLineMetrics firstMetrics;
+    ASSERT_TRUE(inputBox->getLineMetrics(0, firstMetrics));
+    EXPECT_EQ(firstMetrics.startUtf8, 0U);
+    EXPECT_EQ(firstMetrics.endUtf8, text.size());
+    EXPECT_LE(inputBox->getLineCount(), 2U);
+}
+
+TEST_F(InputBoxTest, LineEndUsesUtf8OffsetForMixedNoWrapLine) {
+    const std::string text =
+            "\xF0\x9F\xA4\x94 \xF0\xB0\xBB\x9D \xF0\x9F\xAB\x84 \xF0\x9F\xA4\xB0 "
+            "\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x92 "
+            "\xE6\xB5\x8B\xE8\xAF\x95 123 "
+            "\xE5\x95\x8A\xE5\x90\xA7\xE6\xAC\xA1\xE7\x9A\x84\xE9\xA2\x9D\xE4\xBD\x9B\xE6\xAD\x8C "
+            "3.14159265358979323846264338327950288";
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    inputBox->setViewport(320, 160);
+    inputBox->setSoftWrap(false);
+    inputBox->setText(text.c_str(), text.size());
+    inputBox->setCursorUtf8(0, skia::textlayout::Affinity::kDownstream);
+
+    ASSERT_TRUE(inputBox->moveLineEnd());
+    EXPECT_EQ(inputBox->getCursorUtf8(), text.size());
+
+    inputBox->insertText("\n", 1);
+    EXPECT_EQ(inputBox->getText(), text + "\n");
+}
+
+TEST_F(InputBoxTest, MultiLineIntentDoesNotVerticallyCenterSingleVisualLine) {
+    auto singleLineInputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, false);
+    singleLineInputBox->setViewport(320, 160);
+    singleLineInputBox->setText("abc", 3);
+
+    auto multiLineInputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    multiLineInputBox->setViewport(320, 160);
+    multiLineInputBox->setText("abc", 3);
+
+    const auto singleLineCaret = singleLineInputBox->getCaretRect();
+    const auto multiLineCaret = multiLineInputBox->getCaretRect();
+    EXPECT_GT(singleLineCaret.top, multiLineCaret.top + 1.0f);
+    EXPECT_NEAR(multiLineCaret.top, 0.0f, 1.0f);
+}
+
+TEST_F(InputBoxTest, MaskInputDoesNotMutateTextSelectionOrEditingOffsets) {
+    const std::string text =
+            "ab\xE6\x97\xA5\xE6\x9C\xAC\xF0\x9F\x91\x8D";
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, false, true);
+    inputBox->setViewport(320, 160);
+    inputBox->setText(text.c_str(), text.size());
+
+    inputBox->setMaskInput(true);
+    EXPECT_TRUE(inputBox->getMaskInput());
+    EXPECT_EQ(inputBox->getText(), text);
+
+    const auto selectionStart = text.find("\xE6\x97\xA5");
+    ASSERT_NE(selectionStart, std::string::npos);
+    ASSERT_TRUE(inputBox->setSelectionUtf8(selectionStart,
+                                           text.size(),
+                                           skia::textlayout::Affinity::kDownstream,
+                                           skia::textlayout::Affinity::kDownstream));
+    auto selection = inputBox->getSelection();
+    ASSERT_TRUE(selection.hasSelection);
+    EXPECT_EQ(selection.startUtf8, selectionStart);
+    EXPECT_EQ(selection.endUtf8, text.size());
+
+    inputBox->insertText("X", 1);
+    EXPECT_EQ(inputBox->getText(), text.substr(0, selectionStart) + "X");
+    EXPECT_EQ(inputBox->getCursorUtf8(), selectionStart + 1U);
+}
+
+TEST_F(InputBoxTest, MaskInputPreservesHardNewlineLineBoundaries) {
+    const std::string firstLine = "abc";
+    const std::string secondLine = "\xE6\x97\xA5\xE6\x9C\xAC";
+    const std::string text = firstLine + "\n" + secondLine;
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, false, true);
+    inputBox->setViewport(320, 160);
+    inputBox->setText(text.c_str(), text.size());
+    inputBox->setMaskInput(true);
+
+    ASSERT_EQ(inputBox->getLineCount(), 2U);
+    milestro_text::InputBoxLineMetrics firstMetrics;
+    milestro_text::InputBoxLineMetrics secondMetrics;
+    ASSERT_TRUE(inputBox->getLineMetrics(0, firstMetrics));
+    ASSERT_TRUE(inputBox->getLineMetrics(1, secondMetrics));
+    EXPECT_EQ(firstMetrics.startUtf8, 0U);
+    EXPECT_EQ(firstMetrics.endUtf8, firstLine.size());
+    EXPECT_EQ(secondMetrics.startUtf8, firstLine.size() + 1U);
+    EXPECT_EQ(secondMetrics.endUtf8, text.size());
 }
 
 TEST_F(InputBoxTest, EmptyTextCaretUsesTextMetricsInsteadOfViewportHeight) {
@@ -413,6 +618,93 @@ TEST_F(InputBoxTest, MovementCanExtendAndCollapseSelection) {
     ASSERT_TRUE(selection.hasSelection);
     EXPECT_EQ(selection.startUtf8, 1U);
     EXPECT_EQ(selection.endUtf8, 2U);
+}
+
+TEST_F(InputBoxTest, NewlineIsPlainTextAndCreatesParagraphLines) {
+    auto inputBox = MakeInputBox();
+    const std::string text = "ab\ncd";
+    inputBox->setText(text.c_str(), text.size());
+
+    EXPECT_EQ(inputBox->getText(), text);
+    EXPECT_EQ(inputBox->getLineCount(), 2U);
+
+    milestro_text::InputBoxLineMetrics firstLine;
+    milestro_text::InputBoxLineMetrics secondLine;
+    ASSERT_TRUE(inputBox->getLineMetrics(0, firstLine));
+    ASSERT_TRUE(inputBox->getLineMetrics(1, secondLine));
+    EXPECT_EQ(firstLine.startUtf8, 0U);
+    EXPECT_EQ(firstLine.endUtf8, 2U);
+    EXPECT_EQ(secondLine.startUtf8, 3U);
+    EXPECT_EQ(secondLine.endUtf8, text.size());
+
+    inputBox->setCursorUtf8(3, skia::textlayout::Affinity::kDownstream);
+    ASSERT_TRUE(inputBox->deleteBackward());
+    EXPECT_EQ(inputBox->getText(), "abcd");
+    EXPECT_EQ(inputBox->getLineCount(), 1U);
+    EXPECT_EQ(inputBox->getCursorUtf8(), 2U);
+}
+
+TEST_F(InputBoxTest, UpDownNavigationPreservesCaretXAcrossLines) {
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true);
+    inputBox->setViewport(320, 160);
+    const std::string text = "aaaa\naaaa\naaaa";
+    inputBox->setText(text.c_str(), text.size());
+    inputBox->setCursorUtf8(2, skia::textlayout::Affinity::kDownstream);
+    const auto firstCaret = inputBox->getCaretRect();
+
+    ASSERT_TRUE(inputBox->moveDown());
+    EXPECT_EQ(inputBox->getCursorUtf8(), 7U);
+    const auto secondCaret = inputBox->getCaretRect();
+    EXPECT_NEAR(secondCaret.left, firstCaret.left, 0.5f);
+    EXPECT_GT(secondCaret.top, firstCaret.top);
+
+    ASSERT_TRUE(inputBox->moveDown());
+    EXPECT_EQ(inputBox->getCursorUtf8(), 12U);
+    const auto thirdCaret = inputBox->getCaretRect();
+    EXPECT_NEAR(thirdCaret.left, firstCaret.left, 0.5f);
+    EXPECT_GT(thirdCaret.top, secondCaret.top);
+
+    ASSERT_TRUE(inputBox->moveUp());
+    EXPECT_EQ(inputBox->getCursorUtf8(), 7U);
+}
+
+TEST_F(InputBoxTest, ShiftUpDownExtendsSelectionAcrossLines) {
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true);
+    inputBox->setViewport(320, 160);
+    inputBox->setText("aaaa\naaaa\naaaa", 14);
+    inputBox->setCursorUtf8(7, skia::textlayout::Affinity::kDownstream);
+
+    ASSERT_TRUE(inputBox->moveDown(true));
+    auto selection = inputBox->getSelection();
+    ASSERT_TRUE(selection.hasSelection);
+    EXPECT_EQ(selection.anchorUtf8, 7U);
+    EXPECT_EQ(selection.focusUtf8, 12U);
+    EXPECT_EQ(selection.startUtf8, 7U);
+    EXPECT_EQ(selection.endUtf8, 12U);
+
+    ASSERT_TRUE(inputBox->moveUp(true));
+    selection = inputBox->getSelection();
+    EXPECT_FALSE(selection.hasSelection);
+    EXPECT_EQ(inputBox->getCursorUtf8(), 7U);
+}
+
+TEST_F(InputBoxTest, HomeEndUseLineBoundariesAndDocumentModifierUsesDocumentBoundaries) {
+    auto inputBox = MakeInputBox();
+    const std::string text = "aaaa\nbbbb\ncccc";
+    inputBox->setText(text.c_str(), text.size());
+    inputBox->setCursorUtf8(7, skia::textlayout::Affinity::kDownstream);
+
+    ASSERT_TRUE(inputBox->moveLineStart());
+    EXPECT_EQ(inputBox->getCursorUtf8(), 5U);
+
+    ASSERT_TRUE(inputBox->moveLineEnd());
+    EXPECT_EQ(inputBox->getCursorUtf8(), 9U);
+
+    ASSERT_TRUE(inputBox->moveDocumentStart());
+    EXPECT_EQ(inputBox->getCursorUtf8(), 0U);
+
+    ASSERT_TRUE(inputBox->moveDocumentEnd());
+    EXPECT_EQ(inputBox->getCursorUtf8(), text.size());
 }
 
 TEST_F(InputBoxTest, SelectAllReplacesFullText) {
@@ -641,6 +933,76 @@ TEST_F(InputBoxTest, SelectionRectsUseUniformLineHeightAcrossFontRuns) {
         EXPECT_NEAR(rect.bottom, caret.bottom, 0.001f);
         EXPECT_GT(rect.right, rect.left);
     }
+    ExpectNoSelectionRectOverlap(rects);
+}
+
+TEST_F(InputBoxTest, SelectionRectsPreservePerLineHeightAcrossLines) {
+    auto inputBox = MakeInputBox();
+    inputBox->setViewport(320, 160);
+    const std::string text = "A\xF0\x9F\xA4\x94\nB\xE6\x97\xA5";
+    inputBox->setText(text.c_str(), text.size());
+
+    ASSERT_TRUE(inputBox->selectAll());
+    const auto rects = inputBox->getSelectionRects();
+    ASSERT_GE(rects.size(), 2U);
+
+    milestro_text::InputBoxLineMetrics firstLine;
+    milestro_text::InputBoxLineMetrics secondLine;
+    ASSERT_TRUE(inputBox->getLineMetrics(0, firstLine));
+    ASSERT_TRUE(inputBox->getLineMetrics(1, secondLine));
+    const auto firstLineTop = firstLine.baseline - firstLine.ascent;
+    const auto firstLineBottom = firstLine.baseline + firstLine.descent;
+    const auto secondLineTop = secondLine.baseline - secondLine.ascent;
+    const auto secondLineBottom = secondLine.baseline + secondLine.descent;
+    const auto firstTop = rects.front().top;
+    const auto firstBottom = rects.front().bottom;
+    const auto lastTop = rects.back().top;
+    const auto lastBottom = rects.back().bottom;
+    EXPECT_NEAR(firstTop, firstLineTop, 0.001f);
+    EXPECT_NEAR(firstBottom, firstLineBottom, 0.001f);
+    EXPECT_GE(lastTop, secondLineTop - 0.001f);
+    EXPECT_NEAR(lastBottom, secondLineBottom, 0.001f);
+    EXPECT_LE(lastBottom - lastTop, secondLine.ascent + secondLine.descent + 0.001f);
+    EXPECT_GT(lastBottom - lastTop, 0.0f);
+    EXPECT_GT(lastTop, firstTop);
+    ExpectNoSelectionRectOverlap(rects);
+}
+
+TEST_F(InputBoxTest, SelectionRectsDoNotOverlapForWrappedMixedParagraph) {
+    const std::string text =
+            "大型语言模型（英语：large language model，LLM），也称大语言模型，简称大模型，"
+            "是一种基于人工神经网络的语言模型。其名称中的“大型”指模型具有庞大的参数量"
+            "（通常23在数十亿至数万亿级别，如GPT-3含1750亿参数）以及巨大的训练数据规模。"
+            "大语言模型通常采用自监督机器学习方法，从而能够基于海量无标注的文本进行训练。"
+            "大语言模型专为自然语言处理任务而设计，尤其适用于语言生成。[1][2]其中包含"
+            "Gemini和GPT-4o在内的部分多模态大模型能够同时处理文字、图片、音频和视频等"
+            "不同输入形式。规模最大、功能最强大的LLM基本采用生成式预训练 Transformer (GPT) "
+            "模型，它们为ChatGPT、Gemini、Perplexity和Claude等聊天机器人提供了核心功能。";
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, false, true);
+    inputBox->setViewport(1680, 480);
+    inputBox->setSoftWrap(true);
+    inputBox->setText(text.c_str(), text.size());
+
+    ASSERT_TRUE(inputBox->selectAll());
+    const auto rects = inputBox->getSelectionRects();
+    ASSERT_GT(rects.size(), 1U);
+    ExpectNoSelectionRectOverlap(rects);
+}
+
+TEST_F(InputBoxTest, SelectionRectsDoNotOverlapForNoWrapMixedParagraph) {
+    const std::string text =
+            "大型语言模型（英语：large language model，LLM），也称大语言模型，简称大模型，"
+            "是一种基于人工神经网络的语言模型。\n其名称中的“大型”指模型具有庞大的参数量"
+            "（通常23在数十亿至数万亿级别，如GPT-3含1750亿参数）以及巨大的训练数据规模。";
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, false, true);
+    inputBox->setViewport(1680, 240);
+    inputBox->setSoftWrap(false);
+    inputBox->setText(text.c_str(), text.size());
+
+    ASSERT_TRUE(inputBox->selectAll());
+    const auto rects = inputBox->getSelectionRects();
+    ASSERT_GT(rects.size(), 1U);
+    ExpectNoSelectionRectOverlap(rects);
 }
 
 TEST_F(InputBoxTest, SingleLineGeometryUsesStableBaselineInViewport) {

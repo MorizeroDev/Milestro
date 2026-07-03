@@ -10,6 +10,7 @@ namespace Milestro.Model
             List<string> fontFamilies,
             TextAlign textAlign,
             TextDirection textDirection,
+            TextBoxWrapMode wrapMode,
             float size,
             int weight,
             Color textColor,
@@ -20,6 +21,7 @@ namespace Milestro.Model
             FontFamilies = fontFamilies ?? new List<string>();
             TextAlign = textAlign;
             TextDirection = textDirection;
+            WrapMode = wrapMode;
             Size = size;
             Weight = weight;
             TextColor = textColor;
@@ -31,6 +33,7 @@ namespace Milestro.Model
         public List<string> FontFamilies { get; }
         public TextAlign TextAlign { get; }
         public TextDirection TextDirection { get; }
+        public TextBoxWrapMode WrapMode { get; }
         public float Size { get; }
         public int Weight { get; }
         public Color TextColor { get; }

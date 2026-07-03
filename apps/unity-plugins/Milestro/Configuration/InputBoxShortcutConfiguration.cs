@@ -1,9 +1,9 @@
 namespace Milestro.Configuration
 {
-    public static class InputBoxShortcutConfiguration
+    public class InputBoxShortcutConfiguration
     {
-        public static bool AcceptRedoWithControlY { get; set; } = true;
-        public static bool AcceptRedoWithShiftZ { get; set; } = true;
-        public static bool AcceptShiftClipboardShortcuts { get; set; } = true;
+        public bool AcceptRedoWithControlY { get; set; } = true;
+        public bool AcceptRedoWithShiftZ { get; set; } = true;
+        public bool AcceptShiftClipboardShortcuts { get; set; } = true;
     }
 }

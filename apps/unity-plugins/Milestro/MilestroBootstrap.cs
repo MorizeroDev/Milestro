@@ -16,7 +16,7 @@ namespace Milestro
             if (System.Threading.Interlocked.Exchange(ref _initialized, 1) == 1)
                 return;
 
-            IcuConfiguration.Init();
+            IcuInitializer.Init();
 #endif
         }
 
