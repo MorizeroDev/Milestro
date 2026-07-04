@@ -1123,22 +1123,22 @@ namespace Milestro.Components
             if (ShouldProcessRepeatingKey(KeyCode.LeftArrow, ref nextLeftRepeatTime))
             {
                 ResetSurrogateInputState();
-                changed |= inputBox.MovePrevious(extendSelection);
+                changed |= MoveLeftArrow(inputBox, extendSelection);
             }
             if (ShouldProcessRepeatingKey(KeyCode.RightArrow, ref nextRightRepeatTime))
             {
                 ResetSurrogateInputState();
-                changed |= inputBox.MoveNext(extendSelection);
+                changed |= MoveRightArrow(inputBox, extendSelection);
             }
             if (ShouldProcessRepeatingKey(KeyCode.UpArrow, ref nextUpRepeatTime))
             {
                 ResetSurrogateInputState();
-                changed |= inputBox.MoveUp(extendSelection);
+                changed |= MoveUpArrow(inputBox, extendSelection);
             }
             if (ShouldProcessRepeatingKey(KeyCode.DownArrow, ref nextDownRepeatTime))
             {
                 ResetSurrogateInputState();
-                changed |= inputBox.MoveDown(extendSelection);
+                changed |= MoveDownArrow(inputBox, extendSelection);
             }
             if (ShouldProcessRepeatingKey(KeyCode.Home, ref nextHomeRepeatTime))
             {
@@ -1171,6 +1171,34 @@ namespace Milestro.Components
                 }
             }
             return changed;
+        }
+
+        private static bool MoveLeftArrow(InputBox editor, bool extendSelection)
+        {
+            return InputBoxShortcutUtil.IsMacBoundaryArrowModifierDown()
+                ? editor.MoveLineStart(extendSelection)
+                : editor.MovePrevious(extendSelection);
+        }
+
+        private static bool MoveRightArrow(InputBox editor, bool extendSelection)
+        {
+            return InputBoxShortcutUtil.IsMacBoundaryArrowModifierDown()
+                ? editor.MoveLineEnd(extendSelection)
+                : editor.MoveNext(extendSelection);
+        }
+
+        private static bool MoveUpArrow(InputBox editor, bool extendSelection)
+        {
+            return InputBoxShortcutUtil.IsMacBoundaryArrowModifierDown()
+                ? editor.MoveDocumentStart(extendSelection)
+                : editor.MoveUp(extendSelection);
+        }
+
+        private static bool MoveDownArrow(InputBox editor, bool extendSelection)
+        {
+            return InputBoxShortcutUtil.IsMacBoundaryArrowModifierDown()
+                ? editor.MoveDocumentEnd(extendSelection)
+                : editor.MoveDown(extendSelection);
         }
 
         private bool TryHandleUndoRedoShortcut(out bool changed)

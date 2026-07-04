@@ -86,6 +86,11 @@ namespace Milestro.Util
             return IsControlPressed() != IsCommandPressed() && !IsAltPressed();
         }
 
+        internal static bool IsMacBoundaryArrowModifierDown()
+        {
+            return IsCommandPressed() && !IsControlPressed() && !IsAltPressed();
+        }
+
         internal static bool IsCopyDown()
         {
             return (IsClipboardCommandModifier() && Input.GetKeyDown(KeyCode.C)) ||
