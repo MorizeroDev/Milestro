@@ -61,6 +61,28 @@ namespace Milestro.Skia.TextLayout
             set => SetMaskInput(value);
         }
 
+        public bool Focused
+        {
+            get
+            {
+                ThrowIfDisposed();
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxGetFocused(NativePtr, out var ret));
+                return ret != 0;
+            }
+            set => SetFocused(value);
+        }
+
+        public TextOverflow TextOverflow
+        {
+            get
+            {
+                ThrowIfDisposed();
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxGetTextOverflow(NativePtr, out var ret));
+                return (TextOverflow)ret;
+            }
+            set => SetTextOverflow(value);
+        }
+
         public void SetText(string text)
         {
             ThrowIfDisposed();
@@ -98,6 +120,51 @@ namespace Milestro.Skia.TextLayout
         {
             ThrowIfDisposed();
             ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxSetMaskInput(NativePtr, maskInput ? 1 : 0));
+        }
+
+        public void SetFocused(bool focused)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxSetFocused(NativePtr, focused ? 1 : 0));
+        }
+
+        public void SetTextOverflow(TextOverflow textOverflow)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxSetTextOverflow(NativePtr, (int)textOverflow));
+        }
+
+        public void SetEllipsis(string text)
+        {
+            ThrowIfDisposed();
+            var bytes = GetUtf8Bytes(text);
+            unsafe
+            {
+                fixed (byte* ptr = bytes)
+                {
+                    ExitCodeUtil.ThrowIfFailed(
+                        BindingC.SkiaTextlayoutInputBoxSetEllipsis(NativePtr, ptr, (ulong)bytes.Length));
+                }
+            }
+        }
+
+        public void SetMaskChar(char maskChar)
+        {
+            SetMaskChar(maskChar.ToString());
+        }
+
+        public void SetMaskChar(string text)
+        {
+            ThrowIfDisposed();
+            var bytes = GetUtf8Bytes(text);
+            unsafe
+            {
+                fixed (byte* ptr = bytes)
+                {
+                    ExitCodeUtil.ThrowIfFailed(
+                        BindingC.SkiaTextlayoutInputBoxSetMaskChar(NativePtr, ptr, (ulong)bytes.Length));
+                }
+            }
         }
 
         public void SetCaretColor(Color32 color)

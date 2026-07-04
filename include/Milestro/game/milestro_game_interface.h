@@ -248,10 +248,28 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetSoftWrap(milestro::skia::t
                                                                int32_t softWrap);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetSoftWrap(milestro::skia::textlayout::InputBox *inputBox,
                                                                int32_t &softWrap);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetFocused(milestro::skia::textlayout::InputBox *inputBox,
+                                                              int32_t focused);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetFocused(milestro::skia::textlayout::InputBox *inputBox,
+                                                              int32_t &focused);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetTextOverflow(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t textOverflow);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetTextOverflow(
+        milestro::skia::textlayout::InputBox *inputBox,
+        int32_t &textOverflow);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetEllipsis(
+        milestro::skia::textlayout::InputBox *inputBox,
+        [[milize::CSharpType("void*")]] void *text,
+        uint64_t size);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetMaskInput(milestro::skia::textlayout::InputBox *inputBox,
                                                                 int32_t maskInput);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxGetMaskInput(milestro::skia::textlayout::InputBox *inputBox,
                                                                 int32_t &maskInput);
+MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetMaskChar(
+        milestro::skia::textlayout::InputBox *inputBox,
+        [[milize::CSharpType("void*")]] void *text,
+        uint64_t size);
 MILESTRO_API int64_t MilestroSkiaTextlayoutInputBoxSetCaretColor(milestro::skia::textlayout::InputBox *inputBox,
                                                                  int32_t r,
                                                                  int32_t g,

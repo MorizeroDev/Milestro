@@ -400,12 +400,36 @@ namespace Milestro.Binding
         internal static extern unsafe long SkiaTextlayoutInputBoxGetSoftWrap(IntPtr inputBox, out int softWrap);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxSetFocused")]
+        internal static extern unsafe long SkiaTextlayoutInputBoxSetFocused(IntPtr inputBox, int focused);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxGetFocused")]
+        internal static extern unsafe long SkiaTextlayoutInputBoxGetFocused(IntPtr inputBox, out int focused);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxSetTextOverflow")]
+        internal static extern unsafe long SkiaTextlayoutInputBoxSetTextOverflow(IntPtr inputBox, int textOverflow);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxGetTextOverflow")]
+        internal static extern unsafe long SkiaTextlayoutInputBoxGetTextOverflow(IntPtr inputBox, out int textOverflow);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxSetEllipsis")]
+        internal static extern unsafe long SkiaTextlayoutInputBoxSetEllipsis(IntPtr inputBox, void* text, ulong size);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxSetMaskInput")]
         internal static extern unsafe long SkiaTextlayoutInputBoxSetMaskInput(IntPtr inputBox, int maskInput);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxGetMaskInput")]
         internal static extern unsafe long SkiaTextlayoutInputBoxGetMaskInput(IntPtr inputBox, out int maskInput);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxSetMaskChar")]
+        internal static extern unsafe long SkiaTextlayoutInputBoxSetMaskChar(IntPtr inputBox, void* text, ulong size);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxSetCaretColor")]

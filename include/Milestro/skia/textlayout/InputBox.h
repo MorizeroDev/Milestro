@@ -28,6 +28,12 @@ enum class TextBoundarySnapMode : int32_t {
     Nearest = 2,
 };
 
+enum class TextOverflow : int32_t {
+    Clip = 0,
+    Ellipsis = 1,
+    Overflow = 2,
+};
+
 struct InputBoxCaretRect {
     float left = 0.0f;
     float top = 0.0f;
@@ -116,8 +122,16 @@ public:
     void setViewport(SkScalar width, SkScalar height);
     void setSoftWrap(bool softWrap);
     bool getSoftWrap() const { return softWrap_; }
+    void setFocused(bool focused);
+    bool getFocused() const { return focused_; }
+    void setTextOverflow(TextOverflow textOverflow);
+    TextOverflow getTextOverflow() const { return textOverflow_; }
+    void setEllipsis(const char* text, size_t length);
+    const std::string& getEllipsis() const { return ellipsisText_; }
     void setMaskInput(bool maskInput);
     bool getMaskInput() const { return maskInput_; }
+    void setMaskChar(const char* text, size_t length);
+    const std::string& getMaskChar() const { return maskText_; }
     void setCaretColor(SkColor color) { caretColor_ = color; }
     void setSelectionColor(SkColor color) { selectionColor_ = color; }
     void setCaretWidth(SkScalar width);
@@ -191,9 +205,14 @@ private:
     SkColor selectionColor_ = SkColorSetARGB(0x66, 0x33, 0x7D, 0xFF);
     bool caretVisible_ = true;
     bool softWrap_ = true;
+    bool focused_ = true;
+    bool singleLineInput_ = true;
     bool maskInput_ = false;
     bool centerSingleLineVertically_ = true;
     bool paragraphDirty_ = true;
+    TextOverflow textOverflow_ = TextOverflow::Clip;
+    std::string ellipsisText_ = "\xE2\x80\xA6";
+    std::string maskText_ = "*";
     std::string compositionText_;
     size_t selectionAnchorUtf8_ = 0;
     size_t selectionFocusUtf8_ = 0;
@@ -233,19 +252,40 @@ private:
 
     static std::string sanitizePlainText(const char* text, size_t length);
 
+    struct DisplayTextState {
+        std::string text;
+        std::vector<size_t> committedUtf8ForDisplayUtf8;
+        std::vector<size_t> displayUtf8ForCommittedUtf8;
+        size_t compositionStartUtf8 = 0;
+        size_t compositionEndUtf8 = 0;
+
+        size_t committedUtf8FromDisplay(size_t displayUtf8) const;
+        size_t displayUtf8FromCommitted(size_t committedUtf8) const;
+    };
+
     void configureInputParagraphMetrics();
     void rebuildParagraphIfNeeded();
     std::unique_ptr<::skia::textlayout::Paragraph> buildParagraph() const;
-    std::unique_ptr<::skia::textlayout::Paragraph> buildParagraphForText(const std::string& text) const;
+    std::unique_ptr<::skia::textlayout::Paragraph> buildParagraphForText(const std::string& text,
+                                                                         bool ellipsize) const;
+    std::unique_ptr<::skia::textlayout::Paragraph> buildPaintParagraph() const;
+    bool shouldUseEllipsisDisplay() const;
+    bool shouldClipDisplayToViewport() const;
+    InputBoxMetrics metricsForParagraph(::skia::textlayout::Paragraph* paragraph,
+                                        SkScalar scrollX,
+                                        SkScalar scrollY,
+                                        SkScalar contentWidth) const;
     std::string displayText() const;
+    DisplayTextState displayTextState() const;
     TextBoundaryMap displayBoundaryMap() const;
     size_t displayCaretUtf8() const;
     size_t displayCompositionStartUtf8() const;
     size_t displayCompositionEndUtf8() const;
-    size_t displayCompositionReplacedEndUtf8() const;
+    size_t compositionStartUtf8() const;
+    size_t compositionReplacedEndUtf8() const;
     size_t committedUtf8FromDisplay(size_t displayUtf8) const;
     InputBoxCaretRect getCaretRectForDisplayOffset(size_t displayUtf8);
-    std::vector<InputBoxCaretRect> getRectsForDisplayRange(size_t startUtf8, size_t endUtf8);
+    std::vector<InputBoxCaretRect> getRectsForCommittedRange(size_t startUtf8, size_t endUtf8);
     bool resolveLineMetricsForDisplayUtf8(size_t displayUtf8,
                                           ::skia::textlayout::Affinity affinity,
                                           ::skia::textlayout::LineMetrics& lineMetrics,
@@ -265,6 +305,7 @@ private:
     size_t selectionStartUtf8() const;
     size_t selectionEndUtf8() const;
     SkScalar visualOffsetY();
+    SkScalar visualOffsetYForParagraph(::skia::textlayout::Paragraph* paragraph) const;
     SkScalar contentHeight();
     SkScalar maxScrollY();
     InputBoxCaretRect activeEnsureVisibleRect();
@@ -304,7 +345,8 @@ public:
                          SkColor caretColor,
                          SkColor selectionColor,
                          bool caretVisible,
-                         bool compositionVisible);
+                         bool compositionVisible,
+                         bool clipToViewport);
 
     void paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, SkScalar height) const;
 
@@ -320,6 +362,7 @@ private:
     SkColor selectionColor_ = SkColorSetARGB(0x66, 0x33, 0x7D, 0xFF);
     bool caretVisible_ = false;
     bool compositionVisible_ = false;
+    bool clipToViewport_ = true;
 };
 
 } // namespace milestro::skia::textlayout

@@ -76,10 +76,19 @@ namespace Milestro.Components
         private TextInputWrapMode m_wrapMode = TextInputWrapMode.NoWrap;
 
         [SerializeField]
+        private TextOverflow m_textOverflow = TextOverflow.Clip;
+
+        [SerializeField]
+        private string m_ellipsisString = "\u2026";
+
+        [SerializeField]
         private bool m_readOnly;
 
         [SerializeField]
         private bool m_maskInput;
+
+        [SerializeField]
+        private char m_maskChar = '*';
 
         [SerializeField]
         private bool m_allowCopy = true;
@@ -248,6 +257,65 @@ namespace Milestro.Components
                 m_maskInput = value;
                 CancelScrollTweens();
                 inputBox?.SetMaskInput(m_maskInput);
+                layoutDirty = true;
+                paintDirty = true;
+            }
+        }
+
+        public bool isPassword
+        {
+            get => m_maskInput;
+            set => maskInput = value;
+        }
+
+        public char maskChar
+        {
+            get => m_maskChar;
+            set
+            {
+                if (m_maskChar == value)
+                {
+                    return;
+                }
+
+                m_maskChar = value == '\0' ? '*' : value;
+                CancelScrollTweens();
+                inputBox?.SetMaskChar(m_maskChar);
+                layoutDirty = true;
+                paintDirty = true;
+            }
+        }
+
+        public TextOverflow textOverflow
+        {
+            get => m_textOverflow;
+            set
+            {
+                if (m_textOverflow == value)
+                {
+                    return;
+                }
+
+                m_textOverflow = value;
+                inputBox?.SetTextOverflow(m_textOverflow);
+                layoutDirty = true;
+                paintDirty = true;
+            }
+        }
+
+        public string ellipsisString
+        {
+            get => m_ellipsisString;
+            set
+            {
+                var next = value ?? "";
+                if (m_ellipsisString == next)
+                {
+                    return;
+                }
+
+                m_ellipsisString = next;
+                inputBox?.SetEllipsis(m_ellipsisString);
                 layoutDirty = true;
                 paintDirty = true;
             }
@@ -846,7 +914,14 @@ namespace Milestro.Components
                 inputBox?.ClearComposition();
                 inputBox?.BreakUndoGroup();
             }
+            if (m_maskChar == '\0')
+            {
+                m_maskChar = '*';
+            }
             inputBox?.SetMaskInput(m_maskInput);
+            inputBox?.SetMaskChar(m_maskChar);
+            inputBox?.SetTextOverflow(m_textOverflow);
+            inputBox?.SetEllipsis(m_ellipsisString);
             ClearSelectionIfDisabled();
             ApplyImeCompositionMode();
             m_scrollTweenDurationSeconds = FloatUtil.IsFinite(m_scrollTweenDurationSeconds)
@@ -902,6 +977,7 @@ namespace Milestro.Components
         private void Focus()
         {
             focused = true;
+            inputBox?.SetFocused(true);
             ApplyImeCompositionMode();
             ResetBlink();
             paintDirty = true;
@@ -922,6 +998,7 @@ namespace Milestro.Components
                 inputBox.ClearComposition();
                 inputBox.ClearSelection();
                 inputBox.SetCaretVisible(false);
+                inputBox.SetFocused(false);
             }
             paintDirty = true;
         }
@@ -1863,7 +1940,11 @@ namespace Milestro.Components
             CoerceWrapModeForLineMode();
             m_text = NormalizeTextForLineMode(m_text, m_lineMode);
             inputBox.SetSoftWrap(EffectiveSoftWrap());
+            inputBox.SetFocused(focused);
+            inputBox.SetTextOverflow(m_textOverflow);
+            inputBox.SetEllipsis(m_ellipsisString);
             inputBox.SetMaskInput(m_maskInput);
+            inputBox.SetMaskChar(m_maskChar);
             inputBox.Text = m_text;
             compositionActive = false;
             lastCompositionText = "";

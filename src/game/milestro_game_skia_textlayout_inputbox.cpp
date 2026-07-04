@@ -114,6 +114,47 @@ int64_t MilestroSkiaTextlayoutInputBoxGetSoftWrap(milestro::skia::textlayout::In
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutInputBoxSetFocused(milestro::skia::textlayout::InputBox *inputBox,
+                                                 int32_t focused) try {
+    inputBox->setFocused(focused != 0);
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxGetFocused(milestro::skia::textlayout::InputBox *inputBox,
+                                                 int32_t &focused) try {
+    focused = inputBox->getFocused() ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxSetTextOverflow(milestro::skia::textlayout::InputBox *inputBox,
+                                                      int32_t textOverflow) try {
+    inputBox->setTextOverflow(static_cast<milestro::skia::textlayout::TextOverflow>(textOverflow));
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxGetTextOverflow(milestro::skia::textlayout::InputBox *inputBox,
+                                                      int32_t &textOverflow) try {
+    textOverflow = static_cast<int32_t>(inputBox->getTextOverflow());
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxSetEllipsis(milestro::skia::textlayout::InputBox *inputBox,
+                                                  void *text,
+                                                  uint64_t size) try {
+    inputBox->setEllipsis(reinterpret_cast<const char *>(text), static_cast<size_t>(size));
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutInputBoxSetMaskInput(milestro::skia::textlayout::InputBox *inputBox,
                                                    int32_t maskInput) try {
     inputBox->setMaskInput(maskInput != 0);
@@ -125,6 +166,15 @@ int64_t MilestroSkiaTextlayoutInputBoxSetMaskInput(milestro::skia::textlayout::I
 int64_t MilestroSkiaTextlayoutInputBoxGetMaskInput(milestro::skia::textlayout::InputBox *inputBox,
                                                    int32_t &maskInput) try {
     maskInput = inputBox->getMaskInput() ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxSetMaskChar(milestro::skia::textlayout::InputBox *inputBox,
+                                                  void *text,
+                                                  uint64_t size) try {
+    inputBox->setMaskChar(reinterpret_cast<const char *>(text), static_cast<size_t>(size));
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;

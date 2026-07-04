@@ -2,6 +2,7 @@
 #include "Milestro/game/milestro_game_interface.h"
 #include "Milestro/game/milestro_game_model.h"
 #include "Milestro/game/milestro_game_retcode.h"
+#include "Milestro/skia/Canvas.h"
 #include "Milestro/skia/textlayout/InputBox.h"
 #include "Milestro/skia/textlayout/ParagraphStyle.h"
 #include "Milestro/skia/textlayout/TextStyle.h"
@@ -22,6 +23,12 @@ namespace fs = std::filesystem;
 namespace milestro_text = milestro::skia::textlayout;
 
 namespace {
+
+struct PaintedInputBox {
+    int width = 0;
+    int height = 0;
+    std::vector<uint8_t> pixels;
+};
 
 int RegisterFontsInDirectory(const fs::path& dirPath) {
     auto* fontRegistry = milestro::skia::GetFontRegistry();
@@ -81,6 +88,59 @@ std::string MixedNoWrapPiText() {
 
 std::u16string ToUtf16(const std::string& text) {
     return SkUnicode::convertUtf8ToUtf16(text.c_str(), static_cast<int>(text.size()));
+}
+
+PaintedInputBox PaintSnapshot(milestro_text::InputBox& inputBox,
+                              int width = 320,
+                              int height = 96,
+                              float paintWidth = -1.0f,
+                              float paintHeight = -1.0f) {
+    PaintedInputBox result{
+            width,
+            height,
+            std::vector<uint8_t>(static_cast<size_t>(width * height * 4), 0),
+    };
+    milestro::skia::Canvas canvas(width, height, result.pixels.data());
+    auto snapshot = inputBox.createDrawSnapshot();
+    snapshot->paint(canvas.unwrap(),
+                    0.0f,
+                    0.0f,
+                    paintWidth > 0.0f ? paintWidth : static_cast<float>(width),
+                    paintHeight > 0.0f ? paintHeight : static_cast<float>(height));
+    return result;
+}
+
+size_t CountInkPixels(const PaintedInputBox& image, int left = 0, int right = -1) {
+    if (right < 0) {
+        right = image.width;
+    }
+    left = std::max(0, std::min(left, image.width));
+    right = std::max(left, std::min(right, image.width));
+
+    size_t count = 0;
+    for (int y = 0; y < image.height; ++y) {
+        for (int x = left; x < right; ++x) {
+            const auto base = static_cast<size_t>((y * image.width + x) * 4);
+            if (image.pixels[base] != 0 ||
+                image.pixels[base + 1] != 0 ||
+                image.pixels[base + 2] != 0 ||
+                image.pixels[base + 3] != 0) {
+                ++count;
+            }
+        }
+    }
+    return count;
+}
+
+bool ImagesEqual(const PaintedInputBox& left, const PaintedInputBox& right) {
+    return left.width == right.width &&
+           left.height == right.height &&
+           left.pixels == right.pixels;
+}
+
+size_t GraphemeClusterCount(const std::string& text) {
+    milestro_text::TextBoundaryMap map(text);
+    return map.boundaryCount() == 0 ? 0 : map.boundaryCount() - 1;
 }
 
 void ExpectWrappedMultiLineNoHorizontalScroll(const std::string& text) {
@@ -370,6 +430,142 @@ TEST_F(InputBoxTest, SharedNoWrapMeasurementKeepsMixedPiLineOnOneLine) {
     EXPECT_EQ(lineMetrics.endUtf8, text.size());
 }
 
+TEST_F(InputBoxTest, FocusedEllipsisUsesNoWrapEditScrollForMixedPiLine) {
+    const auto text = MixedNoWrapPiText();
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, false);
+    inputBox->setViewport(160, 96);
+    inputBox->setSoftWrap(false);
+    inputBox->setTextOverflow(milestro_text::TextOverflow::Ellipsis);
+    inputBox->setFocused(true);
+    inputBox->setText(text.c_str(), text.size());
+    inputBox->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
+
+    const auto metrics = inputBox->getMetrics();
+    const auto caret = inputBox->getCaretRect();
+    ASSERT_EQ(inputBox->getLineCount(), 1U);
+    EXPECT_GT(metrics.contentWidth, metrics.viewportWidth);
+    EXPECT_GT(metrics.scrollX, 0.0f);
+    EXPECT_LE(caret.right - metrics.scrollX, metrics.viewportWidth + 0.001f);
+    EXPECT_EQ(inputBox->getText(), text);
+
+    milestro_text::InputBoxLineMetrics lineMetrics;
+    ASSERT_TRUE(inputBox->getLineMetrics(0, lineMetrics));
+    EXPECT_EQ(lineMetrics.startUtf8, 0U);
+    EXPECT_EQ(lineMetrics.endUtf8, text.size());
+}
+
+TEST_F(InputBoxTest, UnfocusedEllipsisIsDisplayOnlyAndDoesNotMutateEditingState) {
+    const auto text = MixedNoWrapPiText();
+    auto focusedInputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, false);
+    focusedInputBox->setViewport(160, 96);
+    focusedInputBox->setSoftWrap(false);
+    focusedInputBox->setTextOverflow(milestro_text::TextOverflow::Ellipsis);
+    focusedInputBox->setText(text.c_str(), text.size());
+    focusedInputBox->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
+
+    auto unfocusedInputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, false);
+    unfocusedInputBox->setViewport(160, 96);
+    unfocusedInputBox->setSoftWrap(false);
+    unfocusedInputBox->setTextOverflow(milestro_text::TextOverflow::Ellipsis);
+    unfocusedInputBox->setText(text.c_str(), text.size());
+    unfocusedInputBox->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
+    ASSERT_TRUE(unfocusedInputBox->setSelectionUtf8(0,
+                                                    text.size(),
+                                                    skia::textlayout::Affinity::kDownstream,
+                                                    skia::textlayout::Affinity::kDownstream));
+    unfocusedInputBox->setFocused(false);
+
+    const auto beforeSelection = unfocusedInputBox->getSelection();
+    const auto beforeScrollX = unfocusedInputBox->getMetrics().scrollX;
+    ASSERT_GT(beforeScrollX, 0.0f);
+
+    const auto focusedPaint = PaintSnapshot(*focusedInputBox, 260, 96, 160.0f, 96.0f);
+    const auto unfocusedPaint = PaintSnapshot(*unfocusedInputBox, 260, 96, 160.0f, 96.0f);
+    EXPECT_FALSE(ImagesEqual(focusedPaint, unfocusedPaint));
+    EXPECT_EQ(CountInkPixels(unfocusedPaint, 160, 260), 0U);
+
+    EXPECT_EQ(unfocusedInputBox->getText(), text);
+    EXPECT_EQ(unfocusedInputBox->getCursorUtf8(), text.size());
+    const auto afterSelection = unfocusedInputBox->getSelection();
+    EXPECT_EQ(afterSelection.anchorUtf8, beforeSelection.anchorUtf8);
+    EXPECT_EQ(afterSelection.focusUtf8, beforeSelection.focusUtf8);
+    EXPECT_EQ(afterSelection.startUtf8, beforeSelection.startUtf8);
+    EXPECT_EQ(afterSelection.endUtf8, beforeSelection.endUtf8);
+    EXPECT_EQ(unfocusedInputBox->getMetrics().scrollX, beforeScrollX);
+}
+
+TEST_F(InputBoxTest, UnfocusedOverflowCanPaintPastSingleLineViewport) {
+    const std::string text = "123456789012345678901234567890";
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, false);
+    inputBox->setViewport(96, 72);
+    inputBox->setSoftWrap(false);
+    inputBox->setTextOverflow(milestro_text::TextOverflow::Overflow);
+    inputBox->setText(text.c_str(), text.size());
+    inputBox->setCursorUtf8(0, skia::textlayout::Affinity::kDownstream);
+    inputBox->setFocused(false);
+
+    const auto image = PaintSnapshot(*inputBox, 240, 72, 96.0f, 72.0f);
+    EXPECT_GT(CountInkPixels(image, 96, 240), 0U);
+}
+
+TEST_F(InputBoxTest, MultilineIgnoresEllipsisDisplayMode) {
+    const std::string text = "first long line wraps in multiline mode\nsecond line";
+    auto clipInputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    clipInputBox->setViewport(160, 120);
+    clipInputBox->setSoftWrap(true);
+    clipInputBox->setTextOverflow(milestro_text::TextOverflow::Clip);
+    clipInputBox->setText(text.c_str(), text.size());
+    clipInputBox->setFocused(false);
+
+    auto ellipsisInputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    ellipsisInputBox->setViewport(160, 120);
+    ellipsisInputBox->setSoftWrap(true);
+    ellipsisInputBox->setTextOverflow(milestro_text::TextOverflow::Ellipsis);
+    ellipsisInputBox->setText(text.c_str(), text.size());
+    ellipsisInputBox->setFocused(false);
+
+    EXPECT_GT(ellipsisInputBox->getLineCount(), 1U);
+    EXPECT_TRUE(ImagesEqual(PaintSnapshot(*clipInputBox, 160, 120),
+                            PaintSnapshot(*ellipsisInputBox, 160, 120)));
+}
+
+TEST_F(InputBoxTest, CompositionSuppressesUnfocusedEllipsisDisplay) {
+    const std::string text = "123456789012345678901234567890";
+    const std::string composition = "\xE6\x97\xA5";
+    auto withoutComposition = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, false);
+    withoutComposition->setViewport(96, 72);
+    withoutComposition->setSoftWrap(false);
+    withoutComposition->setTextOverflow(milestro_text::TextOverflow::Ellipsis);
+    withoutComposition->setText(text.c_str(), text.size());
+    withoutComposition->setFocused(false);
+
+    auto focusedWithComposition = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, false);
+    focusedWithComposition->setViewport(96, 72);
+    focusedWithComposition->setSoftWrap(false);
+    focusedWithComposition->setTextOverflow(milestro_text::TextOverflow::Ellipsis);
+    focusedWithComposition->setText(text.c_str(), text.size());
+    focusedWithComposition->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
+    ASSERT_TRUE(focusedWithComposition->setComposition(composition.c_str(), composition.size()));
+
+    auto withComposition = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, false);
+    withComposition->setViewport(96, 72);
+    withComposition->setSoftWrap(false);
+    withComposition->setTextOverflow(milestro_text::TextOverflow::Ellipsis);
+    withComposition->setText(text.c_str(), text.size());
+    withComposition->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
+    ASSERT_TRUE(withComposition->setComposition(composition.c_str(), composition.size()));
+    withComposition->setFocused(false);
+
+    const auto withoutCompositionPaint = PaintSnapshot(*withoutComposition, 180, 72, 96.0f, 72.0f);
+    const auto focusedWithCompositionPaint = PaintSnapshot(*focusedWithComposition, 180, 72, 96.0f, 72.0f);
+    const auto withCompositionPaint = PaintSnapshot(*withComposition, 180, 72, 96.0f, 72.0f);
+    EXPECT_FALSE(ImagesEqual(withoutCompositionPaint, withCompositionPaint));
+    EXPECT_TRUE(ImagesEqual(focusedWithCompositionPaint, withCompositionPaint));
+    EXPECT_EQ(CountInkPixels(withCompositionPaint, 96, 180), 0U);
+    EXPECT_EQ(withComposition->getText(), text);
+    EXPECT_TRUE(withComposition->hasComposition());
+}
+
 TEST_F(InputBoxTest, NoWrapModeOnlyBreaksAtHardNewlines) {
     const std::string firstLine = "123456789012345678901234567890";
     const std::string secondLine = "abc";
@@ -467,6 +663,66 @@ TEST_F(InputBoxTest, MaskInputDoesNotMutateTextSelectionOrEditingOffsets) {
     inputBox->insertText("X", 1);
     EXPECT_EQ(inputBox->getText(), text.substr(0, selectionStart) + "X");
     EXPECT_EQ(inputBox->getCursorUtf8(), selectionStart + 1U);
+}
+
+TEST_F(InputBoxTest, MaskInputRendersOneMaskClusterPerVisibleTextCluster) {
+    const std::string text =
+            "ab"
+            "\xE6\x97\xA5\xE6\x9C\xAC"
+            "e\xCC\x81"
+            "\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD"
+            "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7";
+    const auto clusterCount = GraphemeClusterCount(text);
+    ASSERT_GT(clusterCount, 1U);
+
+    auto maskedInputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    maskedInputBox->setViewport(520, 120);
+    maskedInputBox->setSoftWrap(false);
+    maskedInputBox->setText(text.c_str(), text.size());
+    maskedInputBox->setMaskInput(true);
+    maskedInputBox->setMaskChar("#", 1);
+
+    std::string expectedMask(clusterCount, '#');
+    auto expectedInputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    expectedInputBox->setViewport(520, 120);
+    expectedInputBox->setSoftWrap(false);
+    expectedInputBox->setText(expectedMask.c_str(), expectedMask.size());
+
+    EXPECT_TRUE(ImagesEqual(PaintSnapshot(*maskedInputBox, 520, 120),
+                            PaintSnapshot(*expectedInputBox, 520, 120)));
+    EXPECT_EQ(maskedInputBox->getText(), text);
+    EXPECT_EQ(maskedInputBox->getCursorUtf8(), 0U);
+
+    maskedInputBox->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
+    ASSERT_TRUE(maskedInputBox->deleteBackward());
+    EXPECT_EQ(maskedInputBox->getText(),
+              text.substr(0, text.size() -
+                                  std::string("\xF0\x9F\x91\xA8\xE2\x80\x8D"
+                                              "\xF0\x9F\x91\xA9\xE2\x80\x8D"
+                                              "\xF0\x9F\x91\xA7")
+                                          .size()));
+}
+
+TEST_F(InputBoxTest, MaskCharUsesFirstVisibleClusterAndFallbackForEmptyInput) {
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    inputBox->setViewport(240, 96);
+    inputBox->setSoftWrap(false);
+    inputBox->setText("abc", 3);
+    inputBox->setMaskInput(true);
+    inputBox->setMaskChar("XY", 2);
+
+    auto expectedX = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    expectedX->setViewport(240, 96);
+    expectedX->setSoftWrap(false);
+    expectedX->setText("XXX", 3);
+    EXPECT_TRUE(ImagesEqual(PaintSnapshot(*inputBox, 240, 96), PaintSnapshot(*expectedX, 240, 96)));
+
+    inputBox->setMaskChar(nullptr, 0);
+    auto expectedFallback = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    expectedFallback->setViewport(240, 96);
+    expectedFallback->setSoftWrap(false);
+    expectedFallback->setText("***", 3);
+    EXPECT_TRUE(ImagesEqual(PaintSnapshot(*inputBox, 240, 96), PaintSnapshot(*expectedFallback, 240, 96)));
 }
 
 TEST_F(InputBoxTest, MaskInputPreservesHardNewlineLineBoundaries) {
