@@ -510,7 +510,7 @@ void InputBox::setMaskInput(bool maskInput) {
 }
 
 void InputBox::setCaretWidth(SkScalar width) {
-    caretWidth_ = std::max<SkScalar>(1.0f, width);
+    caretWidth_ = std::max<SkScalar>(0.0f, width);
 }
 
 void InputBox::setCursorUtf8(size_t utf8Offset, ::skia::textlayout::Affinity affinity) {
@@ -1148,7 +1148,7 @@ void InputBox::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, S
                          paint);
     }
 
-    if (caretVisible_) {
+    if (caretVisible_ && caretWidth_ > 0.0f) {
         const auto caret = getCaretRect();
         SkPaint paint;
         paint.setColor(caretColor_);
@@ -1460,6 +1460,32 @@ bool InputBox::resolveLineMetricsForDisplayUtf8(size_t displayUtf8,
                     lineNumber = line + 1;
                     return true;
                 }
+            }
+
+            const auto& displayTextValue = displayMap.text();
+            if (clamped == displayLength &&
+                current.fHardBreak &&
+                !displayTextValue.empty() &&
+                displayTextValue.back() == '\n') {
+                const auto utf16 = displayMap.utf8ToUtf16(clamped);
+                lineMetrics = current;
+                lineMetrics.fStartIndex = utf16;
+                lineMetrics.fEndIndex = utf16;
+                lineMetrics.fEndExcludingWhitespaces = utf16;
+                lineMetrics.fEndIncludingNewline = utf16;
+                lineMetrics.fHardBreak = false;
+                lineMetrics.fWidth = 0.0;
+                lineMetrics.fLeft = EmptyCaretX(paragraphStyle_.effective_align(), viewportWidth_, caretWidth_);
+                const auto lineAdvance = std::isfinite(current.fHeight) && current.fHeight > 0.0
+                                               ? current.fHeight
+                                               : current.fAscent + current.fDescent;
+                if (std::isfinite(lineAdvance) && lineAdvance > 0.0) {
+                    lineMetrics.fBaseline = current.fBaseline + lineAdvance;
+                }
+                lineMetrics.fLineNumber = current.fLineNumber + 1;
+                lineMetrics.fLineMetrics.clear();
+                lineNumber = line + 1;
+                return true;
             }
 
             lineMetrics = current;
@@ -1969,7 +1995,7 @@ void InputBoxDrawSnapshot::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkSca
                          paint);
     }
 
-    if (caretVisible_) {
+    if (caretVisible_ && caretWidth_ > 0.0f) {
         SkPaint paint;
         paint.setColor(caretColor_);
         paint.setStyle(SkPaint::kFill_Style);

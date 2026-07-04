@@ -644,6 +644,35 @@ TEST_F(InputBoxTest, NewlineIsPlainTextAndCreatesParagraphLines) {
     EXPECT_EQ(inputBox->getCursorUtf8(), 2U);
 }
 
+TEST_F(InputBoxTest, CaretMovesToEmptyTrailingLineAfterInsertedNewline) {
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    inputBox->setViewport(320, 160);
+    inputBox->setText("ab", 2);
+    inputBox->setCursorUtf8(2, skia::textlayout::Affinity::kDownstream);
+    const auto firstLineCaret = inputBox->getCaretRect();
+
+    inputBox->insertText("\n", 1);
+
+    EXPECT_EQ(inputBox->getText(), "ab\n");
+    EXPECT_EQ(inputBox->getCursorUtf8(), 3U);
+    const auto trailingLineCaret = inputBox->getCaretRect();
+    EXPECT_GT(trailingLineCaret.top, firstLineCaret.top + 1.0f);
+    EXPECT_GT(trailingLineCaret.bottom, firstLineCaret.bottom + 1.0f);
+    EXPECT_NEAR(trailingLineCaret.left, 0.0f, 0.001f);
+}
+
+TEST_F(InputBoxTest, CaretWidthCanBeZeroForHiddenCaretGeometry) {
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    inputBox->setViewport(320, 160);
+    inputBox->setText("ab", 2);
+    inputBox->setCursorUtf8(2, skia::textlayout::Affinity::kDownstream);
+
+    inputBox->setCaretWidth(0.0f);
+
+    const auto caret = inputBox->getCaretRect();
+    EXPECT_FLOAT_EQ(caret.left, caret.right);
+}
+
 TEST_F(InputBoxTest, UpDownNavigationPreservesCaretXAcrossLines) {
     auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true);
     inputBox->setViewport(320, 160);
