@@ -184,6 +184,81 @@ namespace Milestro.Components
             eventData.Use();
         }
 
+        public Vector2 ScrollPercent
+        {
+            get
+            {
+                var producer = ProducerComponent();
+                producer.RebuildOutput(forceText: false);
+                ApplyProducerOutput(producer, force: false);
+                return new Vector2(GetScrollPercentX(producer), GetScrollPercentY(producer));
+            }
+            set
+            {
+                var producer = ProducerComponent();
+                producer.RebuildOutput(forceText: false);
+                ApplyProducerOutput(producer, force: false);
+
+                var changed = SetScrollPercentX(producer, value.x);
+                changed |= SetScrollPercentY(producer, value.y);
+                if (!changed)
+                {
+                    return;
+                }
+
+                producer.RebuildOutput(forceText: false);
+                ApplyProducerOutput(producer, force: true);
+            }
+        }
+
+        public float ScrollPercentX
+        {
+            get
+            {
+                var producer = ProducerComponent();
+                producer.RebuildOutput(forceText: false);
+                ApplyProducerOutput(producer, force: false);
+                return GetScrollPercentX(producer);
+            }
+            set
+            {
+                var producer = ProducerComponent();
+                producer.RebuildOutput(forceText: false);
+                ApplyProducerOutput(producer, force: false);
+                if (!SetScrollPercentX(producer, value))
+                {
+                    return;
+                }
+
+                producer.RebuildOutput(forceText: false);
+                ApplyProducerOutput(producer, force: true);
+            }
+        }
+
+        public float ScrollPercentY
+        {
+            get
+            {
+                var producer = ProducerComponent();
+                producer.RebuildOutput(forceText: false);
+                ApplyProducerOutput(producer, force: false);
+                return GetScrollPercentY(producer);
+            }
+            set
+            {
+                var producer = ProducerComponent();
+                producer.RebuildOutput(forceText: false);
+                ApplyProducerOutput(producer, force: false);
+                if (!SetScrollPercentY(producer, value))
+                {
+                    return;
+                }
+
+                producer.RebuildOutput(forceText: false);
+                ApplyProducerOutput(producer, force: true);
+            }
+        }
+
         private bool TryScrollX(TextBoxRenderTextureProducer producer, float contentOffsetDelta, float stepPixels)
         {
             if (Mathf.Approximately(contentOffsetDelta, 0f))
@@ -222,6 +297,42 @@ namespace Milestro.Components
             }
 
             return scrollTweenY.IsActive;
+        }
+
+        private static float GetScrollPercentX(TextBoxRenderTextureProducer producer)
+        {
+            return FloatUtil.ScrollOffsetToPercent(producer.scrollX, producer.maxScrollX);
+        }
+
+        private static float GetScrollPercentY(TextBoxRenderTextureProducer producer)
+        {
+            return FloatUtil.ScrollOffsetToPercent(producer.scrollY, producer.maxScrollY);
+        }
+
+        private bool SetScrollPercentX(TextBoxRenderTextureProducer producer, float percent)
+        {
+            var nextScrollX = FloatUtil.PercentToScrollOffset(percent, producer.maxScrollX);
+            scrollTweenX.Cancel();
+            if (Mathf.Approximately(producer.scrollX, nextScrollX))
+            {
+                return false;
+            }
+
+            producer.scrollX = nextScrollX;
+            return true;
+        }
+
+        private bool SetScrollPercentY(TextBoxRenderTextureProducer producer, float percent)
+        {
+            var nextScrollY = FloatUtil.PercentToScrollOffset(percent, producer.maxScrollY);
+            scrollTweenY.Cancel();
+            if (Mathf.Approximately(producer.scrollY, nextScrollY))
+            {
+                return false;
+            }
+
+            producer.scrollY = nextScrollY;
+            return true;
         }
 
         private void ScrollToX(TextBoxRenderTextureProducer producer, float nextScrollX)

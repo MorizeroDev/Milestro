@@ -16,18 +16,6 @@ using UnityEngine.Serialization;
 
 namespace Milestro.Components
 {
-    public enum TextInputLineMode
-    {
-        SingleLine,
-        MultiLine,
-    }
-
-    public enum TextInputWrapMode
-    {
-        Wrap,
-        NoWrap,
-    }
-
     [DisallowMultipleComponent]
     [RequireComponent(typeof(CanvasRenderer))]
     [AddComponentMenu("Milestro/Text Input")]
@@ -475,6 +463,74 @@ namespace Milestro.Components
             eventData.Use();
         }
 
+        public Vector2 ScrollPercent
+        {
+            get
+            {
+                if (!TryGetScrollMetrics(out var metrics))
+                {
+                    return Vector2.zero;
+                }
+
+                return new Vector2(GetScrollPercentX(metrics), GetScrollPercentY(metrics));
+            }
+            set
+            {
+                if (!TryGetScrollEditor(out var editor, out var metrics))
+                {
+                    return;
+                }
+
+                var changed = SetScrollPercentX(editor, metrics, value.x);
+                changed |= SetScrollPercentY(editor, metrics, value.y);
+                if (!changed)
+                {
+                    return;
+                }
+
+                paintDirty = true;
+                RebuildResources();
+            }
+        }
+
+        public float ScrollPercentX
+        {
+            get
+            {
+                return TryGetScrollMetrics(out var metrics) ? GetScrollPercentX(metrics) : 0f;
+            }
+            set
+            {
+                if (!TryGetScrollEditor(out var editor, out var metrics) ||
+                    !SetScrollPercentX(editor, metrics, value))
+                {
+                    return;
+                }
+
+                paintDirty = true;
+                RebuildResources();
+            }
+        }
+
+        public float ScrollPercentY
+        {
+            get
+            {
+                return TryGetScrollMetrics(out var metrics) ? GetScrollPercentY(metrics) : 0f;
+            }
+            set
+            {
+                if (!TryGetScrollEditor(out var editor, out var metrics) ||
+                    !SetScrollPercentY(editor, metrics, value))
+                {
+                    return;
+                }
+
+                paintDirty = true;
+                RebuildResources();
+            }
+        }
+
         private bool TryScrollX(InputBox editor, float contentOffsetDelta, float stepPixels)
         {
             if (Mathf.Approximately(contentOffsetDelta, 0f))
@@ -517,6 +573,72 @@ namespace Milestro.Components
             }
 
             return scrollTweenY.IsActive;
+        }
+
+        private bool TryGetScrollMetrics(out InputBoxMetrics metrics)
+        {
+            return TryGetScrollEditor(out _, out metrics);
+        }
+
+        private bool TryGetScrollEditor(out InputBox editor, out InputBoxMetrics metrics)
+        {
+            if (!isActiveAndEnabled)
+            {
+                editor = null!;
+                metrics = default;
+                return false;
+            }
+
+            if (rectTransformCache == null)
+            {
+                rectTransformCache = GetComponent<RectTransform>();
+            }
+
+            RebuildResources();
+            if (inputBox == null)
+            {
+                editor = null!;
+                metrics = default;
+                return false;
+            }
+
+            editor = inputBox;
+            metrics = editor.GetMetrics();
+            return true;
+        }
+
+        private static float GetScrollPercentX(InputBoxMetrics metrics)
+        {
+            return FloatUtil.ScrollOffsetToPercent(metrics.ScrollX, MaxScrollX(metrics));
+        }
+
+        private static float GetScrollPercentY(InputBoxMetrics metrics)
+        {
+            return FloatUtil.ScrollOffsetToPercent(metrics.ScrollY, MaxScrollY(metrics));
+        }
+
+        private bool SetScrollPercentX(InputBox editor, InputBoxMetrics metrics, float percent)
+        {
+            var nextScrollX = FloatUtil.PercentToScrollOffset(percent, MaxScrollX(metrics));
+            scrollTweenX.Cancel();
+            if (Mathf.Approximately(metrics.ScrollX, nextScrollX))
+            {
+                return false;
+            }
+
+            return editor.ScrollByX(nextScrollX - metrics.ScrollX);
+        }
+
+        private bool SetScrollPercentY(InputBox editor, InputBoxMetrics metrics, float percent)
+        {
+            var nextScrollY = FloatUtil.PercentToScrollOffset(percent, MaxScrollY(metrics));
+            scrollTweenY.Cancel();
+            if (Mathf.Approximately(metrics.ScrollY, nextScrollY))
+            {
+                return false;
+            }
+
+            return editor.ScrollByY(nextScrollY - metrics.ScrollY);
         }
 
         private void ScrollToX(InputBox editor, InputBoxMetrics metrics, float nextScrollX)

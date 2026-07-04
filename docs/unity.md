@@ -128,13 +128,15 @@ Primary runtime components:
 - `Milestro.Components.TextBox`: UI `Graphic` for rendered text. It owns or
   discovers a `TextBoxRenderTextureProducer` on the same GameObject, supports
   wheel scrolling in both axes, and passes unused scroll delta to parent scroll
-  handlers.
+  handlers. Use the `ScrollPercent*` properties to link its normalized `0..1`
+  scroll position to other scrollbars.
 - `Milestro.Components.WorldSpaceTextBox`: world-space quad backed by a Milestro
   render texture. It can create its mesh, renderer, and default material.
 - `Milestro.Components.TextInput`: editable UI input with caret, selection,
   composition text, keyboard handling, pointer selection, single-line or
   multi-line modes, optional wrapping, masking, read-only mode, and scrollable
-  overflow.
+  overflow. Use the `ScrollPercent*` properties to link its normalized `0..1`
+  scroll position to other scrollbars.
 
 Internal component building blocks:
 
