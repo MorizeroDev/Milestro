@@ -28,6 +28,10 @@ class Canvas;
 
 class Image;
 
+class FontFamilyName;
+
+class MilestroTypefaceFamilyNameList;
+
 class Typeface;
 
 class Font;

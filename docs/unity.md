@@ -30,9 +30,10 @@ Why they are required:
 - `party.para.util.unitynative`: used by managed native-object wrappers,
   disposable native resources, and callback helpers.
 
-Milestro also uses `Newtonsoft.Json` in several managed models and editor tools.
-If your Unity project does not already provide that assembly, install Unity's
-Newtonsoft Json package through Package Manager.
+Optional: if the consuming Unity project defines `MILEASE_HAS_NEWTONSOFT` and
+provides `Newtonsoft.Json`, Milestro model DTOs include `JsonProperty` metadata
+for compatibility with Newtonsoft-based serialization. Milestro does not require
+that symbol or package by default.
 
 ## Asset Layout
 

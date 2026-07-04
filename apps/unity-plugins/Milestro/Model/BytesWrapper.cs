@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Text;
 using Milestro.Binding;
+using Milestro.Util;
 using Paraparty.UnityNative.Base;
 
 namespace Milestro.Model
@@ -36,7 +37,7 @@ namespace Milestro.Model
         public string GetString()
         {
             ExitCodeUtil.ThrowIfFailed(BindingC.GameModelBytesWrapperCStr(ptr, out var dataPtr, out var size));
-            return size == 0 ? string.Empty : Marshal.PtrToStringUTF8(dataPtr, (int)size);
+            return NativeUtf8Util.ReadBorrowed(dataPtr, size);
         }
 
         public byte[] GetBytes()

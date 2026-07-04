@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using Milestro.Binding;
+using Milestro.Util;
 using Paraparty.UnityNative;
 
 namespace Milestro.Skia
@@ -29,7 +29,7 @@ namespace Milestro.Skia
                     ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontFamilyInfoGetName(familyInfo,
                         out var namePtr,
                         out var nameSize));
-                    fontFamilyNames.Add(ReadBorrowedFontRegistryUtf8(namePtr, nameSize));
+                    fontFamilyNames.Add(NativeUtf8Util.ReadBorrowed(namePtr, nameSize));
                 }
 
                 return fontFamilyNames;
@@ -87,8 +87,8 @@ namespace Milestro.Skia
 
             return new FontFaceInfo
             {
-                SourcePath = ReadBorrowedFontRegistryUtf8(sourcePathPtr, sourcePathSize),
-                FamilyName = ReadBorrowedFontRegistryUtf8(familyNamePtr, familyNameSize),
+                SourcePath = NativeUtf8Util.ReadBorrowed(sourcePathPtr, sourcePathSize),
+                FamilyName = NativeUtf8Util.ReadBorrowed(familyNamePtr, familyNameSize),
                 FaceIndex = faceIndex,
                 InstanceIndex = instanceIndex,
                 PackedIndex = packedIndex,
@@ -97,23 +97,6 @@ namespace Milestro.Skia
                 Slant = slant,
                 FixedPitch = fixedPitch != 0,
             };
-        }
-
-        private static string ReadBorrowedFontRegistryUtf8(IntPtr ptr, ulong size)
-        {
-            // Font registry getters expose borrowed string buffers owned by the current native list/info.
-            // Do not route these through BytesWrapper: that would copy into a native wrapper before C# reads it.
-            if (ptr == IntPtr.Zero || size == 0)
-            {
-                return string.Empty;
-            }
-
-            if (size > int.MaxValue)
-            {
-                throw new Exception("Native UTF-8 string is too large.");
-            }
-
-            return Marshal.PtrToStringUTF8(ptr, (int)size);
         }
 
         private static int ToListCapacity(ulong size)

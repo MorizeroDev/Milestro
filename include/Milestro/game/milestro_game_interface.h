@@ -108,11 +108,34 @@ MILESTRO_API int64_t MilestroSkiaFontFaceInfoGetSlant(milestro::skia::MilestroFo
 MILESTRO_API int64_t MilestroSkiaFontFaceInfoGetFixedPitch(milestro::skia::MilestroFontFaceInfo *ret,
                                                            int32_t &value);
 
-MILESTRO_API int64_t MilestroSkiaTypefaceDestroy(milestro::skia::Typeface *&ret);
-MILESTRO_API int64_t MilestroSkiaTypefaceGetFamilyNames(milestro::skia::Typeface *typeFace,
-                                                        uint8_t *buffer,
-                                                        uint64_t bufferSize,
-                                                        uint64_t &needed);
+MILESTRO_API int64_t MilestroSkiaTypefaceDestroy(
+        [[milize::RefType("ref")]] milestro::skia::Typeface *&ret);
+MILESTRO_API int64_t MilestroSkiaTypefaceGetFamilyNameList(
+        milestro::skia::Typeface *typeFace,
+        milestro::skia::MilestroTypefaceFamilyNameList *&ret);
+MILESTRO_API int64_t MilestroSkiaTypefaceFamilyNameListDestroy(
+        [[milize::RefType("ref")]] milestro::skia::MilestroTypefaceFamilyNameList *&ret);
+MILESTRO_API int64_t MilestroSkiaTypefaceFamilyNameListGetSize(
+        milestro::skia::MilestroTypefaceFamilyNameList *list,
+        uint64_t &size);
+MILESTRO_API int64_t MilestroSkiaTypefaceFamilyNameListRefElementAt(
+        milestro::skia::MilestroTypefaceFamilyNameList *list,
+        milestro::skia::FontFamilyName *&ret,
+        uint64_t index);
+MILESTRO_API int64_t MilestroSkiaTypefaceFamilyNameListGetElementAt(
+        milestro::skia::MilestroTypefaceFamilyNameList *list,
+        milestro::skia::FontFamilyName *&ret,
+        uint64_t index);
+MILESTRO_API int64_t MilestroSkiaTypefaceFamilyNameDestroy(
+        [[milize::RefType("ref")]] milestro::skia::FontFamilyName *&ret);
+MILESTRO_API int64_t MilestroSkiaTypefaceFamilyNameGetName(
+        milestro::skia::FontFamilyName *ret,
+        [[milize::CSharpType("IntPtr")]] uint8_t *&ptr,
+        uint64_t &size);
+MILESTRO_API int64_t MilestroSkiaTypefaceFamilyNameGetLanguage(
+        milestro::skia::FontFamilyName *ret,
+        [[milize::CSharpType("IntPtr")]] uint8_t *&ptr,
+        uint64_t &size);
 
 MILESTRO_API int64_t MilestroSkiaFontGetPath(milestro::skia::Font *font,
                                              milestro::skia::Path *&path,

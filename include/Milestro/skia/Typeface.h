@@ -4,21 +4,39 @@
 #include <include/core/SkTypeface.h>
 #include "Milestro/util/milestro_class.h"
 #include "Milestro/log/log.h"
-#include "Milestro/util/milestro_serializerable.h"
+#include <cstddef>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace milestro::skia {
 
-class MILESTRO_API FontFamilyName : public milestro::util::serialization::serializable {
+class MILESTRO_API FontFamilyName {
 public:
     std::string name;
     std::string language;
+};
 
-    nlohmann::json toJson() override {
-        return {
-            {"name", name},
-            {"language", language},
-        };
+class MILESTRO_API MilestroTypefaceFamilyNameList {
+public:
+    explicit MilestroTypefaceFamilyNameList(std::vector<FontFamilyName> data)
+        : data(std::move(data)) {
     }
+
+    FontFamilyName *At(size_t position) {
+        return &data[position];
+    }
+
+    FontFamilyName Get(size_t position) const {
+        return data[position];
+    }
+
+    size_t Size() const {
+        return data.size();
+    }
+
+private:
+    std::vector<FontFamilyName> data;
 };
 
 class MILESTRO_API Typeface {

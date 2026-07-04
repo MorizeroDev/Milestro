@@ -43,8 +43,9 @@ These are required by `Milestro.asmdef`: `party.para.util.colors` is used by the
 rich text color parser, and `party.para.util.unitynative` is used by managed
 native-object wrappers and native callback helpers.
 
-The Unity code also uses `Newtonsoft.Json`. Keep Unity's Newtonsoft Json package
-available if your project does not already provide that assembly.
+If a consuming Unity project defines `MILEASE_HAS_NEWTONSOFT` and provides
+`Newtonsoft.Json`, Milestro model DTOs include optional `JsonProperty` metadata.
+Newtonsoft remains optional and is not required by default.
 
 Runtime assets needed by the current code:
 

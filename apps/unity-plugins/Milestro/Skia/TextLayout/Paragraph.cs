@@ -2,7 +2,6 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Milestro.Binding;
-using Newtonsoft.Json;
 using Paraparty.UnityNative.Base;
 using UnityEngine;
 

@@ -144,6 +144,8 @@ tasks {
             listOf("milestro::skia::Path") to "IntPtr",
             listOf("milestro::skia::Svg") to "IntPtr",
             listOf("milestro::skia::VertexData") to "IntPtr",
+            listOf("milestro::skia::FontFamilyName") to "IntPtr",
+            listOf("milestro::skia::MilestroTypefaceFamilyNameList") to "IntPtr",
             listOf("milestro::skia::MilestroFontFamilyInfo") to "IntPtr",
             listOf("milestro::skia::MilestroFontFamilyList") to "IntPtr",
             listOf("milestro::skia::MilestroFontFaceInfo") to "IntPtr",

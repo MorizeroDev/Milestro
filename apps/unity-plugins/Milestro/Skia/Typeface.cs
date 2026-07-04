@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using Milestro.Binding;
-using Newtonsoft.Json;
+using Milestro.Util;
 using Paraparty.UnityNative.Base;
 
 namespace Milestro.Skia
@@ -19,7 +18,7 @@ namespace Milestro.Skia
             if (ptr != IntPtr.Zero)
             {
                 var nativePtr = ptr;
-                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTypefaceDestroy(out nativePtr));
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTypefaceDestroy(ref nativePtr));
                 ptr = nativePtr;
             }
 
@@ -28,16 +27,48 @@ namespace Milestro.Skia
 
         public List<FontFamilyName> GetFontFamilyNames()
         {
-            var ret = new byte[4096];
-            ulong needed;
-            var err = BindingC.SkiaTypefaceGetFamilyNames(NativePtr, ret, 4096, out needed);
-            if (err < 0)
+            var list = IntPtr.Zero;
+            try
             {
-                throw new Exception("SkiaTypeFaceGetFamilyNames Error");
-            }
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTypefaceGetFamilyNameList(NativePtr, out list));
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTypefaceFamilyNameListGetSize(list, out var size));
 
-            var s = Encoding.UTF8.GetString(ret).TrimEnd('\0');
-            return JsonConvert.DeserializeObject<List<FontFamilyName>>(s) ?? new List<FontFamilyName>();
+                var familyNames = new List<FontFamilyName>(ToListCapacity(size));
+                for (ulong i = 0; i < size; i++)
+                {
+                    ExitCodeUtil.ThrowIfFailed(
+                        BindingC.SkiaTypefaceFamilyNameListRefElementAt(list, out var familyName, i));
+                    familyNames.Add(ReadFontFamilyName(familyName));
+                }
+
+                return familyNames;
+            }
+            finally
+            {
+                if (list != IntPtr.Zero)
+                {
+                    ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTypefaceFamilyNameListDestroy(ref list));
+                }
+            }
+        }
+
+        private static FontFamilyName ReadFontFamilyName(IntPtr familyName)
+        {
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTypefaceFamilyNameGetName(familyName, out var namePtr,
+                out var nameSize));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTypefaceFamilyNameGetLanguage(familyName, out var languagePtr,
+                out var languageSize));
+
+            return new FontFamilyName
+            {
+                Name = NativeUtf8Util.ReadBorrowed(namePtr, nameSize),
+                Language = NativeUtf8Util.ReadBorrowed(languagePtr, languageSize),
+            };
+        }
+
+        private static int ToListCapacity(ulong size)
+        {
+            return size > int.MaxValue ? int.MaxValue : (int)size;
         }
     }
 }
