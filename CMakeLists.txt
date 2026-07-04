@@ -468,6 +468,7 @@ set(
         src/skia/textlayout/ParagraphStyle.cpp
         src/skia/textlayout/ParagraphBuilder.cpp
         src/skia/textlayout/Paragraph.cpp
+        src/skia/textlayout/NoWrapLayout.cpp
         src/skia/textlayout/InputBox.cpp
 
         src/unicode/icu.cpp

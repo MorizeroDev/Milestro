@@ -34,6 +34,15 @@ namespace Milestro.Components.Internal
         private TextBoxWrapMode m_wrapMode = TextBoxWrapMode.Wrap;
 
         [SerializeField]
+        private bool m_singleLine;
+
+        [SerializeField]
+        private TextOverflow m_textOverflow = TextOverflow.Clip;
+
+        [SerializeField]
+        private string m_ellipsisString = "\u2026";
+
+        [SerializeField]
         private float m_size = 36;
 
         [SerializeField]
@@ -114,6 +123,36 @@ namespace Milestro.Components.Internal
             set
             {
                 m_wrapMode = value;
+                MarkPropertiesChanged();
+            }
+        }
+
+        public bool singleLine
+        {
+            get => m_singleLine;
+            set
+            {
+                m_singleLine = value;
+                MarkPropertiesChanged();
+            }
+        }
+
+        public TextOverflow textOverflow
+        {
+            get => m_textOverflow;
+            set
+            {
+                m_textOverflow = value;
+                MarkPropertiesChanged();
+            }
+        }
+
+        public string ellipsisString
+        {
+            get => m_ellipsisString;
+            set
+            {
+                m_ellipsisString = value ?? "";
                 MarkPropertiesChanged();
             }
         }
@@ -329,6 +368,9 @@ namespace Milestro.Components.Internal
                 m_textAlign,
                 m_textDirection,
                 m_wrapMode,
+                m_singleLine,
+                m_textOverflow,
+                m_ellipsisString,
                 m_size,
                 m_weight,
                 m_textColor,

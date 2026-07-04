@@ -321,6 +321,21 @@ namespace Milestro.Binding
                                                                                        out float maxIntrinsicWidth);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphResolveNoWrapContentWidth")]
+        internal static extern unsafe long
+        SkiaTextlayoutParagraphResolveNoWrapContentWidth(IntPtr p, void* text, ulong size, out float width);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutResolveNoWrapProbeLayoutWidth")]
+        internal static extern unsafe long
+        SkiaTextlayoutResolveNoWrapProbeLayoutWidth(ulong textSize, float fontSize, float viewportWidth, out float width);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutResolveNoWrapLayoutWidth")]
+        internal static extern unsafe long
+        SkiaTextlayoutResolveNoWrapLayoutWidth(float viewportWidth, float contentWidth, out float width);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphPaint")]
         internal static extern unsafe long SkiaTextlayoutParagraphPaint(IntPtr p, IntPtr canvas, float x, float y);
 

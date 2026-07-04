@@ -1,5 +1,7 @@
 #include "Milestro/skia/textlayout/InputBox.h"
 
+#include "Milestro/skia/textlayout/NoWrapLayout.h"
+
 #include "include/core/SkCanvas.h"
 #include "include/core/SkFontMetrics.h"
 #include "include/core/SkPaint.h"
@@ -19,9 +21,6 @@ namespace {
 constexpr SkScalar kCaretScrollPadding = 2.0f;
 constexpr SkScalar kCompositionUnderlineHeight = 1.5f;
 constexpr SkScalar kFallbackAscentRatio = 0.8f;
-constexpr SkScalar kNoWrapProbeLayoutWidth = 1048576.0f;
-constexpr SkScalar kNoWrapMaxProbeLayoutWidth = 1073741824.0f;
-constexpr SkScalar kNoWrapLayoutPadding = 64.0f;
 constexpr size_t kMaxEditHistoryGroups = 100;
 constexpr size_t kMaxEditHistoryBytes = 1024 * 1024;
 constexpr size_t kInputBoxMaxLines = 1 << 20;
@@ -68,55 +67,6 @@ SkScalar BaselineOffsetY(SkScalar viewportHeight, SkScalar lineBaseline, const V
         return 0.0f;
     }
     return DefaultBaselineY(viewportHeight, metrics) - lineBaseline;
-}
-
-SkScalar ResolveNoWrapContentWidth(::skia::textlayout::Paragraph* paragraph, const std::string& text) {
-    if (paragraph == nullptr) {
-        return 0.0f;
-    }
-
-    auto width = static_cast<double>(std::max<SkScalar>(paragraph->getLongestLine(),
-                                                        paragraph->getMaxIntrinsicWidth()));
-
-    const auto lineCount = static_cast<int>(paragraph->lineNumber());
-    for (int line = 0; line < lineCount; ++line) {
-        ::skia::textlayout::LineMetrics lineMetrics;
-        if (!paragraph->getLineMetricsAt(line, &lineMetrics)) {
-            continue;
-        }
-
-        width = std::max(width, static_cast<double>(lineMetrics.fWidth));
-        width = std::max(width, static_cast<double>(lineMetrics.fLeft + lineMetrics.fWidth));
-    }
-
-    const auto displayMap = TextBoundaryMap(text);
-    const auto utf16Length = displayMap.utf16Length();
-    if (utf16Length > 0) {
-        auto boxes = paragraph->getRectsForRange(0,
-                                                  static_cast<unsigned>(utf16Length),
-                                                  ::skia::textlayout::RectHeightStyle::kTight,
-                                                  ::skia::textlayout::RectWidthStyle::kTight);
-        for (const auto& box: boxes) {
-            width = std::max(width, static_cast<double>(box.rect.right()));
-        }
-
-        ::skia::textlayout::Paragraph::GlyphInfo glyphInfo;
-        if (paragraph->getGlyphInfoAtUTF16Offset(utf16Length - 1, &glyphInfo)) {
-            width = std::max(width, static_cast<double>(glyphInfo.fGraphemeLayoutBounds.right()));
-        }
-    }
-
-    return std::isfinite(width) && width > 0.0 ? static_cast<float>(width) : 0.0f;
-}
-
-SkScalar ResolveNoWrapProbeLayoutWidth(const std::string& text,
-                                       const ::skia::textlayout::TextStyle& textStyle,
-                                       SkScalar viewportWidth) {
-    const auto fontSize = IsFinitePositive(textStyle.getFontSize()) ? textStyle.getFontSize() : 16.0f;
-    auto width = std::max<double>(kNoWrapProbeLayoutWidth, viewportWidth);
-    width = std::max(width, (static_cast<double>(text.size()) + 1.0) * fontSize * 2.0 + kNoWrapLayoutPadding);
-    width = std::min<double>(width, kNoWrapMaxProbeLayoutWidth);
-    return static_cast<SkScalar>(width);
 }
 
 std::string MaskInputDisplayText(const std::string& text) {
@@ -1255,8 +1205,7 @@ std::unique_ptr<::skia::textlayout::Paragraph> InputBox::buildParagraphForText(c
 
     paragraph->layout(ResolveNoWrapProbeLayoutWidth(text, textStyle_, viewportWidth_));
     const auto measuredWidth = ResolveNoWrapContentWidth(paragraph.get(), text);
-    const auto layoutWidth = measuredWidth > 0.0f ? std::ceil(measuredWidth + kNoWrapLayoutPadding) : viewportWidth_;
-    paragraph->layout(std::max(viewportWidth_, layoutWidth));
+    paragraph->layout(ResolveNoWrapLayoutWidth(viewportWidth_, measuredWidth));
     return paragraph;
 }
 

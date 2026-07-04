@@ -35,6 +35,8 @@ public :
         return paragraph->getMaxIntrinsicWidth();
     }
 
+    SkScalar resolveNoWrapContentWidth(const char* text, size_t length) const;
+
     uint64_t splitGlyph(SkScalar x, SkScalar y, void* context,
                                  MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback = nullptr);
 

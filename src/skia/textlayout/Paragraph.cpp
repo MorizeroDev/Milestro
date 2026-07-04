@@ -4,9 +4,14 @@
 #include "Milestro/skia/textlayout/Paragraph.h"
 #include "Milestro/skia/Font.h"
 #include "Milestro/skia/Path.h"
+#include "Milestro/skia/textlayout/NoWrapLayout.h"
 
 using namespace milestro::skia::textlayout;
 using namespace milestro::skia;
+
+SkScalar Paragraph::resolveNoWrapContentWidth(const char* text, size_t length) const {
+    return ResolveNoWrapContentWidth(paragraph.get(), text, length);
+}
 
 uint64_t
 Paragraph::splitGlyph(SkScalar x, SkScalar y,

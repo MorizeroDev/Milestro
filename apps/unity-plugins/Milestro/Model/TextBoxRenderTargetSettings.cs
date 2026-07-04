@@ -11,6 +11,9 @@ namespace Milestro.Model
             TextAlign textAlign,
             TextDirection textDirection,
             TextBoxWrapMode wrapMode,
+            bool singleLine,
+            TextOverflow textOverflow,
+            string ellipsisString,
             float size,
             int weight,
             Color textColor,
@@ -22,6 +25,9 @@ namespace Milestro.Model
             TextAlign = textAlign;
             TextDirection = textDirection;
             WrapMode = wrapMode;
+            SingleLine = singleLine;
+            TextOverflow = textOverflow;
+            EllipsisString = ellipsisString ?? "";
             Size = size;
             Weight = weight;
             TextColor = textColor;
@@ -34,6 +40,9 @@ namespace Milestro.Model
         public TextAlign TextAlign { get; }
         public TextDirection TextDirection { get; }
         public TextBoxWrapMode WrapMode { get; }
+        public bool SingleLine { get; }
+        public TextOverflow TextOverflow { get; }
+        public string EllipsisString { get; }
         public float Size { get; }
         public int Weight { get; }
         public Color TextColor { get; }

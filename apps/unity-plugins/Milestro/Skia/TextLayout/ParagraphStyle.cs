@@ -10,6 +10,8 @@ namespace Milestro.Skia.TextLayout
     /// </summary>
     public class ParagraphStyle : DisposableNativeObject
     {
+        private string _cachedEllipsis = "";
+
         public ParagraphStyle()
         {
             ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphStyleCreate(out ptr));
@@ -122,11 +124,15 @@ namespace Milestro.Skia.TextLayout
 
         public void SetEllipsis(string s)
         {
+            s = s ?? "";
             var cstr = s.CStr();
             ExitCodeUtil.ThrowIfFailed(
                 BindingC.SkiaTextlayoutParagraphStyleSetEllipsis(NativePtr, cstr)
             );
+            _cachedEllipsis = s;
         }
+
+        public string Ellipsis => _cachedEllipsis;
 
         public float Height
         {

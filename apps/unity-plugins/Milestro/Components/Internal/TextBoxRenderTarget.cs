@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using Milestro.Extensions;
 using Milestro.Model;
 using Milestro.Skia;
@@ -11,14 +12,13 @@ namespace Milestro.Components.Internal
     internal sealed class TextBoxRenderTarget : IDisposable
     {
         private static readonly Rect DefaultUvRect = new Rect(0f, 0f, 1f, 1f);
-        private const float NoWrapProbeLayoutWidth = 1048576f;
-        private const float NoWrapLayoutPadding = 1f;
 
         private UnityAutoRenderTextureSurface? surface;
         private Paragraph? paragraph;
         private bool layoutChanged = true;
         private bool paintChanged = true;
         private int layoutWidth = 640;
+        private string paragraphPlainText = "";
         private float paragraphHeight;
         private float paragraphContentWidth;
         private long outputVersion;
@@ -89,6 +89,7 @@ namespace Milestro.Components.Internal
             surface?.Dispose();
             surface = null;
             paragraph = null;
+            paragraphPlainText = "";
             layoutChanged = true;
             paintChanged = true;
             paragraphHeight = 0f;
@@ -143,6 +144,14 @@ namespace Milestro.Components.Internal
             ParagraphStyle paragraphStyle = new ParagraphStyle();
             paragraphStyle.TextAlign = (int)settings.TextAlign;
             paragraphStyle.TextDirection = (int)settings.TextDirection;
+            if (settings.SingleLine)
+            {
+                paragraphStyle.MaxLines = 1;
+                if (settings.TextOverflow == TextOverflow.Ellipsis)
+                {
+                    paragraphStyle.SetEllipsis(settings.EllipsisString);
+                }
+            }
 
             TextStyle textStyle = new TextStyle();
             textStyle.SetFontFamilies(settings.FontFamilies);
@@ -158,6 +167,7 @@ namespace Milestro.Components.Internal
             var parser = new RichTextParser.RichTextParser();
             parser.ParseText(settings.Content);
             var segments = parser.ConvertToSegments();
+            paragraphPlainText = PlainText(segments);
             var result = segments.ToParagraph(paragraphStyle, textStyle);
             ResizeParagraph(result, settings, true);
             return result;
@@ -180,7 +190,7 @@ namespace Milestro.Components.Internal
                 return false;
             }
 
-            if (settings.WrapMode == TextBoxWrapMode.NoWrap)
+            if (ShouldUseWideNoWrapLayout(settings))
             {
                 return ResizeNoWrapParagraph(targetParagraph, settings, force);
             }
@@ -192,8 +202,8 @@ namespace Milestro.Components.Internal
             }
 
             layoutWidth = newLayoutWidth;
-            paragraphContentWidth = layoutWidth;
             targetParagraph.Layout(layoutWidth);
+            paragraphContentWidth = layoutWidth;
             paragraphHeight = Mathf.Max(0f, targetParagraph.Height);
             return true;
         }
@@ -205,11 +215,13 @@ namespace Milestro.Components.Internal
             var viewportWidth = ContentViewportWidth(settings);
             if (force)
             {
-                targetParagraph.Layout(NoWrapProbeLayoutWidth);
-                paragraphContentWidth = MeasureNoWrapContentWidth(targetParagraph);
+                targetParagraph.Layout(Paragraph.ResolveNoWrapProbeLayoutWidth(paragraphPlainText,
+                    settings.Size,
+                    viewportWidth));
+                paragraphContentWidth = targetParagraph.ResolveNoWrapContentWidth(paragraphPlainText);
             }
 
-            var newLayoutWidth = ResolveNoWrapLayoutWidth(viewportWidth, paragraphContentWidth);
+            var newLayoutWidth = CeilToPositiveInt(Paragraph.ResolveNoWrapLayoutWidth(viewportWidth, paragraphContentWidth));
             if (newLayoutWidth == layoutWidth && !force)
             {
                 return false;
@@ -224,7 +236,7 @@ namespace Milestro.Components.Internal
         private bool UpdateScrollMetrics(TextBoxRenderTargetSettings settings, Vector2 requestedScrollOffset)
         {
             var nextViewportSize = new Vector2(ContentViewportWidth(settings), ContentViewportHeight(settings));
-            var nextContentWidth = settings.WrapMode == TextBoxWrapMode.NoWrap
+            var nextContentWidth = ShouldUseWideNoWrapLayout(settings)
                 ? Mathf.Max(nextViewportSize.x, paragraph != null ? layoutWidth : 0f)
                 : nextViewportSize.x;
             var nextContentSize = new Vector2(nextContentWidth, paragraph != null ? paragraphHeight : 0f);
@@ -257,23 +269,6 @@ namespace Milestro.Components.Internal
             return Math.Max(1, OutputHeight - settings.Margin.vertical);
         }
 
-        private static float MeasureNoWrapContentWidth(Paragraph targetParagraph)
-        {
-            var longestLine = targetParagraph.LongestLine;
-            var maxIntrinsicWidth = targetParagraph.MaxIntrinsicWidth;
-            var width = Mathf.Max(FloatUtil.IsFinite(longestLine) ? longestLine : 0f,
-                FloatUtil.IsFinite(maxIntrinsicWidth) ? maxIntrinsicWidth : 0f);
-            return Mathf.Max(0f, Mathf.Ceil(width));
-        }
-
-        private static int ResolveNoWrapLayoutWidth(int viewportWidth, float contentWidth)
-        {
-            var paddedContentWidth = FloatUtil.IsFinite(contentWidth) && contentWidth > 0f
-                ? contentWidth + NoWrapLayoutPadding
-                : 0f;
-            return Mathf.Max(viewportWidth, CeilToPositiveInt(paddedContentWidth));
-        }
-
         private static int CeilToPositiveInt(float value)
         {
             if (!FloatUtil.IsFinite(value) || value <= 0f)
@@ -284,18 +279,38 @@ namespace Milestro.Components.Internal
             return value >= int.MaxValue ? int.MaxValue : Mathf.CeilToInt(value);
         }
 
+        private static bool ShouldUseWideNoWrapLayout(TextBoxRenderTargetSettings settings)
+        {
+            if (settings.SingleLine)
+            {
+                return settings.TextOverflow != TextOverflow.Ellipsis;
+            }
+
+            return settings.WrapMode == TextBoxWrapMode.NoWrap;
+        }
+
+        private static string PlainText(RichTextParser.ParagraphPayload payload)
+        {
+            var builder = new StringBuilder();
+            foreach (var segment in payload.Body)
+            {
+                builder.Append(segment.Content ?? "");
+            }
+
+            return builder.ToString();
+        }
+
         private UnitySkiaRenderCommandList BuildRenderCommands(TextBoxRenderTargetSettings settings,
             UnityEngine.Object? logContext)
         {
             var commands = new UnitySkiaRenderCommandList();
             if (paragraph != null)
             {
-                var clipRect = new Rect(settings.Margin.left,
-                    settings.Margin.top,
-                    viewportSize.x,
-                    viewportSize.y);
                 var paintPosition = new Vector2(settings.Margin.left - scrollOffset.x,
                     settings.Margin.top - scrollOffset.y);
+                var clipRect = settings.TextOverflow == TextOverflow.Overflow
+                    ? new Rect(0f, 0f, OutputWidth, OutputHeight)
+                    : new Rect(settings.Margin.left, settings.Margin.top, viewportSize.x, viewportSize.y);
                 commands.DrawParagraph(paragraph, paintPosition, clipRect);
             }
             else

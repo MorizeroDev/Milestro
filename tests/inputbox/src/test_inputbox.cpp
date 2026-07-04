@@ -9,6 +9,7 @@
 #include "include/core/SkString.h"
 #include "modules/skunicode/include/SkUnicode.h"
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -68,6 +69,14 @@ std::unique_ptr<milestro_text::InputBox> MakeInputBox(
     auto inputBox = std::make_unique<milestro_text::InputBox>(paragraphStyle.get(), textStyle.get());
     inputBox->setViewport(320, 64);
     return inputBox;
+}
+
+std::string MixedNoWrapPiText() {
+    return "\xF0\x9F\xA4\x94 \xF0\xB0\xBB\x9D \xF0\x9F\xAB\x84 \xF0\x9F\xA4\xB0 "
+           "\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x92 "
+           "\xE6\xB5\x8B\xE8\xAF\x95 123 "
+           "\xE5\x95\x8A\xE5\x90\xA7\xE6\xAC\xA1\xE7\x9A\x84\xE9\xA2\x9D\xE4\xBD\x9B\xE6\xAD\x8C "
+           "3.14159265358979323846264338327950288";
 }
 
 std::u16string ToUtf16(const std::string& text) {
@@ -342,6 +351,25 @@ TEST_F(InputBoxTest, NoWrapModeKeepsLongNumberOnOneLineAndScrollsHorizontally) {
     EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollX, 0.0f);
 }
 
+TEST_F(InputBoxTest, SharedNoWrapMeasurementKeepsMixedPiLineOnOneLine) {
+    const auto text = MixedNoWrapPiText();
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    inputBox->setViewport(320, 160);
+    inputBox->setSoftWrap(false);
+    inputBox->setText(text.c_str(), text.size());
+    inputBox->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
+
+    const auto metrics = inputBox->getMetrics();
+    ASSERT_EQ(inputBox->getLineCount(), 1U);
+    EXPECT_GT(metrics.contentWidth, metrics.viewportWidth);
+    EXPECT_GT(metrics.scrollX, 0.0f);
+
+    milestro_text::InputBoxLineMetrics lineMetrics;
+    ASSERT_TRUE(inputBox->getLineMetrics(0, lineMetrics));
+    EXPECT_EQ(lineMetrics.startUtf8, 0U);
+    EXPECT_EQ(lineMetrics.endUtf8, text.size());
+}
+
 TEST_F(InputBoxTest, NoWrapModeOnlyBreaksAtHardNewlines) {
     const std::string firstLine = "123456789012345678901234567890";
     const std::string secondLine = "abc";
@@ -364,12 +392,7 @@ TEST_F(InputBoxTest, NoWrapModeOnlyBreaksAtHardNewlines) {
 }
 
 TEST_F(InputBoxTest, NoWrapModeDoesNotSoftBreakMixedLineAfterTrailingNewlineInsert) {
-    const std::string text =
-            "\xF0\x9F\xA4\x94 \xF0\xB0\xBB\x9D \xF0\x9F\xAB\x84 \xF0\x9F\xA4\xB0 "
-            "\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x92 "
-            "\xE6\xB5\x8B\xE8\xAF\x95 123 "
-            "\xE5\x95\x8A\xE5\x90\xA7\xE6\xAC\xA1\xE7\x9A\x84\xE9\xA2\x9D\xE4\xBD\x9B\xE6\xAD\x8C "
-            "3.14159265358979323846264338327950288";
+    const auto text = MixedNoWrapPiText();
     auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
     inputBox->setViewport(320, 160);
     inputBox->setSoftWrap(false);
@@ -390,12 +413,7 @@ TEST_F(InputBoxTest, NoWrapModeDoesNotSoftBreakMixedLineAfterTrailingNewlineInse
 }
 
 TEST_F(InputBoxTest, LineEndUsesUtf8OffsetForMixedNoWrapLine) {
-    const std::string text =
-            "\xF0\x9F\xA4\x94 \xF0\xB0\xBB\x9D \xF0\x9F\xAB\x84 \xF0\x9F\xA4\xB0 "
-            "\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x92 "
-            "\xE6\xB5\x8B\xE8\xAF\x95 123 "
-            "\xE5\x95\x8A\xE5\x90\xA7\xE6\xAC\xA1\xE7\x9A\x84\xE9\xA2\x9D\xE4\xBD\x9B\xE6\xAD\x8C "
-            "3.14159265358979323846264338327950288";
+    const auto text = MixedNoWrapPiText();
     auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
     inputBox->setViewport(320, 160);
     inputBox->setSoftWrap(false);

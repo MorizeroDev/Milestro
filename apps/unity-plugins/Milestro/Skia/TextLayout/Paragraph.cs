@@ -59,6 +59,38 @@ namespace Milestro.Skia.TextLayout
             }
         }
 
+        public unsafe float ResolveNoWrapContentWidth(string text)
+        {
+            var payload = Encoding.UTF8.GetBytes(text ?? "");
+            fixed (byte* textPtr = payload)
+            {
+                ExitCodeUtil.ThrowIfFailed(
+                    BindingC.SkiaTextlayoutParagraphResolveNoWrapContentWidth(NativePtr,
+                        textPtr,
+                        (ulong)payload.Length,
+                        out var ret));
+                return ret;
+            }
+        }
+
+        public static float ResolveNoWrapProbeLayoutWidth(string text, float fontSize, float viewportWidth)
+        {
+            var textSize = Encoding.UTF8.GetByteCount(text ?? "");
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutResolveNoWrapProbeLayoutWidth((ulong)textSize,
+                    fontSize,
+                    viewportWidth,
+                    out var ret));
+            return ret;
+        }
+
+        public static float ResolveNoWrapLayoutWidth(float viewportWidth, float contentWidth)
+        {
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutResolveNoWrapLayoutWidth(viewportWidth, contentWidth, out var ret));
+            return ret;
+        }
+
         public void Paint(Canvas canvas, Vector2 position)
         {
             ExitCodeUtil.ThrowIfFailed(

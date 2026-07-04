@@ -199,6 +199,18 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetLongestLine(milestro::ski
                                                                    float &longestLine);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetMaxIntrinsicWidth(milestro::skia::textlayout::Paragraph *p,
                                                                          float &maxIntrinsicWidth);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphResolveNoWrapContentWidth(
+        milestro::skia::textlayout::Paragraph *p,
+        [[milize::CSharpType("void*")]] void *text,
+        uint64_t size,
+        float &width);
+MILESTRO_API int64_t MilestroSkiaTextlayoutResolveNoWrapProbeLayoutWidth(uint64_t textSize,
+                                                                         float fontSize,
+                                                                         float viewportWidth,
+                                                                         float &width);
+MILESTRO_API int64_t MilestroSkiaTextlayoutResolveNoWrapLayoutWidth(float viewportWidth,
+                                                                    float contentWidth,
+                                                                    float &width);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphPaint(milestro::skia::textlayout::Paragraph *p,
                                                           milestro::skia::Canvas *canvas,
                                                           float x, float y);

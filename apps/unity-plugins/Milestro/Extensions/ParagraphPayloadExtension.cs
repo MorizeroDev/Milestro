@@ -11,6 +11,11 @@ namespace Milestro.Extensions
         {
             var ret = new ParagraphStyle();
             ret.TextDirection = baseParaStyle.TextDirection;
+            ret.MaxLines = baseParaStyle.MaxLines;
+            if (baseParaStyle.IsEllipsized)
+            {
+                ret.SetEllipsis(baseParaStyle.Ellipsis);
+            }
 
             if (t.TextAlign.HasValue)
             {

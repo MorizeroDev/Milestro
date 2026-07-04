@@ -1,5 +1,6 @@
 #include <Milestro/game/milestro_game_interface.h>
 #include "milestro_game_retcode.h"
+#include "Milestro/skia/textlayout/NoWrapLayout.h"
 #include "Milestro/skia/textlayout/Paragraph.h"
 #include "Milestro/util/milestro_strutil.h"
 
@@ -37,6 +38,37 @@ int64_t MilestroSkiaTextlayoutParagraphGetLongestLine(milestro::skia::textlayout
 int64_t MilestroSkiaTextlayoutParagraphGetMaxIntrinsicWidth(milestro::skia::textlayout::Paragraph *p,
                                                             float &maxIntrinsicWidth) try {
     maxIntrinsicWidth = p->getMaxIntrinsicWidth();
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutParagraphResolveNoWrapContentWidth(milestro::skia::textlayout::Paragraph *p,
+                                                                 void *text,
+                                                                 uint64_t size,
+                                                                 float &width) try {
+    width = p->resolveNoWrapContentWidth(static_cast<const char *>(text), static_cast<size_t>(size));
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutResolveNoWrapProbeLayoutWidth(uint64_t textSize,
+                                                            float fontSize,
+                                                            float viewportWidth,
+                                                            float &width) try {
+    width = milestro::skia::textlayout::ResolveNoWrapProbeLayoutWidth(static_cast<size_t>(textSize),
+                                                                      fontSize,
+                                                                      viewportWidth);
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutResolveNoWrapLayoutWidth(float viewportWidth,
+                                                       float contentWidth,
+                                                       float &width) try {
+    width = milestro::skia::textlayout::ResolveNoWrapLayoutWidth(viewportWidth, contentWidth);
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
