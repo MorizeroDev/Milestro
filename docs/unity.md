@@ -1,9 +1,10 @@
 # Unity Integration
 
-The Unity side of Milestro lives under `apps/unity-plugins/`. The repository does
-not currently define a complete UPM package; use this folder as Unity asset
-content, or copy/link the relevant directories into a Unity project's `Assets/`
-folder.
+The Unity side of Milestro lives under `apps/unity-plugins/`. The repository
+does not currently define a complete UPM package. Use the Gradle
+`packageUnityPlugin` task to produce a Unity asset-tree directory, or copy/link
+the relevant directories into a Unity project's `Assets/` folder during local
+development.
 
 ## Required Packages
 
@@ -13,6 +14,7 @@ compiling Milestro:
 ```json
 {
   "dependencies": {
+    "com.morizero.milease": "https://github.com/MorizeroDev/Milease.git",
     "party.para.util.colors": "https://github.com/ParaParty/ParaPartyUtil.git?path=Colors",
     "party.para.util.unitynative": "https://github.com/ParaParty/ParaPartyUtil.git?path=UnityNative"
   }
@@ -21,6 +23,8 @@ compiling Milestro:
 
 Why they are required:
 
+- `com.morizero.milease`: used by scroll tweening helpers for smooth text and
+  input scrolling.
 - `party.para.util.colors`: used by `Milestro.RichTextParser` for color parsing
   and serialization.
 - `party.para.util.unitynative`: used by managed native-object wrappers,
@@ -37,6 +41,7 @@ When mapped into a Unity project, the important directories are:
 ```text
 Assets/
   Milestro/                 Core runtime assembly
+  Milestro/Plugins/         Native plugin binaries and generated iOS bridge files
   Milestro.Editor/          Editor-only utilities
   Milestro.Experimental/    Optional experimental components
   Resources/Milestro/       Runtime resources
@@ -67,28 +72,29 @@ In this repository that maps to:
 apps/unity-plugins/Milestro/Plugins/<platform>/
 ```
 
-Generated plugin binaries under `apps/unity-plugins/Milestro/Plugins/` are
-ignored by git. The checked-in exception is the generated iOS bridge source:
+Generated plugin binaries and generated iOS bridge files under
+`apps/unity-plugins/Milestro/Plugins/` are ignored by git in the current
+repository state. `./gradlew h2cs` writes the iOS bridge source to:
 
 ```text
 apps/unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp
 ```
 
-For iOS, keep `FrameworkBinding.cpp` compiled into the Unity Xcode project
-alongside the Milestro native library or framework.
+For iOS, generate `FrameworkBinding.cpp` before packaging, and keep it compiled
+into the Unity Xcode project alongside the Milestro native library or framework.
 
 ## ICU Data
 
 `MilestroBootstrap` initializes ICU automatically on editor and player startup
 unless the C# scripting define symbol `MILESTRO_NO_ICU_INIT` is set in Unity.
 
-The bootstrap loads this Unity resource:
+The default bootstrap loads this Unity resource:
 
 ```text
 Resources/Milestro/icudtl.dat.bytes
 ```
 
-Create it from the vendored ICU data file:
+`./gradlew packageUnityPlugin` creates it from the vendored ICU data file:
 
 ```text
 ext/icu-cmake/common/icudtl.dat
@@ -104,21 +110,36 @@ The `.bytes` extension is important: Unity imports it as a `TextAsset`, while
 `Resources.Load<TextAsset>("Milestro/icudtl.dat")` resolves it without the final
 `.bytes` suffix.
 
+ICU loading is configurable through `MilestroConfiguration.Configuration.Icu`:
+
+- `IcudtlResourcePath` defaults to `Milestro/icudtl.dat`.
+- `IcudtlPersistentFileName` defaults to `icudtl.dat`.
+- `IcudtlPathOverride` can point mobile builds at a specific extracted ICU data
+  path.
+
+Editor and standalone builds load ICU from memory. Mobile builds write the
+resource bytes to the configured persistent path, then load ICU from that file.
+
 ## Components
 
 Primary runtime components:
 
 - `Milestro.Components.TextBox`: UI `Graphic` for rendered text. It owns or
-  discovers a `TextBoxRenderTextureProducer` on the same GameObject.
+  discovers a `TextBoxRenderTextureProducer` on the same GameObject, supports
+  wheel scrolling in both axes, and passes unused scroll delta to parent scroll
+  handlers.
 - `Milestro.Components.WorldSpaceTextBox`: world-space quad backed by a Milestro
   render texture. It can create its mesh, renderer, and default material.
 - `Milestro.Components.TextInput`: editable UI input with caret, selection,
-  composition text, keyboard handling, and pointer selection.
+  composition text, keyboard handling, pointer selection, single-line or
+  multi-line modes, optional wrapping, masking, read-only mode, and scrollable
+  overflow.
 
 Internal component building blocks:
 
 - `TextBoxRenderTextureProducer`: builds text render-target output from content,
-  font family list, alignment, direction, size, weight, color, locale, and margin.
+  font family list, alignment, direction, wrap mode, size, weight, color, locale,
+  margin, and scroll offset.
 - `TextBoxRenderTarget`: builds Skia paragraph payloads and submits render
   commands to a Unity render texture surface.
 - `RenderTextureGraphic` and `RenderTextureMeshPresenter`: present render texture
@@ -127,6 +148,34 @@ Internal component building blocks:
 Current default text components use `Source Han Sans VF` as the initial font
 family. Register that font, or change the component's font family list before
 rendering.
+
+## Configuration
+
+Global runtime defaults are exposed through:
+
+```csharp
+Milestro.Configuration.MilestroConfiguration.Configuration
+```
+
+Current configuration groups:
+
+- `InputBoxShortcut`: undo/redo and clipboard shortcut variants.
+- `ScrollAxisLock`: scroll gesture deadzone, dominance ratio, and timeout values.
+- `TextInput`: scroll-wheel step, key repeat timing, keyboard scroll interlock,
+  and surrogate-pair timeout.
+- `WorldSpaceTextBox`: default material resource path.
+- `Icu`: ICU resource path and extracted-file path settings.
+
+Set these values before Milestro components are created when you need project-wide
+defaults.
+
+## Native Wrappers
+
+Low-level managed wrappers such as `Canvas`, `Paragraph`, `ParagraphBuilder`,
+`TextStyle`, `InputBox`, `TypeFace`, `MilestroImage`, `Svg`, and Unicode helper
+objects inherit `DisposableNativeObject`. Dispose them when you create them
+directly, for example with `using` or an explicit `Dispose()`. Component-owned
+objects are released by their Unity component lifecycle.
 
 ## Fonts
 

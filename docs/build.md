@@ -1,7 +1,7 @@
 # Build
 
-Milestro's native library is built with CMake. Binding generation and C# source
-formatting are handled by Gradle.
+Milestro's native library is built with CMake. Binding generation, Unity plugin
+packaging, and C# source formatting are handled by Gradle.
 
 Skia is not vendored in this repository. Build Skia separately, then point
 Milestro at the Skia source root and either the Skia library output directory or
@@ -14,7 +14,7 @@ the Skia CMake directory.
   AppleClang, or `clang-cl`.
 - Ninja, Xcode, or another CMake generator suitable for the target platform.
 - A separate Skia checkout and build output.
-- Java/Gradle for `h2cs` binding generation.
+- Java/Gradle for `h2cs` binding generation and Unity plugin packaging.
 - Optional: `clang-format` for generated binding formatting.
 - Optional: `dotnet format` for C# formatting.
 
@@ -26,6 +26,7 @@ newer is required because the CMake project checks for Swift C++ interop support
 - `Milestro`: native library used by Unity.
 - `MilestroCli`: CLI executable, enabled by default with `MILESTRO_ENABLE_CLI=ON`.
 - `H2CS`: regenerates C# and iOS bridge bindings from the exported game API.
+- `milestro_unity_plugin`: runs the Gradle Unity plugin packaging task.
 - Native tests: `MilestroTest_ReadFont`, `MilestroTest_ReadImage`,
   `MilestroTest_Icu`, `MilestroTest_SkiaUnicodeFallback`,
   `MilestroTest_InputBoxApiSpike`, and `MilestroTest_InputBox`.
@@ -71,6 +72,7 @@ third-party dependencies to static libraries.
 | `MILESTRO_REMAP_SOURCE_PATHS` | `ON` | Remaps absolute source/build paths in debug info. |
 | `MILESTRO_ENABLE_DESKTOP_OPENGL_RENDER` | `OFF` | Enables the experimental Unity OpenGLCore RenderTexture backend on desktop Linux. |
 | `MILESTRO_ENABLE_DESKTOP_VULKAN_RENDER` | `OFF` | Enables the experimental Unity Vulkan RenderTexture backend on desktop. |
+| `MILESTRO_UNITY_PLUGIN_OUTPUT_DIR` | unset | Optional output directory for the `milestro_unity_plugin` target. Defaults to `<build-dir>/unity-plugin`. |
 
 ## Tests
 
@@ -107,6 +109,10 @@ This updates:
 - `apps/unity-plugins/Milestro/Binding/BindingC.cs`
 - `apps/unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp`
 
+The generated iOS bridge is written under the Unity plugin tree. That plugin
+tree is used as generated/local build output; generated native plugin content is
+not tracked by git in the current repository state.
+
 `clang-format` is optional. The Gradle task skips generated binding formatting if
 it is not installed.
 
@@ -118,6 +124,53 @@ Format C# files under `apps/unity-plugins`:
 
 This uses `dotnet format` when available.
 
+## Unity Plugin Packaging
+
+Package the Unity asset tree with Gradle:
+
+```sh
+./gradlew packageUnityPlugin
+```
+
+The default output is:
+
+```text
+build/unity-plugin/
+```
+
+Override it with:
+
+```sh
+./gradlew packageUnityPlugin -PmilestroUnityPluginOutputDir=/path/to/output
+```
+
+or through CMake:
+
+```sh
+cmake --build cmake-build-relwithdebinfo --target milestro_unity_plugin
+```
+
+Set `MILESTRO_UNITY_PLUGIN_OUTPUT_DIR` at configure time to choose the CMake
+target's output directory.
+
+The package task copies `Milestro`, `Milestro.Editor`, `Milestro.Experimental`,
+and `Resources` from `apps/unity-plugins/`. It also generates:
+
+```text
+Resources/Milestro/icudtl.dat.bytes
+```
+
+from:
+
+```text
+ext/icu-cmake/common/icudtl.dat
+```
+
+The task does not compile native platform binaries. Any native binaries or
+generated iOS bridge files that already exist under
+`apps/unity-plugins/Milestro/Plugins/` are copied as part of the `Milestro`
+asset tree.
+
 ## Unity Runtime Files
 
 For Unity integration, place the built native binary under the Unity plugin
@@ -127,8 +180,8 @@ assets. In this repository those paths are under:
 apps/unity-plugins/Milestro/Plugins/
 ```
 
-That directory is ignored for generated platform binaries, except for the iOS
-`FrameworkBinding.cpp` source file and its `.meta` file.
+That directory is treated as generated/local plugin output. Generated platform
+binaries and generated iOS bridge files under it are ignored by git.
 
 The managed bindings expect:
 
@@ -136,7 +189,9 @@ The managed bindings expect:
 - iOS player builds: `DllImport("__Internal")` with the `FrameworkBinding`
   entry-point prefix
 
-The current Unity bootstrap also expects ICU data at:
+If you use `packageUnityPlugin`, the ICU Unity `TextAsset` is generated into the
+package output automatically. If you use `apps/unity-plugins` directly, create
+the file at:
 
 ```text
 apps/unity-plugins/Resources/Milestro/icudtl.dat.bytes
