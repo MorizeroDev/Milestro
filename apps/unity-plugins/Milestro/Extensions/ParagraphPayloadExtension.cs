@@ -11,20 +11,30 @@ namespace Milestro.Extensions
         public static ParagraphStyle ToParagraphStyle(this ParagraphStyleState t, ParagraphStyle baseParaStyle)
         {
             var ret = new ParagraphStyle();
-            ret.TextDirection = baseParaStyle.TextDirection;
-            ret.MaxLines = baseParaStyle.MaxLines;
+            ret.TextDirection = t.TextDirection ?? baseParaStyle.TextDirection;
+            ret.TextAlign = t.TextAlign ?? baseParaStyle.TextAlign;
+
+            if (baseParaStyle.IsUnlimitedLines)
+            {
+                ret.ClearMaxLines();
+            }
+            else
+            {
+                ret.MaxLines = baseParaStyle.MaxLines;
+            }
+
             if (baseParaStyle.IsEllipsized)
             {
                 ret.SetEllipsis(baseParaStyle.Ellipsis);
             }
 
-            if (t.TextAlign.HasValue)
+            ret.Height = baseParaStyle.Height;
+            ret.TextHeightBehavior = baseParaStyle.TextHeightBehavior;
+            ret.ReplaceTabCharacters = baseParaStyle.ReplaceTabCharacters;
+            ret.ApplyRoundingHack = baseParaStyle.ApplyRoundingHack;
+            if (!baseParaStyle.IsHintingOn)
             {
-                ret.TextAlign = t.TextAlign.Value;
-            }
-            else
-            {
-                ret.TextAlign = baseParaStyle.TextAlign;
+                ret.TurnHintingOff();
             }
 
             return ret;
@@ -33,9 +43,13 @@ namespace Milestro.Extensions
         public static TextStyle ToTextStyle(this TextStyleState t, TextStyle baseTextStyle)
         {
             var ret = new TextStyle();
-            ret.SetFontFamilies(baseTextStyle.GetFontFamilies());
+            ret.DecorationMode = baseTextStyle.DecorationMode;
+            ret.DecorationColor = baseTextStyle.DecorationColor;
+            ret.DecorationStyle = baseTextStyle.DecorationStyle;
+            ret.DecorationThicknessMultiplier = baseTextStyle.DecorationThicknessMultiplier;
 
             ret.Decoration =
+                baseTextStyle.Decoration |
                 (t.Underline ? TextDecoration.Underline : TextDecoration.NoDecoration) |
                 (t.Strikethrough ? TextDecoration.LineThrough : TextDecoration.NoDecoration);
 
@@ -45,12 +59,18 @@ namespace Milestro.Extensions
                 weight = t.FontWeight.Value;
             }
 
-            if (t.Italic)
+            if (t.FontWidth.HasValue)
             {
-                slant = FontSlant.Italic;
+                width = t.FontWidth.Value;
+            }
+
+            if (t.FontSlant.HasValue)
+            {
+                slant = t.FontSlant.Value;
             }
 
             ret.SetFontStyle(weight, width, slant);
+            ret.SetFontFamilies(new List<string>(t.FontFamilies ?? baseTextStyle.GetFontFamilies()));
 
             if (t.Color.HasValue)
             {
@@ -61,16 +81,23 @@ namespace Milestro.Extensions
                 ret.Color = baseTextStyle.Color;
             }
 
-            if (t.FontSize > 0)
+            if (t.FontSize.HasValue)
             {
-                ret.FontSize = t.FontSize;
+                ret.FontSize = t.FontSize.Value;
             }
             else
             {
                 ret.FontSize = baseTextStyle.FontSize;
             }
 
-            ret.Locale = baseTextStyle.Locale;
+            ret.Locale = t.Locale ?? baseTextStyle.Locale;
+            ret.BaselineShift = t.BaselineShift ?? baseTextStyle.BaselineShift;
+            ret.Height = baseTextStyle.Height;
+            ret.HeightOverride = baseTextStyle.HeightOverride;
+            ret.HalfLeading = baseTextStyle.HalfLeading;
+            ret.LetterSpacing = t.LetterSpacing ?? baseTextStyle.LetterSpacing;
+            ret.WordSpacing = baseTextStyle.WordSpacing;
+            ret.TextBaseline = baseTextStyle.TextBaseline;
 
 
             var shadowList = baseTextStyle.GetShadows();

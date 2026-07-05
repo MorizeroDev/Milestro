@@ -177,11 +177,11 @@ namespace Milestro.RichTextParser
         private void ConvertToSegments(Context ctx, XmlElementNode node)
         {
             var state = ctx.TextStyleState.Clone();
-            if (node.Tag == "b")
+            if (node.Tag == "b" || node.Tag == "strong")
             {
                 state.FontWeight = FontWeight.Bold;
             }
-            else if (node.Tag == "s")
+            else if (node.Tag == "s" || node.Tag == "del")
             {
                 state.Strikethrough = true;
             }
@@ -189,20 +189,27 @@ namespace Milestro.RichTextParser
             {
                 state.Underline = true;
             }
-            else if (node.Tag == "i")
+            else if (node.Tag == "i" || node.Tag == "em")
             {
-                state.Italic = true;
+                state.FontSlant = FontSlant.Italic;
             }
             else if (node.Tag == "font")
             {
                 if (node.Attributes.TryGetValue("color", out var color))
                 {
-                    state.Color = ColorUtils.ParseColor(color);
+                    try
+                    {
+                        state.Color = ColorUtils.ParseColor(color);
+                    }
+                    catch (Exception)
+                    {
+                        // ignored
+                    }
                 }
 
                 if (node.Attributes.TryGetValue("size", out var size))
                 {
-                    if (float.TryParse(size, NumberStyles.Any, ParseCulture, out var result))
+                    if (TryParseFontSize(size, out var result))
                     {
                         state.FontSize = result;
                     }
@@ -210,11 +217,59 @@ namespace Milestro.RichTextParser
 
                 if (node.Attributes.TryGetValue("weight", out var weight))
                 {
-                    if (int.TryParse(weight, NumberStyles.Integer, ParseCulture, out var result)
-                        && result > FontWeight.Invisible && result <= FontWeight.ExtraBlack)
+                    if (TryParseFontWeight(weight, out var result))
                     {
                         state.FontWeight = result;
                     }
+                }
+
+                if (node.Attributes.TryGetValue("face", out var face)
+                    && TryParseFontFamilies(face, out var fontFamilies))
+                {
+                    state.FontFamilies = fontFamilies;
+                }
+            }
+            else if (node.Tag == "span")
+            {
+                if (node.Attributes.TryGetValue("cspace", out var cspace)
+                    && TryParseFloat(cspace, out var letterSpacing))
+                {
+                    state.LetterSpacing = letterSpacing;
+                }
+
+                if (node.Attributes.TryGetValue("voffset", out var voffset)
+                    && TryParseFloat(voffset, out var baselineShift))
+                {
+                    state.BaselineShift = baselineShift;
+                }
+
+                if (node.Attributes.TryGetValue("lang", out var lang) && !string.IsNullOrWhiteSpace(lang))
+                {
+                    state.Locale = lang;
+                }
+
+                if (node.Attributes.TryGetValue("face", out var face)
+                    && TryParseFontFamilies(face, out var fontFamilies))
+                {
+                    state.FontFamilies = fontFamilies;
+                }
+
+                if (node.Attributes.TryGetValue("weight", out var weight)
+                    && TryParseFontWeight(weight, out var fontWeight))
+                {
+                    state.FontWeight = fontWeight;
+                }
+
+                if (node.Attributes.TryGetValue("width", out var width)
+                    && TryParseEnum(width, out FontWidth fontWidth))
+                {
+                    state.FontWidth = fontWidth;
+                }
+
+                if (node.Attributes.TryGetValue("slant", out var slant)
+                    && TryParseEnum(slant, out FontSlant fontSlant))
+                {
+                    state.FontSlant = fontSlant;
                 }
             }
             else if (node.Tag == "p")
@@ -223,15 +278,16 @@ namespace Milestro.RichTextParser
 
                 if (node.Attributes.TryGetValue("align", out var alignDirection))
                 {
-                    try
+                    if (TryParseEnum(alignDirection, out TextAlign textAlign))
                     {
-                        ctx.Result.ParagraphStyle.TextAlign =
-                            (TextAlign)Enum.Parse(typeof(TextAlign), alignDirection, true);
+                        ctx.Result.ParagraphStyle.TextAlign = textAlign;
                     }
-                    catch (Exception)
-                    {
-                        // ignored
-                    }
+                }
+
+                if (node.Attributes.TryGetValue("dir", out var textDirection)
+                    && TryParseEnum(textDirection, out TextDirection direction))
+                {
+                    ctx.Result.ParagraphStyle.TextDirection = direction;
                 }
             }
             else if (node.Tag == "br")
@@ -277,5 +333,66 @@ namespace Milestro.RichTextParser
         }
 
         private static readonly CultureInfo ParseCulture = CultureInfo.GetCultureInfo("en");
+
+        private static bool TryParseFloat(string value, out float result)
+        {
+            return float.TryParse(value, NumberStyles.Any, ParseCulture, out result);
+        }
+
+        private static bool TryParseFontSize(string value, out float result)
+        {
+            return TryParseFloat(value, out result) && result > 0;
+        }
+
+        private static bool TryParseFontWeight(string value, out int result)
+        {
+            return int.TryParse(value, NumberStyles.Integer, ParseCulture, out result)
+                   && result > FontWeight.Invisible
+                   && result <= FontWeight.ExtraBlack;
+        }
+
+        private static bool TryParseEnum<T>(string value, out T result)
+            where T : struct
+        {
+            try
+            {
+                var parsed = (T)Enum.Parse(typeof(T), value, true);
+                if (Enum.IsDefined(typeof(T), parsed))
+                {
+                    result = parsed;
+                    return true;
+                }
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+
+            result = default;
+            return false;
+        }
+
+        private static bool TryParseFontFamilies(string value, out List<string> fontFamilies)
+        {
+            fontFamilies = new List<string>();
+
+            foreach (var item in value.Split(','))
+            {
+                var family = item.Trim();
+                if (family.Length >= 2
+                    && ((family[0] == '"' && family[family.Length - 1] == '"')
+                        || (family[0] == '\'' && family[family.Length - 1] == '\'')))
+                {
+                    family = family.Substring(1, family.Length - 2).Trim();
+                }
+
+                if (family.Length > 0)
+                {
+                    fontFamilies.Add(family);
+                }
+            }
+
+            return fontFamilies.Count > 0;
+        }
     }
 }
