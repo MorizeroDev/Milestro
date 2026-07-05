@@ -1387,8 +1387,8 @@ namespace Milestro.Components
                 nextRepeatTime = 0;
                 return false;
             }
-            #if ENABLE_IN
-            #endif
+#if ENABLE_IN
+#endif
 
             if (nextRepeatTime <= 0)
             {

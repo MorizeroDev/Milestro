@@ -92,4 +92,28 @@ void DrawSubmission(SkCanvas* canvas, const MilestroUnityRenderSubmission& submi
     }
 }
 
+void ReleaseSubmissionOwnedResources(MilestroUnityRenderSubmission* submission) {
+    if (submission == nullptr || submission->commands == nullptr || submission->commandCount <= 0) {
+        return;
+    }
+
+    for (int32_t i = 0; i < submission->commandCount; ++i) {
+        MilestroUnityDrawCommand& command = submission->commands[i];
+        switch (static_cast<MilestroUnityDrawResourceOwnership>(command.resourceOwnership)) {
+            case MilestroUnityDrawResourceOwnership::Paragraph:
+                delete static_cast<milestro::skia::textlayout::Paragraph*>(command.resource);
+                break;
+            case MilestroUnityDrawResourceOwnership::InputBoxSnapshot:
+                delete static_cast<milestro::skia::textlayout::InputBoxDrawSnapshot*>(command.resource);
+                break;
+            case MilestroUnityDrawResourceOwnership::None:
+            default:
+                break;
+        }
+
+        command.resource = nullptr;
+        command.resourceOwnership = static_cast<int32_t>(MilestroUnityDrawResourceOwnership::None);
+    }
+}
+
 } // namespace milestro::unity_render

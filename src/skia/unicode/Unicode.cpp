@@ -4,6 +4,7 @@
 #include "SkUnicodeNop.h"
 #include <modules/skunicode/include/SkUnicode_icu.h>
 
+#include <mutex>
 #include <stdexcept>
 #include <string>
 
@@ -17,6 +18,10 @@ inline sk_sp<SkUnicode> MakeSkUnicode() {
 
 static std::unique_ptr<UnicodeProvider> UnicodeProviderInstance = nullptr;
 
+std::mutex& UnicodeProviderMutex() {
+    static std::mutex mutex;
+    return mutex;
+}
 
 UnicodeProvider* GetFallbackUnicodeProvider() {
     static UnicodeProvider fallback(MakeNopSkUnicode());
@@ -39,6 +44,7 @@ Result<void, std::string> InitialUnicodeProvider() {
 }
 
 UnicodeProvider *GetUnicodeProvider() {
+    std::lock_guard lock(UnicodeProviderMutex());
     if (UnicodeProviderInstance == nullptr) {
         auto result = InitialUnicodeProvider();
         if (result.isErr()) {

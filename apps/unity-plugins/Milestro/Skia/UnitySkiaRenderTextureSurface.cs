@@ -48,6 +48,7 @@ namespace Milestro.Skia
             public float ClipY;
             public float ClipWidth;
             public float ClipHeight;
+            public int ResourceOwnership;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -98,6 +99,18 @@ namespace Milestro.Skia
             {
                 DisposeResources(OwnedResources);
             }
+        }
+
+        private readonly struct NativeOwnedResource
+        {
+            public NativeOwnedResource(IntPtr ptr, UnitySkiaRenderCommandList.ResourceOwnership ownership)
+            {
+                Ptr = ptr;
+                Ownership = ownership;
+            }
+
+            public readonly IntPtr Ptr;
+            public readonly UnitySkiaRenderCommandList.ResourceOwnership Ownership;
         }
 
         private sealed class DeferredRelease
@@ -294,11 +307,12 @@ namespace Milestro.Skia
             var commandsPtr = IntPtr.Zero;
             object[] resources = Array.Empty<object>();
             IDisposable[] ownedResources = Array.Empty<IDisposable>();
+            NativeOwnedResource[] nativeOwnedResources = Array.Empty<NativeOwnedResource>();
             PendingRenderEvent? pendingEvent = null;
             var enqueued = false;
             try
             {
-                commandsPtr = MarshalCommands(commands, out resources, out ownedResources);
+                commandsPtr = MarshalCommands(commands, out resources, out ownedResources, out nativeOwnedResources);
                 var submission = new RenderSubmissionPayload
                 {
                     Target = target,
@@ -321,12 +335,14 @@ namespace Milestro.Skia
                 if (pendingEvent != null && !enqueued)
                 {
                     CancelPendingEvent(pendingEvent);
+                    DisposeNativeOwnedResources(nativeOwnedResources);
                 }
                 else if (pendingEvent == null)
                 {
                     FreeSubmission(submissionPtr, commandsPtr);
                     KeepAliveResources(resources);
                     DisposeResources(ownedResources);
+                    DisposeNativeOwnedResources(nativeOwnedResources);
                 }
                 throw;
             }
@@ -364,10 +380,12 @@ namespace Milestro.Skia
 
         private static IntPtr MarshalCommands(UnitySkiaRenderCommandList commandList,
             out object[] keepAliveResources,
-            out IDisposable[] ownedResources)
+            out IDisposable[] ownedResources,
+            out NativeOwnedResource[] nativeOwnedResources)
         {
             keepAliveResources = Array.Empty<object>();
             ownedResources = Array.Empty<IDisposable>();
+            nativeOwnedResources = Array.Empty<NativeOwnedResource>();
             if (commandList.Count == 0)
             {
                 return IntPtr.Zero;
@@ -377,6 +395,7 @@ namespace Milestro.Skia
             var commandsPtr = Marshal.AllocHGlobal(commandSize * commandList.Count);
             var keepAliveList = new List<object>(commandList.Count);
             var ownedList = new List<IDisposable>();
+            var nativeOwnedList = new List<NativeOwnedResource>();
             try
             {
                 var commands = commandList.Commands;
@@ -385,7 +404,26 @@ namespace Milestro.Skia
                     var command = commands[i];
                     var resource = command.Resource;
                     var keepAlive = command.KeepAlive;
-                    if (command.SnapshotInputBox)
+                    var ownership = command.Ownership;
+                    if (command.SnapshotParagraph)
+                    {
+                        if (command.ParagraphSnapshotFactory == null)
+                        {
+                            throw new InvalidOperationException("Milestro paragraph draw command is missing its snapshot factory.");
+                        }
+
+                        var snapshot = command.ParagraphSnapshotFactory();
+                        if (snapshot == null)
+                        {
+                            throw new InvalidOperationException("Milestro paragraph draw command snapshot factory returned null.");
+                        }
+
+                        resource = snapshot.DetachNativePtr();
+                        ownership = UnitySkiaRenderCommandList.ResourceOwnership.Paragraph;
+                        keepAlive = null;
+                        nativeOwnedList.Add(new NativeOwnedResource(resource, ownership));
+                    }
+                    else if (command.SnapshotInputBox)
                     {
                         if (!(command.KeepAlive is TextLayout.InputBox inputBox))
                         {
@@ -393,9 +431,10 @@ namespace Milestro.Skia
                         }
 
                         var snapshot = inputBox.CreateDrawSnapshot();
-                        resource = snapshot.NativePtr;
-                        keepAlive = snapshot;
-                        ownedList.Add(snapshot);
+                        resource = snapshot.DetachNativePtr();
+                        ownership = UnitySkiaRenderCommandList.ResourceOwnership.InputBoxSnapshot;
+                        keepAlive = null;
+                        nativeOwnedList.Add(new NativeOwnedResource(resource, ownership));
                     }
 
                     var payload = new DrawCommandPayload
@@ -409,20 +448,26 @@ namespace Milestro.Skia
                         ClipX = command.ClipX,
                         ClipY = command.ClipY,
                         ClipWidth = command.ClipWidth,
-                        ClipHeight = command.ClipHeight
+                        ClipHeight = command.ClipHeight,
+                        ResourceOwnership = (int)ownership
                     };
                     Marshal.StructureToPtr(payload, IntPtr.Add(commandsPtr, i * commandSize), false);
-                    keepAliveList.Add(keepAlive);
+                    if (keepAlive != null)
+                    {
+                        keepAliveList.Add(keepAlive);
+                    }
                 }
 
                 keepAliveResources = keepAliveList.ToArray();
                 ownedResources = ownedList.ToArray();
+                nativeOwnedResources = nativeOwnedList.ToArray();
             }
             catch
             {
                 try
                 {
                     DisposeResources(ownedList);
+                    DisposeNativeOwnedResources(nativeOwnedList);
                 }
                 finally
                 {
@@ -460,6 +505,33 @@ namespace Milestro.Skia
             foreach (var resource in resources)
             {
                 resource?.Dispose();
+            }
+        }
+
+        private static void DisposeNativeOwnedResources(IEnumerable<NativeOwnedResource> resources)
+        {
+            if (resources == null)
+            {
+                return;
+            }
+
+            foreach (var resource in resources)
+            {
+                var ptr = resource.Ptr;
+                if (ptr == IntPtr.Zero)
+                {
+                    continue;
+                }
+
+                switch (resource.Ownership)
+                {
+                    case UnitySkiaRenderCommandList.ResourceOwnership.Paragraph:
+                        ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphDestroy(out ptr));
+                        break;
+                    case UnitySkiaRenderCommandList.ResourceOwnership.InputBoxSnapshot:
+                        ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxDrawSnapshotDestroy(ref ptr));
+                        break;
+                }
             }
         }
 

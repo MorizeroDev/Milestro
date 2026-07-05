@@ -14,6 +14,13 @@ namespace Milestro.Skia
             InputBoxSnapshot = 3
         }
 
+        internal enum ResourceOwnership
+        {
+            None = 0,
+            Paragraph = 1,
+            InputBoxSnapshot = 2
+        }
+
         internal struct Command
         {
             public CommandKind Kind;
@@ -28,6 +35,9 @@ namespace Milestro.Skia
             public float ClipHeight;
             public object KeepAlive;
             public bool SnapshotInputBox;
+            public Func<Paragraph> ParagraphSnapshotFactory;
+            public bool SnapshotParagraph;
+            public ResourceOwnership Ownership;
         }
 
         private readonly List<Command> commands = new List<Command>();
@@ -71,6 +81,27 @@ namespace Milestro.Skia
                 ClipWidth = clipRect.width,
                 ClipHeight = clipRect.height,
                 KeepAlive = paragraph
+            });
+        }
+
+        internal void DrawParagraphSnapshot(Func<Paragraph> paragraphFactory, Vector2 position, Rect clipRect)
+        {
+            if (paragraphFactory == null)
+            {
+                return;
+            }
+
+            commands.Add(new Command
+            {
+                Kind = CommandKind.Paragraph,
+                X = position.x,
+                Y = position.y,
+                ClipX = clipRect.x,
+                ClipY = clipRect.y,
+                ClipWidth = clipRect.width,
+                ClipHeight = clipRect.height,
+                ParagraphSnapshotFactory = paragraphFactory,
+                SnapshotParagraph = true
             });
         }
 

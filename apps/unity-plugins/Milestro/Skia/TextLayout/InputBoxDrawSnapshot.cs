@@ -11,6 +11,13 @@ namespace Milestro.Skia.TextLayout
         {
         }
 
+        internal IntPtr DetachNativePtr()
+        {
+            var nativePtr = NativePtr;
+            ptr = IntPtr.Zero;
+            return nativePtr;
+        }
+
         protected override void DisposeUnmanaged()
         {
             if (ptr != IntPtr.Zero)

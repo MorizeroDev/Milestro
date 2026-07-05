@@ -13,6 +13,12 @@ enum class MilestroUnityDrawCommandKind : int32_t {
     InputBoxSnapshot = 3,
 };
 
+enum class MilestroUnityDrawResourceOwnership : int32_t {
+    None = 0,
+    Paragraph = 1,
+    InputBoxSnapshot = 2,
+};
+
 struct MilestroUnityDrawCommand {
     int32_t kind = 0;
     void* resource = nullptr;
@@ -24,6 +30,7 @@ struct MilestroUnityDrawCommand {
     float clipY = 0.0f;
     float clipWidth = 0.0f;
     float clipHeight = 0.0f;
+    int32_t resourceOwnership = 0;
 };
 
 struct MilestroUnityRenderSubmission {

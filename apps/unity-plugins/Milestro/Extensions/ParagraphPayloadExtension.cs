@@ -112,14 +112,15 @@ namespace Milestro.Extensions
         public static Paragraph ToParagraph(this ParagraphPayload payload, ParagraphStyle baseParaStyle,
             TextStyle baseTextStyle)
         {
-            var paragraphStyle = payload.ParagraphStyle.ToParagraphStyle(baseParaStyle);
+            using var paragraphStyle = payload.ParagraphStyle.ToParagraphStyle(baseParaStyle);
             paragraphStyle.SetTextStyle(baseTextStyle);
 
-            var builder = new ParagraphBuilder(paragraphStyle);
+            using var builder = new ParagraphBuilder(paragraphStyle);
 
             foreach (var item in payload.Body)
             {
-                builder.PushStyle(item.TextStyle.ToTextStyle(baseTextStyle));
+                using var textStyle = item.TextStyle.ToTextStyle(baseTextStyle);
+                builder.PushStyle(textStyle);
                 builder.AddText(item.Content);
                 builder.Pop();
             }

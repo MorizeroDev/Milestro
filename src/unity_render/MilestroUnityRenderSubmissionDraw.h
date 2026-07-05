@@ -8,6 +8,7 @@ class SkCanvas;
 namespace milestro::unity_render {
 
 void DrawSubmission(SkCanvas* canvas, const MilestroUnityRenderSubmission& submission);
+void ReleaseSubmissionOwnedResources(MilestroUnityRenderSubmission* submission);
 
 } // namespace milestro::unity_render
 

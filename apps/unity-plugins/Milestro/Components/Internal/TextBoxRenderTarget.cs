@@ -61,7 +61,7 @@ namespace Milestro.Components.Internal
             var needsDraw = EnsureSurface(sizePixels, colorSpace);
             if (forceText || paragraph == null || layoutChanged)
             {
-                paragraph = BuildParagraph(settings);
+                ReplaceParagraph(BuildParagraph(settings));
                 needsDraw = true;
             }
 
@@ -86,9 +86,9 @@ namespace Milestro.Components.Internal
 
         public void Dispose()
         {
+            RetireParagraph();
             surface?.Dispose();
             surface = null;
-            paragraph = null;
             paragraphPlainText = "";
             layoutChanged = true;
             paintChanged = true;
@@ -141,7 +141,23 @@ namespace Milestro.Components.Internal
 
         private Paragraph BuildParagraph(TextBoxRenderTargetSettings settings)
         {
-            ParagraphStyle paragraphStyle = new ParagraphStyle();
+            var result = CreateParagraph(settings, out var plainText);
+            paragraphPlainText = plainText;
+            ResizeParagraph(result, settings, true);
+            return result;
+        }
+
+        private Paragraph BuildPaintParagraph(TextBoxRenderTargetSettings settings)
+        {
+            var result = CreateParagraph(settings, out _);
+            result.Layout(Math.Max(1, layoutWidth));
+            return result;
+        }
+
+        private Paragraph CreateParagraph(TextBoxRenderTargetSettings settings,
+            out string plainText)
+        {
+            using var paragraphStyle = new ParagraphStyle();
             paragraphStyle.TextAlign = settings.TextAlign;
             paragraphStyle.TextDirection = settings.TextDirection;
             if (settings.SingleLine)
@@ -153,7 +169,7 @@ namespace Milestro.Components.Internal
                 }
             }
 
-            TextStyle textStyle = new TextStyle();
+            using var textStyle = new TextStyle();
             textStyle.SetFontFamilies(settings.FontFamilies);
             textStyle.FontSize = settings.Size;
             textStyle.Locale = settings.Locale;
@@ -167,10 +183,8 @@ namespace Milestro.Components.Internal
             var parser = new RichTextParser.RichTextParser();
             parser.ParseText(settings.Content);
             var segments = parser.ConvertToSegments();
-            paragraphPlainText = PlainText(segments);
-            var result = segments.ToParagraph(paragraphStyle, textStyle);
-            ResizeParagraph(result, settings, true);
-            return result;
+            plainText = PlainText(segments);
+            return segments.ToParagraph(paragraphStyle, textStyle);
         }
 
         private static void ValidateMargin(RectOffset margin)
@@ -311,7 +325,7 @@ namespace Milestro.Components.Internal
                 var clipRect = settings.TextOverflow == TextOverflow.Overflow
                     ? new Rect(0f, 0f, OutputWidth, OutputHeight)
                     : new Rect(settings.Margin.left, settings.Margin.top, viewportSize.x, viewportSize.y);
-                commands.DrawParagraph(paragraph, paintPosition, clipRect);
+                commands.DrawParagraphSnapshot(() => BuildPaintParagraph(settings), paintPosition, clipRect);
             }
             else
             {
@@ -327,6 +341,36 @@ namespace Milestro.Components.Internal
             {
                 ++outputVersion;
             }
+        }
+
+        private void ReplaceParagraph(Paragraph nextParagraph)
+        {
+            var oldParagraph = paragraph;
+            paragraph = nextParagraph;
+            DisposeParagraphAfterPendingDraws(oldParagraph);
+        }
+
+        private void RetireParagraph()
+        {
+            var oldParagraph = paragraph;
+            paragraph = null;
+            DisposeParagraphAfterPendingDraws(oldParagraph);
+        }
+
+        private void DisposeParagraphAfterPendingDraws(Paragraph? oldParagraph)
+        {
+            if (oldParagraph == null)
+            {
+                return;
+            }
+
+            if (surface != null)
+            {
+                surface.DisposeResourceAfterPendingDraws(oldParagraph);
+                return;
+            }
+
+            oldParagraph.Dispose();
         }
 
         private static Vector2Int NormalizeSize(Vector2Int sizePixels)

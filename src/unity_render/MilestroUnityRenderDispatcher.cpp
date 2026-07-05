@@ -3,6 +3,7 @@
 #include "game/milestro_game_retcode.h"
 #include "unity_render/MilestroUnityGraphicsBackend.h"
 #include "unity_render/MilestroUnityRenderSubmission.h"
+#include "unity_render/MilestroUnityRenderSubmissionDraw.h"
 
 #include <IUnityGraphics.h>
 #include <Milestro/log/log.h>
@@ -59,6 +60,7 @@ void MarkSubmissionCompleted(MilestroUnityRenderSubmission* submission) {
         return;
     }
 
+    ReleaseSubmissionOwnedResources(submission);
     std::atomic_ref<int32_t> completed(submission->completed);
     completed.store(1, std::memory_order_release);
 }
