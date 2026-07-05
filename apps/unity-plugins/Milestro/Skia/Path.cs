@@ -2,7 +2,7 @@ using System;
 using Milestro.Binding;
 using Paraparty.UnityNative.Base;
 
-namespace Milestro.Skia.TextLayout
+namespace Milestro.Skia
 {
     public class Path : DisposableNativeObject
     {

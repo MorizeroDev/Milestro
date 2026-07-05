@@ -141,6 +141,7 @@ tasks {
             listOf("milestro::skia::Image") to "IntPtr",
             listOf("milestro::skia::Typeface") to "IntPtr",
             listOf("milestro::skia::Font") to "IntPtr",
+            listOf("milestro::skia::TextDrawSnapshot") to "IntPtr",
             listOf("milestro::skia::Path") to "IntPtr",
             listOf("milestro::skia::Svg") to "IntPtr",
             listOf("milestro::skia::VertexData") to "IntPtr",

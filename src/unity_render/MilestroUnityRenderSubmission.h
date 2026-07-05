@@ -11,6 +11,7 @@ enum class MilestroUnityDrawCommandKind : int32_t {
     Paragraph = 1,
     Image = 2,
     InputBoxSnapshot = 3,
+    SlimText = 4,
 };
 
 enum class MilestroUnityDrawResourceOwnership : int32_t {

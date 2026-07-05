@@ -36,6 +36,8 @@ class Typeface;
 
 class Font;
 
+class TextDrawSnapshot;
+
 class Path;
 
 class Svg;

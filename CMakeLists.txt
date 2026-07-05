@@ -492,6 +492,7 @@ set(
         src/game/milestro_game_skia_fontcollection.cpp
         src/game/milestro_game_skia_typeface.cpp
         src/game/milestro_game_skia_font.cpp
+        src/game/milestro_game_skia_slim_text.cpp
         src/game/milestro_game_skia_path.cpp
         src/game/milestro_game_skia_svg.cpp
         src/game/milestro_game_skia_vertexdata.cpp

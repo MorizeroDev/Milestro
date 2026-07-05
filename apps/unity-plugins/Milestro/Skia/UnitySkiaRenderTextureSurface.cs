@@ -436,6 +436,18 @@ namespace Milestro.Skia
                         keepAlive = null;
                         nativeOwnedList.Add(new NativeOwnedResource(resource, ownership));
                     }
+                    else if (command.SnapshotSlimText)
+                    {
+                        if (!(command.KeepAlive is Font font))
+                        {
+                            throw new InvalidOperationException("Milestro slim text draw command is missing its font.");
+                        }
+
+                        var snapshot = new TextDrawSnapshot(font, command.Text, command.Color);
+                        resource = snapshot.NativePtr;
+                        keepAlive = snapshot;
+                        ownedList.Add(snapshot);
+                    }
 
                     var payload = new DrawCommandPayload
                     {

@@ -1,6 +1,7 @@
 #include "unity_render/MilestroUnityRenderSubmissionDraw.h"
 
 #include <Milestro/skia/Image.h>
+#include <Milestro/skia/Font.h>
 #include <Milestro/skia/textlayout/InputBox.h>
 #include <Milestro/skia/textlayout/Paragraph.h>
 
@@ -60,6 +61,15 @@ void DrawInputBoxSnapshotCommand(SkCanvas* canvas, const MilestroUnityDrawComman
     snapshot->paint(canvas, command.x, command.y, command.width, command.height);
 }
 
+void DrawSlimTextCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& command) {
+    auto* snapshot = static_cast<milestro::skia::TextDrawSnapshot*>(command.resource);
+    if (snapshot == nullptr) {
+        return;
+    }
+
+    snapshot->paintText(canvas, command.x, command.y);
+}
+
 void DrawCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& command) {
     switch (static_cast<MilestroUnityDrawCommandKind>(command.kind)) {
         case MilestroUnityDrawCommandKind::Image:
@@ -70,6 +80,9 @@ void DrawCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& command) {
             return;
         case MilestroUnityDrawCommandKind::InputBoxSnapshot:
             DrawInputBoxSnapshotCommand(canvas, command);
+            return;
+        case MilestroUnityDrawCommandKind::SlimText:
+            DrawSlimTextCommand(canvas, command);
             return;
         default:
             return;

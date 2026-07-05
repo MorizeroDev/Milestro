@@ -57,8 +57,16 @@ MILESTRO_API int64_t MilestroGameModelNumberWrapperCreate(milestro::game::model:
 MILESTRO_API int64_t MilestroGameModelNumberWrapperValue(milestro::game::model::NumberWrapper* ret,
                                                      double& value);
 
-MILESTRO_API int64_t MilestroSkiaFontRegistryRegisterFontFromFile(uint8_t *path);
+MILESTRO_API int64_t MilestroSkiaFontRegistryRegisterFontFromFile([[milize::CSharpType("byte*")]] uint8_t *path,
+                                                                  uint64_t pathSize);
 MILESTRO_API int64_t MilestroSkiaFontRegistryGetRegisteredFontFamilyList(milestro::skia::MilestroFontFamilyList *&ret);
+MILESTRO_API int64_t MilestroSkiaFontRegistryResolveTypeface(milestro::skia::Font *&ret,
+                                                     [[milize::CSharpType("byte*")]] uint8_t *family,
+                                                     uint64_t familySize,
+                                                     int32_t weight,
+                                                     float size,
+                                                     int32_t fallbackToSystem);
+
 MILESTRO_API int64_t MilestroSkiaFontFamilyListDestroy(
         [[milize::RefType("ref")]] milestro::skia::MilestroFontFamilyList *&ret);
 MILESTRO_API int64_t MilestroSkiaFontFamilyListGetSize(milestro::skia::MilestroFontFamilyList *list,
@@ -140,9 +148,33 @@ MILESTRO_API int64_t MilestroSkiaTypefaceFamilyNameGetLanguage(
         [[milize::CSharpType("IntPtr")]] uint8_t *&ptr,
         uint64_t &size);
 
+MILESTRO_API int64_t MilestroSkiaFontDestroy(
+        [[milize::RefType("ref")]] milestro::skia::Font *&ret);
 MILESTRO_API int64_t MilestroSkiaFontGetPath(milestro::skia::Font *font,
                                              milestro::skia::Path *&path,
                                              uint16_t glyphId);
+MILESTRO_API int64_t MilestroSkiaFontGetMetrics(milestro::skia::Font *font,
+                                                float &ascent,
+                                                float &descent,
+                                                float &leading);
+MILESTRO_API int64_t MilestroSkiaFontMeasureText(milestro::skia::Font *font,
+                                                 [[milize::CSharpType("byte*")]] uint8_t *text,
+                                                 uint64_t textSize,
+                                                 float &boundsLeft,
+                                                 float &boundsTop,
+                                                 float &boundsRight,
+                                                 float &boundsBottom,
+                                                 float &advanceX);
+MILESTRO_API int64_t MilestroSkiaTextDrawSnapshotCreate(milestro::skia::TextDrawSnapshot *&ret,
+                                                        milestro::skia::Font *font,
+                                                        [[milize::CSharpType("byte*")]] uint8_t *text,
+                                                        uint64_t textSize,
+                                                        int32_t r,
+                                                        int32_t g,
+                                                        int32_t b,
+                                                        int32_t a);
+MILESTRO_API int64_t MilestroSkiaTextDrawSnapshotDestroy(
+        [[milize::RefType("ref")]] milestro::skia::TextDrawSnapshot *&ret);
 
 MILESTRO_API int64_t MilestroSkiaPathDestroy(milestro::skia::Path *&ret);
 MILESTRO_API int64_t MilestroSkiaPathToAATriangles(milestro::skia::Path *p,

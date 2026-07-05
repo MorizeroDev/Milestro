@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
-using Milestro.Skia.TextLayout;
+using Milestro.Util;
 using UnityEngine;
+using Paragraph = Milestro.Skia.TextLayout.Paragraph;
+using SkFont = Milestro.Skia.Font;
 
 namespace Milestro.Skia
 {
@@ -11,7 +13,8 @@ namespace Milestro.Skia
         {
             Paragraph = 1,
             Image = 2,
-            InputBoxSnapshot = 3
+            InputBoxSnapshot = 3,
+            SlimText = 4
         }
 
         internal enum ResourceOwnership
@@ -38,6 +41,9 @@ namespace Milestro.Skia
             public Func<Paragraph> ParagraphSnapshotFactory;
             public bool SnapshotParagraph;
             public ResourceOwnership Ownership;
+            public bool SnapshotSlimText;
+            public string Text;
+            public Color32 Color;
         }
 
         private readonly List<Command> commands = new List<Command>();
@@ -157,6 +163,26 @@ namespace Milestro.Skia
                 Height = viewport.height,
                 KeepAlive = inputBox,
                 SnapshotInputBox = true
+            });
+        }
+
+        public void DrawString(string text, SkFont font, Vector2 baselinePosition, Color32 color)
+        {
+            if (font == null)
+            {
+                return;
+            }
+
+            commands.Add(new Command
+            {
+                Kind = CommandKind.SlimText,
+                Resource = font.NativePtr,
+                X = baselinePosition.x,
+                Y = baselinePosition.y,
+                KeepAlive = font,
+                SnapshotSlimText = true,
+                Text = text ?? "",
+                Color = color
             });
         }
 

@@ -130,7 +130,7 @@ int64_t MilestroSkiaTextlayoutTextStyleAddShadow(milestro::skia::textlayout::Tex
                                                  int32_t colorR, int32_t colorG, int32_t colorB, int32_t colorA,
                                                  float offsetX, float offsetY,
                                                  double blurSigma) {
-    s->addShadow(SkColorSetARGB(colorR, colorG, colorB, colorA), {offsetX, offsetY}, blurSigma);
+    s->addShadow(SkColorSetARGB(colorA, colorR, colorG, colorB), {offsetX, offsetY}, blurSigma);
     return MILESTRO_API_RET_OK;
 }
 

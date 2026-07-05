@@ -1,17 +1,44 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Milestro.Binding;
+using Milestro.Model;
+using Milestro.Skia.TextLayout;
 using Milestro.Util;
-using Paraparty.UnityNative;
 
 namespace Milestro.Skia
 {
     public static class FontRegistry
     {
+        public static unsafe Font ResolveFont(string familyName,
+                                              int weight = FontWeight.Normal,
+                                              float size = 16f,
+                                              bool fallbackToSystem = true)
+        {
+            var payload = Encoding.UTF8.GetBytes(familyName ?? "");
+            fixed (byte* familyPtr = payload)
+            {
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontRegistryResolveTypeface(out var font,
+                    familyPtr,
+                    (ulong)payload.Length,
+                    weight,
+                    size,
+                    fallbackToSystem ? 1 : 0));
+                return new Font(font);
+            }
+        }
+
         public static void RegisterFontFromPath(string path)
         {
-            var dat = path.CStr();
-            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontRegistryRegisterFontFromFile(dat));
+            var payload = Encoding.UTF8.GetBytes(path ?? "");
+            unsafe
+            {
+                fixed (byte* pathPtr = payload)
+                {
+                    ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontRegistryRegisterFontFromFile(pathPtr,
+                        (ulong)payload.Length));
+                }
+            }
         }
 
         public static List<string> GetRegisteredFontFamilyNames()

@@ -4,7 +4,7 @@ using Paraparty.UnityNative;
 using Paraparty.UnityNative.Base;
 using UnityEngine;
 
-namespace Milestro.Skia.TextLayout
+namespace Milestro.Skia
 {
     public class Svg : DisposableNativeObject
     {
