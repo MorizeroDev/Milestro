@@ -4,7 +4,8 @@
     "references": [
         "com.morizero.milease",
         "party.para.util.colors",
-        "party.para.util.unitynative"
+        "party.para.util.unitynative",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

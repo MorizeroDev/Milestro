@@ -1,3 +1,4 @@
+using Milestro.InputManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -7,7 +8,7 @@ namespace Milestro.Util
     {
         internal static bool IsHorizontalScrollModifierDown()
         {
-            return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            return HybridInput.GetKey(KeyCode.LeftShift) || HybridInput.GetKey(KeyCode.RightShift);
         }
 
         internal static void PassScrollToParent(Transform sourceTransform,

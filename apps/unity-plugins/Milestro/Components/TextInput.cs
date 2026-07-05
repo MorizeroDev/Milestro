@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Milestro.Components.Internal;
 using Milestro.Configuration;
+using Milestro.InputManagement;
 using Milestro.Model;
 using Milestro.Skia;
 using Milestro.Skia.TextLayout;
@@ -17,7 +18,7 @@ using UnityEngine.Serialization;
 namespace Milestro.Components
 {
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(CanvasRenderer))]
+    [RequireComponent(typeof(CanvasRenderer), typeof(InputStringReceiver))]
     [AddComponentMenu("Milestro/Text Input")]
     public class TextInput : RenderTextureGraphic,
         IPointerDownHandler,
@@ -115,6 +116,7 @@ namespace Milestro.Components
         [NonSerialized] private RectTransform rectTransformCache;
         [NonSerialized] private UnityAutoRenderTextureSurface? surface;
         [NonSerialized] private InputBox? inputBox;
+        [NonSerialized] private InputStringReceiver receiver;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
         [NonSerialized] private bool styleDirty = true;
         [NonSerialized] private bool layoutDirty = true;
@@ -392,6 +394,7 @@ namespace Milestro.Components
         {
             base.OnEnable();
             rectTransformCache = GetComponent<RectTransform>();
+            receiver = GetComponent<InputStringReceiver>();
             styleDirty = true;
             layoutDirty = true;
             paintDirty = true;
@@ -678,6 +681,11 @@ namespace Milestro.Components
             if (rectTransformCache == null)
             {
                 rectTransformCache = GetComponent<RectTransform>();
+            }
+
+            if (receiver == null)
+            {
+                receiver = GetComponent<InputStringReceiver>();
             }
 
             RebuildResources();
@@ -1008,7 +1016,7 @@ namespace Milestro.Components
             lastCompositionText = "";
             ResetSurrogateInputState();
             ResetKeyRepeatState();
-            Input.imeCompositionMode = IMECompositionMode.Auto;
+            HybridInput.SetIMEEnabled(false);
             caretVisible = false;
             if (inputBox != null)
             {
@@ -1073,7 +1081,7 @@ namespace Milestro.Components
             }
 
             var changed = false;
-            var hadCompositionBeforeInput = compositionActive || !string.IsNullOrEmpty(Input.compositionString);
+            var hadCompositionBeforeInput = compositionActive || !string.IsNullOrEmpty(receiver.CompositionString);
             var committedText = ReadCommittedText();
             var committedTextHadLineBreak = ContainsLineBreak(committedText);
             if (committedText.Length > 0 && inputBox != null)
@@ -1118,7 +1126,7 @@ namespace Milestro.Components
             }
 
             var changed = false;
-            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+            if (HybridInput.GetKeyDown(KeyCode.Return) || HybridInput.GetKeyDown(KeyCode.KeypadEnter))
             {
                 ResetSurrogateInputState();
                 if (!m_readOnly && m_lineMode == TextInputLineMode.MultiLine && !suppressEnterInsertion)
@@ -1362,23 +1370,25 @@ namespace Milestro.Components
                 return;
             }
 
-            Input.imeCompositionMode = m_readOnly ? IMECompositionMode.Off : IMECompositionMode.On;
+            HybridInput.SetIMEEnabled(!m_readOnly);
         }
 
-        private bool ShouldProcessRepeatingKey(KeyCode keyCode, ref float nextRepeatTime)
+        private bool ShouldProcessRepeatingKey(KeyCode key, ref float nextRepeatTime)
         {
             var now = Time.unscaledTime;
-            if (Input.GetKeyDown(keyCode))
+            if (HybridInput.GetKeyDown(key))
             {
                 nextRepeatTime = now + MilestroConfiguration.Configuration.TextInput.KeyRepeatInitialDelay;
                 return true;
             }
 
-            if (!Input.GetKey(keyCode))
+            if (!HybridInput.GetKey(key))
             {
                 nextRepeatTime = 0;
                 return false;
             }
+            #if ENABLE_IN
+            #endif
 
             if (nextRepeatTime <= 0)
             {
@@ -1477,7 +1487,7 @@ namespace Milestro.Components
 
         private static bool IsHorizontalCaretNavigationDown()
         {
-            return Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.RightArrow);
+            return HybridInput.GetKey(KeyCode.LeftArrow) || HybridInput.GetKey(KeyCode.RightArrow);
         }
 
         private bool UpdateComposition()
@@ -1489,7 +1499,7 @@ namespace Milestro.Components
                 return false;
             }
 
-            var rawCompositionText = Input.compositionString ?? "";
+            var rawCompositionText = receiver.CompositionString;
             if (rawCompositionText.Length > 0)
             {
                 ResetSurrogateInputState();
@@ -1539,7 +1549,7 @@ namespace Milestro.Components
                 rect.yMax - metrics.ScrollY));
             var worldPoint = rectTransformCache.TransformPoint(localPoint);
             var camera = canvas == null || canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
-            Input.compositionCursorPos = RectTransformUtility.WorldToScreenPoint(camera, worldPoint);
+            HybridInput.SetIMECursorPosition(RectTransformUtility.WorldToScreenPoint(camera, worldPoint));
         }
 
         private static bool IsEscapeSequenceLead(char ch)
@@ -1625,10 +1635,10 @@ namespace Milestro.Components
             var queuedGuiInput = TakeQueuedGuiCommittedInput();
             if (queuedGuiInput.Length == 0)
             {
-                return FilterCommittedInput(Input.inputString);
+                return FilterCommittedInput(receiver.InputString);
             }
 
-            var mergedInput = MergeSupplementaryFallback(Input.inputString, queuedGuiInput);
+            var mergedInput = MergeSupplementaryFallback(receiver.InputString, queuedGuiInput);
             return FilterCommittedInput(mergedInput, keepReplacementCharacter: true);
         }
 

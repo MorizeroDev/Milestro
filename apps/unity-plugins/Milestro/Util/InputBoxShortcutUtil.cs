@@ -1,4 +1,5 @@
 using Milestro.Configuration;
+using Milestro.InputManagement;
 using UnityEngine;
 
 namespace Milestro.Util
@@ -7,7 +8,7 @@ namespace Milestro.Util
     {
         internal static bool IsSelectionExtendDown()
         {
-            return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            return HybridInput.GetKey(KeyCode.LeftShift) || HybridInput.GetKey(KeyCode.RightShift);
         }
 
         private static bool IsSelectionModifierPressed()
@@ -17,17 +18,17 @@ namespace Milestro.Util
 
         private static bool IsControlPressed()
         {
-            return Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+            return HybridInput.GetKey(KeyCode.LeftControl) || HybridInput.GetKey(KeyCode.RightControl);
         }
 
         private static bool IsCommandPressed()
         {
-            return Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand);
+            return HybridInput.GetKey(KeyCode.LeftCommand) || HybridInput.GetKey(KeyCode.RightCommand);
         }
 
         private static bool IsAltPressed()
         {
-            return Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+            return HybridInput.GetKey(KeyCode.LeftAlt) || HybridInput.GetKey(KeyCode.RightAlt);
         }
 
         private static bool IsExactCommandOrControlModifier(bool shift)
@@ -63,22 +64,22 @@ namespace Milestro.Util
         internal static bool IsUndoDown()
         {
             return IsExactCommandOrControlModifier(false) &&
-                   Input.GetKeyDown(KeyCode.Z);
+                   HybridInput.GetKeyDown(KeyCode.Z);
         }
 
         internal static bool IsRedoDown()
         {
             return (MilestroConfiguration.Configuration.InputBoxShortcut.AcceptRedoWithShiftZ &&
                     IsExactCommandOrControlModifier(true) &&
-                    Input.GetKeyDown(KeyCode.Z)) ||
+                    HybridInput.GetKeyDown(KeyCode.Z)) ||
                    (MilestroConfiguration.Configuration.InputBoxShortcut.AcceptRedoWithControlY &&
                     IsExactControlModifier(false) &&
-                    Input.GetKeyDown(KeyCode.Y));
+                    HybridInput.GetKeyDown(KeyCode.Y));
         }
 
         internal static bool IsSelectAllDown()
         {
-            return IsExactCommandOrControlModifier(false) && Input.GetKeyDown(KeyCode.A);
+            return IsExactCommandOrControlModifier(false) && HybridInput.GetKeyDown(KeyCode.A);
         }
 
         internal static bool IsDocumentBoundaryModifierDown()
@@ -93,20 +94,20 @@ namespace Milestro.Util
 
         internal static bool IsCopyDown()
         {
-            return (IsClipboardCommandModifier() && Input.GetKeyDown(KeyCode.C)) ||
-                   (IsExactControlModifier(false) && Input.GetKeyDown(KeyCode.Insert));
+            return (IsClipboardCommandModifier() && HybridInput.GetKeyDown(KeyCode.C)) ||
+                   (IsExactControlModifier(false) && HybridInput.GetKeyDown(KeyCode.Insert));
         }
 
         internal static bool IsCutDown()
         {
-            return (IsClipboardCommandModifier() && Input.GetKeyDown(KeyCode.X)) ||
-                   (IsExactShiftOnlyModifier() && Input.GetKeyDown(KeyCode.Delete));
+            return (IsClipboardCommandModifier() && HybridInput.GetKeyDown(KeyCode.X)) ||
+                   (IsExactShiftOnlyModifier() && HybridInput.GetKeyDown(KeyCode.Delete));
         }
 
         internal static bool IsPasteDown()
         {
-            return (IsClipboardCommandModifier() && Input.GetKeyDown(KeyCode.V)) ||
-                   (IsExactShiftOnlyModifier() && Input.GetKeyDown(KeyCode.Insert));
+            return (IsClipboardCommandModifier() && HybridInput.GetKeyDown(KeyCode.V)) ||
+                   (IsExactShiftOnlyModifier() && HybridInput.GetKeyDown(KeyCode.Insert));
         }
 
         internal static bool IsCommittedTextInputSuppressed()
@@ -126,16 +127,16 @@ namespace Milestro.Util
 
         private static bool IsEditingKeyPressed()
         {
-            return Input.GetKey(KeyCode.LeftArrow) ||
-                   Input.GetKey(KeyCode.RightArrow) ||
-                   Input.GetKey(KeyCode.UpArrow) ||
-                   Input.GetKey(KeyCode.DownArrow) ||
-                   Input.GetKey(KeyCode.Backspace) ||
-                   Input.GetKey(KeyCode.Delete) ||
-                   Input.GetKey(KeyCode.Home) ||
-                   Input.GetKey(KeyCode.End) ||
-                   Input.GetKey(KeyCode.PageUp) ||
-                   Input.GetKey(KeyCode.PageDown);
+            return HybridInput.GetKey(KeyCode.LeftArrow) ||
+                   HybridInput.GetKey(KeyCode.RightArrow) ||
+                   HybridInput.GetKey(KeyCode.UpArrow) ||
+                   HybridInput.GetKey(KeyCode.DownArrow) ||
+                   HybridInput.GetKey(KeyCode.Backspace) ||
+                   HybridInput.GetKey(KeyCode.Delete) ||
+                   HybridInput.GetKey(KeyCode.Home) ||
+                   HybridInput.GetKey(KeyCode.End) ||
+                   HybridInput.GetKey(KeyCode.PageUp) ||
+                   HybridInput.GetKey(KeyCode.PageDown);
         }
     }
 }
