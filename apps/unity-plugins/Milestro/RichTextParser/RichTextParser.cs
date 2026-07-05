@@ -179,7 +179,7 @@ namespace Milestro.RichTextParser
             var state = ctx.TextStyleState.Clone();
             if (node.Tag == "b")
             {
-                state.FontWeight = 700;
+                state.FontWeight = FontWeight.Bold;
             }
             else if (node.Tag == "s")
             {
@@ -211,7 +211,7 @@ namespace Milestro.RichTextParser
                 if (node.Attributes.TryGetValue("weight", out var weight))
                 {
                     if (int.TryParse(weight, NumberStyles.Integer, ParseCulture, out var result)
-                        && result >= 1 && result <= 1000)
+                        && result > FontWeight.Invisible && result <= FontWeight.ExtraBlack)
                     {
                         state.FontWeight = result;
                     }

@@ -1947,7 +1947,7 @@ namespace Milestro.Components
             RetireInputBox();
 
             var paragraphStyle = new ParagraphStyle();
-            paragraphStyle.TextAlign = (int)ToParagraphTextAlign(m_textAlignment);
+            paragraphStyle.TextAlign = ToParagraphTextAlign(m_textAlignment);
             if (m_lineMode == TextInputLineMode.SingleLine)
             {
                 paragraphStyle.MaxLines = 1;

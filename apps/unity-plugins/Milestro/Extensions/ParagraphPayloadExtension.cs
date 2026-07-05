@@ -1,5 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
+using Milestro.Model;
 using Milestro.RichTextParser;
 using Milestro.Skia.TextLayout;
 
@@ -19,7 +20,7 @@ namespace Milestro.Extensions
 
             if (t.TextAlign.HasValue)
             {
-                ret.TextAlign = (int)t.TextAlign.Value;
+                ret.TextAlign = t.TextAlign.Value;
             }
             else
             {
@@ -34,9 +35,11 @@ namespace Milestro.Extensions
             var ret = new TextStyle();
             ret.SetFontFamilies(baseTextStyle.GetFontFamilies());
 
-            ret.Decoration = (t.Underline ? 0x1 : 0x0) + (t.Strikethrough ? 0x2 : 0x0);
+            ret.Decoration =
+                (t.Underline ? TextDecoration.Underline : TextDecoration.NoDecoration) |
+                (t.Strikethrough ? TextDecoration.LineThrough : TextDecoration.NoDecoration);
 
-            baseTextStyle.GetFontStyle(out int weight, out int width, out int slant);
+            baseTextStyle.GetFontStyle(out int weight, out var width, out var slant);
             if (t.FontWeight.HasValue)
             {
                 weight = t.FontWeight.Value;
@@ -44,7 +47,7 @@ namespace Milestro.Extensions
 
             if (t.Italic)
             {
-                slant = 1;
+                slant = FontSlant.Italic;
             }
 
             ret.SetFontStyle(weight, width, slant);

@@ -142,8 +142,8 @@ namespace Milestro.Components.Internal
         private Paragraph BuildParagraph(TextBoxRenderTargetSettings settings)
         {
             ParagraphStyle paragraphStyle = new ParagraphStyle();
-            paragraphStyle.TextAlign = (int)settings.TextAlign;
-            paragraphStyle.TextDirection = (int)settings.TextDirection;
+            paragraphStyle.TextAlign = settings.TextAlign;
+            paragraphStyle.TextDirection = settings.TextDirection;
             if (settings.SingleLine)
             {
                 paragraphStyle.MaxLines = 1;
@@ -158,9 +158,9 @@ namespace Milestro.Components.Internal
             textStyle.FontSize = settings.Size;
             textStyle.Locale = settings.Locale;
             textStyle.Color = settings.TextColor;
-            if (settings.Weight > 0 && settings.Weight <= 1000)
+            if (settings.Weight > FontWeight.Invisible && settings.Weight <= FontWeight.ExtraBlack)
             {
-                textStyle.GetFontStyle(out int weight, out int width, out int slant);
+                textStyle.GetFontStyle(out int weight, out var width, out var slant);
                 textStyle.SetFontStyle(settings.Weight, width, slant);
             }
 

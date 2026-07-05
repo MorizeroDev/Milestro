@@ -9,42 +9,17 @@ namespace Milestro.RichTextParser
     /// </summary>
     public class TextStyleState
     {
-        /*
-         *  enum TextDecoration {
-         *      kNoDecoration = 0x0,
-         *      kUnderline = 0x1,
-         *      kOverline = 0x2,
-         *      kLineThrough = 0x4,
-         *  };
-         */
         public bool Underline { get; set; } = false;
+
         public bool Strikethrough { get; set; } = false;
 
-        // enum Slant {
-        //     kUpright_Slant,
-        //     kItalic_Slant,
-        //     kOblique_Slant,
-        // };
         public bool Italic { get; set; } = false;
 
-        // enum Weight {
-        //     kInvisible_Weight   =    0,
-        //     kThin_Weight        =  100,
-        //     kExtraLight_Weight  =  200,
-        //     kLight_Weight       =  300,
-        //     kNormal_Weight      =  400,
-        //     kMedium_Weight      =  500,
-        //     kSemiBold_Weight    =  600,
-        //     kBold_Weight        =  700,
-        //     kExtraBold_Weight   =  800,
-        //     kBlack_Weight       =  900,
-        //     kExtraBlack_Weight  = 1000,
-        // };
         public int? FontWeight { get; set; } = null;
 
         public Color? Color { get; set; } = null;
-        public float FontSize { get; set; } = -1;
 
+        public float FontSize { get; set; } = -1;
 
         public TextStyleState Clone()
         {

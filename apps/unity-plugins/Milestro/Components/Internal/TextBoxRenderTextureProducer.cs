@@ -47,7 +47,7 @@ namespace Milestro.Components.Internal
 
         [SerializeField]
         [Range(0, 1000)]
-        private int m_weight = 400;
+        private int m_weight = FontWeight.Normal;
 
         [SerializeField]
         private Color m_textColor = Color.white;

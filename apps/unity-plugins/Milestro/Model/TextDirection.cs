@@ -1,13 +1,11 @@
 namespace Milestro.Model
 {
+    /// <summary>
+    /// Maps to Skia's <c>skia::textlayout::TextDirection</c> in <c>modules/skparagraph/include/DartTypes.h</c>.
+    /// </summary>
     public enum TextDirection
     {
-        // enum class TextDirection {
-        //     kRtl,
-        //     kLtr,
-        // };
-
-        Ltr = 1,
         Rtl = 0,
+        Ltr = 1,
     }
 }

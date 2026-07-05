@@ -1,5 +1,6 @@
 using System;
 using Milestro.Binding;
+using Milestro.Model;
 using Paraparty.UnityNative;
 using Paraparty.UnityNative.Base;
 
@@ -69,33 +70,33 @@ namespace Milestro.Skia.TextLayout
         }
 
 
-        public int TextDirection
+        public TextDirection TextDirection
         {
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
                     BindingC.SkiaTextlayoutParagraphStyleGetTextDirection(NativePtr, out var ret)
                 );
-                return ret;
+                return (TextDirection)ret;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutParagraphStyleSetTextDirection(NativePtr, value)
+                    BindingC.SkiaTextlayoutParagraphStyleSetTextDirection(NativePtr, (int)value)
                 );
         }
 
-        public int TextAlign
+        public TextAlign TextAlign
         {
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
                     BindingC.SkiaTextlayoutParagraphStyleGetTextAlign(NativePtr, out var ret)
                 );
-                return ret;
+                return (TextAlign)ret;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutParagraphStyleSetTextAlign(NativePtr, value)
+                    BindingC.SkiaTextlayoutParagraphStyleSetTextAlign(NativePtr, (int)value)
                 );
         }
 
@@ -149,18 +150,18 @@ namespace Milestro.Skia.TextLayout
                 );
         }
 
-        public int TextHeightBehavior
+        public TextHeightBehavior TextHeightBehavior
         {
             get
             {
                 ExitCodeUtil.ThrowIfFailed(
                     BindingC.SkiaTextlayoutParagraphStyleGetTextHeightBehavior(NativePtr, out var ret)
                 );
-                return ret;
+                return (TextHeightBehavior)ret;
             }
             set =>
                 ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutParagraphStyleSetTextHeightBehavior(NativePtr, value)
+                    BindingC.SkiaTextlayoutParagraphStyleSetTextHeightBehavior(NativePtr, (int)value)
                 );
         }
 

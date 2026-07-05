@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Milestro.Binding;
+using Milestro.Model;
 using Paraparty.UnityNative;
 using Paraparty.UnityNative.Base;
 
@@ -41,17 +42,19 @@ namespace Milestro.Skia.TextLayout
             );
         }
 
-        public void GetFontStyle(out int weight, out int width, out int slant)
+        public void GetFontStyle(out int weight, out FontWidth width, out FontSlant slant)
         {
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutStrutStyleGetFontStyle(NativePtr, out weight, out width, out slant)
+                BindingC.SkiaTextlayoutStrutStyleGetFontStyle(NativePtr, out weight, out var widthValue, out var slantValue)
             );
+            width = (FontWidth)widthValue;
+            slant = (FontSlant)slantValue;
         }
 
-        public void SetFontStyle(int weight, int width, int slant)
+        public void SetFontStyle(int weight, FontWidth width, FontSlant slant)
         {
             ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutStrutStyleSetFontStyle(NativePtr, weight, width, slant)
+                BindingC.SkiaTextlayoutStrutStyleSetFontStyle(NativePtr, weight, (int)width, (int)slant)
             );
         }
 
