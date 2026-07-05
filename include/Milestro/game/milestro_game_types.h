@@ -36,7 +36,11 @@ class Typeface;
 
 class Font;
 
+class SlimTextDrawSnapshot;
+
 class TextDrawSnapshot;
+
+class ReusableTextDrawSnapshot;
 
 class Path;
 

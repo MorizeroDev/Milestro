@@ -42,14 +42,7 @@ namespace Milestro.Components.Internal
             get => m_text;
             set
             {
-                var nextValue = value ?? "";
-                if (m_text == nextValue)
-                {
-                    return;
-                }
-
-                m_text = nextValue;
-                MarkPaintChanged();
+                SetManagedStringText(value);
             }
         }
 
@@ -208,6 +201,53 @@ namespace Milestro.Components.Internal
             }
 
             RebuildResources();
+        }
+
+        public void SetManagedStringText(string? value)
+        {
+            var nextValue = value ?? "";
+            var changed = m_text != nextValue;
+            m_text = nextValue;
+            if (RenderTarget.UseManagedStringText() || changed)
+            {
+                MarkPaintChanged();
+            }
+        }
+
+        internal void SyncTextWithoutModeSwitch(string? value)
+        {
+            var nextValue = value ?? "";
+            if (m_text == nextValue)
+            {
+                return;
+            }
+
+            m_text = nextValue;
+            MarkPaintChanged();
+        }
+
+        public void PrepareTextUtf8NoAlloc(int capacity)
+        {
+            if (capacity < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(capacity));
+            }
+
+            NormalizeSerializedValues();
+            var target = RenderTarget;
+            target.EnsureNoAllocCapacity(capacity);
+            target.Rebuild(CurrentSize(), SurfaceColorSpace(), CurrentSettings());
+        }
+
+        public void SetTextUtf8NoAlloc(byte[] buffer, int offset, int length)
+        {
+            NormalizeSerializedValues();
+            RenderTarget.SetTextUtf8NoAlloc(CurrentSize(),
+                SurfaceColorSpace(),
+                CurrentSettings(),
+                buffer,
+                offset,
+                length);
         }
 
 #if UNITY_EDITOR

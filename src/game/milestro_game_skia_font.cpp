@@ -2,7 +2,6 @@
 #include "Milestro/skia/Font.h"
 #include <Milestro/game/milestro_game_interface.h>
 #include <cstdint>
-#include <string>
 
 extern "C" {
 
@@ -45,7 +44,7 @@ int64_t MilestroSkiaFontGetMetrics(milestro::skia::Font *font,
 }
 
 int64_t MilestroSkiaFontMeasureText(milestro::skia::Font *font,
-                                    uint8_t *text,
+                                    const uint8_t *text,
                                     uint64_t textSize,
                                     float &boundsLeft,
                                     float &boundsTop,
@@ -56,13 +55,8 @@ int64_t MilestroSkiaFontMeasureText(milestro::skia::Font *font,
         return MILESTRO_API_RET_FAILED;
     }
 
-    std::string textString;
-    if (text != nullptr && textSize > 0) {
-        textString.assign(reinterpret_cast<const char *>(text), static_cast<size_t>(textSize));
-    }
-
     SkRect bounds = SkRect::MakeEmpty();
-    advanceX = font->measureText(textString.data(), textString.size(), &bounds);
+    advanceX = font->measureText(reinterpret_cast<const char *>(text), static_cast<size_t>(textSize), &bounds);
     boundsLeft = bounds.left();
     boundsTop = bounds.top();
     boundsRight = bounds.right();

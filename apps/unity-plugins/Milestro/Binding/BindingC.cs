@@ -236,6 +236,37 @@ namespace Milestro.Binding
         internal static extern unsafe long SkiaTextDrawSnapshotDestroy(ref IntPtr ret);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaReusableTextDrawSnapshotCreate")]
+        internal static extern unsafe long SkiaReusableTextDrawSnapshotCreate(out IntPtr ret,
+                                                                              IntPtr font,
+                                                                              ulong capacity,
+                                                                              int r,
+                                                                              int g,
+                                                                              int b,
+                                                                              int a);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaReusableTextDrawSnapshotUpdateText")]
+        internal static extern unsafe long SkiaReusableTextDrawSnapshotUpdateText(IntPtr ret, byte* text, ulong textSize);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaReusableTextDrawSnapshotCopyTextFrom")]
+        internal static extern unsafe long SkiaReusableTextDrawSnapshotCopyTextFrom(IntPtr ret, IntPtr source);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaReusableTextDrawSnapshotMeasureText")]
+        internal static extern unsafe long SkiaReusableTextDrawSnapshotMeasureText(IntPtr ret,
+                                                                                   out float boundsLeft,
+                                                                                   out float boundsTop,
+                                                                                   out float boundsRight,
+                                                                                   out float boundsBottom,
+                                                                                   out float advanceX);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaReusableTextDrawSnapshotDestroy")]
+        internal static extern unsafe long SkiaReusableTextDrawSnapshotDestroy(ref IntPtr ret);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaPathDestroy")]
         internal static extern unsafe long SkiaPathDestroy(out IntPtr ret);
 

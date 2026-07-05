@@ -73,6 +73,14 @@ namespace Milestro.Skia
             return surface.TrySubmit(commands, clearBeforeDraw);
         }
 
+        internal bool TrySubmitSlimTextNoAlloc(UnitySkiaRenderTextureSurface.SlimTextNoAllocSubmission submission,
+            Vector2 baseline,
+            bool drawText,
+            bool clearBeforeDraw = true)
+        {
+            return surface.TrySubmitSlimTextNoAlloc(submission, baseline, drawText, clearBeforeDraw);
+        }
+
         public void Dispose()
         {
             surface.Dispose();

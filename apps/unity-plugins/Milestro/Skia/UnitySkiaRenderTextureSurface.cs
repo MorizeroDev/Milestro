@@ -19,7 +19,7 @@ namespace Milestro.Skia
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct RenderTargetPayload
+        internal struct RenderTargetPayload
         {
             public int GraphicsBackend;
             public int HandleKind;
@@ -68,22 +68,23 @@ namespace Milestro.Skia
             public int Completed;
         }
 
-        private sealed class PendingRenderEvent
+        internal sealed class PendingRenderEvent
         {
             public long Serial;
             public int GraphicsBackend;
             public IntPtr SubmissionPtr;
             public IntPtr CommandsPtr;
-            public Texture Texture;
-            public object[] Resources;
-            public IDisposable[] OwnedResources;
+            public Texture? Texture;
+            public object[] Resources = Array.Empty<object>();
+            public IDisposable[] OwnedResources = Array.Empty<IDisposable>();
+            public bool Reusable;
+            public bool InUse;
 
             public void KeepAlive()
             {
-                GC.KeepAlive(Texture);
-                if (Resources == null)
+                if (Texture != null)
                 {
-                    return;
+                    GC.KeepAlive(Texture);
                 }
 
                 foreach (var resource in Resources)
@@ -111,6 +112,270 @@ namespace Milestro.Skia
 
             public readonly IntPtr Ptr;
             public readonly UnitySkiaRenderCommandList.ResourceOwnership Ownership;
+        }
+
+        private sealed unsafe class SlimTextRenderSlot : IDisposable
+        {
+            private readonly CommandBuffer commandBuffer;
+            private bool disposed;
+
+            public readonly ReusableTextDrawSnapshot Snapshot;
+            public readonly IntPtr SubmissionPtr;
+            public readonly IntPtr CommandsPtr;
+            public readonly PendingRenderEvent PendingEvent;
+
+            public SlimTextRenderSlot(ReusableTextDrawSnapshot snapshot, int slotIndex)
+            {
+                Snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
+                SubmissionPtr = Marshal.AllocHGlobal(sizeof(RenderSubmissionPayload));
+                CommandsPtr = Marshal.AllocHGlobal(sizeof(DrawCommandPayload));
+                PendingEvent = new PendingRenderEvent
+                {
+                    SubmissionPtr = SubmissionPtr,
+                    CommandsPtr = CommandsPtr,
+                    Resources = new object[] { Snapshot },
+                    OwnedResources = Array.Empty<IDisposable>(),
+                    Reusable = true
+                };
+                commandBuffer = new CommandBuffer
+                {
+                    name = "Milestro Slim Text Native Plugin Pass " + slotIndex
+                };
+            }
+
+            public bool InUse => PendingEvent.InUse;
+
+            public void CopyTextFrom(ReusableTextDrawSnapshot source)
+            {
+                ThrowIfDisposed();
+                Snapshot.CopyTextFrom(source);
+            }
+
+            public void WritePayload(RenderTargetPayload target, Vector2 baseline, bool drawText)
+            {
+                ThrowIfDisposed();
+                var command = (DrawCommandPayload*)CommandsPtr;
+                command->Kind = (int)UnitySkiaRenderCommandList.CommandKind.SlimText;
+                command->Resource = Snapshot.NativePtr;
+                command->X = baseline.x;
+                command->Y = baseline.y;
+                command->Width = 0f;
+                command->Height = 0f;
+                command->ClipX = 0f;
+                command->ClipY = 0f;
+                command->ClipWidth = 0f;
+                command->ClipHeight = 0f;
+
+                var submission = (RenderSubmissionPayload*)SubmissionPtr;
+                submission->Target = target;
+                submission->Commands = drawText ? CommandsPtr : IntPtr.Zero;
+                submission->CommandCount = drawText ? 1 : 0;
+                submission->Completed = 0;
+            }
+
+            public void Submit(IntPtr renderEventFunc, int renderEventId)
+            {
+                ThrowIfDisposed();
+                commandBuffer.Clear();
+                commandBuffer.IssuePluginEventAndData(renderEventFunc, renderEventId, SubmissionPtr);
+                Graphics.ExecuteCommandBuffer(commandBuffer);
+            }
+
+            public void Dispose()
+            {
+                if (disposed)
+                {
+                    return;
+                }
+
+                disposed = true;
+                commandBuffer.Release();
+                Snapshot.Dispose();
+                if (CommandsPtr != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(CommandsPtr);
+                }
+
+                if (SubmissionPtr != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(SubmissionPtr);
+                }
+            }
+
+            private void ThrowIfDisposed()
+            {
+                if (disposed)
+                {
+                    throw new ObjectDisposedException(nameof(SlimTextRenderSlot));
+                }
+            }
+        }
+
+        internal sealed class SlimTextNoAllocSubmission : IDisposable
+        {
+            private readonly ReusableTextDrawSnapshot stagingSnapshot;
+            private readonly SlimTextRenderSlot[] slots;
+            private bool retired;
+            private bool disposed;
+
+            public SlimTextNoAllocSubmission(Font font, int capacity, Color32 color, int slotCount = 3)
+            {
+                if (font == null)
+                {
+                    throw new ArgumentNullException(nameof(font));
+                }
+
+                if (capacity < 0)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(capacity));
+                }
+
+                slotCount = Math.Max(2, slotCount);
+                Capacity = capacity;
+                stagingSnapshot = new ReusableTextDrawSnapshot(font, capacity, color);
+                slots = new SlimTextRenderSlot[slotCount];
+                for (var i = 0; i < slots.Length; ++i)
+                {
+                    slots[i] = new SlimTextRenderSlot(new ReusableTextDrawSnapshot(font, capacity, color), i);
+                }
+
+                EnsurePendingEventCapacity(slotCount);
+            }
+
+            public int Capacity { get; }
+
+            internal ReusableTextDrawSnapshot StagingSnapshot => stagingSnapshot;
+
+            public void UpdateText(byte[] buffer, int offset, int length)
+            {
+                ThrowIfDisposed();
+                stagingSnapshot.UpdateText(buffer, offset, length);
+            }
+
+            internal void CopyTextFrom(SlimTextNoAllocSubmission source)
+            {
+                ThrowIfDisposed();
+                if (source == null)
+                {
+                    throw new ArgumentNullException(nameof(source));
+                }
+
+                stagingSnapshot.CopyTextFrom(source.stagingSnapshot);
+            }
+
+            public Rect MeasureBounds()
+            {
+                ThrowIfDisposed();
+                return stagingSnapshot.MeasureBounds();
+            }
+
+            internal bool TryBeginRetire()
+            {
+                if (retired || disposed)
+                {
+                    return false;
+                }
+
+                retired = true;
+                return true;
+            }
+
+            private SlimTextRenderSlot? TryAcquireSlot()
+            {
+                for (var i = 0; i < slots.Length; ++i)
+                {
+                    var slot = slots[i];
+                    if (!slot.InUse)
+                    {
+                        return slot;
+                    }
+                }
+
+                return null;
+            }
+
+            private bool TryPrepareSlot(RenderTargetPayload target,
+                Vector2 baseline,
+                bool drawText,
+                out PendingRenderEvent pendingEvent)
+            {
+                ThrowIfDisposed();
+                var slot = TryAcquireSlot();
+                if (slot == null)
+                {
+                    pendingEvent = null!;
+                    return false;
+                }
+
+                slot.CopyTextFrom(stagingSnapshot);
+                slot.WritePayload(target, baseline, drawText);
+                pendingEvent = slot.PendingEvent;
+                return true;
+            }
+
+            private void SubmitPrepared(PendingRenderEvent pendingEvent, IntPtr renderEventFunc, int renderEventId)
+            {
+                for (var i = 0; i < slots.Length; ++i)
+                {
+                    var slot = slots[i];
+                    if (slot.PendingEvent == pendingEvent)
+                    {
+                        slot.Submit(renderEventFunc, renderEventId);
+                        return;
+                    }
+                }
+
+                throw new InvalidOperationException("Milestro slim text render slot is not owned by this submission.");
+            }
+
+            internal bool TryPrepareAndSubmit(RenderTargetPayload target,
+                Vector2 baseline,
+                bool drawText,
+                IntPtr renderEventFunc,
+                int renderEventId,
+                Texture texture)
+            {
+                if (!TryPrepareSlot(target, baseline, drawText, out var pendingEvent))
+                {
+                    return false;
+                }
+
+                try
+                {
+                    AddReusablePendingEvent(pendingEvent, texture);
+                    SubmitPrepared(pendingEvent, renderEventFunc, renderEventId);
+                }
+                catch
+                {
+                    CancelPendingEvent(pendingEvent);
+                    throw;
+                }
+
+                return true;
+            }
+
+            public void Dispose()
+            {
+                if (disposed)
+                {
+                    return;
+                }
+
+                disposed = true;
+                stagingSnapshot.Dispose();
+                for (var i = 0; i < slots.Length; ++i)
+                {
+                    slots[i].Dispose();
+                }
+            }
+
+            private void ThrowIfDisposed()
+            {
+                if (disposed)
+                {
+                    throw new ObjectDisposedException(nameof(SlimTextNoAllocSubmission));
+                }
+            }
         }
 
         private sealed class DeferredRelease
@@ -350,6 +615,54 @@ namespace Milestro.Skia
             return true;
         }
 
+        internal bool TrySubmitSlimTextNoAlloc(SlimTextNoAllocSubmission submission,
+            Vector2 baseline,
+            bool drawText,
+            bool? clearBeforeDraw = null)
+        {
+            ThrowIfDisposed();
+            CollectCompletedEvents();
+
+            if (submission == null)
+            {
+                throw new ArgumentNullException(nameof(submission));
+            }
+
+            if (renderEventFunc == IntPtr.Zero)
+            {
+                throw new InvalidOperationException("Milestro Unity render event callback is unavailable.");
+            }
+
+            if (!HasUsableTexture())
+            {
+                Resize(Width, Height);
+            }
+
+            if (!TryGetNativeTargetHandles(out var handleKind, out var colorRenderBufferHandle, out var nativeTextureHandle))
+            {
+                return false;
+            }
+            warnedMissingNativeTarget = false;
+
+            var target = new RenderTargetPayload
+            {
+                GraphicsBackend = (int)Backend,
+                HandleKind = (int)handleKind,
+                ColorRenderBufferHandle = colorRenderBufferHandle,
+                NativeTextureHandle = nativeTextureHandle,
+                Width = Width,
+                Height = Height,
+                ColorSpace = (int)descriptor.ColorSpace,
+                StorageSrgb = descriptor.UseSrgbStorage ? 1 : 0,
+                ClearBeforeDraw = (clearBeforeDraw ?? descriptor.ClearBeforeDraw) ? 1 : 0,
+                MsaaSamples = descriptor.MsaaSamples,
+                ResolveStrategy = (int)descriptor.ResolveStrategy,
+                PreferredFormat = (int)descriptor.PreferredFormat
+            };
+
+            return submission.TryPrepareAndSubmit(target, baseline, drawText, renderEventFunc, renderEventId, Texture!);
+        }
+
         public void Dispose()
         {
             if (disposed)
@@ -507,15 +820,16 @@ namespace Milestro.Skia
             }
         }
 
-        private static void DisposeResources(IEnumerable<IDisposable> resources)
+        private static void DisposeResources(IDisposable[] resources)
         {
             if (resources == null)
             {
                 return;
             }
 
-            foreach (var resource in resources)
+            for (var i = 0; i < resources.Length; ++i)
             {
+                var resource = resources[i];
                 resource?.Dispose();
             }
         }
@@ -544,6 +858,19 @@ namespace Milestro.Skia
                         ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxDrawSnapshotDestroy(ref ptr));
                         break;
                 }
+            }
+        }
+
+        private static void DisposeResources(List<IDisposable> resources)
+        {
+            if (resources == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < resources.Count; ++i)
+            {
+                resources[i]?.Dispose();
             }
         }
 
@@ -896,6 +1223,23 @@ namespace Milestro.Skia
             }
         }
 
+        private static void AddReusablePendingEvent(PendingRenderEvent pendingEvent, Texture texture)
+        {
+            EnsureLifetimePump();
+            lock (PendingLock)
+            {
+                if (pendingEvent.InUse)
+                {
+                    throw new InvalidOperationException("Milestro reusable render event slot is already pending.");
+                }
+
+                pendingEvent.Serial = ++nextSerial;
+                pendingEvent.Texture = texture;
+                pendingEvent.InUse = true;
+                PendingEvents.Add(pendingEvent);
+            }
+        }
+
         private static void CancelPendingEvent(PendingRenderEvent pendingEvent)
         {
             var removed = false;
@@ -906,8 +1250,14 @@ namespace Milestro.Skia
 
             if (removed)
             {
-                FreeSubmission(pendingEvent.SubmissionPtr, pendingEvent.CommandsPtr);
+                pendingEvent.InUse = false;
+                if (!pendingEvent.Reusable)
+                {
+                    FreeSubmission(pendingEvent.SubmissionPtr, pendingEvent.CommandsPtr);
+                }
+
                 pendingEvent.KeepAlive();
+                pendingEvent.Texture = null;
                 pendingEvent.DisposeOwnedResources();
             }
         }
@@ -957,8 +1307,14 @@ namespace Milestro.Skia
                         continue;
                     }
 
-                    FreeSubmission(pendingEvent.SubmissionPtr, pendingEvent.CommandsPtr);
+                    pendingEvent.InUse = false;
+                    if (!pendingEvent.Reusable)
+                    {
+                        FreeSubmission(pendingEvent.SubmissionPtr, pendingEvent.CommandsPtr);
+                    }
+
                     pendingEvent.KeepAlive();
+                    pendingEvent.Texture = null;
                     pendingEvent.DisposeOwnedResources();
                     PendingEvents.RemoveAt(i);
                 }
@@ -1083,6 +1439,18 @@ namespace Milestro.Skia
             }
 
             return false;
+        }
+
+        private static void EnsurePendingEventCapacity(int additionalSlots)
+        {
+            lock (PendingLock)
+            {
+                var targetCapacity = PendingEvents.Capacity + Math.Max(0, additionalSlots);
+                if (PendingEvents.Capacity < targetCapacity)
+                {
+                    PendingEvents.Capacity = targetCapacity;
+                }
+            }
         }
 
         private static void EnsureLifetimePump()

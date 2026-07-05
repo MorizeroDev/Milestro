@@ -158,23 +158,47 @@ MILESTRO_API int64_t MilestroSkiaFontGetMetrics(milestro::skia::Font *font,
                                                 float &descent,
                                                 float &leading);
 MILESTRO_API int64_t MilestroSkiaFontMeasureText(milestro::skia::Font *font,
-                                                 [[milize::CSharpType("byte*")]] uint8_t *text,
+                                                 [[milize::CSharpType("byte*")]] const uint8_t *text,
                                                  uint64_t textSize,
                                                  float &boundsLeft,
                                                  float &boundsTop,
                                                  float &boundsRight,
                                                  float &boundsBottom,
                                                  float &advanceX);
-MILESTRO_API int64_t MilestroSkiaTextDrawSnapshotCreate(milestro::skia::TextDrawSnapshot *&ret,
+MILESTRO_API int64_t MilestroSkiaTextDrawSnapshotCreate(milestro::skia::SlimTextDrawSnapshot *&ret,
                                                         milestro::skia::Font *font,
-                                                        [[milize::CSharpType("byte*")]] uint8_t *text,
+                                                        [[milize::CSharpType("byte*")]] const uint8_t *text,
                                                         uint64_t textSize,
                                                         int32_t r,
                                                         int32_t g,
                                                         int32_t b,
                                                         int32_t a);
 MILESTRO_API int64_t MilestroSkiaTextDrawSnapshotDestroy(
-        [[milize::RefType("ref")]] milestro::skia::TextDrawSnapshot *&ret);
+        [[milize::RefType("ref")]] milestro::skia::SlimTextDrawSnapshot *&ret);
+MILESTRO_API int64_t MilestroSkiaReusableTextDrawSnapshotCreate(
+        milestro::skia::SlimTextDrawSnapshot *&ret,
+        milestro::skia::Font *font,
+        uint64_t capacity,
+        int32_t r,
+        int32_t g,
+        int32_t b,
+        int32_t a);
+MILESTRO_API int64_t MilestroSkiaReusableTextDrawSnapshotUpdateText(
+        milestro::skia::SlimTextDrawSnapshot *ret,
+        [[milize::CSharpType("byte*")]] const uint8_t *text,
+        uint64_t textSize);
+MILESTRO_API int64_t MilestroSkiaReusableTextDrawSnapshotCopyTextFrom(
+        milestro::skia::SlimTextDrawSnapshot *ret,
+        milestro::skia::SlimTextDrawSnapshot *source);
+MILESTRO_API int64_t MilestroSkiaReusableTextDrawSnapshotMeasureText(
+        milestro::skia::SlimTextDrawSnapshot *ret,
+        float &boundsLeft,
+        float &boundsTop,
+        float &boundsRight,
+        float &boundsBottom,
+        float &advanceX);
+MILESTRO_API int64_t MilestroSkiaReusableTextDrawSnapshotDestroy(
+        [[milize::RefType("ref")]] milestro::skia::SlimTextDrawSnapshot *&ret);
 
 MILESTRO_API int64_t MilestroSkiaPathDestroy(milestro::skia::Path *&ret);
 MILESTRO_API int64_t MilestroSkiaPathToAATriangles(milestro::skia::Path *p,

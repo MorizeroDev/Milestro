@@ -54,7 +54,7 @@ namespace Milestro.Components
             set
             {
                 m_text = value ?? "";
-                ApplyConfiguration();
+                ApplyConfiguration(useManagedStringText: true);
             }
         }
 
@@ -158,6 +158,42 @@ namespace Milestro.Components
             }
         }
 
+        public void PrepareTextUtf8NoAlloc(int capacity)
+        {
+            if (capacity < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(capacity));
+            }
+
+            NormalizeSerializedValues();
+            var targetTextureSizePixels = NormalizeTextureSize(m_textureSizePixels);
+            ApplyRectTransformSettings(RectTransformComponent(), targetTextureSizePixels);
+            ProducerComponent().PrepareTextUtf8NoAlloc(capacity);
+        }
+
+        public void SetTextUtf8NoAlloc(byte[] buffer, int offset, int length)
+        {
+            if (buffer == null)
+            {
+                throw new ArgumentNullException(nameof(buffer));
+            }
+
+            if (offset < 0 || offset > buffer.Length)
+            {
+                throw new ArgumentOutOfRangeException(nameof(offset));
+            }
+
+            if (length < 0 || length > buffer.Length - offset)
+            {
+                throw new ArgumentOutOfRangeException(nameof(length));
+            }
+
+            NormalizeSerializedValues();
+            var targetTextureSizePixels = NormalizeTextureSize(m_textureSizePixels);
+            ApplyRectTransformSettings(RectTransformComponent(), targetTextureSizePixels);
+            ProducerComponent().SetTextUtf8NoAlloc(buffer, offset, length);
+        }
+
         private void Reset()
         {
             NormalizeSerializedValues();
@@ -195,7 +231,7 @@ namespace Milestro.Components
         }
 #endif
 
-        private void ApplyConfiguration()
+        private void ApplyConfiguration(bool useManagedStringText = false)
         {
             NormalizeSerializedValues();
             if (!this || gameObject == null)
@@ -203,10 +239,10 @@ namespace Milestro.Components
                 return;
             }
 
-            EnsureConfigured();
+            EnsureConfigured(useManagedStringText);
         }
 
-        private void EnsureConfigured()
+        private void EnsureConfigured(bool useManagedStringText = false)
         {
             var rectTransform = RectTransformComponent();
             var producer = ProducerComponent();
@@ -216,7 +252,7 @@ namespace Milestro.Components
             var targetTextureSizePixels = CurrentTextureSizePixels();
 
             ApplyRectTransformSettings(rectTransform, targetTextureSizePixels);
-            ApplyProducerSettings(producer);
+            ApplyProducerSettings(producer, useManagedStringText);
             ApplyPresenterSettings(presenter, producer);
             ApplyMesh(meshFilter, targetTextureSizePixels);
             ApplyMaterial(meshRenderer);
@@ -231,9 +267,16 @@ namespace Milestro.Components
             }
         }
 
-        private void ApplyProducerSettings(SlimTextRenderTextureProducer producer)
+        private void ApplyProducerSettings(SlimTextRenderTextureProducer producer, bool useManagedStringText)
         {
-            producer.text = m_text;
+            if (useManagedStringText)
+            {
+                producer.SetManagedStringText(m_text);
+            }
+            else
+            {
+                producer.SyncTextWithoutModeSwitch(m_text);
+            }
             producer.fontFamily = m_fontFamily;
             producer.fontWeight = m_fontWeight;
             producer.fontSize = m_fontSize;
