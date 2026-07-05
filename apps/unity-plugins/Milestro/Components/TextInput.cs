@@ -27,7 +27,8 @@ namespace Milestro.Components
         IEndDragHandler,
         IScrollHandler,
         ISelectHandler,
-        IDeselectHandler
+        IDeselectHandler,
+        ITextBoxScrollTarget
     {
         private const char ReplacementCharacter = '\ufffd';
         private const float DefaultScrollWheelStepPixels = 48f;
@@ -597,6 +598,23 @@ namespace Milestro.Components
                 paintDirty = true;
                 RebuildResources();
             }
+        }
+
+        public bool TryGetScrollState(out TextBoxScrollState state)
+        {
+            if (!TryGetScrollMetrics(out var metrics))
+            {
+                state = default;
+                return false;
+            }
+
+            state = new TextBoxScrollState(metrics.ScrollX,
+                metrics.ScrollY,
+                metrics.ViewportWidth,
+                metrics.ViewportHeight,
+                metrics.ContentWidth,
+                Mathf.Max(metrics.ViewportHeight, metrics.Height));
+            return true;
         }
 
         private bool TryScrollX(InputBox editor, float contentOffsetDelta, float stepPixels)

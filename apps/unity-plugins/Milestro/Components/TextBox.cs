@@ -10,7 +10,7 @@ using UnityEngine.EventSystems;
 namespace Milestro.Components
 {
     [AddComponentMenu("Milestro/Text Box")]
-    public class TextBox : RenderTextureGraphic, IScrollHandler
+    public class TextBox : RenderTextureGraphic, IScrollHandler, ITextBoxScrollTarget
     {
         private const float DefaultScrollWheelStepPixels = 48f;
         private const float DefaultScrollTweenDurationSeconds = 0.14f;
@@ -257,6 +257,26 @@ namespace Milestro.Components
                 producer.RebuildOutput(forceText: false);
                 ApplyProducerOutput(producer, force: true);
             }
+        }
+
+        public bool TryGetScrollState(out TextBoxScrollState state)
+        {
+            if (!isActiveAndEnabled)
+            {
+                state = default;
+                return false;
+            }
+
+            var producer = ProducerComponent();
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: false);
+            state = new TextBoxScrollState(producer.scrollX,
+                producer.scrollY,
+                producer.viewportWidth,
+                producer.viewportHeight,
+                producer.contentWidth,
+                producer.contentHeight);
+            return true;
         }
 
         private bool TryScrollX(TextBoxRenderTextureProducer producer, float contentOffsetDelta, float stepPixels)

@@ -130,6 +130,10 @@ Primary runtime components:
   wheel scrolling in both axes, and passes unused scroll delta to parent scroll
   handlers. Use the `ScrollPercent*` properties to link its normalized `0..1`
   scroll position to other scrollbars.
+- `Milestro.Components.TextBoxScrollbar`: optional connector for Unity UI
+  `Scrollbar` components. Assign exactly one TextBox or TextInput target plus
+  horizontal and/or vertical scrollbars, and it hides each scrollbar when that
+  axis has no overflow.
 - `Milestro.Components.WorldSpaceTextBox`: world-space quad backed by a Milestro
   render texture. It can create its mesh, renderer, and default material.
 - `Milestro.Components.TextInput`: editable UI input with caret, selection,
