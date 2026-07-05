@@ -4,6 +4,9 @@ using System.Runtime.InteropServices;
 using Milestro.Binding;
 using UnityEngine;
 using UnityEngine.Rendering;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace Milestro.Skia
 {
@@ -56,9 +59,18 @@ namespace Milestro.Skia
             public int Completed;
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RenderDrainPayload
+        {
+            public int Magic;
+            public int GraphicsBackend;
+            public int Completed;
+        }
+
         private sealed class PendingRenderEvent
         {
             public long Serial;
+            public int GraphicsBackend;
             public IntPtr SubmissionPtr;
             public IntPtr CommandsPtr;
             public Texture Texture;
@@ -94,13 +106,29 @@ namespace Milestro.Skia
             public Action Release;
         }
 
+        private sealed class PendingRenderDrain
+        {
+            public int GraphicsBackend;
+            public IntPtr DrainPtr;
+            public IntPtr RenderEventFunc;
+            public int RenderEventId;
+        }
+
+        private const int RenderDrainMagic = 0x4D524451; // MRDQ
         private static readonly object PendingLock = new object();
         private static readonly List<PendingRenderEvent> PendingEvents = new List<PendingRenderEvent>();
         private static readonly List<DeferredRelease> DeferredReleases = new List<DeferredRelease>();
+        private static readonly Dictionary<int, PendingRenderDrain> PendingDrains =
+            new Dictionary<int, PendingRenderDrain>();
         private static readonly int CompletedOffset =
             (int)Marshal.OffsetOf<RenderSubmissionPayload>(nameof(RenderSubmissionPayload.Completed));
+        private static readonly int DrainCompletedOffset =
+            (int)Marshal.OffsetOf<RenderDrainPayload>(nameof(RenderDrainPayload.Completed));
         private static long nextSerial;
         private static MilestroRenderEventLifetimePump lifetimePump;
+#if UNITY_EDITOR
+        private static bool editorLifetimePumpRegistered;
+#endif
 
         private UnitySkiaRenderTextureDescriptor descriptor;
         private IntPtr renderEventFunc;
@@ -267,6 +295,7 @@ namespace Milestro.Skia
             object[] resources = Array.Empty<object>();
             IDisposable[] ownedResources = Array.Empty<IDisposable>();
             PendingRenderEvent? pendingEvent = null;
+            var enqueued = false;
             try
             {
                 commandsPtr = MarshalCommands(commands, out resources, out ownedResources);
@@ -282,28 +311,18 @@ namespace Milestro.Skia
                 Marshal.StructureToPtr(submission, submissionPtr, false);
 
                 // HasUsableTexture and TryGetNativeTargetHandles above guarantee a live target texture here.
-                pendingEvent = AddPendingEvent(submissionPtr, commandsPtr, Texture!, resources, ownedResources);
-
-                CommandBuffer? cmd = null;
-                try
-                {
-                    cmd = new CommandBuffer();
-                    cmd.name = "Milestro " + Backend + " Native Plugin Pass";
-                    cmd.IssuePluginEventAndData(renderEventFunc, renderEventId, submissionPtr);
-                    Graphics.ExecuteCommandBuffer(cmd);
-                }
-                finally
-                {
-                    cmd?.Release();
-                }
+                pendingEvent = AddPendingEvent((int)Backend, submissionPtr, commandsPtr, Texture!, resources, ownedResources);
+                ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderEnqueueSubmission((int)Backend, submissionPtr));
+                enqueued = true;
+                ScheduleRenderDrain(Backend, renderEventFunc, renderEventId);
             }
             catch
             {
-                if (pendingEvent != null)
+                if (pendingEvent != null && !enqueued)
                 {
                     CancelPendingEvent(pendingEvent);
                 }
-                else
+                else if (pendingEvent == null)
                 {
                     FreeSubmission(submissionPtr, commandsPtr);
                     KeepAliveResources(resources);
@@ -689,7 +708,8 @@ namespace Milestro.Skia
             }
         }
 
-        private static PendingRenderEvent AddPendingEvent(IntPtr submissionPtr,
+        private static PendingRenderEvent AddPendingEvent(int graphicsBackend,
+            IntPtr submissionPtr,
             IntPtr commandsPtr,
             Texture texture,
             object[] resources,
@@ -701,6 +721,7 @@ namespace Milestro.Skia
                 var pendingEvent = new PendingRenderEvent
                 {
                     Serial = ++nextSerial,
+                    GraphicsBackend = graphicsBackend,
                     SubmissionPtr = submissionPtr,
                     CommandsPtr = commandsPtr,
                     Texture = texture,
@@ -709,6 +730,85 @@ namespace Milestro.Skia
                 };
                 PendingEvents.Add(pendingEvent);
                 return pendingEvent;
+            }
+        }
+
+        private static void ScheduleRenderDrain(UnitySkiaGraphicsBackend backend,
+            IntPtr renderEventFunc,
+            int renderEventId)
+        {
+            if (renderEventFunc == IntPtr.Zero)
+            {
+                throw new InvalidOperationException("Milestro Unity render event callback is unavailable.");
+            }
+
+            if (renderEventId < 0)
+            {
+                throw new InvalidOperationException("Milestro Unity render event id is unavailable.");
+            }
+
+            PendingRenderDrain? pendingDrain = null;
+            var graphicsBackend = (int)backend;
+            lock (PendingLock)
+            {
+                if (PendingDrains.ContainsKey(graphicsBackend))
+                {
+                    return;
+                }
+
+                EnsureLifetimePump();
+                var drain = new RenderDrainPayload
+                {
+                    Magic = RenderDrainMagic,
+                    GraphicsBackend = graphicsBackend,
+                    Completed = 0
+                };
+                var drainPtr = Marshal.AllocHGlobal(Marshal.SizeOf<RenderDrainPayload>());
+                Marshal.StructureToPtr(drain, drainPtr, false);
+                pendingDrain = new PendingRenderDrain
+                {
+                    GraphicsBackend = graphicsBackend,
+                    DrainPtr = drainPtr,
+                    RenderEventFunc = renderEventFunc,
+                    RenderEventId = renderEventId
+                };
+                PendingDrains.Add(graphicsBackend, pendingDrain);
+            }
+
+            try
+            {
+                IssueRenderDrain(pendingDrain);
+            }
+            catch
+            {
+                lock (PendingLock)
+                {
+                    if (PendingDrains.TryGetValue(graphicsBackend, out var current) && current == pendingDrain)
+                    {
+                        PendingDrains.Remove(graphicsBackend);
+                    }
+                }
+
+                Marshal.FreeHGlobal(pendingDrain.DrainPtr);
+                throw;
+            }
+        }
+
+        private static void IssueRenderDrain(PendingRenderDrain pendingDrain)
+        {
+            CommandBuffer? cmd = null;
+            try
+            {
+                cmd = new CommandBuffer();
+                cmd.name = "Milestro Queued Native Render Drain";
+                cmd.IssuePluginEventAndData(pendingDrain.RenderEventFunc,
+                    pendingDrain.RenderEventId,
+                    pendingDrain.DrainPtr);
+                Graphics.ExecuteCommandBuffer(cmd);
+            }
+            finally
+            {
+                cmd?.Release();
             }
         }
 
@@ -760,6 +860,8 @@ namespace Milestro.Skia
         private static void CollectCompletedEvents()
         {
             List<Action>? releases = null;
+            List<PendingRenderDrain>? completedDrains = null;
+            List<PendingRenderDrain>? drainsToReschedule = null;
 
             lock (PendingLock)
             {
@@ -775,6 +877,37 @@ namespace Milestro.Skia
                     pendingEvent.KeepAlive();
                     pendingEvent.DisposeOwnedResources();
                     PendingEvents.RemoveAt(i);
+                }
+
+                foreach (var pendingDrain in PendingDrains.Values)
+                {
+                    if (Marshal.ReadInt32(pendingDrain.DrainPtr, DrainCompletedOffset) == 0)
+                    {
+                        continue;
+                    }
+
+                    Marshal.FreeHGlobal(pendingDrain.DrainPtr);
+                    if (completedDrains == null)
+                    {
+                        completedDrains = new List<PendingRenderDrain>();
+                    }
+                    completedDrains.Add(pendingDrain);
+                    if (HasPendingEventForBackend(pendingDrain.GraphicsBackend))
+                    {
+                        if (drainsToReschedule == null)
+                        {
+                            drainsToReschedule = new List<PendingRenderDrain>();
+                        }
+                        drainsToReschedule.Add(pendingDrain);
+                    }
+                }
+
+                if (completedDrains != null)
+                {
+                    foreach (var pendingDrain in completedDrains)
+                    {
+                        PendingDrains.Remove(pendingDrain.GraphicsBackend);
+                    }
                 }
 
                 for (var i = DeferredReleases.Count - 1; i >= 0; i--)
@@ -794,6 +927,16 @@ namespace Milestro.Skia
                 }
             }
 
+            if (drainsToReschedule != null)
+            {
+                foreach (var pendingDrain in drainsToReschedule)
+                {
+                    ScheduleRenderDrain((UnitySkiaGraphicsBackend)pendingDrain.GraphicsBackend,
+                        pendingDrain.RenderEventFunc,
+                        pendingDrain.RenderEventId);
+                }
+            }
+
             if (releases == null)
             {
                 return;
@@ -810,6 +953,20 @@ namespace Milestro.Skia
             CollectCompletedEvents();
         }
 
+#if UNITY_EDITOR
+        private static void CollectCompletedEventsFromEditorPump()
+        {
+            CollectCompletedEvents();
+            if (HasPendingLifetimeWork())
+            {
+                return;
+            }
+
+            EditorApplication.update -= CollectCompletedEventsFromEditorPump;
+            editorLifetimePumpRegistered = false;
+        }
+#endif
+
         private static bool HasPendingEventAtOrBefore(long serial)
         {
             foreach (var pendingEvent in PendingEvents)
@@ -823,8 +980,41 @@ namespace Milestro.Skia
             return false;
         }
 
+        private static bool HasPendingLifetimeWork()
+        {
+            lock (PendingLock)
+            {
+                return PendingEvents.Count != 0 || PendingDrains.Count != 0 || DeferredReleases.Count != 0;
+            }
+        }
+
+        private static bool HasPendingEventForBackend(int graphicsBackend)
+        {
+            foreach (var pendingEvent in PendingEvents)
+            {
+                if (pendingEvent.GraphicsBackend == graphicsBackend)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static void EnsureLifetimePump()
         {
+#if UNITY_EDITOR
+            if (Application.isEditor)
+            {
+                if (!editorLifetimePumpRegistered)
+                {
+                    EditorApplication.update += CollectCompletedEventsFromEditorPump;
+                    editorLifetimePumpRegistered = true;
+                }
+                return;
+            }
+#endif
+
             if (lifetimePump != null || !Application.isPlaying)
             {
                 return;

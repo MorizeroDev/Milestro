@@ -13,6 +13,7 @@ void Unload();
 void *GetRenderEventFuncForExport();
 int64_t GetMetalRenderEventIdForExport(int32_t &eventId);
 int64_t GetRenderTextureEventIdForExport(int32_t graphicsBackend, int32_t &eventId);
+int64_t EnqueueSubmissionForExport(int32_t graphicsBackend, void *submission);
 int64_t CreateD3D12ExternalTextureForExport(int32_t width,
                                             int32_t height,
                                             int32_t storageSrgb,

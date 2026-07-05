@@ -32,6 +32,10 @@ MILESTRO_API int64_t MilestroUnityRenderGetRenderTextureEventId(int32_t graphics
     return milestro::unity_render::GetRenderTextureEventIdForExport(graphicsBackend, eventId);
 }
 
+MILESTRO_API int64_t MilestroUnityRenderEnqueueSubmission(int32_t graphicsBackend, void *submission) {
+    return milestro::unity_render::EnqueueSubmissionForExport(graphicsBackend, submission);
+}
+
 MILESTRO_API int64_t MilestroUnityRenderCreateD3D12ExternalTexture(int32_t width,
                                                                    int32_t height,
                                                                    int32_t storageSrgb,

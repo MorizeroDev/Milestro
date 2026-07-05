@@ -30,6 +30,10 @@ namespace Milestro.Binding
         internal static extern unsafe long UnityRenderGetRenderTextureEventId(int graphicsBackend, out int eventId);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderEnqueueSubmission")]
+        internal static extern unsafe long UnityRenderEnqueueSubmission(int graphicsBackend, IntPtr submission);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderCreateD3D12ExternalTexture")]
         internal static extern unsafe long UnityRenderCreateD3D12ExternalTexture(int width,
                                                                                  int height,

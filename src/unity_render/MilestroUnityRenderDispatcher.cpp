@@ -7,7 +7,10 @@
 #include <IUnityGraphics.h>
 #include <Milestro/log/log.h>
 
+#include <array>
 #include <atomic>
+#include <mutex>
+#include <vector>
 
 #if defined(__APPLE__)
 #include "unity_render/MilestroUnityRenderMetalBackend.h"
@@ -34,11 +37,22 @@ constexpr int kD3D12DrawEventOffset = 1;
 constexpr int kGLDrawEventOffset = 2;
 constexpr int kVulkanDrawEventOffset = 3;
 constexpr int kReservedEventCount = 4;
+constexpr int32_t kRenderDrainMagic = 0x4D524451; // MRDQ
+constexpr int kSubmissionQueueCount = 6;
 
 IUnityInterfaces* gUnityInterfaces = nullptr;
 IUnityGraphics* gUnityGraphics = nullptr;
 UnityGfxRenderer gRenderer = kUnityGfxRendererNull;
 int gEventBase = -1;
+std::mutex gSubmissionQueueMutex;
+std::array<std::vector<MilestroUnityRenderSubmission*>, kSubmissionQueueCount> gSubmissionQueues;
+std::mutex gRenderSystemMutex;
+
+struct MilestroUnityRenderDrain {
+    int32_t magic = 0;
+    int32_t graphicsBackend = 0;
+    int32_t completed = 0;
+};
 
 void MarkSubmissionCompleted(MilestroUnityRenderSubmission* submission) {
     if (submission == nullptr) {
@@ -49,53 +63,97 @@ void MarkSubmissionCompleted(MilestroUnityRenderSubmission* submission) {
     completed.store(1, std::memory_order_release);
 }
 
-void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType) {
-    if (eventType == kUnityGfxDeviceEventInitialize && gUnityGraphics != nullptr) {
-        gRenderer = gUnityGraphics->GetRenderer();
-    } else if (eventType == kUnityGfxDeviceEventShutdown) {
-        gRenderer = kUnityGfxRendererNull;
+void MarkDrainCompleted(MilestroUnityRenderDrain* drain) {
+    if (drain == nullptr) {
+        return;
     }
 
-#if defined(__APPLE__)
-    metal::OnGraphicsDeviceEvent(eventType, gUnityInterfaces, gRenderer);
-#else
-    (void) eventType;
-#endif
-
-#if defined(_WIN32)
-    d3d12::OnGraphicsDeviceEvent(eventType,
-                                 gUnityInterfaces,
-                                 gRenderer,
-                                 gEventBase >= 0 ? gEventBase + kD3D12DrawEventOffset : -1);
-#endif
-
-#if defined(MILESTRO_ENABLE_UNITY_GL_RENDER)
-    gl::OnGraphicsDeviceEvent(eventType, gUnityInterfaces, gRenderer);
-#endif
-
-#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
-    vulkan::OnGraphicsDeviceEvent(eventType,
-                                  gUnityInterfaces,
-                                  gRenderer,
-                                  gEventBase >= 0 ? gEventBase + kVulkanDrawEventOffset : -1);
-#endif
+    std::atomic_ref<int32_t> completed(drain->completed);
+    completed.store(1, std::memory_order_release);
 }
 
-void UNITY_INTERFACE_API OnRenderEvent(int eventId, void* data) {
-    if (gEventBase < 0) {
-        MILESTROLOG_WARN("Ignoring unknown Milestro Unity render event: {}", eventId);
-        MarkSubmissionCompleted(static_cast<MilestroUnityRenderSubmission*>(data));
-        return;
-    }
-
+bool IsRenderDrainPayload(void* data) {
     if (data == nullptr) {
-        MILESTROLOG_ERROR("Milestro Unity render event received null payload.");
+        return false;
+    }
+
+    return *static_cast<int32_t*>(data) == kRenderDrainMagic;
+}
+
+int SubmissionQueueIndex(int32_t graphicsBackend) {
+    switch (static_cast<MilestroUnityGraphicsBackend>(graphicsBackend)) {
+        case MilestroUnityGraphicsBackend::Metal:
+        case MilestroUnityGraphicsBackend::Direct3D12:
+        case MilestroUnityGraphicsBackend::Vulkan:
+        case MilestroUnityGraphicsBackend::OpenGL:
+        case MilestroUnityGraphicsBackend::OpenGLES:
+            return graphicsBackend;
+        default:
+            return -1;
+    }
+}
+
+std::vector<MilestroUnityRenderSubmission*> DrainQueuedSubmissions(int32_t graphicsBackend) {
+    std::lock_guard lock(gSubmissionQueueMutex);
+
+    const int queueIndex = SubmissionQueueIndex(graphicsBackend);
+    if (queueIndex < 0) {
+        MILESTROLOG_ERROR("Milestro Unity render drain received unknown backend {}.", graphicsBackend);
+        return {};
+    }
+
+    std::vector<MilestroUnityRenderSubmission*> drained;
+    drained.swap(gSubmissionQueues[queueIndex]);
+    return drained;
+}
+
+void CompleteQueuedSubmissions() {
+    std::vector<MilestroUnityRenderSubmission*> submissions;
+    {
+        std::lock_guard lock(gSubmissionQueueMutex);
+        for (std::vector<MilestroUnityRenderSubmission*>& queue: gSubmissionQueues) {
+            submissions.insert(submissions.end(), queue.begin(), queue.end());
+            queue.clear();
+        }
+    }
+
+    for (MilestroUnityRenderSubmission* submission: submissions) {
+        MarkSubmissionCompleted(submission);
+    }
+}
+
+int64_t EnqueueSubmission(int32_t graphicsBackend, MilestroUnityRenderSubmission* submission) {
+    if (submission == nullptr) {
+        MILESTROLOG_ERROR("Milestro Unity render enqueue received null submission.");
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    if (submission->target.graphicsBackend != graphicsBackend) {
+        MILESTROLOG_ERROR("Milestro Unity render enqueue backend mismatch: requested={}, submission={}.",
+                          graphicsBackend,
+                          submission->target.graphicsBackend);
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    const int queueIndex = SubmissionQueueIndex(graphicsBackend);
+    if (queueIndex < 0) {
+        MILESTROLOG_ERROR("Milestro Unity render enqueue received unknown backend {}.", graphicsBackend);
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    {
+        std::lock_guard lock(gSubmissionQueueMutex);
+        gSubmissionQueues[queueIndex].push_back(submission);
+    }
+    return MILESTRO_API_RET_OK;
+}
+
+void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* submission) {
+    if (submission == nullptr) {
         return;
     }
 
-    auto* submission = static_cast<MilestroUnityRenderSubmission*>(data);
     const MilestroUnityRenderTargetPayload& target = submission->target;
-    const int eventOffset = eventId - gEventBase;
     if (eventOffset == kMetalDrawEventOffset) {
         if (target.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::Metal)) {
             MILESTROLOG_ERROR("Milestro Metal render event received backend {}.", target.graphicsBackend);
@@ -216,8 +274,76 @@ void UNITY_INTERFACE_API OnRenderEvent(int eventId, void* data) {
         return;
     }
 
-    MILESTROLOG_WARN("Ignoring unknown Milestro Unity render event: {}", eventId);
+    MILESTROLOG_WARN("Ignoring unknown Milestro Unity render event offset: {}", eventOffset);
     MarkSubmissionCompleted(submission);
+}
+
+void DrainRenderQueue(int eventOffset, MilestroUnityRenderDrain* drain) {
+    if (drain == nullptr || drain->magic != kRenderDrainMagic) {
+        return;
+    }
+
+    std::lock_guard renderLock(gRenderSystemMutex);
+    std::vector<MilestroUnityRenderSubmission*> submissions = DrainQueuedSubmissions(drain->graphicsBackend);
+    for (MilestroUnityRenderSubmission* submission: submissions) {
+        RenderQueuedSubmission(eventOffset, submission);
+    }
+    MarkDrainCompleted(drain);
+}
+
+void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType) {
+    std::lock_guard renderLock(gRenderSystemMutex);
+
+    if (eventType == kUnityGfxDeviceEventInitialize && gUnityGraphics != nullptr) {
+        gRenderer = gUnityGraphics->GetRenderer();
+    } else if (eventType == kUnityGfxDeviceEventShutdown) {
+        gRenderer = kUnityGfxRendererNull;
+    }
+
+#if defined(__APPLE__)
+    metal::OnGraphicsDeviceEvent(eventType, gUnityInterfaces, gRenderer);
+#else
+    (void) eventType;
+#endif
+
+#if defined(_WIN32)
+    d3d12::OnGraphicsDeviceEvent(eventType,
+                                 gUnityInterfaces,
+                                 gRenderer,
+                                 gEventBase >= 0 ? gEventBase + kD3D12DrawEventOffset : -1);
+#endif
+
+#if defined(MILESTRO_ENABLE_UNITY_GL_RENDER)
+    gl::OnGraphicsDeviceEvent(eventType, gUnityInterfaces, gRenderer);
+#endif
+
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    vulkan::OnGraphicsDeviceEvent(eventType,
+                                  gUnityInterfaces,
+                                  gRenderer,
+                                  gEventBase >= 0 ? gEventBase + kVulkanDrawEventOffset : -1);
+#endif
+}
+
+void UNITY_INTERFACE_API OnRenderEvent(int eventId, void* data) {
+    if (gEventBase < 0) {
+        MILESTROLOG_WARN("Ignoring unknown Milestro Unity render event: {}", eventId);
+        MarkDrainCompleted(static_cast<MilestroUnityRenderDrain*>(data));
+        return;
+    }
+
+    if (data == nullptr) {
+        MILESTROLOG_ERROR("Milestro Unity render event received null payload.");
+        return;
+    }
+
+    const int eventOffset = eventId - gEventBase;
+    if (!IsRenderDrainPayload(data)) {
+        MILESTROLOG_ERROR("Milestro Unity render event received non-drain payload.");
+        return;
+    }
+
+    DrainRenderQueue(eventOffset, static_cast<MilestroUnityRenderDrain*>(data));
 }
 
 void* RenderEventFunc() {
@@ -287,12 +413,18 @@ int64_t GetRenderTextureEventIdForExport(int32_t graphicsBackend, int32_t& event
     return RenderTextureEventId(graphicsBackend, eventId);
 }
 
+int64_t EnqueueSubmissionForExport(int32_t graphicsBackend, void* submission) {
+    return EnqueueSubmission(graphicsBackend, static_cast<MilestroUnityRenderSubmission*>(submission));
+}
+
 int64_t CreateD3D12ExternalTextureForExport(int32_t width,
                                             int32_t height,
                                             int32_t storageSrgb,
                                             int32_t preferredFormat,
                                             void*& texture) {
 #if defined(_WIN32)
+    std::lock_guard renderLock(gRenderSystemMutex);
+
     if (gRenderer != kUnityGfxRendererD3D12) {
         texture = nullptr;
         MILESTROLOG_ERROR("Milestro D3D12 external texture requested while Unity renderer is {}.",
@@ -314,6 +446,7 @@ int64_t CreateD3D12ExternalTextureForExport(int32_t width,
 
 int64_t DestroyD3D12ExternalTextureForExport(void*& texture) {
 #if defined(_WIN32)
+    std::lock_guard renderLock(gRenderSystemMutex);
     return d3d12::DestroyExternalTexture(texture);
 #else
     texture = nullptr;
@@ -339,6 +472,7 @@ void Unload() {
     if (gUnityGraphics != nullptr) {
         gUnityGraphics->UnregisterDeviceEventCallback(OnGraphicsDeviceEvent);
     }
+    CompleteQueuedSubmissions();
     OnGraphicsDeviceEvent(kUnityGfxDeviceEventShutdown);
     gEventBase = -1;
     gUnityGraphics = nullptr;
