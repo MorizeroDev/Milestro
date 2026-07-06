@@ -542,7 +542,7 @@ void InputBox::setText(const char* text, size_t length) {
 void InputBox::setViewport(SkScalar width, SkScalar height) {
     viewportWidth_ = std::max<SkScalar>(1.0f, width);
     viewportHeight_ = std::max<SkScalar>(1.0f, height);
-    paragraphDirty_ = true;
+    markParagraphDirty();
     ensureCaretVisible();
 }
 
@@ -552,7 +552,7 @@ void InputBox::setSoftWrap(bool softWrap) {
     }
 
     softWrap_ = softWrap;
-    paragraphDirty_ = true;
+    markParagraphDirty();
     if (softWrap_) {
         scrollX_ = 0.0f;
     }
@@ -565,7 +565,7 @@ void InputBox::setFocused(bool focused) {
     }
 
     focused_ = focused;
-    paragraphDirty_ = true;
+    markParagraphDirty();
     if (focused_) {
         ensureCaretVisible();
     }
@@ -577,7 +577,7 @@ void InputBox::setTextOverflow(TextOverflow textOverflow) {
     }
 
     textOverflow_ = textOverflow;
-    paragraphDirty_ = true;
+    markParagraphDirty();
 }
 
 void InputBox::setEllipsis(const char* text, size_t length) {
@@ -591,7 +591,7 @@ void InputBox::setEllipsis(const char* text, size_t length) {
     }
 
     ellipsisText_ = std::move(next);
-    paragraphDirty_ = true;
+    markParagraphDirty();
 }
 
 void InputBox::setMaskInput(bool maskInput) {
@@ -600,7 +600,7 @@ void InputBox::setMaskInput(bool maskInput) {
     }
 
     maskInput_ = maskInput;
-    paragraphDirty_ = true;
+    markParagraphDirty();
     ensureCaretVisible();
 }
 
@@ -612,7 +612,7 @@ void InputBox::setMaskChar(const char* text, size_t length) {
 
     maskText_ = next;
     if (maskInput_) {
-        paragraphDirty_ = true;
+        markParagraphDirty();
         ensureCaretVisible();
     }
 }
@@ -633,7 +633,6 @@ void InputBox::setCursorUtf8(size_t utf8Offset, ::skia::textlayout::Affinity aff
     affinity_ = affinity;
     resetSelectionToCursor();
     resetPreferredCaretX();
-    ensureCaretVisible();
     if (cursorUtf8_ != oldCursor ||
         affinity_ != oldAffinity ||
         selectionAnchorUtf8_ != oldAnchor ||
@@ -642,6 +641,7 @@ void InputBox::setCursorUtf8(size_t utf8Offset, ::skia::textlayout::Affinity aff
         selectionFocusAffinity_ != oldFocusAffinity) {
         breakUndoGroup();
     }
+    ensureCaretVisible();
 }
 
 void InputBox::insertText(const char* text, size_t length) {
@@ -751,8 +751,6 @@ bool InputBox::setSelectionUtf8(size_t anchorUtf8,
     selectionFocusAffinity_ = focusAffinity;
     cursorUtf8_ = selectionFocusUtf8_;
     affinity_ = focusAffinity;
-    resetPreferredCaretX();
-    ensureCaretVisible();
 
     const bool changed = selectionAnchorUtf8_ != oldAnchor ||
                          selectionFocusUtf8_ != oldFocus ||
@@ -761,8 +759,11 @@ bool InputBox::setSelectionUtf8(size_t anchorUtf8,
                          cursorUtf8_ != oldCursor ||
                          affinity_ != oldAffinity;
     if (changed) {
+        markSelectionStateDirty();
         breakUndoGroup();
     }
+    resetPreferredCaretX();
+    ensureCaretVisible();
     return changed;
 }
 
@@ -1162,11 +1163,12 @@ InputBoxCaretRect InputBox::getCompositionRect() {
 }
 
 std::vector<InputBoxCaretRect> InputBox::getSelectionRects() {
-    if (!hasSelection() || !compositionText_.empty()) {
+    const auto selectionRects = getSelectionRectsSnapshot();
+    if (selectionRects == nullptr) {
         return {};
     }
 
-    return getRectsForCommittedRange(selectionStartUtf8(), selectionEndUtf8());
+    return *selectionRects;
 }
 
 InputBoxMetrics InputBox::getMetrics() {
@@ -1212,7 +1214,7 @@ void InputBox::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, S
 
     rebuildParagraphIfNeeded();
     const auto ellipsisDisplay = shouldUseEllipsisDisplay();
-    auto paintParagraph = ellipsisDisplay ? buildPaintParagraph() : nullptr;
+    auto paintParagraph = ellipsisDisplay ? getPaintParagraphSnapshot() : nullptr;
     auto* paragraph = ellipsisDisplay ? paintParagraph.get() : paragraph_.get();
     const auto paintScrollX = ellipsisDisplay ? 0.0f : scrollX_;
     const auto paintScrollY = ellipsisDisplay ? 0.0f : scrollY_;
@@ -1225,12 +1227,12 @@ void InputBox::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, S
         canvas->clipRect(SkRect::MakeXYWH(x, y, clipWidth, clipHeight));
     }
 
-    const auto selectionRects = ellipsisDisplay ? std::vector<InputBoxCaretRect>() : getSelectionRects();
-    if (!selectionRects.empty()) {
+    const auto selectionRects = ellipsisDisplay ? nullptr : getSelectionRectsSnapshot();
+    if (selectionRects != nullptr && !selectionRects->empty()) {
         SkPaint paint;
         paint.setColor(selectionColor_);
         paint.setStyle(SkPaint::kFill_Style);
-        for (const auto& rect: selectionRects) {
+        for (const auto& rect: *selectionRects) {
             canvas->drawRect(SkRect::MakeLTRB(x + rect.left - paintScrollX,
                                               y + rect.top - paintScrollY,
                                               x + rect.right - paintScrollX,
@@ -1274,10 +1276,10 @@ void InputBox::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, S
 std::unique_ptr<InputBoxDrawSnapshot> InputBox::createDrawSnapshot() {
     rebuildParagraphIfNeeded();
     const auto ellipsisDisplay = shouldUseEllipsisDisplay();
-    auto paragraph = buildPaintParagraph();
+    auto paragraph = getPaintParagraphSnapshot();
     auto caretRect = getCaretRect();
     auto compositionRect = getCompositionRect();
-    auto selectionRects = ellipsisDisplay ? std::vector<InputBoxCaretRect>() : getSelectionRects();
+    auto selectionRects = ellipsisDisplay ? nullptr : getSelectionRectsSnapshot();
     const auto snapshotScrollX = ellipsisDisplay ? 0.0f : scrollX_;
     const auto snapshotScrollY = ellipsisDisplay ? 0.0f : scrollY_;
     const auto snapshotContentWidth = ellipsisDisplay ? viewportWidth_ : contentWidth();
@@ -1337,6 +1339,28 @@ void InputBox::configureInputParagraphMetrics() {
     paragraphStyle_.setStrutStyle(strutStyle);
 }
 
+void InputBox::markParagraphDirty() {
+    paragraphDirty_ = true;
+    paintParagraphDirty_ = true;
+    selectionRectsDirty_ = true;
+    paintParagraphCache_.reset();
+    selectionRectsCache_.reset();
+}
+
+void InputBox::markSelectionStateDirty() {
+    if (!compositionText_.empty()) {
+        markParagraphDirty();
+        return;
+    }
+
+    markSelectionRectsDirty();
+}
+
+void InputBox::markSelectionRectsDirty() {
+    selectionRectsDirty_ = true;
+    selectionRectsCache_.reset();
+}
+
 void InputBox::rebuildParagraphIfNeeded() {
     if (!paragraphDirty_ && paragraph_ != nullptr) {
         return;
@@ -1382,6 +1406,27 @@ std::unique_ptr<::skia::textlayout::Paragraph> InputBox::buildParagraphForText(c
 
 std::unique_ptr<::skia::textlayout::Paragraph> InputBox::buildPaintParagraph() const {
     return buildParagraphForText(displayText(), shouldUseEllipsisDisplay());
+}
+
+std::shared_ptr<::skia::textlayout::Paragraph> InputBox::getPaintParagraphSnapshot() {
+    rebuildParagraphIfNeeded();
+    if (paintParagraphDirty_ || paintParagraphCache_ == nullptr) {
+        auto paragraph = buildPaintParagraph();
+        paintParagraphCache_ = std::shared_ptr<::skia::textlayout::Paragraph>(std::move(paragraph));
+        paintParagraphDirty_ = false;
+    }
+
+    return paintParagraphCache_;
+}
+
+std::shared_ptr<const std::vector<InputBoxCaretRect>> InputBox::getSelectionRectsSnapshot() {
+    rebuildParagraphIfNeeded();
+    if (selectionRectsDirty_ || selectionRectsCache_ == nullptr) {
+        selectionRectsCache_ = std::make_shared<std::vector<InputBoxCaretRect>>(buildSelectionRects());
+        selectionRectsDirty_ = false;
+    }
+
+    return selectionRectsCache_;
 }
 
 bool InputBox::shouldUseEllipsisDisplay() const {
@@ -1558,6 +1603,14 @@ size_t InputBox::compositionReplacedEndUtf8() const {
 
 size_t InputBox::committedUtf8FromDisplay(size_t displayUtf8) const {
     return displayTextState().committedUtf8FromDisplay(displayUtf8);
+}
+
+std::vector<InputBoxCaretRect> InputBox::buildSelectionRects() {
+    if (!hasSelection() || !compositionText_.empty()) {
+        return {};
+    }
+
+    return getRectsForCommittedRange(selectionStartUtf8(), selectionEndUtf8());
 }
 
 std::vector<InputBoxCaretRect> InputBox::getRectsForCommittedRange(size_t startUtf8, size_t endUtf8) {
@@ -2012,11 +2065,24 @@ void InputBox::ensureRectVisible(const InputBoxCaretRect& rect) {
     scrollY_ = ClampScalar(scrollY_, 0.0f, maxScrollYValue);
 }
 
-void InputBox::resetSelectionToCursor() {
+bool InputBox::resetSelectionToCursor() {
+    const auto oldAnchor = selectionAnchorUtf8_;
+    const auto oldFocus = selectionFocusUtf8_;
+    const auto oldAnchorAffinity = selectionAnchorAffinity_;
+    const auto oldFocusAffinity = selectionFocusAffinity_;
+
     selectionAnchorUtf8_ = boundaryMap_.snapUtf8(cursorUtf8_, TextBoundarySnapMode::Nearest);
     selectionFocusUtf8_ = selectionAnchorUtf8_;
     selectionAnchorAffinity_ = affinity_;
     selectionFocusAffinity_ = affinity_;
+    const bool changed = selectionAnchorUtf8_ != oldAnchor ||
+                         selectionFocusUtf8_ != oldFocus ||
+                         selectionAnchorAffinity_ != oldAnchorAffinity ||
+                         selectionFocusAffinity_ != oldFocusAffinity;
+    if (changed) {
+        markSelectionStateDirty();
+    }
+    return changed;
 }
 
 void InputBox::resetPreferredCaretX() {
@@ -2070,7 +2136,7 @@ void InputBox::replaceText(std::string text, size_t requestedCursor) {
     affinity_ = ::skia::textlayout::Affinity::kDownstream;
     resetSelectionToCursor();
     resetPreferredCaretX();
-    paragraphDirty_ = true;
+    markParagraphDirty();
     ensureCaretVisible();
 }
 
@@ -2099,7 +2165,7 @@ void InputBox::restoreEditState(const EditState& state) {
     selectionAnchorAffinity_ = state.selectionAnchorAffinity;
     selectionFocusAffinity_ = state.selectionFocusAffinity;
     resetPreferredCaretX();
-    paragraphDirty_ = true;
+    markParagraphDirty();
     ensureCaretVisible();
 }
 
@@ -2182,14 +2248,14 @@ size_t InputBox::editHistoryByteCost(const std::vector<EditGroup>& stack) {
 }
 
 void InputBox::markCompositionDirty() {
-    paragraphDirty_ = true;
+    markParagraphDirty();
 }
 
-InputBoxDrawSnapshot::InputBoxDrawSnapshot(std::unique_ptr<::skia::textlayout::Paragraph> paragraph,
+InputBoxDrawSnapshot::InputBoxDrawSnapshot(std::shared_ptr<::skia::textlayout::Paragraph> paragraph,
                                            InputBoxCaretRect caretRect,
                                            InputBoxMetrics metrics,
                                            InputBoxCaretRect compositionRect,
-                                           std::vector<InputBoxCaretRect> selectionRects,
+                                           std::shared_ptr<const std::vector<InputBoxCaretRect>> selectionRects,
                                            SkScalar caretWidth,
                                            SkScalar visualOffsetY,
                                            SkColor caretColor,
@@ -2222,11 +2288,11 @@ void InputBoxDrawSnapshot::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkSca
         canvas->clipRect(SkRect::MakeXYWH(x, y, clipWidth, clipHeight));
     }
 
-    if (!selectionRects_.empty()) {
+    if (selectionRects_ != nullptr && !selectionRects_->empty()) {
         SkPaint paint;
         paint.setColor(selectionColor_);
         paint.setStyle(SkPaint::kFill_Style);
-        for (const auto& rect: selectionRects_) {
+        for (const auto& rect: *selectionRects_) {
             canvas->drawRect(SkRect::MakeLTRB(x + rect.left - metrics_.scrollX,
                                               y + rect.top - metrics_.scrollY,
                                               x + rect.right - metrics_.scrollX,

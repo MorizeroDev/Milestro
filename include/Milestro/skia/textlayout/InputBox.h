@@ -210,6 +210,8 @@ private:
     bool maskInput_ = false;
     bool centerSingleLineVertically_ = true;
     bool paragraphDirty_ = true;
+    bool paintParagraphDirty_ = true;
+    bool selectionRectsDirty_ = true;
     TextOverflow textOverflow_ = TextOverflow::Clip;
     std::string ellipsisText_ = "\xE2\x80\xA6";
     std::string maskText_ = "*";
@@ -218,6 +220,8 @@ private:
     size_t selectionFocusUtf8_ = 0;
     ::skia::textlayout::Affinity selectionAnchorAffinity_ = ::skia::textlayout::Affinity::kDownstream;
     ::skia::textlayout::Affinity selectionFocusAffinity_ = ::skia::textlayout::Affinity::kDownstream;
+    std::shared_ptr<::skia::textlayout::Paragraph> paintParagraphCache_;
+    std::shared_ptr<const std::vector<InputBoxCaretRect>> selectionRectsCache_;
 
     enum class EditKind {
         Typing,
@@ -264,11 +268,17 @@ private:
     };
 
     void configureInputParagraphMetrics();
+    void markParagraphDirty();
+    void markSelectionStateDirty();
+    void markSelectionRectsDirty();
     void rebuildParagraphIfNeeded();
     std::unique_ptr<::skia::textlayout::Paragraph> buildParagraph() const;
     std::unique_ptr<::skia::textlayout::Paragraph> buildParagraphForText(const std::string& text,
                                                                          bool ellipsize) const;
     std::unique_ptr<::skia::textlayout::Paragraph> buildPaintParagraph() const;
+    std::shared_ptr<::skia::textlayout::Paragraph> getPaintParagraphSnapshot();
+    std::shared_ptr<const std::vector<InputBoxCaretRect>> getSelectionRectsSnapshot();
+    std::vector<InputBoxCaretRect> buildSelectionRects();
     bool shouldUseEllipsisDisplay() const;
     bool shouldClipDisplayToViewport() const;
     InputBoxMetrics metricsForParagraph(::skia::textlayout::Paragraph* paragraph,
@@ -310,7 +320,7 @@ private:
     SkScalar maxScrollY();
     InputBoxCaretRect activeEnsureVisibleRect();
     void ensureRectVisible(const InputBoxCaretRect& rect);
-    void resetSelectionToCursor();
+    bool resetSelectionToCursor();
     void resetPreferredCaretX();
     bool replaceSelectionWith(std::string replacement);
     bool deleteSelection();
@@ -335,11 +345,11 @@ private:
 
 class MILESTRO_API InputBoxDrawSnapshot {
 public:
-    InputBoxDrawSnapshot(std::unique_ptr<::skia::textlayout::Paragraph> paragraph,
+    InputBoxDrawSnapshot(std::shared_ptr<::skia::textlayout::Paragraph> paragraph,
                          InputBoxCaretRect caretRect,
                          InputBoxMetrics metrics,
                          InputBoxCaretRect compositionRect,
-                         std::vector<InputBoxCaretRect> selectionRects,
+                         std::shared_ptr<const std::vector<InputBoxCaretRect>> selectionRects,
                          SkScalar caretWidth,
                          SkScalar visualOffsetY,
                          SkColor caretColor,
@@ -351,11 +361,11 @@ public:
     void paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, SkScalar height) const;
 
 private:
-    std::unique_ptr<::skia::textlayout::Paragraph> paragraph_;
+    std::shared_ptr<::skia::textlayout::Paragraph> paragraph_;
     InputBoxCaretRect caretRect_;
     InputBoxMetrics metrics_;
     InputBoxCaretRect compositionRect_;
-    std::vector<InputBoxCaretRect> selectionRects_;
+    std::shared_ptr<const std::vector<InputBoxCaretRect>> selectionRects_;
     SkScalar caretWidth_ = 1.0f;
     SkScalar visualOffsetY_ = 0.0f;
     SkColor caretColor_ = SK_ColorWHITE;
