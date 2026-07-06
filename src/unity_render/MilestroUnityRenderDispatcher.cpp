@@ -10,6 +10,7 @@
 
 #include <array>
 #include <atomic>
+#include <cstring>
 #include <mutex>
 #include <vector>
 
@@ -114,7 +115,9 @@ bool IsRenderDrainPayload(void* data) {
         return false;
     }
 
-    return *static_cast<int32_t*>(data) == kRenderDrainMagic;
+    int32_t magic = 0;
+    std::memcpy(&magic, data, sizeof(magic));
+    return magic == kRenderDrainMagic;
 }
 
 int SubmissionQueueIndex(int32_t graphicsBackend) {
