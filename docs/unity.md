@@ -14,7 +14,6 @@ compiling Milestro:
 ```json
 {
   "dependencies": {
-    "com.morizero.milease": "https://github.com/MorizeroDev/Milease.git",
     "party.para.util.colors": "https://github.com/ParaParty/ParaPartyUtil.git?path=Colors",
     "party.para.util.unitynative": "https://github.com/ParaParty/ParaPartyUtil.git?path=UnityNative"
   }
@@ -23,8 +22,6 @@ compiling Milestro:
 
 Why they are required:
 
-- `com.morizero.milease`: used by scroll tweening helpers for smooth text and
-  input scrolling.
 - `party.para.util.colors`: used by `Milestro.RichTextParser` for color parsing
   and serialization.
 - `party.para.util.unitynative`: used by managed native-object wrappers,

@@ -1,3 +1,4 @@
+using Milestro.Configuration;
 using Milestro.InputManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -39,6 +40,59 @@ namespace Milestro.Util
         {
             return !Mathf.Approximately(scrollDelta.x, 0f) ||
                    !Mathf.Approximately(scrollDelta.y, 0f);
+        }
+
+        internal static bool ShouldBypassTweenForPointerScroll(Vector2 scrollDelta)
+        {
+            var configuration = MilestroConfiguration.Configuration?.ScrollTween;
+            var mode = configuration?.PointerScrollTweenMode ?? PointerScrollTweenMode.Auto;
+            switch (mode)
+            {
+                case PointerScrollTweenMode.AlwaysTween:
+                    return false;
+                case PointerScrollTweenMode.BypassFractional:
+                    return HasFractionalScrollDelta(scrollDelta, ResolveFractionalDeltaTolerance(configuration));
+                case PointerScrollTweenMode.Auto:
+                default:
+                    return IsPlatformAutoBypassScroll(scrollDelta, ResolveFractionalDeltaTolerance(configuration));
+            }
+        }
+
+        private static bool IsPlatformAutoBypassScroll(Vector2 scrollDelta, float fractionalDeltaTolerance)
+        {
+#if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+            return HasFractionalScrollDelta(scrollDelta, fractionalDeltaTolerance);
+#else
+            return false;
+#endif
+        }
+
+        private static bool HasFractionalScrollDelta(Vector2 scrollDelta, float fractionalDeltaTolerance)
+        {
+            return HasFractionalValue(scrollDelta.x, fractionalDeltaTolerance) ||
+                   HasFractionalValue(scrollDelta.y, fractionalDeltaTolerance);
+        }
+
+        private static bool HasFractionalValue(float value, float fractionalDeltaTolerance)
+        {
+            if (!FloatUtil.IsFinite(value))
+            {
+                return false;
+            }
+
+            return Mathf.Abs(value - Mathf.Round(value)) > fractionalDeltaTolerance;
+        }
+
+        private static float ResolveFractionalDeltaTolerance(ScrollTweenConfiguration? configuration)
+        {
+            var tolerance = configuration?.FractionalDeltaTolerance ??
+                            ScrollTweenConfiguration.DefaultFractionalDeltaTolerance;
+            if (!FloatUtil.IsFinite(tolerance))
+            {
+                return ScrollTweenConfiguration.DefaultFractionalDeltaTolerance;
+            }
+
+            return Mathf.Clamp(tolerance, 0f, 0.5f);
         }
     }
 }

@@ -114,7 +114,7 @@ namespace Milestro.Components
             var hasOverflow = HasOverflow(state.ViewportWidth, state.ContentWidth);
             m_horizontalScrollbar.size = hasOverflow ? ThumbSize(state.ViewportWidth, state.ContentWidth) : 1f;
             m_horizontalScrollbar.SetValueWithoutNotify(hasOverflow
-                ? ScrollPercent(state.ScrollX, state.ViewportWidth, state.ContentWidth)
+                ? ScrollOffsetToPercent(state.ScrollX, state.ViewportWidth, state.ContentWidth)
                 : 0f);
             SetScrollbarVisible(m_horizontalScrollbar, hasOverflow);
         }
@@ -129,7 +129,7 @@ namespace Milestro.Components
             var hasOverflow = HasOverflow(state.ViewportHeight, state.ContentHeight);
             m_verticalScrollbar.size = hasOverflow ? ThumbSize(state.ViewportHeight, state.ContentHeight) : 1f;
             m_verticalScrollbar.SetValueWithoutNotify(hasOverflow
-                ? 1f - ScrollPercent(state.ScrollY, state.ViewportHeight, state.ContentHeight)
+                ? 1f - ScrollOffsetToPercent(state.ScrollY, state.ViewportHeight, state.ContentHeight)
                 : 1f);
             SetScrollbarVisible(m_verticalScrollbar, hasOverflow);
         }
@@ -146,7 +146,7 @@ namespace Milestro.Components
                 return;
             }
 
-            Target.ScrollPercentX = value;
+            Target.ScrollToPercentX(value);
         }
 
         private void OnVerticalScrollbarValueChanged(float value)
@@ -157,7 +157,7 @@ namespace Milestro.Components
             }
 
             var scrollPercent = 1f - value;
-            Target.ScrollPercentY = scrollPercent;
+            Target.ScrollToPercentY(scrollPercent);
         }
 
         private ITextBoxScrollTarget Target
@@ -202,7 +202,7 @@ namespace Milestro.Components
             return Mathf.Clamp01(viewportSize / contentSize);
         }
 
-        private static float ScrollPercent(float scrollOffset, float viewportSize, float contentSize)
+        private static float ScrollOffsetToPercent(float scrollOffset, float viewportSize, float contentSize)
         {
             return FloatUtil.ScrollOffsetToPercent(scrollOffset, contentSize - viewportSize);
         }

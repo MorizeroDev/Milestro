@@ -6,6 +6,7 @@ namespace Milestro.Configuration
 
         public InputBoxShortcutConfiguration InputBoxShortcut { get; set; } = new InputBoxShortcutConfiguration();
         public ScrollAxisLockConfiguration ScrollAxisLock { get; set; } = new ScrollAxisLockConfiguration();
+        public ScrollTweenConfiguration ScrollTween { get; set; } = new ScrollTweenConfiguration();
 
         public TextInputConfiguration TextInput { get; set; } = new TextInputConfiguration();
         public WorldSpaceTextBoxConfiguration WorldSpaceTextBox { get; set; } = new WorldSpaceTextBoxConfiguration();

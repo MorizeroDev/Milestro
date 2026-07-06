@@ -148,11 +148,12 @@ namespace Milestro.Components
                 return;
             }
 
+            var shouldTweenPointerScroll = ShouldTweenPointerScroll(eventData.scrollDelta);
             var unusedScrollDelta = Vector2.zero;
             var consumed = false;
             if (axis == ScrollAxis.Horizontal || axis == ScrollAxis.Free)
             {
-                if (TryScrollX(producer, contentOffsetDelta.x, stepPixels))
+                if (TryScrollX(producer, contentOffsetDelta.x, stepPixels, shouldTweenPointerScroll))
                 {
                     consumed = true;
                 }
@@ -164,7 +165,7 @@ namespace Milestro.Components
 
             if (axis == ScrollAxis.Vertical || axis == ScrollAxis.Free)
             {
-                if (TryScrollY(producer, contentOffsetDelta.y, stepPixels))
+                if (TryScrollY(producer, contentOffsetDelta.y, stepPixels, shouldTweenPointerScroll))
                 {
                     consumed = true;
                 }
@@ -184,79 +185,72 @@ namespace Milestro.Components
             eventData.Use();
         }
 
-        public Vector2 ScrollPercent
+        public Vector2 GetScrollPercent()
         {
-            get
-            {
-                var producer = ProducerComponent();
-                producer.RebuildOutput(forceText: false);
-                ApplyProducerOutput(producer, force: false);
-                return new Vector2(GetScrollPercentX(producer), GetScrollPercentY(producer));
-            }
-            set
-            {
-                var producer = ProducerComponent();
-                producer.RebuildOutput(forceText: false);
-                ApplyProducerOutput(producer, force: false);
+            var producer = ProducerComponent();
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: false);
+            return new Vector2(ResolveScrollPercentX(producer), ResolveScrollPercentY(producer));
+        }
 
-                var changed = SetScrollPercentX(producer, value.x);
-                changed |= SetScrollPercentY(producer, value.y);
-                if (!changed)
-                {
-                    return;
-                }
+        public float GetScrollPercentX()
+        {
+            var producer = ProducerComponent();
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: false);
+            return ResolveScrollPercentX(producer);
+        }
 
+        public float GetScrollPercentY()
+        {
+            var producer = ProducerComponent();
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: false);
+            return ResolveScrollPercentY(producer);
+        }
+
+        public void ScrollToPercent(Vector2 percent, bool animated = false)
+        {
+            var producer = ProducerComponent();
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: false);
+
+            var shouldAnimate = animated && ShouldTweenScroll();
+            var changed = SetScrollPercentX(producer, percent.x, shouldAnimate);
+            changed |= SetScrollPercentY(producer, percent.y, shouldAnimate);
+            if (changed)
+            {
                 producer.RebuildOutput(forceText: false);
                 ApplyProducerOutput(producer, force: true);
             }
         }
 
-        public float ScrollPercentX
+        public void ScrollToPercentX(float percent, bool animated = false)
         {
-            get
+            var producer = ProducerComponent();
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: false);
+            if (!SetScrollPercentX(producer, percent, animated && ShouldTweenScroll()))
             {
-                var producer = ProducerComponent();
-                producer.RebuildOutput(forceText: false);
-                ApplyProducerOutput(producer, force: false);
-                return GetScrollPercentX(producer);
+                return;
             }
-            set
-            {
-                var producer = ProducerComponent();
-                producer.RebuildOutput(forceText: false);
-                ApplyProducerOutput(producer, force: false);
-                if (!SetScrollPercentX(producer, value))
-                {
-                    return;
-                }
 
-                producer.RebuildOutput(forceText: false);
-                ApplyProducerOutput(producer, force: true);
-            }
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: true);
         }
 
-        public float ScrollPercentY
+        public void ScrollToPercentY(float percent, bool animated = false)
         {
-            get
+            var producer = ProducerComponent();
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: false);
+            if (!SetScrollPercentY(producer, percent, animated && ShouldTweenScroll()))
             {
-                var producer = ProducerComponent();
-                producer.RebuildOutput(forceText: false);
-                ApplyProducerOutput(producer, force: false);
-                return GetScrollPercentY(producer);
+                return;
             }
-            set
-            {
-                var producer = ProducerComponent();
-                producer.RebuildOutput(forceText: false);
-                ApplyProducerOutput(producer, force: false);
-                if (!SetScrollPercentY(producer, value))
-                {
-                    return;
-                }
 
-                producer.RebuildOutput(forceText: false);
-                ApplyProducerOutput(producer, force: true);
-            }
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: true);
         }
 
         public bool TryGetScrollState(out TextBoxScrollState state)
@@ -279,61 +273,84 @@ namespace Milestro.Components
             return true;
         }
 
-        private bool TryScrollX(TextBoxRenderTextureProducer producer, float contentOffsetDelta, float stepPixels)
+        private bool TryScrollX(TextBoxRenderTextureProducer producer,
+            float contentOffsetDelta,
+            float stepPixels,
+            bool tweenScroll)
         {
             if (Mathf.Approximately(contentOffsetDelta, 0f))
             {
                 return false;
             }
 
-            var previousScrollX = scrollTweenX.IsActive ? scrollTweenX.Target : producer.scrollX;
-            var nextScrollX = Mathf.Clamp(previousScrollX + contentOffsetDelta * stepPixels,
-                0f,
-                producer.maxScrollX);
-            if (!Mathf.Approximately(previousScrollX, nextScrollX))
+            var deltaPixels = contentOffsetDelta * stepPixels;
+            if (tweenScroll)
             {
-                ScrollToX(producer, nextScrollX);
-                return true;
+                return scrollTweenX.ScrollBy(producer.scrollX, deltaPixels, producer.maxScrollX) ||
+                       scrollTweenX.IsActive();
             }
 
-            return scrollTweenX.IsActive;
+            scrollTweenX.Cancel();
+            var nextScrollX = Mathf.Clamp(producer.scrollX + deltaPixels, 0f, producer.maxScrollX);
+            if (Mathf.Approximately(producer.scrollX, nextScrollX))
+            {
+                return false;
+            }
+
+            producer.scrollX = nextScrollX;
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: true);
+            return true;
         }
 
-        private bool TryScrollY(TextBoxRenderTextureProducer producer, float contentOffsetDelta, float stepPixels)
+        private bool TryScrollY(TextBoxRenderTextureProducer producer,
+            float contentOffsetDelta,
+            float stepPixels,
+            bool tweenScroll)
         {
             if (Mathf.Approximately(contentOffsetDelta, 0f))
             {
                 return false;
             }
 
-            var previousScrollY = scrollTweenY.IsActive ? scrollTweenY.Target : producer.scrollY;
-            var nextScrollY = Mathf.Clamp(previousScrollY + contentOffsetDelta * stepPixels,
-                0f,
-                producer.maxScrollY);
-            if (!Mathf.Approximately(previousScrollY, nextScrollY))
+            var deltaPixels = contentOffsetDelta * stepPixels;
+            if (tweenScroll)
             {
-                ScrollToY(producer, nextScrollY);
-                return true;
+                return scrollTweenY.ScrollBy(producer.scrollY, deltaPixels, producer.maxScrollY) ||
+                       scrollTweenY.IsActive();
             }
 
-            return scrollTweenY.IsActive;
+            scrollTweenY.Cancel();
+            var nextScrollY = Mathf.Clamp(producer.scrollY + deltaPixels, 0f, producer.maxScrollY);
+            if (Mathf.Approximately(producer.scrollY, nextScrollY))
+            {
+                return false;
+            }
+
+            producer.scrollY = nextScrollY;
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: true);
+            return true;
         }
 
-        private static float GetScrollPercentX(TextBoxRenderTextureProducer producer)
+        private static float ResolveScrollPercentX(TextBoxRenderTextureProducer producer)
         {
             return FloatUtil.ScrollOffsetToPercent(producer.scrollX, producer.maxScrollX);
         }
 
-        private static float GetScrollPercentY(TextBoxRenderTextureProducer producer)
+        private static float ResolveScrollPercentY(TextBoxRenderTextureProducer producer)
         {
             return FloatUtil.ScrollOffsetToPercent(producer.scrollY, producer.maxScrollY);
         }
 
-        private bool SetScrollPercentX(TextBoxRenderTextureProducer producer, float percent)
+        private bool SetScrollPercentX(TextBoxRenderTextureProducer producer, float percent, bool animated)
         {
             var nextScrollX = FloatUtil.PercentToScrollOffset(percent, producer.maxScrollX);
-            scrollTweenX.Cancel();
-            if (Mathf.Approximately(producer.scrollX, nextScrollX))
+            if (!scrollTweenX.ScrollTo(producer.scrollX,
+                    nextScrollX,
+                    producer.maxScrollX,
+                    out nextScrollX,
+                    animated))
             {
                 return false;
             }
@@ -342,45 +359,20 @@ namespace Milestro.Components
             return true;
         }
 
-        private bool SetScrollPercentY(TextBoxRenderTextureProducer producer, float percent)
+        private bool SetScrollPercentY(TextBoxRenderTextureProducer producer, float percent, bool animated)
         {
             var nextScrollY = FloatUtil.PercentToScrollOffset(percent, producer.maxScrollY);
-            scrollTweenY.Cancel();
-            if (Mathf.Approximately(producer.scrollY, nextScrollY))
+            if (!scrollTweenY.ScrollTo(producer.scrollY,
+                    nextScrollY,
+                    producer.maxScrollY,
+                    out nextScrollY,
+                    animated))
             {
                 return false;
             }
 
             producer.scrollY = nextScrollY;
             return true;
-        }
-
-        private void ScrollToX(TextBoxRenderTextureProducer producer, float nextScrollX)
-        {
-            if (!ShouldTweenScroll())
-            {
-                scrollTweenX.Cancel();
-                producer.scrollX = nextScrollX;
-                producer.RebuildOutput(forceText: false);
-                ApplyProducerOutput(producer, force: true);
-                return;
-            }
-
-            scrollTweenX.Start(producer.scrollX, nextScrollX);
-        }
-
-        private void ScrollToY(TextBoxRenderTextureProducer producer, float nextScrollY)
-        {
-            if (!ShouldTweenScroll())
-            {
-                scrollTweenY.Cancel();
-                producer.scrollY = nextScrollY;
-                producer.RebuildOutput(forceText: false);
-                ApplyProducerOutput(producer, force: true);
-                return;
-            }
-
-            scrollTweenY.Start(producer.scrollY, nextScrollY);
         }
 
         private void TickScrollTweens(TextBoxRenderTextureProducer producer)
@@ -415,13 +407,18 @@ namespace Milestro.Components
             return tween.Tick(currentValue,
                     maxValue,
                     Time.deltaTime,
-                    ScrollTweenDurationSeconds(),
                     out nextValue);
         }
 
         private bool ShouldTweenScroll()
         {
             return Application.isPlaying && m_smoothScroll && ScrollTweenDurationSeconds() > 0f;
+        }
+
+        private bool ShouldTweenPointerScroll(Vector2 scrollDelta)
+        {
+            return ShouldTweenScroll() &&
+                   !ScrollEventUtil.ShouldBypassTweenForPointerScroll(scrollDelta);
         }
 
         private void CancelScrollTweens()

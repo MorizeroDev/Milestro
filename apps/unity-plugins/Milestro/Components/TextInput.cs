@@ -509,17 +509,18 @@ namespace Milestro.Components
             }
 
             var stepPixels = ScrollWheelStepPixels();
+            var shouldTweenPointerScroll = ShouldTweenPointerScroll(eventData.scrollDelta);
             var handledX = (axis == ScrollAxis.Horizontal || axis == ScrollAxis.Free) &&
-                           TryScrollX(inputBox, contentOffsetDelta.x, stepPixels);
+                           TryScrollX(inputBox, contentOffsetDelta.x, stepPixels, shouldTweenPointerScroll);
             var handledY = (axis == ScrollAxis.Vertical || axis == ScrollAxis.Free) &&
-                           TryScrollY(inputBox, contentOffsetDelta.y, stepPixels);
+                           TryScrollY(inputBox, contentOffsetDelta.y, stepPixels, shouldTweenPointerScroll);
             if (!handledX && !handledY)
             {
                 ScrollEventUtil.PassScrollToParent(transform, eventData, lockedScrollDelta);
                 return;
             }
 
-            if (!ShouldTweenScroll())
+            if (!shouldTweenPointerScroll)
             {
                 paintDirty = true;
                 RebuildResources();
@@ -535,72 +536,65 @@ namespace Milestro.Components
             eventData.Use();
         }
 
-        public Vector2 ScrollPercent
+        public Vector2 GetScrollPercent()
         {
-            get
+            if (!TryGetScrollMetrics(out var metrics))
             {
-                if (!TryGetScrollMetrics(out var metrics))
-                {
-                    return Vector2.zero;
-                }
-
-                return new Vector2(GetScrollPercentX(metrics), GetScrollPercentY(metrics));
+                return Vector2.zero;
             }
-            set
+
+            return new Vector2(ResolveScrollPercentX(metrics), ResolveScrollPercentY(metrics));
+        }
+
+        public float GetScrollPercentX()
+        {
+            return TryGetScrollMetrics(out var metrics) ? ResolveScrollPercentX(metrics) : 0f;
+        }
+
+        public float GetScrollPercentY()
+        {
+            return TryGetScrollMetrics(out var metrics) ? ResolveScrollPercentY(metrics) : 0f;
+        }
+
+        public void ScrollToPercent(Vector2 percent, bool animated = false)
+        {
+            if (!TryGetScrollEditor(out var editor, out var metrics))
             {
-                if (!TryGetScrollEditor(out var editor, out var metrics))
-                {
-                    return;
-                }
+                return;
+            }
 
-                var changed = SetScrollPercentX(editor, metrics, value.x);
-                changed |= SetScrollPercentY(editor, metrics, value.y);
-                if (!changed)
-                {
-                    return;
-                }
-
+            var shouldAnimate = animated && ShouldTweenScroll();
+            var changed = SetScrollPercentX(editor, metrics, percent.x, shouldAnimate);
+            changed |= SetScrollPercentY(editor, metrics, percent.y, shouldAnimate);
+            if (changed)
+            {
                 paintDirty = true;
                 RebuildResources();
             }
         }
 
-        public float ScrollPercentX
+        public void ScrollToPercentX(float percent, bool animated = false)
         {
-            get
+            if (!TryGetScrollEditor(out var editor, out var metrics) ||
+                !SetScrollPercentX(editor, metrics, percent, animated && ShouldTweenScroll()))
             {
-                return TryGetScrollMetrics(out var metrics) ? GetScrollPercentX(metrics) : 0f;
+                return;
             }
-            set
-            {
-                if (!TryGetScrollEditor(out var editor, out var metrics) ||
-                    !SetScrollPercentX(editor, metrics, value))
-                {
-                    return;
-                }
 
-                paintDirty = true;
-                RebuildResources();
-            }
+            paintDirty = true;
+            RebuildResources();
         }
 
-        public float ScrollPercentY
+        public void ScrollToPercentY(float percent, bool animated = false)
         {
-            get
+            if (!TryGetScrollEditor(out var editor, out var metrics) ||
+                !SetScrollPercentY(editor, metrics, percent, animated && ShouldTweenScroll()))
             {
-                return TryGetScrollMetrics(out var metrics) ? GetScrollPercentY(metrics) : 0f;
+                return;
             }
-            set
-            {
-                if (!TryGetScrollEditor(out var editor, out var metrics) ||
-                    !SetScrollPercentY(editor, metrics, value))
-                {
-                    return;
-                }
 
-                paintDirty = true;
-                RebuildResources();
-            }
+            paintDirty = true;
+            RebuildResources();
         }
 
         public bool TryGetScrollState(out TextBoxScrollState state)
@@ -620,7 +614,7 @@ namespace Milestro.Components
             return true;
         }
 
-        private bool TryScrollX(InputBox editor, float contentOffsetDelta, float stepPixels)
+        private bool TryScrollX(InputBox editor, float contentOffsetDelta, float stepPixels, bool tweenScroll)
         {
             if (Mathf.Approximately(contentOffsetDelta, 0f))
             {
@@ -629,20 +623,18 @@ namespace Milestro.Components
 
             var metrics = editor.GetMetrics();
             scrollTweenX.CancelIfExternallyMoved(metrics.ScrollX);
-            var previousScrollX = scrollTweenX.IsActive ? scrollTweenX.Target : metrics.ScrollX;
-            var nextScrollX = Mathf.Clamp(previousScrollX + contentOffsetDelta * stepPixels,
-                0f,
-                MaxScrollX(metrics));
-            if (!Mathf.Approximately(previousScrollX, nextScrollX))
+            var deltaPixels = contentOffsetDelta * stepPixels;
+            if (tweenScroll)
             {
-                ScrollToX(editor, metrics, nextScrollX);
-                return true;
+                return scrollTweenX.ScrollBy(metrics.ScrollX, deltaPixels, MaxScrollX(metrics)) ||
+                       scrollTweenX.IsActive();
             }
 
-            return scrollTweenX.IsActive;
+            scrollTweenX.Cancel();
+            return editor.ScrollByX(deltaPixels);
         }
 
-        private bool TryScrollY(InputBox editor, float contentOffsetDelta, float stepPixels)
+        private bool TryScrollY(InputBox editor, float contentOffsetDelta, float stepPixels, bool tweenScroll)
         {
             if (Mathf.Approximately(contentOffsetDelta, 0f))
             {
@@ -651,17 +643,15 @@ namespace Milestro.Components
 
             var metrics = editor.GetMetrics();
             scrollTweenY.CancelIfExternallyMoved(metrics.ScrollY);
-            var previousScrollY = scrollTweenY.IsActive ? scrollTweenY.Target : metrics.ScrollY;
-            var nextScrollY = Mathf.Clamp(previousScrollY + contentOffsetDelta * stepPixels,
-                0f,
-                MaxScrollY(metrics));
-            if (!Mathf.Approximately(previousScrollY, nextScrollY))
+            var deltaPixels = contentOffsetDelta * stepPixels;
+            if (tweenScroll)
             {
-                ScrollToY(editor, metrics, nextScrollY);
-                return true;
+                return scrollTweenY.ScrollBy(metrics.ScrollY, deltaPixels, MaxScrollY(metrics)) ||
+                       scrollTweenY.IsActive();
             }
 
-            return scrollTweenY.IsActive;
+            scrollTweenY.Cancel();
+            return editor.ScrollByY(deltaPixels);
         }
 
         private bool TryGetScrollMetrics(out InputBoxMetrics metrics)
@@ -701,21 +691,24 @@ namespace Milestro.Components
             return true;
         }
 
-        private static float GetScrollPercentX(InputBoxMetrics metrics)
+        private static float ResolveScrollPercentX(InputBoxMetrics metrics)
         {
             return FloatUtil.ScrollOffsetToPercent(metrics.ScrollX, MaxScrollX(metrics));
         }
 
-        private static float GetScrollPercentY(InputBoxMetrics metrics)
+        private static float ResolveScrollPercentY(InputBoxMetrics metrics)
         {
             return FloatUtil.ScrollOffsetToPercent(metrics.ScrollY, MaxScrollY(metrics));
         }
 
-        private bool SetScrollPercentX(InputBox editor, InputBoxMetrics metrics, float percent)
+        private bool SetScrollPercentX(InputBox editor, InputBoxMetrics metrics, float percent, bool animated)
         {
             var nextScrollX = FloatUtil.PercentToScrollOffset(percent, MaxScrollX(metrics));
-            scrollTweenX.Cancel();
-            if (Mathf.Approximately(metrics.ScrollX, nextScrollX))
+            if (!scrollTweenX.ScrollTo(metrics.ScrollX,
+                    nextScrollX,
+                    MaxScrollX(metrics),
+                    out nextScrollX,
+                    animated))
             {
                 return false;
             }
@@ -723,11 +716,14 @@ namespace Milestro.Components
             return editor.ScrollByX(nextScrollX - metrics.ScrollX);
         }
 
-        private bool SetScrollPercentY(InputBox editor, InputBoxMetrics metrics, float percent)
+        private bool SetScrollPercentY(InputBox editor, InputBoxMetrics metrics, float percent, bool animated)
         {
             var nextScrollY = FloatUtil.PercentToScrollOffset(percent, MaxScrollY(metrics));
-            scrollTweenY.Cancel();
-            if (Mathf.Approximately(metrics.ScrollY, nextScrollY))
+            if (!scrollTweenY.ScrollTo(metrics.ScrollY,
+                    nextScrollY,
+                    MaxScrollY(metrics),
+                    out nextScrollY,
+                    animated))
             {
                 return false;
             }
@@ -735,39 +731,9 @@ namespace Milestro.Components
             return editor.ScrollByY(nextScrollY - metrics.ScrollY);
         }
 
-        private void ScrollToX(InputBox editor, InputBoxMetrics metrics, float nextScrollX)
-        {
-            if (!ShouldTweenScroll())
-            {
-                scrollTweenX.Cancel();
-                if (editor.ScrollByX(nextScrollX - metrics.ScrollX))
-                {
-                    paintDirty = true;
-                }
-                return;
-            }
-
-            scrollTweenX.Start(metrics.ScrollX, nextScrollX);
-        }
-
-        private void ScrollToY(InputBox editor, InputBoxMetrics metrics, float nextScrollY)
-        {
-            if (!ShouldTweenScroll())
-            {
-                scrollTweenY.Cancel();
-                if (editor.ScrollByY(nextScrollY - metrics.ScrollY))
-                {
-                    paintDirty = true;
-                }
-                return;
-            }
-
-            scrollTweenY.Start(metrics.ScrollY, nextScrollY);
-        }
-
         private void TickScrollTweens(InputBox editor)
         {
-            if (!scrollTweenX.IsActive && !scrollTweenY.IsActive)
+            if (!scrollTweenX.IsActive() && !scrollTweenY.IsActive())
             {
                 return;
             }
@@ -795,13 +761,18 @@ namespace Milestro.Components
             return tween.Tick(currentValue,
                 maxValue,
                 Time.deltaTime,
-                ScrollTweenDurationSeconds(),
                 out nextValue);
         }
 
         private bool ShouldTweenScroll()
         {
             return Application.isPlaying && m_smoothScroll && ScrollTweenDurationSeconds() > 0f;
+        }
+
+        private bool ShouldTweenPointerScroll(Vector2 scrollDelta)
+        {
+            return ShouldTweenScroll() &&
+                   !ScrollEventUtil.ShouldBypassTweenForPointerScroll(scrollDelta);
         }
 
         private void CancelScrollTweens()
