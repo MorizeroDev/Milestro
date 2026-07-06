@@ -28,6 +28,7 @@ IUnityGraphicsMetalV2* gMetalV2 = nullptr;
 IUnityGraphicsMetalV1* gMetalV1 = nullptr;
 sk_sp<GrDirectContext> gDirectContext;
 id<MTLCommandQueue> gDirectContextQueue = nil;
+bool gLoggedMissingCommandBufferSkip = false;
 
 constexpr int32_t kUnityColorSpaceLinear = 1;
 
@@ -53,6 +54,30 @@ id<MTLCommandQueue> CommandQueue() {
     return commandBuffer != nil ? commandBuffer.commandQueue : nil;
 }
 
+id<MTLCommandBuffer> CurrentCommandBuffer() {
+    if (gMetalV2 != nullptr) {
+        return gMetalV2->CurrentCommandBuffer();
+    }
+    if (gMetalV1 != nullptr) {
+        return gMetalV1->CurrentCommandBuffer();
+    }
+    return nil;
+}
+
+MTLRenderPassDescriptor* CurrentRenderPassDescriptor() {
+    if (gMetalV2 != nullptr) {
+        return gMetalV2->CurrentRenderPassDescriptor();
+    }
+    if (gMetalV1 != nullptr) {
+        return gMetalV1->CurrentRenderPassDescriptor();
+    }
+    return nil;
+}
+
+bool RequiresUnityRenderBufferLookup(const MilestroUnityRenderTargetPayload& payload) {
+    return payload.handleKind == static_cast<int32_t>(MilestroUnityRenderTextureHandleKind::RenderBuffer);
+}
+
 id<MTLTexture> TextureFromRenderBuffer(void* renderBufferHandle) {
     if (renderBufferHandle == nullptr) {
         return nil;
@@ -60,10 +85,18 @@ id<MTLTexture> TextureFromRenderBuffer(void* renderBufferHandle) {
 
     if (gMetalV2 != nullptr) {
         UnityRenderBuffer renderBuffer = gMetalV2->RenderBufferFromHandle(renderBufferHandle);
+        if (renderBuffer == nullptr) {
+            MILESTROLOG_WARN("Unity Metal V2 returned a null render buffer for handle {}.", renderBufferHandle);
+            return nil;
+        }
         return gMetalV2->TextureFromRenderBuffer(renderBuffer);
     }
     if (gMetalV1 != nullptr) {
         UnityRenderBuffer renderBuffer = gMetalV1->RenderBufferFromHandle(renderBufferHandle);
+        if (renderBuffer == nullptr) {
+            MILESTROLOG_WARN("Unity Metal V1 returned a null render buffer for handle {}.", renderBufferHandle);
+            return nil;
+        }
         return gMetalV1->TextureFromRenderBuffer(renderBuffer);
     }
     return nil;
@@ -188,10 +221,17 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
         return MILESTRO_API_RET_FAILED;
     }
 
-    GrDirectContext* context = DirectContext();
-    if (context == nullptr) {
-        return MILESTRO_API_RET_FAILED;
+    if (RequiresUnityRenderBufferLookup(payload) &&
+        (CurrentCommandBuffer() == nil || CurrentRenderPassDescriptor() == nil)) {
+        if (!gLoggedMissingCommandBufferSkip) {
+            MILESTROLOG_WARN("Skipping Milestro Metal render because Unity has no current Metal render context.");
+            gLoggedMissingCommandBufferSkip = true;
+        }
+        return MILESTRO_API_RET_OK;
     }
+    gLoggedMissingCommandBufferSkip = false;
+
+    EndCurrentCommandEncoder();
 
     id<MTLTexture> texture = TextureFromPayload(payload);
     if (texture == nil) {
@@ -203,7 +243,11 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
         return MILESTRO_API_RET_FAILED;
     }
 
-    EndCurrentCommandEncoder();
+    GrDirectContext* context = DirectContext();
+    if (context == nullptr) {
+        return MILESTRO_API_RET_FAILED;
+    }
+
     CommitCurrentCommandBufferIfAvailable();
 
     GrMtlTextureInfo textureInfo;

@@ -65,6 +65,41 @@ void MarkSubmissionCompleted(MilestroUnityRenderSubmission* submission) {
     completed.store(1, std::memory_order_release);
 }
 
+bool IsSameRenderTarget(const MilestroUnityRenderSubmission* lhs, const MilestroUnityRenderSubmission* rhs) {
+    if (lhs == nullptr || rhs == nullptr) {
+        return false;
+    }
+
+    const MilestroUnityRenderTargetPayload& left = lhs->target;
+    const MilestroUnityRenderTargetPayload& right = rhs->target;
+    if (left.graphicsBackend != right.graphicsBackend || left.handleKind != right.handleKind) {
+        return false;
+    }
+
+    if (left.colorRenderBufferHandle != nullptr || right.colorRenderBufferHandle != nullptr) {
+        return left.colorRenderBufferHandle == right.colorRenderBufferHandle;
+    }
+    return left.nativeTextureHandle == right.nativeTextureHandle;
+}
+
+void DropSupersededQueuedSubmissionsLocked(int queueIndex,
+                                           const MilestroUnityRenderSubmission* newer,
+                                           std::vector<MilestroUnityRenderSubmission*>& superseded) {
+    std::vector<MilestroUnityRenderSubmission*>& queue = gSubmissionQueues[queueIndex];
+    auto write = queue.begin();
+    for (auto read = queue.begin(); read != queue.end(); ++read) {
+        MilestroUnityRenderSubmission* queued = *read;
+        if (IsSameRenderTarget(queued, newer)) {
+            superseded.push_back(queued);
+            continue;
+        }
+
+        *write = queued;
+        ++write;
+    }
+    queue.erase(write, queue.end());
+}
+
 void MarkDrainCompleted(MilestroUnityRenderDrain* drain) {
     if (drain == nullptr) {
         return;
@@ -143,9 +178,19 @@ int64_t EnqueueSubmission(int32_t graphicsBackend, MilestroUnityRenderSubmission
         return MILESTRO_API_RET_FAILED;
     }
 
+    std::vector<MilestroUnityRenderSubmission*> supersededSubmissions;
     {
         std::lock_guard lock(gSubmissionQueueMutex);
+#if defined(__APPLE__)
+        if (static_cast<MilestroUnityGraphicsBackend>(graphicsBackend) == MilestroUnityGraphicsBackend::Metal) {
+            DropSupersededQueuedSubmissionsLocked(queueIndex, submission, supersededSubmissions);
+        }
+#endif
         gSubmissionQueues[queueIndex].push_back(submission);
+    }
+    for (MilestroUnityRenderSubmission* superseded: supersededSubmissions) {
+        MILESTROLOG_WARN("Dropping superseded Milestro Metal render submission before queue drain.");
+        MarkSubmissionCompleted(superseded);
     }
     return MILESTRO_API_RET_OK;
 }
