@@ -29,7 +29,9 @@ namespace Milestro.Components.Internal
         [NonSerialized] private SlimTextRenderTarget? renderTarget;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
 #if UNITY_EDITOR
+        private const int MaxEditorSkippedRenderRetries = 2;
         [NonSerialized] private bool m_editorRebuildQueued;
+        [NonSerialized] private int m_editorSkippedRenderRetries;
 #endif
 
         public override Texture? OutputTexture => renderTarget?.OutputTexture;
@@ -195,8 +197,7 @@ namespace Milestro.Components.Internal
 
         protected virtual void OnDisable()
         {
-            renderTarget?.Dispose();
-            renderTarget = null;
+            DisposeRenderTarget();
         }
 
         private void Update()
@@ -272,18 +273,30 @@ namespace Milestro.Components.Internal
             NormalizeSerializedValues();
             var target = RenderTarget;
             target.EnsureNoAllocCapacity(capacity);
-            target.Rebuild(CurrentSize(), SurfaceColorSpace(), CurrentSettings());
+            var rebuilt = target.Rebuild(CurrentSize(), SurfaceColorSpace(), CurrentSettings());
+            if (!rebuilt)
+            {
+#if UNITY_EDITOR
+                QueueEditorRebuild();
+#endif
+            }
         }
 
         public void SetTextUtf8NoAlloc(byte[] buffer, int offset, int length)
         {
             NormalizeSerializedValues();
-            RenderTarget.SetTextUtf8NoAlloc(CurrentSize(),
+            var rebuilt = RenderTarget.SetTextUtf8NoAlloc(CurrentSize(),
                 SurfaceColorSpace(),
                 CurrentSettings(),
                 buffer,
                 offset,
                 length);
+            if (!rebuilt)
+            {
+#if UNITY_EDITOR
+                QueueEditorRebuild();
+#endif
+            }
         }
 
 #if UNITY_EDITOR
@@ -313,9 +326,15 @@ namespace Milestro.Components.Internal
         private void RebuildResources()
         {
             NormalizeSerializedValues();
-            RenderTarget.Rebuild(CurrentSize(),
+            var rebuilt = RenderTarget.Rebuild(CurrentSize(),
                 SurfaceColorSpace(),
                 CurrentSettings());
+            if (!rebuilt)
+            {
+#if UNITY_EDITOR
+                QueueEditorRebuild();
+#endif
+            }
         }
 
         private Vector2Int CurrentSize()
@@ -366,14 +385,53 @@ namespace Milestro.Components.Internal
                 if (renderTarget == null)
                 {
                     renderTarget = new SlimTextRenderTarget();
+                    renderTarget.RenderEventCompleted += OnRenderEventCompleted;
                 }
 
                 return renderTarget;
             }
         }
 
+        private void DisposeRenderTarget()
+        {
+            if (renderTarget == null)
+            {
+                return;
+            }
+
+            renderTarget.RenderEventCompleted -= OnRenderEventCompleted;
+            renderTarget.Dispose();
+            renderTarget = null;
+        }
+
+        private void OnRenderEventCompleted(UnitySkiaRenderTextureSurface.RenderSubmissionStatus status)
+        {
+            if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn)
+            {
+#if UNITY_EDITOR
+                m_editorSkippedRenderRetries = 0;
+#endif
+                NotifyOutputChanged();
+                return;
+            }
+
+#if UNITY_EDITOR
+            if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Skipped &&
+                !Application.isPlaying &&
+                isActiveAndEnabled &&
+                m_editorSkippedRenderRetries < MaxEditorSkippedRenderRetries)
+            {
+                ++m_editorSkippedRenderRetries;
+                QueueEditorRebuild();
+            }
+#endif
+        }
+
         private void MarkPropertiesChanged()
         {
+#if UNITY_EDITOR
+            m_editorSkippedRenderRetries = 0;
+#endif
             RenderTarget.MarkPropertiesChanged();
 #if UNITY_EDITOR
             if (isActiveAndEnabled)
@@ -385,6 +443,9 @@ namespace Milestro.Components.Internal
 
         private void MarkPaintChanged()
         {
+#if UNITY_EDITOR
+            m_editorSkippedRenderRetries = 0;
+#endif
             RenderTarget.MarkPaintChanged();
 #if UNITY_EDITOR
             if (isActiveAndEnabled)

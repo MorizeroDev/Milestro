@@ -36,6 +36,8 @@ namespace Milestro.Components.Internal
         public bool HasOutput => surface?.Texture != null;
         public long OutputVersion => outputVersion;
 
+        public event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus>? RenderEventCompleted;
+
         public void MarkPropertiesChanged()
         {
             styleChanged = true;
@@ -145,8 +147,7 @@ namespace Milestro.Components.Internal
             DisposeFont();
             DisposeNoAllocSubmission();
             DisposeNoAllocSubmission(ref retiredNoAllocSubmission);
-            surface?.Dispose();
-            surface = null;
+            DisposeSurface();
             styleChanged = true;
             paintChanged = true;
             noAllocMode = false;
@@ -162,8 +163,8 @@ namespace Milestro.Components.Internal
             sizePixels = NormalizeSize(sizePixels);
             if (surface == null || surface.ColorSpace != colorSpace)
             {
-                surface?.Dispose();
-                surface = new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, colorSpace);
+                DisposeSurface();
+                SetSurface(new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, colorSpace));
                 MarkOutputChanged();
                 return true;
             }
@@ -314,7 +315,6 @@ namespace Milestro.Components.Internal
                 return false;
             }
 
-            MarkOutputChanged();
             return true;
         }
 
@@ -332,8 +332,40 @@ namespace Milestro.Components.Internal
                 return false;
             }
 
-            MarkOutputChanged();
             return true;
+        }
+
+        private void SetSurface(UnityAutoRenderTextureSurface nextSurface)
+        {
+            surface = nextSurface;
+            surface.RenderEventCompleted += HandleRenderEventCompleted;
+        }
+
+        private void DisposeSurface()
+        {
+            if (surface == null)
+            {
+                return;
+            }
+
+            surface.RenderEventCompleted -= HandleRenderEventCompleted;
+            surface.Dispose();
+            surface = null;
+        }
+
+        private void HandleRenderEventCompleted(UnitySkiaRenderTextureSurface.RenderSubmissionStatus status)
+        {
+            if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn)
+            {
+                MarkOutputChanged();
+            }
+            else if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Skipped)
+            {
+                paintChanged = true;
+                noAllocTextChanged = noAllocMode || noAllocTextChanged;
+            }
+
+            RenderEventCompleted?.Invoke(status);
         }
 
         private void DisposeFont()

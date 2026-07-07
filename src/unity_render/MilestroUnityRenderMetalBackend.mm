@@ -227,7 +227,7 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
             MILESTROLOG_WARN("Skipping Milestro Metal render because Unity has no current Metal render context.");
             gLoggedMissingCommandBufferSkip = true;
         }
-        return MILESTRO_API_RET_OK;
+        return static_cast<int64_t>(MilestroUnityRenderSubmissionStatus::Skipped);
     }
     gLoggedMissingCommandBufferSkip = false;
 

@@ -40,6 +40,8 @@ namespace Milestro.Components.Internal
         public Vector2 ViewportSize => viewportSize;
         public Vector2 MaxScrollOffset => maxScrollOffset;
 
+        public event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus>? RenderEventCompleted;
+
         public void MarkPropertiesChanged()
         {
             layoutChanged = true;
@@ -89,8 +91,7 @@ namespace Milestro.Components.Internal
         public void Dispose()
         {
             RetireParagraph();
-            surface?.Dispose();
-            surface = null;
+            DisposeSurface();
             paragraphPlainText = "";
             layoutChanged = true;
             paintChanged = true;
@@ -110,9 +111,8 @@ namespace Milestro.Components.Internal
             sizePixels = NormalizeSize(sizePixels);
             if (surface == null || surface.ColorSpace != colorSpace)
             {
-                surface?.Dispose();
-                surface = null;
-                surface = new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, colorSpace);
+                DisposeSurface();
+                SetSurface(new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, colorSpace));
                 MarkOutputChanged();
                 return true;
             }
@@ -139,8 +139,39 @@ namespace Milestro.Components.Internal
                 return false;
             }
 
-            MarkOutputChanged();
             return true;
+        }
+
+        private void SetSurface(UnityAutoRenderTextureSurface nextSurface)
+        {
+            surface = nextSurface;
+            surface.RenderEventCompleted += HandleRenderEventCompleted;
+        }
+
+        private void DisposeSurface()
+        {
+            if (surface == null)
+            {
+                return;
+            }
+
+            surface.RenderEventCompleted -= HandleRenderEventCompleted;
+            surface.Dispose();
+            surface = null;
+        }
+
+        private void HandleRenderEventCompleted(UnitySkiaRenderTextureSurface.RenderSubmissionStatus status)
+        {
+            if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn)
+            {
+                MarkOutputChanged();
+            }
+            else if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Skipped)
+            {
+                paintChanged = true;
+            }
+
+            RenderEventCompleted?.Invoke(status);
         }
 
         private Paragraph BuildParagraph(TextBoxRenderTargetSettings settings)

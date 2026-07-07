@@ -146,7 +146,9 @@ namespace Milestro.Components
         [NonSerialized] private bool keyboardScrollInterlockActive;
         [NonSerialized] private float keyboardScrollInterlockUntilTime = -1f;
 #if UNITY_EDITOR
+        private const int MaxEditorSkippedRenderRetries = 2;
         [NonSerialized] private bool m_editorRebuildQueued;
+        [NonSerialized] private int m_editorSkippedRenderRetries;
 #endif
 
         public string Text
@@ -408,8 +410,7 @@ namespace Milestro.Components
             ReleaseInputFocus();
             Texture = null;
             RetireInputBox();
-            surface?.Dispose();
-            surface = null;
+            DisposeSurface();
             CancelScrollTweens();
             scrollAxisLock.Reset();
             ResetKeyboardScrollInterlock();
@@ -927,6 +928,7 @@ namespace Milestro.Components
                 ? Mathf.Max(0f, m_scrollTweenDurationSeconds)
                 : DefaultScrollTweenDurationSeconds;
             if (surface != null) UvRect = surface.DisplayUvRect;
+            m_editorSkippedRenderRetries = 0;
             styleDirty = true;
             layoutDirty = true;
             paintDirty = true;
@@ -940,6 +942,9 @@ namespace Milestro.Components
             {
                 layoutDirty = true;
                 paintDirty = true;
+#if UNITY_EDITOR
+                m_editorSkippedRenderRetries = 0;
+#endif
                 CancelScrollTweens();
                 scrollAxisLock.Reset();
                 SetVerticesDirty();
@@ -1888,12 +1893,18 @@ namespace Milestro.Components
 
         private void RebuildResources()
         {
+#if UNITY_EDITOR
+            if (styleDirty || layoutDirty)
+            {
+                m_editorSkippedRenderRetries = 0;
+            }
+#endif
             var sizePixels = CurrentSize();
             var surfaceColorSpace = SurfaceColorSpace();
             if (surface == null || surface.ColorSpace != surfaceColorSpace)
             {
-                surface?.Dispose();
-                surface = new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, surfaceColorSpace);
+                DisposeSurface();
+                SetSurface(new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, surfaceColorSpace));
                 ApplySurfaceToGraphic();
                 paintDirty = true;
             }
@@ -1935,13 +1946,64 @@ namespace Milestro.Components
             }
 
             inputBox.SetCaretVisible(focused && caretVisible);
-            if (!surface!.TrySubmit(BuildRenderCommands()))
+            var submitted = surface!.TrySubmit(BuildRenderCommands());
+            if (!submitted)
             {
                 paintDirty = true;
+#if UNITY_EDITOR
+                QueueEditorRebuild();
+#endif
                 return;
             }
 
             paintDirty = false;
+        }
+
+        private void SetSurface(UnityAutoRenderTextureSurface nextSurface)
+        {
+            surface = nextSurface;
+            surface.RenderEventCompleted += OnRenderEventCompleted;
+        }
+
+        private void DisposeSurface()
+        {
+            if (surface == null)
+            {
+                return;
+            }
+
+            surface.RenderEventCompleted -= OnRenderEventCompleted;
+            surface.Dispose();
+            surface = null;
+        }
+
+        private void OnRenderEventCompleted(UnitySkiaRenderTextureSurface.RenderSubmissionStatus status)
+        {
+            if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn)
+            {
+#if UNITY_EDITOR
+                m_editorSkippedRenderRetries = 0;
+                if (!Application.isPlaying && this && isActiveAndEnabled)
+                {
+                    SetVerticesDirty();
+                    SetMaterialDirty();
+                    UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+                }
+#endif
+                return;
+            }
+
+#if UNITY_EDITOR
+            if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Skipped &&
+                !Application.isPlaying &&
+                isActiveAndEnabled &&
+                m_editorSkippedRenderRetries < MaxEditorSkippedRenderRetries)
+            {
+                ++m_editorSkippedRenderRetries;
+                paintDirty = true;
+                QueueEditorRebuild();
+            }
+#endif
         }
 
         private void RecreateInputBox()

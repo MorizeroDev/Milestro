@@ -56,14 +56,15 @@ struct MilestroUnityRenderDrain {
     int32_t completed = 0;
 };
 
-void MarkSubmissionCompleted(MilestroUnityRenderSubmission* submission) {
+void MarkSubmissionCompleted(MilestroUnityRenderSubmission* submission,
+                             MilestroUnityRenderSubmissionStatus status = MilestroUnityRenderSubmissionStatus::Drawn) {
     if (submission == nullptr) {
         return;
     }
 
     ReleaseSubmissionOwnedResources(submission);
     std::atomic_ref<int32_t> completed(submission->completed);
-    completed.store(1, std::memory_order_release);
+    completed.store(static_cast<int32_t>(status), std::memory_order_release);
 }
 
 bool IsSameRenderTarget(const MilestroUnityRenderSubmission* lhs, const MilestroUnityRenderSubmission* rhs) {
@@ -158,7 +159,7 @@ void CompleteQueuedSubmissions() {
     }
 
     for (MilestroUnityRenderSubmission* submission: submissions) {
-        MarkSubmissionCompleted(submission);
+        MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
     }
 }
 
@@ -193,7 +194,7 @@ int64_t EnqueueSubmission(int32_t graphicsBackend, MilestroUnityRenderSubmission
     }
     for (MilestroUnityRenderSubmission* superseded: supersededSubmissions) {
         MILESTROLOG_WARN("Dropping superseded Milestro Metal render submission before queue drain.");
-        MarkSubmissionCompleted(superseded);
+        MarkSubmissionCompleted(superseded, MilestroUnityRenderSubmissionStatus::Failed);
     }
     return MILESTRO_API_RET_OK;
 }
@@ -207,26 +208,33 @@ void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* subm
     if (eventOffset == kMetalDrawEventOffset) {
         if (target.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::Metal)) {
             MILESTROLOG_ERROR("Milestro Metal render event received backend {}.", target.graphicsBackend);
-            MarkSubmissionCompleted(submission);
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
             return;
         }
 
         if (gRenderer != kUnityGfxRendererMetal) {
             MILESTROLOG_ERROR("Milestro Metal render event invoked while Unity renderer is {}.",
                               static_cast<int>(gRenderer));
-            MarkSubmissionCompleted(submission);
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
             return;
         }
 
 #if defined(__APPLE__)
         const auto status = metal::Render(*submission);
+        if (status == static_cast<int64_t>(MilestroUnityRenderSubmissionStatus::Skipped)) {
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Skipped);
+            return;
+        }
+
         if (status < 0) {
             MILESTROLOG_ERROR("Milestro Metal render event failed: {}", status);
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
+            return;
         }
         MarkSubmissionCompleted(submission);
 #else
         MILESTROLOG_ERROR("Milestro Metal render event is only available on Apple platforms.");
-        MarkSubmissionCompleted(submission);
+        MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
 #endif
         return;
     }
@@ -234,14 +242,14 @@ void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* subm
     if (eventOffset == kD3D12DrawEventOffset) {
         if (target.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::Direct3D12)) {
             MILESTROLOG_ERROR("Milestro D3D12 render event received backend {}.", target.graphicsBackend);
-            MarkSubmissionCompleted(submission);
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
             return;
         }
 
         if (gRenderer != kUnityGfxRendererD3D12) {
             MILESTROLOG_ERROR("Milestro D3D12 render event invoked while Unity renderer is {}.",
                               static_cast<int>(gRenderer));
-            MarkSubmissionCompleted(submission);
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
             return;
         }
 
@@ -249,11 +257,13 @@ void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* subm
         const auto status = d3d12::Render(*submission);
         if (status < 0) {
             MILESTROLOG_ERROR("Milestro D3D12 render event failed: {}", status);
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
+            return;
         }
         MarkSubmissionCompleted(submission);
 #else
         MILESTROLOG_ERROR("Milestro D3D12 render event is only available on Windows.");
-        MarkSubmissionCompleted(submission);
+        MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
 #endif
         return;
     }
@@ -262,14 +272,14 @@ void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* subm
         if (target.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::OpenGL) &&
             target.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::OpenGLES)) {
             MILESTROLOG_ERROR("Milestro GL render event received backend {}.", target.graphicsBackend);
-            MarkSubmissionCompleted(submission);
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
             return;
         }
 
         if (gRenderer != kUnityGfxRendererOpenGLES30 && gRenderer != kUnityGfxRendererOpenGLCore) {
             MILESTROLOG_ERROR("Milestro GL render event invoked while Unity renderer is {}.",
                               static_cast<int>(gRenderer));
-            MarkSubmissionCompleted(submission);
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
             return;
         }
 
@@ -280,7 +290,7 @@ void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* subm
             MILESTROLOG_ERROR("Milestro GL render event backend {} does not match Unity renderer {}.",
                               target.graphicsBackend,
                               static_cast<int>(gRenderer));
-            MarkSubmissionCompleted(submission);
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
             return;
         }
 
@@ -288,11 +298,13 @@ void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* subm
         const auto status = gl::Render(*submission, gRenderer);
         if (status < 0) {
             MILESTROLOG_ERROR("Milestro GL render event failed: {}", status);
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
+            return;
         }
         MarkSubmissionCompleted(submission);
 #else
         MILESTROLOG_ERROR("Milestro GL render event is not enabled in this Milestro build.");
-        MarkSubmissionCompleted(submission);
+        MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
 #endif
         return;
     }
@@ -300,14 +312,14 @@ void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* subm
     if (eventOffset == kVulkanDrawEventOffset) {
         if (target.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan)) {
             MILESTROLOG_ERROR("Milestro Vulkan render event received backend {}.", target.graphicsBackend);
-            MarkSubmissionCompleted(submission);
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
             return;
         }
 
         if (gRenderer != kUnityGfxRendererVulkan) {
             MILESTROLOG_ERROR("Milestro Vulkan render event invoked while Unity renderer is {}.",
                               static_cast<int>(gRenderer));
-            MarkSubmissionCompleted(submission);
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
             return;
         }
 
@@ -315,17 +327,19 @@ void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* subm
         const auto status = vulkan::Render(*submission);
         if (status < 0) {
             MILESTROLOG_ERROR("Milestro Vulkan render event failed: {}", status);
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
+            return;
         }
         MarkSubmissionCompleted(submission);
 #else
         MILESTROLOG_ERROR("Milestro Vulkan render backend is not enabled in this Milestro build.");
-        MarkSubmissionCompleted(submission);
+        MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
 #endif
         return;
     }
 
     MILESTROLOG_WARN("Ignoring unknown Milestro Unity render event offset: {}", eventOffset);
-    MarkSubmissionCompleted(submission);
+    MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
 }
 
 void DrainRenderQueue(int eventOffset, MilestroUnityRenderDrain* drain) {

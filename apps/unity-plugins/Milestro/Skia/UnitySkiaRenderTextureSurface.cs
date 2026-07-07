@@ -18,6 +18,14 @@ namespace Milestro.Skia
             NativeTexture = 2
         }
 
+        internal enum RenderSubmissionStatus
+        {
+            Failed = -1,
+            Pending = 0,
+            Drawn = 1,
+            Skipped = 2
+        }
+
         [StructLayout(LayoutKind.Sequential)]
         internal struct RenderTargetPayload
         {
@@ -77,6 +85,7 @@ namespace Milestro.Skia
             public Texture? Texture;
             public object[] Resources = Array.Empty<object>();
             public IDisposable[] OwnedResources = Array.Empty<IDisposable>();
+            public UnitySkiaRenderTextureSurface? Owner;
             public bool Reusable;
             public bool InUse;
 
@@ -339,7 +348,8 @@ namespace Milestro.Skia
                 bool drawText,
                 IntPtr renderEventFunc,
                 int renderEventId,
-                Texture texture)
+                Texture texture,
+                UnitySkiaRenderTextureSurface owner)
             {
                 if (!TryPrepareSlot(target, baseline, drawText, out var pendingEvent))
                 {
@@ -348,7 +358,7 @@ namespace Milestro.Skia
 
                 try
                 {
-                    AddReusablePendingEvent(pendingEvent, texture);
+                    AddReusablePendingEvent(pendingEvent, texture, owner);
                     SubmitPrepared(pendingEvent, renderEventFunc, renderEventId);
                 }
                 catch
@@ -398,6 +408,18 @@ namespace Milestro.Skia
             public int RenderEventId;
         }
 
+        private readonly struct CompletedRenderEventNotification
+        {
+            public CompletedRenderEventNotification(UnitySkiaRenderTextureSurface owner, RenderSubmissionStatus status)
+            {
+                Owner = owner;
+                Status = status;
+            }
+
+            public readonly UnitySkiaRenderTextureSurface Owner;
+            public readonly RenderSubmissionStatus Status;
+        }
+
         private const int RenderDrainMagic = 0x4D524451; // MRDQ
         private static readonly object PendingLock = new object();
         private static readonly List<PendingRenderEvent> PendingEvents = new List<PendingRenderEvent>();
@@ -420,6 +442,8 @@ namespace Milestro.Skia
         private IntPtr d3d12ExternalTexture;
         private bool warnedMissingNativeTarget;
         private bool disposed;
+
+        internal event Action<RenderSubmissionStatus>? RenderEventCompleted;
 
         public UnitySkiaGraphicsBackend Backend { get; }
         public UnityEngine.ColorSpace ColorSpace => descriptor.ColorSpace;
@@ -596,7 +620,13 @@ namespace Milestro.Skia
                 Marshal.StructureToPtr(submission, submissionPtr, false);
 
                 // HasUsableTexture and TryGetNativeTargetHandles above guarantee a live target texture here.
-                pendingEvent = AddPendingEvent((int)Backend, submissionPtr, commandsPtr, Texture!, resources, ownedResources);
+                pendingEvent = AddPendingEvent((int)Backend,
+                    submissionPtr,
+                    commandsPtr,
+                    Texture!,
+                    resources,
+                    ownedResources,
+                    this);
                 ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderEnqueueSubmission((int)Backend, submissionPtr));
                 enqueued = true;
                 ScheduleRenderDrain(Backend, renderEventFunc, renderEventId);
@@ -666,7 +696,14 @@ namespace Milestro.Skia
                 PreferredFormat = (int)descriptor.PreferredFormat
             };
 
-            return submission.TryPrepareAndSubmit(target, baseline, drawText, renderEventFunc, renderEventId, Texture!);
+            var queued = submission.TryPrepareAndSubmit(target,
+                baseline,
+                drawText,
+                renderEventFunc,
+                renderEventId,
+                Texture!,
+                this);
+            return queued;
         }
 
         public void Dispose()
@@ -1130,7 +1167,8 @@ namespace Milestro.Skia
             IntPtr commandsPtr,
             Texture texture,
             object[] resources,
-            IDisposable[] ownedResources)
+            IDisposable[] ownedResources,
+            UnitySkiaRenderTextureSurface owner)
         {
             EnsureLifetimePump();
             lock (PendingLock)
@@ -1143,7 +1181,8 @@ namespace Milestro.Skia
                     CommandsPtr = commandsPtr,
                     Texture = texture,
                     Resources = resources,
-                    OwnedResources = ownedResources
+                    OwnedResources = ownedResources,
+                    Owner = owner
                 };
                 PendingEvents.Add(pendingEvent);
                 return pendingEvent;
@@ -1229,7 +1268,9 @@ namespace Milestro.Skia
             }
         }
 
-        private static void AddReusablePendingEvent(PendingRenderEvent pendingEvent, Texture texture)
+        private static void AddReusablePendingEvent(PendingRenderEvent pendingEvent,
+            Texture texture,
+            UnitySkiaRenderTextureSurface owner)
         {
             EnsureLifetimePump();
             lock (PendingLock)
@@ -1241,6 +1282,7 @@ namespace Milestro.Skia
 
                 pendingEvent.Serial = ++nextSerial;
                 pendingEvent.Texture = texture;
+                pendingEvent.Owner = owner;
                 pendingEvent.InUse = true;
                 PendingEvents.Add(pendingEvent);
             }
@@ -1264,6 +1306,7 @@ namespace Milestro.Skia
 
                 pendingEvent.KeepAlive();
                 pendingEvent.Texture = null;
+                pendingEvent.Owner = null;
                 pendingEvent.DisposeOwnedResources();
             }
         }
@@ -1302,6 +1345,7 @@ namespace Milestro.Skia
             List<Action>? releases = null;
             List<PendingRenderDrain>? completedDrains = null;
             List<PendingRenderDrain>? drainsToReschedule = null;
+            List<CompletedRenderEventNotification>? notifications = null;
 
             lock (PendingLock)
             {
@@ -1313,6 +1357,8 @@ namespace Milestro.Skia
                         continue;
                     }
 
+                    var completedStatus = CompletedStatus(pendingEvent.SubmissionPtr);
+                    var owner = pendingEvent.Owner;
                     pendingEvent.InUse = false;
                     if (!pendingEvent.Reusable)
                     {
@@ -1322,7 +1368,16 @@ namespace Milestro.Skia
                     pendingEvent.KeepAlive();
                     pendingEvent.Texture = null;
                     pendingEvent.DisposeOwnedResources();
+                    pendingEvent.Owner = null;
                     PendingEvents.RemoveAt(i);
+                    if (owner != null)
+                    {
+                        if (notifications == null)
+                        {
+                            notifications = new List<CompletedRenderEventNotification>();
+                        }
+                        notifications.Add(new CompletedRenderEventNotification(owner, completedStatus));
+                    }
                 }
 
                 foreach (var pendingDrain in PendingDrains.Values)
@@ -1380,6 +1435,14 @@ namespace Milestro.Skia
                     ScheduleRenderDrain((UnitySkiaGraphicsBackend)pendingDrain.GraphicsBackend,
                         pendingDrain.RenderEventFunc,
                         pendingDrain.RenderEventId);
+                }
+            }
+
+            if (notifications != null)
+            {
+                foreach (var notification in notifications)
+                {
+                    notification.Owner.NotifyRenderEventCompleted(notification.Status);
                 }
             }
 
@@ -1445,6 +1508,37 @@ namespace Milestro.Skia
             }
 
             return false;
+        }
+
+        private static RenderSubmissionStatus CompletedStatus(IntPtr submissionPtr)
+        {
+            var rawStatus = Marshal.ReadInt32(submissionPtr, CompletedOffset);
+            if (rawStatus == (int)RenderSubmissionStatus.Pending)
+            {
+                return RenderSubmissionStatus.Drawn;
+            }
+
+            if (rawStatus == (int)RenderSubmissionStatus.Drawn)
+            {
+                return RenderSubmissionStatus.Drawn;
+            }
+
+            if (rawStatus == (int)RenderSubmissionStatus.Skipped)
+            {
+                return RenderSubmissionStatus.Skipped;
+            }
+
+            return RenderSubmissionStatus.Failed;
+        }
+
+        private void NotifyRenderEventCompleted(RenderSubmissionStatus status)
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            RenderEventCompleted?.Invoke(status);
         }
 
         private static void EnsurePendingEventCapacity(int additionalSlots)

@@ -16,6 +16,12 @@ namespace Milestro.Skia
         public Texture? Texture => surface.Texture;
         public RenderTexture? RenderTexture => surface.RenderTexture;
 
+        internal event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus> RenderEventCompleted
+        {
+            add => surface.RenderEventCompleted += value;
+            remove => surface.RenderEventCompleted -= value;
+        }
+
         public int Width => surface.Width;
         public int Height => surface.Height;
 

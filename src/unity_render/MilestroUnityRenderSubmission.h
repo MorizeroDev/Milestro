@@ -20,6 +20,13 @@ enum class MilestroUnityDrawResourceOwnership : int32_t {
     InputBoxSnapshot = 2,
 };
 
+enum class MilestroUnityRenderSubmissionStatus : int32_t {
+    Failed = -1,
+    Pending = 0,
+    Drawn = 1,
+    Skipped = 2,
+};
+
 struct MilestroUnityDrawCommand {
     int32_t kind = 0;
     void* resource = nullptr;
@@ -40,6 +47,7 @@ struct MilestroUnityRenderSubmission {
     int32_t commandCount = 0;
 
     // Written by the render-thread callback so managed code can free the per-event submission.
+    // Values use MilestroUnityRenderSubmissionStatus, with 0 reserved for pending.
     int32_t completed = 0;
 };
 

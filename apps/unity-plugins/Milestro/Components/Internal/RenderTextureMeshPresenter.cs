@@ -1,4 +1,7 @@
 using System;
+#if UNITY_EDITOR
+using UnityEditorInternal;
+#endif
 using UnityEngine;
 
 namespace Milestro.Components.Internal
@@ -22,6 +25,7 @@ namespace Milestro.Components.Internal
         [NonSerialized] private long observedOutputVersion = long.MinValue;
         [NonSerialized] private string observedTexturePropertyName = DefaultTexturePropertyName;
         [NonSerialized] private bool rendererDisabledByPresenter;
+        [NonSerialized] private RenderTextureProducer? observedProducer;
 
         public RenderTextureProducer? Producer
         {
@@ -33,6 +37,7 @@ namespace Milestro.Components.Internal
                     return;
                 }
 
+                SetObservedProducer(value);
                 m_producer = value;
                 ResetObservedOutput();
                 ApplyProducerOutput(force: true);
@@ -75,11 +80,13 @@ namespace Milestro.Components.Internal
         {
             meshRendererCache = GetComponent<MeshRenderer>();
             ResetObservedOutput();
+            SetObservedProducer(ResolveProducer());
             ApplyProducerOutput(force: true);
         }
 
         private void OnDisable()
         {
+            SetObservedProducer(null);
             var targetRenderer = MeshRendererComponent();
             if (targetRenderer != null)
             {
@@ -127,6 +134,7 @@ namespace Milestro.Components.Internal
             }
 
             var producer = ResolveProducer();
+            SetObservedProducer(producer);
             var outputTexture = producer != null && producer.HasOutput ? producer.OutputTexture : null;
             if (producer == null || outputTexture == null)
             {
@@ -212,6 +220,36 @@ namespace Milestro.Components.Internal
             }
 
             return GetComponent<RenderTextureProducer>();
+        }
+
+        private void SetObservedProducer(RenderTextureProducer? producer)
+        {
+            if (observedProducer == producer)
+            {
+                return;
+            }
+
+            if (observedProducer != null)
+            {
+                observedProducer.OutputChanged -= OnProducerOutputChanged;
+            }
+
+            observedProducer = producer;
+            if (observedProducer != null)
+            {
+                observedProducer.OutputChanged += OnProducerOutputChanged;
+            }
+        }
+
+        private void OnProducerOutputChanged()
+        {
+#if UNITY_EDITOR
+            if (!Application.isPlaying && this && isActiveAndEnabled)
+            {
+                ApplyProducerOutput(force: true);
+                InternalEditorUtility.RepaintAllViews();
+            }
+#endif
         }
 
         private MeshRenderer? MeshRendererComponent()

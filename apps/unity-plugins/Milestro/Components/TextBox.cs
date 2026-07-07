@@ -3,6 +3,7 @@ using Milestro.Components.Internal;
 using Milestro.Util;
 #if UNITY_EDITOR
 using UnityEditor;
+using UnityEditorInternal;
 #endif
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -24,6 +25,7 @@ namespace Milestro.Components
         [NonSerialized] private readonly ScrollTween scrollTweenY = new ScrollTween();
         [NonSerialized] private readonly ScrollAxisLock scrollAxisLock = new ScrollAxisLock();
         [NonSerialized] private long observedOutputVersion = long.MinValue;
+        [NonSerialized] private TextBoxRenderTextureProducer? observedProducer;
 #if UNITY_EDITOR
         [NonSerialized] private bool m_editorApplyQueued;
 #endif
@@ -39,6 +41,7 @@ namespace Milestro.Components
             base.OnDisable();
             CancelScrollTweens();
             scrollAxisLock.Reset();
+            SetObservedProducer(null);
             Texture = null;
             observedOutputVersion = long.MinValue;
         }
@@ -112,6 +115,7 @@ namespace Milestro.Components
             }
 
             EnsureConfigured(forceText: false, forceApply: true);
+            InternalEditorUtility.RepaintAllViews();
         }
 #endif
 
@@ -440,7 +444,37 @@ namespace Milestro.Components
             }
 
             ShowConfigurationComponent(producerCache);
+            SetObservedProducer(producerCache);
             return producerCache;
+        }
+
+        private void SetObservedProducer(TextBoxRenderTextureProducer? producer)
+        {
+            if (observedProducer == producer)
+            {
+                return;
+            }
+
+            if (observedProducer != null)
+            {
+                observedProducer.OutputChanged -= OnProducerOutputChanged;
+            }
+
+            observedProducer = producer;
+            if (observedProducer != null)
+            {
+                observedProducer.OutputChanged += OnProducerOutputChanged;
+            }
+        }
+
+        private void OnProducerOutputChanged()
+        {
+#if UNITY_EDITOR
+            if (!Application.isPlaying && this && isActiveAndEnabled)
+            {
+                QueueEditorApply();
+            }
+#endif
         }
 
         private void ApplyProducerOutput(TextBoxRenderTextureProducer producer, bool force)
@@ -465,9 +499,16 @@ namespace Milestro.Components
                 return;
             }
 
+            var textureAlreadyApplied = Texture == outputTexture;
+            var uvAlreadyApplied = UvRect == outputUvRect;
             Texture = outputTexture;
             UvRect = outputUvRect;
             observedOutputVersion = outputVersion;
+            if (textureAlreadyApplied && uvAlreadyApplied)
+            {
+                SetVerticesDirty();
+                SetMaterialDirty();
+            }
         }
 
         private static void ShowConfigurationComponent(Component configurationComponent)

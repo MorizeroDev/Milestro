@@ -61,7 +61,9 @@ namespace Milestro.Components.Internal
         [NonSerialized] private float m_scrollX;
         [NonSerialized] private float m_scrollY;
 #if UNITY_EDITOR
+        private const int MaxEditorSkippedRenderRetries = 2;
         [NonSerialized] private bool m_editorRebuildQueued;
+        [NonSerialized] private int m_editorSkippedRenderRetries;
 #endif
 
         public override Texture? OutputTexture => renderTarget?.OutputTexture;
@@ -257,8 +259,7 @@ namespace Milestro.Components.Internal
 
         protected virtual void OnDisable()
         {
-            renderTarget?.Dispose();
-            renderTarget = null;
+            DisposeRenderTarget();
         }
 
         private void Update()
@@ -323,12 +324,19 @@ namespace Milestro.Components.Internal
 
         private void RebuildResources(bool forceText)
         {
-            RenderTarget.Rebuild(CurrentSize(),
+            var rebuilt = RenderTarget.Rebuild(CurrentSize(),
                 SurfaceColorSpace(),
                 CurrentSettings(),
                 new Vector2(m_scrollX, m_scrollY),
                 forceText,
                 this);
+            if (!rebuilt)
+            {
+#if UNITY_EDITOR
+                QueueEditorRebuild();
+#endif
+            }
+
             var nextScrollX = RenderTarget.ScrollOffset.x;
             if (!Mathf.Approximately(m_scrollX, nextScrollX))
             {
@@ -403,14 +411,53 @@ namespace Milestro.Components.Internal
                 if (renderTarget == null)
                 {
                     renderTarget = new TextBoxRenderTarget();
+                    renderTarget.RenderEventCompleted += OnRenderEventCompleted;
                 }
 
                 return renderTarget;
             }
         }
 
+        private void DisposeRenderTarget()
+        {
+            if (renderTarget == null)
+            {
+                return;
+            }
+
+            renderTarget.RenderEventCompleted -= OnRenderEventCompleted;
+            renderTarget.Dispose();
+            renderTarget = null;
+        }
+
+        private void OnRenderEventCompleted(UnitySkiaRenderTextureSurface.RenderSubmissionStatus status)
+        {
+            if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn)
+            {
+#if UNITY_EDITOR
+                m_editorSkippedRenderRetries = 0;
+#endif
+                NotifyOutputChanged();
+                return;
+            }
+
+#if UNITY_EDITOR
+            if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Skipped &&
+                !Application.isPlaying &&
+                isActiveAndEnabled &&
+                m_editorSkippedRenderRetries < MaxEditorSkippedRenderRetries)
+            {
+                ++m_editorSkippedRenderRetries;
+                QueueEditorRebuild();
+            }
+#endif
+        }
+
         private void MarkPropertiesChanged()
         {
+#if UNITY_EDITOR
+            m_editorSkippedRenderRetries = 0;
+#endif
             RenderTarget.MarkPropertiesChanged();
         }
 
@@ -423,6 +470,9 @@ namespace Milestro.Components.Internal
             }
 
             m_scrollX = nextScrollX;
+#if UNITY_EDITOR
+            m_editorSkippedRenderRetries = 0;
+#endif
             RenderTarget.MarkPaintChanged();
         }
 
@@ -435,6 +485,9 @@ namespace Milestro.Components.Internal
             }
 
             m_scrollY = nextScrollY;
+#if UNITY_EDITOR
+            m_editorSkippedRenderRetries = 0;
+#endif
             RenderTarget.MarkPaintChanged();
         }
 
