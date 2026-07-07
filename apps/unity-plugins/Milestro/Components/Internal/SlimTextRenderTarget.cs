@@ -395,13 +395,13 @@ namespace Milestro.Components.Internal
             var bounds = measurement.Bounds;
             var contentLeft = ResolveContentStart(settings.HorizontalAlign,
                 OutputWidth,
-                settings.RectOffset.left,
-                settings.RectOffset.right,
+                settings.RectOffsetLeft,
+                settings.RectOffsetRight,
                 MeasureContentWidth(measurement));
             var contentTop = ResolveContentStart(settings.VerticalAlign,
                 OutputHeight,
-                settings.RectOffset.top,
-                settings.RectOffset.bottom,
+                settings.RectOffsetTop,
+                settings.RectOffsetBottom,
                 MeasureContentHeight(measurement));
             return new Vector2(contentLeft - bounds.xMin, contentTop - bounds.yMin);
         }

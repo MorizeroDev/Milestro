@@ -129,7 +129,7 @@ namespace Milestro.Components
             }
             set
             {
-                m_rectOffset = NormalizeRectOffset(value);
+                m_rectOffset = CloneNormalizedRectOffset(value);
                 ApplyConfiguration();
             }
         }
@@ -662,7 +662,8 @@ namespace Milestro.Components
                     m_fontSize,
                     m_fallbackToSystemFont);
                 var measurement = font.MeasureText(m_text);
-                var rectOffset = NormalizeRectOffset(m_rectOffset);
+                EnsureRectOffset();
+                var rectOffset = m_rectOffset;
                 var width = Mathf.CeilToInt(MeasureContentWidth(measurement) +
                                             rectOffset.left +
                                             rectOffset.right);
@@ -693,7 +694,7 @@ namespace Milestro.Components
             m_fontSize = NormalizeFontSize(m_fontSize);
             m_textureSizePixels = NormalizeTextureSize(m_textureSizePixels);
             m_pixelsPerUnit = NormalizePixelsPerUnit(m_pixelsPerUnit);
-            m_rectOffset = NormalizeRectOffset(m_rectOffset);
+            NormalizeRectOffsetInPlace();
             if (string.IsNullOrEmpty(m_texturePropertyName))
             {
                 m_texturePropertyName = DefaultTexturePropertyName;
@@ -728,7 +729,16 @@ namespace Milestro.Components
             }
         }
 
-        private static RectOffset NormalizeRectOffset(RectOffset rectOffset)
+        private void NormalizeRectOffsetInPlace()
+        {
+            EnsureRectOffset();
+            m_rectOffset.left = Mathf.Max(0, m_rectOffset.left);
+            m_rectOffset.right = Mathf.Max(0, m_rectOffset.right);
+            m_rectOffset.top = Mathf.Max(0, m_rectOffset.top);
+            m_rectOffset.bottom = Mathf.Max(0, m_rectOffset.bottom);
+        }
+
+        private static RectOffset CloneNormalizedRectOffset(RectOffset rectOffset)
         {
             if (rectOffset == null)
             {

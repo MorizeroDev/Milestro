@@ -19,7 +19,10 @@ namespace Milestro.Model
             FontWeight = fontWeight;
             FontSize = fontSize;
             TextColor = textColor;
-            RectOffset = NormalizeRectOffset(rectOffset);
+            RectOffsetLeft = rectOffset != null ? Mathf.Max(0, rectOffset.left) : 0;
+            RectOffsetRight = rectOffset != null ? Mathf.Max(0, rectOffset.right) : 0;
+            RectOffsetTop = rectOffset != null ? Mathf.Max(0, rectOffset.top) : 0;
+            RectOffsetBottom = rectOffset != null ? Mathf.Max(0, rectOffset.bottom) : 0;
             HorizontalAlign = horizontalAlign;
             VerticalAlign = verticalAlign;
             FallbackToSystemFont = fallbackToSystemFont;
@@ -30,22 +33,12 @@ namespace Milestro.Model
         public int FontWeight { get; }
         public float FontSize { get; }
         public Color TextColor { get; }
-        public RectOffset RectOffset { get; }
+        public int RectOffsetLeft { get; }
+        public int RectOffsetRight { get; }
+        public int RectOffsetTop { get; }
+        public int RectOffsetBottom { get; }
         public SlimTextHorizontalAlign HorizontalAlign { get; }
         public SlimTextVerticalAlign VerticalAlign { get; }
         public bool FallbackToSystemFont { get; }
-
-        private static RectOffset NormalizeRectOffset(RectOffset rectOffset)
-        {
-            if (rectOffset == null)
-            {
-                return new RectOffset();
-            }
-
-            return new RectOffset(Mathf.Max(0, rectOffset.left),
-                Mathf.Max(0, rectOffset.right),
-                Mathf.Max(0, rectOffset.top),
-                Mathf.Max(0, rectOffset.bottom));
-        }
     }
 }

@@ -120,7 +120,7 @@ namespace Milestro.Components.Internal
             }
             set
             {
-                var nextValue = NormalizeRectOffset(value);
+                var nextValue = CloneNormalizedRectOffset(value);
                 if (RectOffsetsEqual(m_rectOffset, nextValue))
                 {
                     return;
@@ -408,7 +408,7 @@ namespace Milestro.Components.Internal
 
             m_fontWeight = NormalizeFontWeight(m_fontWeight);
             m_fontSize = NormalizeFontSize(m_fontSize);
-            m_rectOffset = NormalizeRectOffset(m_rectOffset);
+            NormalizeRectOffsetInPlace();
         }
 
         private static int NormalizeFontWeight(int weight)
@@ -429,7 +429,16 @@ namespace Milestro.Components.Internal
             }
         }
 
-        private static RectOffset NormalizeRectOffset(RectOffset rectOffset)
+        private void NormalizeRectOffsetInPlace()
+        {
+            EnsureRectOffset();
+            m_rectOffset.left = Mathf.Max(0, m_rectOffset.left);
+            m_rectOffset.right = Mathf.Max(0, m_rectOffset.right);
+            m_rectOffset.top = Mathf.Max(0, m_rectOffset.top);
+            m_rectOffset.bottom = Mathf.Max(0, m_rectOffset.bottom);
+        }
+
+        private static RectOffset CloneNormalizedRectOffset(RectOffset rectOffset)
         {
             if (rectOffset == null)
             {
