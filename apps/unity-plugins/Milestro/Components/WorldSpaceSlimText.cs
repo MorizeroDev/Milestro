@@ -27,7 +27,9 @@ namespace Milestro.Components
         [SerializeField] private Color m_color = Color.white;
         [SerializeField] private Vector2Int m_textureSizePixels = new Vector2Int(128, 32);
         [SerializeField] private float m_pixelsPerUnit = 100f;
-        [SerializeField] private Vector2 m_padding = Vector2.zero;
+        [SerializeField] private RectOffset m_rectOffset = new RectOffset();
+        [SerializeField] private SlimTextHorizontalAlign m_horizontalAlign = SlimTextHorizontalAlign.Left;
+        [SerializeField] private SlimTextVerticalAlign m_verticalAlign = SlimTextVerticalAlign.Top;
         [SerializeField] private bool m_autoFitTexture;
         [SerializeField] private bool m_fallbackToSystemFont = true;
         [SerializeField] private Material? m_material;
@@ -118,12 +120,36 @@ namespace Milestro.Components
             }
         }
 
-        public Vector2 padding
+        public RectOffset rectOffset
         {
-            get => m_padding;
+            get
+            {
+                EnsureRectOffset();
+                return m_rectOffset;
+            }
             set
             {
-                m_padding = NormalizePadding(value);
+                m_rectOffset = NormalizeRectOffset(value);
+                ApplyConfiguration();
+            }
+        }
+
+        public SlimTextHorizontalAlign horizontalAlign
+        {
+            get => m_horizontalAlign;
+            set
+            {
+                m_horizontalAlign = value;
+                ApplyConfiguration();
+            }
+        }
+
+        public SlimTextVerticalAlign verticalAlign
+        {
+            get => m_verticalAlign;
+            set
+            {
+                m_verticalAlign = value;
                 ApplyConfiguration();
             }
         }
@@ -281,7 +307,9 @@ namespace Milestro.Components
             producer.fontWeight = m_fontWeight;
             producer.fontSize = m_fontSize;
             producer.color = m_color;
-            producer.padding = m_padding;
+            producer.rectOffset = m_rectOffset;
+            producer.horizontalAlign = m_horizontalAlign;
+            producer.verticalAlign = m_verticalAlign;
             producer.fallbackToSystemFont = m_fallbackToSystemFont;
         }
 
@@ -634,12 +662,13 @@ namespace Milestro.Components
                     m_fontSize,
                     m_fallbackToSystemFont);
                 var measurement = font.MeasureText(m_text);
-                var baselineX = m_padding.x - measurement.Bounds.xMin;
-                var baselineY = m_padding.y - measurement.Bounds.yMin;
-                var width = Mathf.CeilToInt(baselineX +
-                                            Mathf.Max(measurement.Bounds.xMax, measurement.AdvanceX) +
-                                            m_padding.x);
-                var height = Mathf.CeilToInt(baselineY + measurement.Bounds.yMax + m_padding.y);
+                var rectOffset = NormalizeRectOffset(m_rectOffset);
+                var width = Mathf.CeilToInt(MeasureContentWidth(measurement) +
+                                            rectOffset.left +
+                                            rectOffset.right);
+                var height = Mathf.CeilToInt(MeasureContentHeight(measurement) +
+                                             rectOffset.top +
+                                             rectOffset.bottom);
                 return NormalizeTextureSize(new Vector2Int(width, height));
             }
             catch (Exception)
@@ -664,7 +693,7 @@ namespace Milestro.Components
             m_fontSize = NormalizeFontSize(m_fontSize);
             m_textureSizePixels = NormalizeTextureSize(m_textureSizePixels);
             m_pixelsPerUnit = NormalizePixelsPerUnit(m_pixelsPerUnit);
-            m_padding = NormalizePadding(m_padding);
+            m_rectOffset = NormalizeRectOffset(m_rectOffset);
             if (string.IsNullOrEmpty(m_texturePropertyName))
             {
                 m_texturePropertyName = DefaultTexturePropertyName;
@@ -691,10 +720,49 @@ namespace Milestro.Components
             return FloatUtil.IsFinite(pixelsPerUnit) ? Mathf.Max(1f, pixelsPerUnit) : 1f;
         }
 
-        private static Vector2 NormalizePadding(Vector2 padding)
+        private void EnsureRectOffset()
         {
-            return new Vector2(FloatUtil.IsFinite(padding.x) ? Mathf.Max(0f, padding.x) : 0f,
-                FloatUtil.IsFinite(padding.y) ? Mathf.Max(0f, padding.y) : 0f);
+            if (m_rectOffset == null)
+            {
+                m_rectOffset = new RectOffset();
+            }
+        }
+
+        private static RectOffset NormalizeRectOffset(RectOffset rectOffset)
+        {
+            if (rectOffset == null)
+            {
+                return new RectOffset();
+            }
+
+            return new RectOffset(Mathf.Max(0, rectOffset.left),
+                Mathf.Max(0, rectOffset.right),
+                Mathf.Max(0, rectOffset.top),
+                Mathf.Max(0, rectOffset.bottom));
+        }
+
+        private static float MeasureContentWidth(FontTextMeasurement measurement)
+        {
+            var bounds = measurement.Bounds;
+            if (!FloatUtil.IsFinite(bounds.xMin) ||
+                !FloatUtil.IsFinite(bounds.xMax) ||
+                !FloatUtil.IsFinite(measurement.AdvanceX))
+            {
+                return 0f;
+            }
+
+            return Mathf.Max(0f, Mathf.Max(bounds.xMax, measurement.AdvanceX) - bounds.xMin);
+        }
+
+        private static float MeasureContentHeight(FontTextMeasurement measurement)
+        {
+            var bounds = measurement.Bounds;
+            if (!FloatUtil.IsFinite(bounds.yMin) || !FloatUtil.IsFinite(bounds.yMax))
+            {
+                return 0f;
+            }
+
+            return Mathf.Max(0f, bounds.yMax - bounds.yMin);
         }
     }
 }

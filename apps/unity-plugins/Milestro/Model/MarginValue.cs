@@ -1,43 +1,67 @@
 using System;
+using UnityEngine;
 
 namespace Milestro.Model
 {
     [Serializable]
     public struct MarginValue
     {
-        public float Value;
-        public MarginUnit Unit;
-        public bool Auto;
+        [SerializeField]
+        private float m_value;
+
+        [SerializeField]
+        private MarginUnit m_unit;
+
+        [SerializeField]
+        private bool m_auto;
+
+        public float Value
+        {
+            get => m_value;
+            set => m_value = value;
+        }
+
+        public MarginUnit Unit
+        {
+            get => m_unit;
+            set => m_unit = value;
+        }
+
+        public bool Auto
+        {
+            get => m_auto;
+            set => m_auto = value;
+        }
 
         public float Resolve(MarginResolveContext context, MarginAxis axis)
         {
-            if (Auto || !IsFinite(Value))
+            if (m_auto || !IsFinite(m_value))
             {
                 return 0f;
             }
 
-            switch (Unit)
+            switch (m_unit)
             {
                 case MarginUnit.ContainerPercent:
-                    return Value * 0.01f * (axis == MarginAxis.Horizontal
+                    return m_value * 0.01f * (axis == MarginAxis.Horizontal
                         ? context.ContainerWidth
                         : context.ContainerHeight);
                 case MarginUnit.Vw:
-                    return Value * 0.01f * context.ContainerWidth;
+                    return m_value * 0.01f * context.ContainerWidth;
                 case MarginUnit.Vh:
-                    return Value * 0.01f * context.ContainerHeight;
+                    return m_value * 0.01f * context.ContainerHeight;
                 case MarginUnit.Em:
-                    return Value * context.FontSize;
+                    return m_value * context.FontSize;
                 default:
-                    return Value;
+                    return m_value;
             }
         }
 
         public void Normalize()
         {
-            if (!IsFinite(Value))
+            if (!IsFinite(m_value))
             {
-                Value = 0f;
+                m_value = 0f;
             }
         }
 

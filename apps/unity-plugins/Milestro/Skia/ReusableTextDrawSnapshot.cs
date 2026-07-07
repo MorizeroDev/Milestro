@@ -80,6 +80,18 @@ namespace Milestro.Skia
             return Rect.MinMaxRect(boundsLeft, boundsTop, boundsRight, boundsBottom);
         }
 
+        internal FontTextMeasurement MeasureTextBoundsAndAdvance()
+        {
+            MeasureRaw(out var boundsLeft,
+                out var boundsTop,
+                out var boundsRight,
+                out var boundsBottom,
+                out var advanceX);
+            return new FontTextMeasurement(Rect.MinMaxRect(boundsLeft, boundsTop, boundsRight, boundsBottom),
+                advanceX,
+                default);
+        }
+
         internal FontTextMeasurement MeasureText()
         {
             MeasureRaw(out var boundsLeft,

@@ -243,10 +243,8 @@ namespace Milestro.Components.Internal
                 return true;
             }
 
-            var bounds = noAllocSubmission!.MeasureBounds();
-            var padding = NormalizePadding(settings.Padding);
-            var baseline = new Vector2(padding.x - bounds.xMin,
-                padding.y - bounds.yMin);
+            var measurement = noAllocSubmission!.MeasureText();
+            var baseline = ResolveBaseline(settings, measurement);
 
             if (!TrySubmitNoAlloc(noAllocSubmission, baseline))
             {
@@ -299,9 +297,7 @@ namespace Milestro.Components.Internal
             }
 
             var measurement = font.MeasureText(settings.Text);
-            var padding = NormalizePadding(settings.Padding);
-            var baseline = new Vector2(padding.x - measurement.Bounds.xMin,
-                padding.y - measurement.Bounds.yMin);
+            var baseline = ResolveBaseline(settings, measurement);
             commands.DrawString(settings.Text, font, baseline, settings.TextColor);
             return commands;
         }
@@ -393,10 +389,97 @@ namespace Milestro.Components.Internal
             return new Vector2Int(Mathf.Max(1, sizePixels.x), Mathf.Max(1, sizePixels.y));
         }
 
-        private static Vector2 NormalizePadding(Vector2 padding)
+        private Vector2 ResolveBaseline(SlimTextRenderTargetSettings settings,
+            FontTextMeasurement measurement)
         {
-            return new Vector2(FloatUtil.IsFinite(padding.x) ? Mathf.Max(0f, padding.x) : 0f,
-                FloatUtil.IsFinite(padding.y) ? Mathf.Max(0f, padding.y) : 0f);
+            var bounds = measurement.Bounds;
+            var contentLeft = ResolveContentStart(settings.HorizontalAlign,
+                OutputWidth,
+                settings.RectOffset.left,
+                settings.RectOffset.right,
+                MeasureContentWidth(measurement));
+            var contentTop = ResolveContentStart(settings.VerticalAlign,
+                OutputHeight,
+                settings.RectOffset.top,
+                settings.RectOffset.bottom,
+                MeasureContentHeight(measurement));
+            return new Vector2(contentLeft - bounds.xMin, contentTop - bounds.yMin);
+        }
+
+        private static float ResolveContentStart(SlimTextHorizontalAlign align,
+            float containerLength,
+            float startInset,
+            float endInset,
+            float contentLength)
+        {
+            if (!FloatUtil.IsFinite(containerLength) ||
+                !FloatUtil.IsFinite(contentLength) ||
+                contentLength <= 0f)
+            {
+                return startInset;
+            }
+
+            var availableLength = Mathf.Max(0f, containerLength - startInset - endInset);
+            var spare = Mathf.Max(0f, availableLength - contentLength);
+            switch (align)
+            {
+                case SlimTextHorizontalAlign.Center:
+                    return startInset + spare * 0.5f;
+                case SlimTextHorizontalAlign.Right:
+                    return containerLength - endInset - contentLength;
+                default:
+                    return startInset;
+            }
+        }
+
+        private static float ResolveContentStart(SlimTextVerticalAlign align,
+            float containerLength,
+            float startInset,
+            float endInset,
+            float contentLength)
+        {
+            if (!FloatUtil.IsFinite(containerLength) ||
+                !FloatUtil.IsFinite(contentLength) ||
+                contentLength <= 0f)
+            {
+                return startInset;
+            }
+
+            var availableLength = Mathf.Max(0f, containerLength - startInset - endInset);
+            var spare = Mathf.Max(0f, availableLength - contentLength);
+            switch (align)
+            {
+                case SlimTextVerticalAlign.Center:
+                    return startInset + spare * 0.5f;
+                case SlimTextVerticalAlign.Bottom:
+                    return containerLength - endInset - contentLength;
+                default:
+                    return startInset;
+            }
+        }
+
+        private static float MeasureContentWidth(FontTextMeasurement measurement)
+        {
+            var bounds = measurement.Bounds;
+            if (!FloatUtil.IsFinite(bounds.xMin) ||
+                !FloatUtil.IsFinite(bounds.xMax) ||
+                !FloatUtil.IsFinite(measurement.AdvanceX))
+            {
+                return 0f;
+            }
+
+            return Mathf.Max(0f, Mathf.Max(bounds.xMax, measurement.AdvanceX) - bounds.xMin);
+        }
+
+        private static float MeasureContentHeight(FontTextMeasurement measurement)
+        {
+            var bounds = measurement.Bounds;
+            if (!FloatUtil.IsFinite(bounds.yMin) || !FloatUtil.IsFinite(bounds.yMax))
+            {
+                return 0f;
+            }
+
+            return Mathf.Max(0f, bounds.yMax - bounds.yMin);
         }
 
         private static float NormalizeFontSize(float fontSize)

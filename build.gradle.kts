@@ -159,6 +159,7 @@ tasks {
             listOf("milestro::skia::textlayout::TextStyle") to "IntPtr",
             listOf("milestro::skia::textlayout::InputBox") to "IntPtr",
             listOf("milestro::skia::textlayout::InputBoxDrawSnapshot") to "IntPtr",
+
             listOf("MilestroSkiaTextlayoutParagraphSplitGlyphCallback") to
                 "MilestroCTypes.SkiaTextlayoutParagraphSplitGlyphCallback",
         )

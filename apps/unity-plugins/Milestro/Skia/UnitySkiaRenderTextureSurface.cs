@@ -269,6 +269,12 @@ namespace Milestro.Skia
                 return stagingSnapshot.MeasureBounds();
             }
 
+            internal FontTextMeasurement MeasureText()
+            {
+                ThrowIfDisposed();
+                return stagingSnapshot.MeasureTextBoundsAndAdvance();
+            }
+
             internal bool TryBeginRetire()
             {
                 if (retired || disposed)

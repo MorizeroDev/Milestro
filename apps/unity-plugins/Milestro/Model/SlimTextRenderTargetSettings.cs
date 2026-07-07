@@ -9,7 +9,9 @@ namespace Milestro.Model
             int fontWeight,
             float fontSize,
             Color textColor,
-            Vector2 padding,
+            RectOffset rectOffset,
+            SlimTextHorizontalAlign horizontalAlign,
+            SlimTextVerticalAlign verticalAlign,
             bool fallbackToSystemFont)
         {
             Text = text ?? "";
@@ -17,7 +19,9 @@ namespace Milestro.Model
             FontWeight = fontWeight;
             FontSize = fontSize;
             TextColor = textColor;
-            Padding = padding;
+            RectOffset = NormalizeRectOffset(rectOffset);
+            HorizontalAlign = horizontalAlign;
+            VerticalAlign = verticalAlign;
             FallbackToSystemFont = fallbackToSystemFont;
         }
 
@@ -26,7 +30,22 @@ namespace Milestro.Model
         public int FontWeight { get; }
         public float FontSize { get; }
         public Color TextColor { get; }
-        public Vector2 Padding { get; }
+        public RectOffset RectOffset { get; }
+        public SlimTextHorizontalAlign HorizontalAlign { get; }
+        public SlimTextVerticalAlign VerticalAlign { get; }
         public bool FallbackToSystemFont { get; }
+
+        private static RectOffset NormalizeRectOffset(RectOffset rectOffset)
+        {
+            if (rectOffset == null)
+            {
+                return new RectOffset();
+            }
+
+            return new RectOffset(Mathf.Max(0, rectOffset.left),
+                Mathf.Max(0, rectOffset.right),
+                Mathf.Max(0, rectOffset.top),
+                Mathf.Max(0, rectOffset.bottom));
+        }
     }
 }

@@ -20,7 +20,9 @@ namespace Milestro.Components.Internal
         [SerializeField, Range(0, 1000)] private int m_fontWeight = FontWeight.Normal;
         [SerializeField] private float m_fontSize = 24f;
         [SerializeField] private Color m_color = Color.white;
-        [SerializeField] private Vector2 m_padding = Vector2.zero;
+        [SerializeField] private RectOffset m_rectOffset = new RectOffset();
+        [SerializeField] private SlimTextHorizontalAlign m_horizontalAlign = SlimTextHorizontalAlign.Left;
+        [SerializeField] private SlimTextVerticalAlign m_verticalAlign = SlimTextVerticalAlign.Top;
         [SerializeField] private bool m_fallbackToSystemFont = true;
 
         [NonSerialized] private RectTransform? rectTransformCache;
@@ -109,18 +111,52 @@ namespace Milestro.Components.Internal
             }
         }
 
-        public Vector2 padding
+        public RectOffset rectOffset
         {
-            get => m_padding;
+            get
+            {
+                EnsureRectOffset();
+                return m_rectOffset;
+            }
             set
             {
-                var nextValue = NormalizePadding(value);
-                if (m_padding == nextValue)
+                var nextValue = NormalizeRectOffset(value);
+                if (RectOffsetsEqual(m_rectOffset, nextValue))
                 {
                     return;
                 }
 
-                m_padding = nextValue;
+                m_rectOffset = nextValue;
+                MarkPaintChanged();
+            }
+        }
+
+        public SlimTextHorizontalAlign horizontalAlign
+        {
+            get => m_horizontalAlign;
+            set
+            {
+                if (m_horizontalAlign == value)
+                {
+                    return;
+                }
+
+                m_horizontalAlign = value;
+                MarkPaintChanged();
+            }
+        }
+
+        public SlimTextVerticalAlign verticalAlign
+        {
+            get => m_verticalAlign;
+            set
+            {
+                if (m_verticalAlign == value)
+                {
+                    return;
+                }
+
+                m_verticalAlign = value;
                 MarkPaintChanged();
             }
         }
@@ -307,7 +343,9 @@ namespace Milestro.Components.Internal
                 m_fontWeight,
                 m_fontSize,
                 m_color,
-                m_padding,
+                m_rectOffset,
+                m_horizontalAlign,
+                m_verticalAlign,
                 m_fallbackToSystemFont);
         }
 
@@ -370,7 +408,7 @@ namespace Milestro.Components.Internal
 
             m_fontWeight = NormalizeFontWeight(m_fontWeight);
             m_fontSize = NormalizeFontSize(m_fontSize);
-            m_padding = NormalizePadding(m_padding);
+            m_rectOffset = NormalizeRectOffset(m_rectOffset);
         }
 
         private static int NormalizeFontWeight(int weight)
@@ -383,10 +421,36 @@ namespace Milestro.Components.Internal
             return FloatUtil.IsFinite(fontSize) ? Mathf.Max(1f, fontSize) : 1f;
         }
 
-        private static Vector2 NormalizePadding(Vector2 padding)
+        private void EnsureRectOffset()
         {
-            return new Vector2(FloatUtil.IsFinite(padding.x) ? Mathf.Max(0f, padding.x) : 0f,
-                FloatUtil.IsFinite(padding.y) ? Mathf.Max(0f, padding.y) : 0f);
+            if (m_rectOffset == null)
+            {
+                m_rectOffset = new RectOffset();
+            }
+        }
+
+        private static RectOffset NormalizeRectOffset(RectOffset rectOffset)
+        {
+            if (rectOffset == null)
+            {
+                return new RectOffset();
+            }
+
+            return new RectOffset(Mathf.Max(0, rectOffset.left),
+                Mathf.Max(0, rectOffset.right),
+                Mathf.Max(0, rectOffset.top),
+                Mathf.Max(0, rectOffset.bottom));
+        }
+
+        private static bool RectOffsetsEqual(RectOffset a, RectOffset b)
+        {
+            return a == b ||
+                   a != null &&
+                   b != null &&
+                   a.left == b.left &&
+                   a.right == b.right &&
+                   a.top == b.top &&
+                   a.bottom == b.bottom;
         }
     }
 }
