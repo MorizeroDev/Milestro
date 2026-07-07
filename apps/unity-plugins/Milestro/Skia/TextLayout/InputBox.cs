@@ -193,6 +193,16 @@ namespace Milestro.Skia.TextLayout
             ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxSetCaretVisible(NativePtr, visible ? 1 : 0));
         }
 
+        public void SetAutoMargin(bool left, bool top, bool right, bool bottom)
+        {
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutInputBoxSetAutoMargin(NativePtr,
+                left ? 1 : 0,
+                top ? 1 : 0,
+                right ? 1 : 0,
+                bottom ? 1 : 0));
+        }
+
         public void InsertText(string text)
         {
             ThrowIfDisposed();

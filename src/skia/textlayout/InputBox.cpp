@@ -168,8 +168,7 @@ SkScalar EmptyCaretX(::skia::textlayout::TextAlign align, SkScalar viewportWidth
 }
 
 bool HasGlyphClusterStart(SkUnicode::CodeUnitFlags flags) {
-    return (flags & SkUnicode::CodeUnitFlags::kGlyphClusterStart) ==
-           SkUnicode::CodeUnitFlags::kGlyphClusterStart;
+    return (flags & SkUnicode::CodeUnitFlags::kGlyphClusterStart) == SkUnicode::CodeUnitFlags::kGlyphClusterStart;
 }
 
 VerticalMetrics ResolveStyleVerticalMetrics(const ::skia::textlayout::TextStyle& textStyle) {
@@ -180,7 +179,8 @@ VerticalMetrics ResolveStyleVerticalMetrics(const ::skia::textlayout::TextStyle&
 
     auto ascent = std::isfinite(fontMetrics.fAscent) && fontMetrics.fAscent < 0.0f ? -fontMetrics.fAscent : 0.0f;
     auto descent = std::isfinite(fontMetrics.fDescent) && fontMetrics.fDescent > 0.0f ? fontMetrics.fDescent : 0.0f;
-    const auto leading = std::isfinite(fontMetrics.fLeading) && fontMetrics.fLeading > 0.0f ? fontMetrics.fLeading : 0.0f;
+    const auto leading =
+            std::isfinite(fontMetrics.fLeading) && fontMetrics.fLeading > 0.0f ? fontMetrics.fLeading : 0.0f;
 
     if (!IsFinitePositive(ascent) && !IsFinitePositive(descent)) {
         ascent = fontSize * kFallbackAscentRatio;
@@ -457,10 +457,7 @@ void TextBoundaryMap::rebuildBoundaries() {
     auto unicode = milestro::skia::GetUnicodeProvider()->unwrap();
     skia_private::TArray<SkUnicode::CodeUnitFlags, true> flags;
     const bool hasFlags = unicode != nullptr &&
-                          unicode->computeCodeUnitFlags(text_.data(),
-                                                         static_cast<int>(text_.size()),
-                                                         false,
-                                                         &flags);
+                          unicode->computeCodeUnitFlags(text_.data(), static_cast<int>(text_.size()), false, &flags);
 
     bool sawGlyphClusterFlag = false;
     if (hasFlags) {
@@ -518,7 +515,6 @@ InputBox::InputBox(ParagraphStyle* paragraphStyle, TextStyle* textStyle) : Input
         paragraphStyle_.setReplaceTabCharacters(paragraphStyle->getReplaceTabCharacters());
         paragraphStyle_.setApplyRoundingHack(paragraphStyle->getApplyRoundingHack());
         singleLineInput_ = !paragraphStyle->unlimited_lines() && paragraphStyle->getMaxLines() == 1;
-        centerSingleLineVertically_ = singleLineInput_;
         if (!paragraphStyle->hintingIsOn()) {
             paragraphStyle_.turnHintingOff();
         }
@@ -621,6 +617,19 @@ void InputBox::setCaretWidth(SkScalar width) {
     caretWidth_ = std::max<SkScalar>(0.0f, width);
 }
 
+void InputBox::setAutoMargin(bool left, bool top, bool right, bool bottom) {
+    if (autoMarginLeft_ == left && autoMarginTop_ == top && autoMarginRight_ == right && autoMarginBottom_ == bottom) {
+        return;
+    }
+
+    autoMarginLeft_ = left;
+    autoMarginTop_ = top;
+    autoMarginRight_ = right;
+    autoMarginBottom_ = bottom;
+    markSelectionRectsDirty();
+    ensureCaretVisible();
+}
+
 void InputBox::setCursorUtf8(size_t utf8Offset, ::skia::textlayout::Affinity affinity) {
     const auto oldCursor = cursorUtf8_;
     const auto oldAffinity = affinity_;
@@ -633,11 +642,8 @@ void InputBox::setCursorUtf8(size_t utf8Offset, ::skia::textlayout::Affinity aff
     affinity_ = affinity;
     resetSelectionToCursor();
     resetPreferredCaretX();
-    if (cursorUtf8_ != oldCursor ||
-        affinity_ != oldAffinity ||
-        selectionAnchorUtf8_ != oldAnchor ||
-        selectionFocusUtf8_ != oldFocus ||
-        selectionAnchorAffinity_ != oldAnchorAffinity ||
+    if (cursorUtf8_ != oldCursor || affinity_ != oldAffinity || selectionAnchorUtf8_ != oldAnchor ||
+        selectionFocusUtf8_ != oldFocus || selectionAnchorAffinity_ != oldAnchorAffinity ||
         selectionFocusAffinity_ != oldFocusAffinity) {
         breakUndoGroup();
     }
@@ -752,12 +758,9 @@ bool InputBox::setSelectionUtf8(size_t anchorUtf8,
     cursorUtf8_ = selectionFocusUtf8_;
     affinity_ = focusAffinity;
 
-    const bool changed = selectionAnchorUtf8_ != oldAnchor ||
-                         selectionFocusUtf8_ != oldFocus ||
-                         selectionAnchorAffinity_ != oldAnchorAffinity ||
-                         selectionFocusAffinity_ != oldFocusAffinity ||
-                         cursorUtf8_ != oldCursor ||
-                         affinity_ != oldAffinity;
+    const bool changed = selectionAnchorUtf8_ != oldAnchor || selectionFocusUtf8_ != oldFocus ||
+                         selectionAnchorAffinity_ != oldAnchorAffinity || selectionFocusAffinity_ != oldFocusAffinity ||
+                         cursorUtf8_ != oldCursor || affinity_ != oldAffinity;
     if (changed) {
         markSelectionStateDirty();
         breakUndoGroup();
@@ -915,8 +918,8 @@ bool InputBox::moveLineStart(bool extendSelection) {
     ::skia::textlayout::LineMetrics lineMetrics;
     int lineNumber = 0;
     const auto displayState = displayTextState();
-    const auto displayCursor = displayState.displayUtf8FromCommitted(boundaryMap_.snapUtf8(cursorUtf8_,
-                                                                                            TextBoundarySnapMode::Nearest));
+    const auto displayCursor =
+            displayState.displayUtf8FromCommitted(boundaryMap_.snapUtf8(cursorUtf8_, TextBoundarySnapMode::Nearest));
     if (!resolveLineMetricsForDisplayUtf8(displayCursor, affinity_, lineMetrics, lineNumber)) {
         if (clearedComposition) {
             breakUndoGroup();
@@ -941,8 +944,8 @@ bool InputBox::moveLineEnd(bool extendSelection) {
     ::skia::textlayout::LineMetrics lineMetrics;
     int lineNumber = 0;
     const auto displayState = displayTextState();
-    const auto displayCursor = displayState.displayUtf8FromCommitted(boundaryMap_.snapUtf8(cursorUtf8_,
-                                                                                            TextBoundarySnapMode::Nearest));
+    const auto displayCursor =
+            displayState.displayUtf8FromCommitted(boundaryMap_.snapUtf8(cursorUtf8_, TextBoundarySnapMode::Nearest));
     if (!resolveLineMetricsForDisplayUtf8(displayCursor, affinity_, lineMetrics, lineNumber)) {
         if (clearedComposition) {
             breakUndoGroup();
@@ -964,10 +967,7 @@ bool InputBox::moveLineEnd(bool extendSelection) {
 bool InputBox::moveDocumentStart(bool extendSelection) {
     resetPreferredCaretX();
     const bool clearedComposition = clearComposition();
-    const bool moved = moveToUtf8(0,
-                                  ::skia::textlayout::Affinity::kDownstream,
-                                  extendSelection,
-                                  true);
+    const bool moved = moveToUtf8(0, ::skia::textlayout::Affinity::kDownstream, extendSelection, true);
     if (clearedComposition && !moved) {
         breakUndoGroup();
     }
@@ -977,10 +977,8 @@ bool InputBox::moveDocumentStart(bool extendSelection) {
 bool InputBox::moveDocumentEnd(bool extendSelection) {
     resetPreferredCaretX();
     const bool clearedComposition = clearComposition();
-    const bool moved = moveToUtf8(boundaryMap_.utf8Length(),
-                                  ::skia::textlayout::Affinity::kUpstream,
-                                  extendSelection,
-                                  true);
+    const bool moved =
+            moveToUtf8(boundaryMap_.utf8Length(), ::skia::textlayout::Affinity::kUpstream, extendSelection, true);
     if (clearedComposition && !moved) {
         breakUndoGroup();
     }
@@ -996,7 +994,8 @@ bool InputBox::hitTest(SkScalar x, SkScalar y, bool extendSelection) {
 
     const auto oldCursor = cursorUtf8_;
     const auto oldAffinity = affinity_;
-    const auto hit = paragraph_->getGlyphPositionAtCoordinate(x + scrollX_, y + scrollY_ - visualOffsetY());
+    const auto hit =
+            paragraph_->getGlyphPositionAtCoordinate(x + scrollX_ - visualOffsetX(), y + scrollY_ - visualOffsetY());
     const auto displayMap = displayBoundaryMap();
     const auto displayUtf8 = displayMap.utf16ToUtf8(hit.position < 0 ? 0 : static_cast<size_t>(hit.position));
     const auto utf8 = committedUtf8FromDisplay(displayUtf8);
@@ -1122,8 +1121,9 @@ InputBoxCaretRect InputBox::getCaretRectForDisplayOffset(size_t displayUtf8) {
         x = contentWidth();
     }
 
-    rect.left = x;
-    rect.right = x + caretWidth_;
+    const auto offsetX = visualOffsetX();
+    rect.left = x + offsetX;
+    rect.right = x + caretWidth_ + offsetX;
     const auto offsetY = visualOffsetY();
     rect.top = top + offsetY;
     rect.bottom = bottom + offsetY;
@@ -1153,11 +1153,12 @@ InputBoxCaretRect InputBox::getCompositionRect() {
 
     auto rect = boxes.back().rect;
 
+    const auto offsetX = visualOffsetX();
     const auto offsetY = visualOffsetY();
     return InputBoxCaretRect{
-            ToFloat(rect.left()),
+            ToFloat(rect.left() + offsetX),
             ToFloat(rect.top() + offsetY),
-            ToFloat(rect.right()),
+            ToFloat(rect.right() + offsetX),
             ToFloat(rect.bottom() + offsetY),
     };
 }
@@ -1218,6 +1219,7 @@ void InputBox::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, S
     auto* paragraph = ellipsisDisplay ? paintParagraph.get() : paragraph_.get();
     const auto paintScrollX = ellipsisDisplay ? 0.0f : scrollX_;
     const auto paintScrollY = ellipsisDisplay ? 0.0f : scrollY_;
+    const auto offsetX = ellipsisDisplay ? visualOffsetXForParagraph(paragraph) : visualOffsetX();
     const auto offsetY = ellipsisDisplay ? visualOffsetYForParagraph(paragraph) : visualOffsetY();
     const auto clipToViewport = shouldClipDisplayToViewport();
     canvas->save();
@@ -1242,7 +1244,7 @@ void InputBox::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, S
     }
 
     if (paragraph != nullptr) {
-        paragraph->paint(canvas, x - paintScrollX, y + offsetY - paintScrollY);
+        paragraph->paint(canvas, x + offsetX - paintScrollX, y + offsetY - paintScrollY);
     }
 
     if (!ellipsisDisplay && !compositionText_.empty()) {
@@ -1284,6 +1286,7 @@ std::unique_ptr<InputBoxDrawSnapshot> InputBox::createDrawSnapshot() {
     const auto snapshotScrollY = ellipsisDisplay ? 0.0f : scrollY_;
     const auto snapshotContentWidth = ellipsisDisplay ? viewportWidth_ : contentWidth();
     auto metrics = metricsForParagraph(paragraph.get(), snapshotScrollX, snapshotScrollY, snapshotContentWidth);
+    const auto snapshotOffsetX = ellipsisDisplay ? visualOffsetXForParagraph(paragraph.get()) : visualOffsetX();
     const auto snapshotOffsetY = ellipsisDisplay ? visualOffsetYForParagraph(paragraph.get()) : visualOffsetY();
     return std::make_unique<InputBoxDrawSnapshot>(std::move(paragraph),
                                                   caretRect,
@@ -1291,6 +1294,7 @@ std::unique_ptr<InputBoxDrawSnapshot> InputBox::createDrawSnapshot() {
                                                   compositionRect,
                                                   std::move(selectionRects),
                                                   caretWidth_,
+                                                  snapshotOffsetX,
                                                   snapshotOffsetY,
                                                   caretColor_,
                                                   selectionColor_,
@@ -1430,10 +1434,7 @@ std::shared_ptr<const std::vector<InputBoxCaretRect>> InputBox::getSelectionRect
 }
 
 bool InputBox::shouldUseEllipsisDisplay() const {
-    return !focused_ &&
-           singleLineInput_ &&
-           textOverflow_ == TextOverflow::Ellipsis &&
-           compositionText_.empty();
+    return !focused_ && singleLineInput_ && textOverflow_ == TextOverflow::Ellipsis && compositionText_.empty();
 }
 
 bool InputBox::shouldClipDisplayToViewport() const {
@@ -1551,14 +1552,14 @@ InputBox::DisplayTextState InputBox::displayTextState() const {
     DisplayTextState state;
     state.text = std::move(builder.text);
     state.committedUtf8ForDisplayUtf8 = std::move(builder.committedUtf8ForDisplayUtf8);
-    state.displayUtf8ForCommittedUtf8 = BuildDisplayUtf8ForCommittedUtf8(state.committedUtf8ForDisplayUtf8,
-                                                                          boundaryMap_.utf8Length());
+    state.displayUtf8ForCommittedUtf8 =
+            BuildDisplayUtf8ForCommittedUtf8(state.committedUtf8ForDisplayUtf8, boundaryMap_.utf8Length());
     if (!compositionText_.empty()) {
         state.compositionStartUtf8 = compositionDisplayStart;
         state.compositionEndUtf8 = std::max(compositionDisplayStart, compositionDisplayEnd);
     } else {
-        state.compositionStartUtf8 = state.displayUtf8FromCommitted(boundaryMap_.snapUtf8(cursorUtf8_,
-                                                                                           TextBoundarySnapMode::Nearest));
+        state.compositionStartUtf8 =
+                state.displayUtf8FromCommitted(boundaryMap_.snapUtf8(cursorUtf8_, TextBoundarySnapMode::Nearest));
         state.compositionEndUtf8 = state.compositionStartUtf8;
     }
     return state;
@@ -1570,8 +1571,8 @@ TextBoundaryMap InputBox::displayBoundaryMap() const {
 
 size_t InputBox::displayCaretUtf8() const {
     if (compositionText_.empty()) {
-        return displayTextState().displayUtf8FromCommitted(boundaryMap_.snapUtf8(cursorUtf8_,
-                                                                                  TextBoundarySnapMode::Nearest));
+        return displayTextState().displayUtf8FromCommitted(
+                boundaryMap_.snapUtf8(cursorUtf8_, TextBoundarySnapMode::Nearest));
     }
 
     return displayTextState().compositionEndUtf8;
@@ -1639,6 +1640,7 @@ std::vector<InputBoxCaretRect> InputBox::getRectsForCommittedRange(size_t startU
                                               ::skia::textlayout::RectWidthStyle::kTight);
 
     // Keep SkParagraph's visual x slices, but normalize highlight height per line across font fallback runs.
+    const auto offsetX = visualOffsetX();
     const auto offsetY = visualOffsetY();
     const auto fallbackMetrics = ResolveStyleVerticalMetrics(textStyle_);
     std::vector<InputBoxCaretRect> rects;
@@ -1674,9 +1676,9 @@ std::vector<InputBoxCaretRect> InputBox::getRectsForCommittedRange(size_t startU
         }
 
         rects.push_back(InputBoxCaretRect{
-                ToFloat(box.rect.left()),
+                ToFloat(box.rect.left() + offsetX),
                 selectionTop,
-                ToFloat(box.rect.right()),
+                ToFloat(box.rect.right() + offsetX),
                 selectionBottom,
         });
     }
@@ -1728,12 +1730,9 @@ bool InputBox::resolveLineMetricsForDisplayUtf8(size_t displayUtf8,
             return true;
         }
         if (clamped == end) {
-            if (!current.fHardBreak &&
-                affinity == ::skia::textlayout::Affinity::kDownstream &&
-                line + 1 < lineCount) {
+            if (!current.fHardBreak && affinity == ::skia::textlayout::Affinity::kDownstream && line + 1 < lineCount) {
                 ::skia::textlayout::LineMetrics next;
-                if (getLineMetricsAt(line + 1, next) &&
-                    LineMetricStartUtf8(next, displayMap) == clamped) {
+                if (getLineMetricsAt(line + 1, next) && LineMetricStartUtf8(next, displayMap) == clamped) {
                     lineMetrics = next;
                     lineNumber = line + 1;
                     return true;
@@ -1752,8 +1751,7 @@ bool InputBox::resolveLineMetricsForDisplayUtf8(size_t displayUtf8,
         if (clamped == endIncludingNewline) {
             if (line + 1 < lineCount) {
                 ::skia::textlayout::LineMetrics next;
-                if (getLineMetricsAt(line + 1, next) &&
-                    LineMetricStartUtf8(next, displayMap) == clamped) {
+                if (getLineMetricsAt(line + 1, next) && LineMetricStartUtf8(next, displayMap) == clamped) {
                     lineMetrics = next;
                     lineNumber = line + 1;
                     return true;
@@ -1761,9 +1759,7 @@ bool InputBox::resolveLineMetricsForDisplayUtf8(size_t displayUtf8,
             }
 
             const auto& displayTextValue = displayMap.text();
-            if (clamped == displayLength &&
-                current.fHardBreak &&
-                !displayTextValue.empty() &&
+            if (clamped == displayLength && current.fHardBreak && !displayTextValue.empty() &&
                 displayTextValue.back() == '\n') {
                 const auto utf16 = displayMap.utf8ToUtf16(clamped);
                 lineMetrics = current;
@@ -1775,8 +1771,8 @@ bool InputBox::resolveLineMetricsForDisplayUtf8(size_t displayUtf8,
                 lineMetrics.fWidth = 0.0;
                 lineMetrics.fLeft = EmptyCaretX(paragraphStyle_.effective_align(), viewportWidth_, caretWidth_);
                 const auto lineAdvance = std::isfinite(current.fHeight) && current.fHeight > 0.0
-                                               ? current.fHeight
-                                               : current.fAscent + current.fDescent;
+                                                 ? current.fHeight
+                                                 : current.fAscent + current.fDescent;
                 if (std::isfinite(lineAdvance) && lineAdvance > 0.0) {
                     lineMetrics.fBaseline = current.fBaseline + lineAdvance;
                 }
@@ -1837,14 +1833,13 @@ SkScalar InputBox::caretXForDisplayOffset(size_t displayUtf8,
     return rtl ? glyphInfo.fGraphemeLayoutBounds.right() : glyphInfo.fGraphemeLayoutBounds.left();
 }
 
-size_t InputBox::displayUtf8ForLineX(int lineNumber,
-                                     SkScalar x,
-                                     ::skia::textlayout::Affinity& affinity) {
+size_t InputBox::displayUtf8ForLineX(int lineNumber, SkScalar x, ::skia::textlayout::Affinity& affinity) {
+    x -= visualOffsetX();
     ::skia::textlayout::LineMetrics lineMetrics;
     if (!getLineMetricsAt(lineNumber, lineMetrics)) {
         affinity = ::skia::textlayout::Affinity::kDownstream;
-        return displayTextState().displayUtf8FromCommitted(boundaryMap_.snapUtf8(cursorUtf8_,
-                                                                                  TextBoundarySnapMode::Nearest));
+        return displayTextState().displayUtf8FromCommitted(
+                boundaryMap_.snapUtf8(cursorUtf8_, TextBoundarySnapMode::Nearest));
     }
 
     const auto lineLeft = ToFloat(lineMetrics.fLeft);
@@ -1877,8 +1872,8 @@ bool InputBox::moveToUtf8(size_t targetUtf8,
                           bool shouldResetPreferredCaretX) {
     const auto oldCursor = cursorUtf8_;
     const auto oldAffinity = affinity_;
-    const auto target = boundaryMap_.snapUtf8(std::min(targetUtf8, boundaryMap_.utf8Length()),
-                                              TextBoundarySnapMode::Nearest);
+    const auto target =
+            boundaryMap_.snapUtf8(std::min(targetUtf8, boundaryMap_.utf8Length()), TextBoundarySnapMode::Nearest);
 
     bool changed = false;
     if (extendSelection) {
@@ -1916,8 +1911,8 @@ bool InputBox::moveVertical(int lineDelta, bool extendSelection) {
     ::skia::textlayout::LineMetrics currentLineMetrics;
     int currentLine = 0;
     const auto displayState = displayTextState();
-    const auto displayCursor = displayState.displayUtf8FromCommitted(boundaryMap_.snapUtf8(cursorUtf8_,
-                                                                                            TextBoundarySnapMode::Nearest));
+    const auto displayCursor =
+            displayState.displayUtf8FromCommitted(boundaryMap_.snapUtf8(cursorUtf8_, TextBoundarySnapMode::Nearest));
     if (!resolveLineMetricsForDisplayUtf8(displayCursor, affinity_, currentLineMetrics, currentLine)) {
         if (clearedComposition) {
             breakUndoGroup();
@@ -1961,6 +1956,43 @@ size_t InputBox::selectionEndUtf8() const {
     return std::max(anchor, focus);
 }
 
+SkScalar InputBox::visualOffsetX() {
+    rebuildParagraphIfNeeded();
+    return visualOffsetXForParagraph(paragraph_.get());
+}
+
+SkScalar InputBox::visualOffsetXForParagraph(::skia::textlayout::Paragraph* paragraph) const {
+    if ((!autoMarginLeft_ && !autoMarginRight_) || paragraph == nullptr) {
+        return 0.0f;
+    }
+
+    const auto contentWidthValue = visualContentWidthForParagraph(paragraph);
+    if (!IsFinitePositive(viewportWidth_) || !IsFinitePositive(contentWidthValue) ||
+        contentWidthValue >= viewportWidth_) {
+        return 0.0f;
+    }
+
+    const auto spare = viewportWidth_ - contentWidthValue;
+    if (autoMarginLeft_ && autoMarginRight_) {
+        return spare * 0.5f;
+    }
+    return autoMarginLeft_ ? spare : 0.0f;
+}
+
+SkScalar InputBox::visualContentWidthForParagraph(::skia::textlayout::Paragraph* paragraph) const {
+    if (paragraph == nullptr) {
+        return caretWidth_;
+    }
+
+    auto width = std::max<SkScalar>(0.0f, paragraph->getLongestLine());
+    width = std::max(width, paragraph->getMaxIntrinsicWidth());
+    if (!softWrap_) {
+        width = std::max(width, ResolveNoWrapContentWidth(paragraph, displayText()));
+    }
+
+    return std::max<SkScalar>(caretWidth_, std::ceil(width + caretWidth_));
+}
+
 SkScalar InputBox::visualOffsetY() {
     rebuildParagraphIfNeeded();
     return visualOffsetYForParagraph(paragraph_.get());
@@ -1969,23 +2001,55 @@ SkScalar InputBox::visualOffsetY() {
 SkScalar InputBox::visualOffsetYForParagraph(::skia::textlayout::Paragraph* paragraph) const {
     const auto verticalMetrics = ResolveStyleVerticalMetrics(textStyle_);
     if (paragraph == nullptr) {
-        return BaselineOffsetY(viewportHeight_, verticalMetrics.ascent, verticalMetrics);
+        if (!autoMarginTop_ && !autoMarginBottom_) {
+            return 0.0f;
+        }
+        const auto spare = viewportHeight_ - verticalMetrics.height;
+        if (!(spare > 0.0f)) {
+            return 0.0f;
+        }
+        if (autoMarginTop_ && autoMarginBottom_) {
+            return spare * 0.5f;
+        }
+        return autoMarginTop_ ? spare : 0.0f;
     }
 
-    if (!centerSingleLineVertically_) {
-        return 0.0f;
-    }
-
-    if (paragraph->lineNumber() > 1) {
+    if (!autoMarginTop_ && !autoMarginBottom_) {
         return 0.0f;
     }
 
     ::skia::textlayout::LineMetrics lineMetrics;
-    if (!paragraph->getLineMetricsAt(0, &lineMetrics)) {
+    const bool hasLineMetrics = paragraph->getLineMetricsAt(0, &lineMetrics);
+    if (!hasLineMetrics) {
         return BaselineOffsetY(viewportHeight_, verticalMetrics.ascent, verticalMetrics);
     }
 
-    return BaselineOffsetY(viewportHeight_, lineMetrics.fBaseline, verticalMetrics);
+    if (paragraph->lineNumber() <= 1) {
+        if (autoMarginTop_ && autoMarginBottom_) {
+            return BaselineOffsetY(viewportHeight_, lineMetrics.fBaseline, verticalMetrics);
+        }
+
+        if (autoMarginTop_) {
+            const auto lineBottom = lineMetrics.fBaseline + lineMetrics.fDescent;
+            if (!std::isfinite(lineBottom) || lineBottom >= viewportHeight_) {
+                return 0.0f;
+            }
+            return viewportHeight_ - lineBottom;
+        }
+
+        return 0.0f;
+    }
+
+    const auto height = paragraph->getHeight();
+    if (!IsFinitePositive(viewportHeight_) || !IsFinitePositive(height) || height >= viewportHeight_) {
+        return 0.0f;
+    }
+
+    const auto spare = viewportHeight_ - height;
+    if (autoMarginTop_ && autoMarginBottom_) {
+        return spare * 0.5f;
+    }
+    return autoMarginTop_ ? spare : 0.0f;
 }
 
 SkScalar InputBox::contentHeight() {
@@ -2075,10 +2139,8 @@ bool InputBox::resetSelectionToCursor() {
     selectionFocusUtf8_ = selectionAnchorUtf8_;
     selectionAnchorAffinity_ = affinity_;
     selectionFocusAffinity_ = affinity_;
-    const bool changed = selectionAnchorUtf8_ != oldAnchor ||
-                         selectionFocusUtf8_ != oldFocus ||
-                         selectionAnchorAffinity_ != oldAnchorAffinity ||
-                         selectionFocusAffinity_ != oldFocusAffinity;
+    const bool changed = selectionAnchorUtf8_ != oldAnchor || selectionFocusUtf8_ != oldFocus ||
+                         selectionAnchorAffinity_ != oldAnchorAffinity || selectionFocusAffinity_ != oldFocusAffinity;
     if (changed) {
         markSelectionStateDirty();
     }
@@ -2131,8 +2193,8 @@ SkScalar InputBox::contentWidth() {
 void InputBox::replaceText(std::string text, size_t requestedCursor) {
     boundaryMap_.rebuild(std::move(text));
     compositionText_.clear();
-    cursorUtf8_ = boundaryMap_.snapUtf8(std::min(requestedCursor, boundaryMap_.utf8Length()),
-                                        TextBoundarySnapMode::Nearest);
+    cursorUtf8_ =
+            boundaryMap_.snapUtf8(std::min(requestedCursor, boundaryMap_.utf8Length()), TextBoundarySnapMode::Nearest);
     affinity_ = ::skia::textlayout::Affinity::kDownstream;
     resetSelectionToCursor();
     resetPreferredCaretX();
@@ -2155,8 +2217,8 @@ InputBox::EditState InputBox::captureEditState() const {
 void InputBox::restoreEditState(const EditState& state) {
     boundaryMap_.rebuild(state.text);
     compositionText_.clear();
-    cursorUtf8_ = boundaryMap_.snapUtf8(std::min(state.cursorUtf8, boundaryMap_.utf8Length()),
-                                        TextBoundarySnapMode::Nearest);
+    cursorUtf8_ =
+            boundaryMap_.snapUtf8(std::min(state.cursorUtf8, boundaryMap_.utf8Length()), TextBoundarySnapMode::Nearest);
     affinity_ = state.affinity;
     selectionAnchorUtf8_ = boundaryMap_.snapUtf8(std::min(state.selectionAnchorUtf8, boundaryMap_.utf8Length()),
                                                  TextBoundarySnapMode::Nearest);
@@ -2216,15 +2278,11 @@ void InputBox::pruneEditHistory(std::vector<EditGroup>& stack) {
 }
 
 bool InputBox::isMergeableEditKind(EditKind kind) {
-    return kind == EditKind::Typing ||
-           kind == EditKind::DeleteBackward ||
-           kind == EditKind::DeleteForward;
+    return kind == EditKind::Typing || kind == EditKind::DeleteBackward || kind == EditKind::DeleteForward;
 }
 
 bool InputBox::editStateEquals(const EditState& left, const EditState& right) {
-    return left.text == right.text &&
-           left.cursorUtf8 == right.cursorUtf8 &&
-           left.affinity == right.affinity &&
+    return left.text == right.text && left.cursorUtf8 == right.cursorUtf8 && left.affinity == right.affinity &&
            left.selectionAnchorUtf8 == right.selectionAnchorUtf8 &&
            left.selectionFocusUtf8 == right.selectionFocusUtf8 &&
            left.selectionAnchorAffinity == right.selectionAnchorAffinity &&
@@ -2257,24 +2315,18 @@ InputBoxDrawSnapshot::InputBoxDrawSnapshot(std::shared_ptr<::skia::textlayout::P
                                            InputBoxCaretRect compositionRect,
                                            std::shared_ptr<const std::vector<InputBoxCaretRect>> selectionRects,
                                            SkScalar caretWidth,
+                                           SkScalar visualOffsetX,
                                            SkScalar visualOffsetY,
                                            SkColor caretColor,
                                            SkColor selectionColor,
                                            bool caretVisible,
                                            bool compositionVisible,
                                            bool clipToViewport)
-        : paragraph_(std::move(paragraph)),
-          caretRect_(caretRect),
-          metrics_(metrics),
-          compositionRect_(compositionRect),
-          selectionRects_(std::move(selectionRects)),
-          caretWidth_(caretWidth),
-          visualOffsetY_(visualOffsetY),
-          caretColor_(caretColor),
-          selectionColor_(selectionColor),
-          caretVisible_(caretVisible),
-          compositionVisible_(compositionVisible),
-          clipToViewport_(clipToViewport) {}
+    : paragraph_(std::move(paragraph)), caretRect_(caretRect), metrics_(metrics), compositionRect_(compositionRect),
+      selectionRects_(std::move(selectionRects)), caretWidth_(caretWidth), visualOffsetX_(visualOffsetX),
+      visualOffsetY_(visualOffsetY), caretColor_(caretColor), selectionColor_(selectionColor),
+      caretVisible_(caretVisible), compositionVisible_(compositionVisible), clipToViewport_(clipToViewport) {
+}
 
 void InputBoxDrawSnapshot::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, SkScalar height) const {
     if (canvas == nullptr) {
@@ -2302,15 +2354,14 @@ void InputBoxDrawSnapshot::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkSca
     }
 
     if (paragraph_ != nullptr) {
-        paragraph_->paint(canvas, x - metrics_.scrollX, y + visualOffsetY_ - metrics_.scrollY);
+        paragraph_->paint(canvas, x + visualOffsetX_ - metrics_.scrollX, y + visualOffsetY_ - metrics_.scrollY);
     }
 
     if (compositionVisible_) {
         SkPaint paint;
         paint.setColor(caretColor_);
         paint.setStyle(SkPaint::kFill_Style);
-        const auto underlineTop =
-                std::max(compositionRect_.top, compositionRect_.bottom - kCompositionUnderlineHeight);
+        const auto underlineTop = std::max(compositionRect_.top, compositionRect_.bottom - kCompositionUnderlineHeight);
         canvas->drawRect(SkRect::MakeLTRB(x + compositionRect_.left - metrics_.scrollX,
                                           y + underlineTop - metrics_.scrollY,
                                           x + compositionRect_.right - metrics_.scrollX,

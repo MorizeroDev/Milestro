@@ -27,20 +27,17 @@ std::string SafeTextCopy(const char* text, size_t length) {
 
 } // namespace
 
-SkScalar ResolveNoWrapContentWidth(::skia::textlayout::Paragraph* paragraph,
-                                   const char* text,
-                                   size_t length) {
+SkScalar ResolveNoWrapContentWidth(::skia::textlayout::Paragraph* paragraph, const char* text, size_t length) {
     return ResolveNoWrapContentWidth(paragraph, SafeTextCopy(text, length));
 }
 
-SkScalar ResolveNoWrapContentWidth(::skia::textlayout::Paragraph* paragraph,
-                                   const std::string& text) {
+SkScalar ResolveNoWrapContentWidth(::skia::textlayout::Paragraph* paragraph, const std::string& text) {
     if (paragraph == nullptr) {
         return 0.0f;
     }
 
-    auto width = static_cast<double>(std::max<SkScalar>(paragraph->getLongestLine(),
-                                                        paragraph->getMaxIntrinsicWidth()));
+    auto width =
+            static_cast<double>(std::max<SkScalar>(paragraph->getLongestLine(), paragraph->getMaxIntrinsicWidth()));
 
     const auto lineCount = static_cast<int>(paragraph->lineNumber());
     for (int line = 0; line < lineCount; ++line) {
@@ -50,23 +47,22 @@ SkScalar ResolveNoWrapContentWidth(::skia::textlayout::Paragraph* paragraph,
         }
 
         width = std::max(width, static_cast<double>(lineMetrics.fWidth));
-        width = std::max(width, static_cast<double>(lineMetrics.fLeft + lineMetrics.fWidth));
     }
 
     const auto displayMap = TextBoundaryMap(text);
     const auto utf16Length = displayMap.utf16Length();
     if (utf16Length > 0) {
         auto boxes = paragraph->getRectsForRange(0,
-                                                  static_cast<unsigned>(utf16Length),
-                                                  ::skia::textlayout::RectHeightStyle::kTight,
-                                                  ::skia::textlayout::RectWidthStyle::kTight);
+                                                 static_cast<unsigned>(utf16Length),
+                                                 ::skia::textlayout::RectHeightStyle::kTight,
+                                                 ::skia::textlayout::RectWidthStyle::kTight);
         for (const auto& box: boxes) {
-            width = std::max(width, static_cast<double>(box.rect.right()));
+            width = std::max(width, static_cast<double>(box.rect.width()));
         }
 
         ::skia::textlayout::Paragraph::GlyphInfo glyphInfo;
         if (paragraph->getGlyphInfoAtUTF16Offset(utf16Length - 1, &glyphInfo)) {
-            width = std::max(width, static_cast<double>(glyphInfo.fGraphemeLayoutBounds.right()));
+            width = std::max(width, static_cast<double>(glyphInfo.fGraphemeLayoutBounds.width()));
         }
     }
 
@@ -79,9 +75,7 @@ SkScalar ResolveNoWrapProbeLayoutWidth(const std::string& text,
     return ResolveNoWrapProbeLayoutWidth(text.size(), textStyle.getFontSize(), viewportWidth);
 }
 
-SkScalar ResolveNoWrapProbeLayoutWidth(size_t textByteLength,
-                                       SkScalar fontSize,
-                                       SkScalar viewportWidth) {
+SkScalar ResolveNoWrapProbeLayoutWidth(size_t textByteLength, SkScalar fontSize, SkScalar viewportWidth) {
     fontSize = IsFinitePositive(fontSize) ? fontSize : 16.0f;
     auto width = std::max<double>(kNoWrapProbeLayoutWidth, viewportWidth);
     width = std::max(width, (static_cast<double>(textByteLength) + 1.0) * fontSize * 2.0 + kNoWrapLayoutPadding);

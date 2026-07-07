@@ -43,7 +43,7 @@ namespace Milestro.Components
 
         [SerializeField]
         [FormerlySerializedAs("margin")]
-        private RectOffset m_margin = new RectOffset();
+        private Margin m_margin = new Margin();
 
         [SerializeField]
         [FormerlySerializedAs("fontFamilies")]
@@ -915,6 +915,8 @@ namespace Milestro.Components
             {
                 m_maskChar = '*';
             }
+            ValidateMargin();
+            ApplyInputBoxAutoMargin();
             inputBox?.SetMaskInput(m_maskInput);
             inputBox?.SetMaskChar(m_maskChar);
             inputBox?.SetTextOverflow(m_textOverflow);
@@ -1921,6 +1923,7 @@ namespace Milestro.Components
             {
                 CancelScrollTweens();
                 inputBox.SetViewport(ContentSize());
+                ApplyInputBoxAutoMargin();
                 inputBox.EnsureCaretVisible();
                 layoutDirty = false;
                 paintDirty = true;
@@ -1979,6 +1982,7 @@ namespace Milestro.Components
             inputBox.SetSelectionColor(m_selectionColor);
             inputBox.SetCaretWidth(m_caretWidth);
             inputBox.SetViewport(ContentSize());
+            ApplyInputBoxAutoMargin();
             ClearSelectionIfDisabled();
         }
 
@@ -2015,29 +2019,44 @@ namespace Milestro.Components
 
         private Vector2 ContentSize()
         {
-            var rect = rectTransformCache.rect;
-            return new Vector2(Mathf.Max(1, Mathf.CeilToInt(rect.width) - m_margin.horizontal),
-                Mathf.Max(1, Mathf.CeilToInt(rect.height) - m_margin.vertical));
+            var currentSize = CurrentSize();
+            var margin = CurrentResolvedMargin(currentSize);
+            return new Vector2(Mathf.Max(1f, currentSize.x - margin.FixedHorizontalSize),
+                Mathf.Max(1f, currentSize.y - margin.FixedVerticalSize));
         }
 
         private Rect ContentRect()
         {
             var size = ContentSize();
-            return new Rect(m_margin.left, m_margin.top, size.x, size.y);
+            var margin = CurrentResolvedMargin();
+            return new Rect(margin.Left, margin.Top, size.x, size.y);
         }
 
         private Vector2 ToContentPoint(Vector2 localPoint)
         {
             var rect = rectTransformCache.rect;
-            return new Vector2(localPoint.x - rect.xMin - m_margin.left,
-                rect.yMax - localPoint.y - m_margin.top);
+            var margin = CurrentResolvedMargin();
+            return new Vector2(localPoint.x - rect.xMin - margin.Left,
+                rect.yMax - localPoint.y - margin.Top);
         }
 
         private Vector2 ContentPointToLocalPoint(Vector2 contentPoint)
         {
             var rect = rectTransformCache.rect;
-            return new Vector2(rect.xMin + m_margin.left + contentPoint.x,
-                rect.yMax - m_margin.top - contentPoint.y);
+            var margin = CurrentResolvedMargin();
+            return new Vector2(rect.xMin + margin.Left + contentPoint.x,
+                rect.yMax - margin.Top - contentPoint.y);
+        }
+
+        private ResolvedMargin CurrentResolvedMargin()
+        {
+            return CurrentResolvedMargin(CurrentSize());
+        }
+
+        private ResolvedMargin CurrentResolvedMargin(Vector2Int currentSize)
+        {
+            ValidateMargin();
+            return m_margin.Resolve(new MarginResolveContext(currentSize.x, currentSize.y, m_size));
         }
 
         private ColorSpace SurfaceColorSpace()
@@ -2053,10 +2072,19 @@ namespace Milestro.Components
 
         private void ValidateMargin()
         {
-            if (m_margin.left < 0) m_margin.left = 0;
-            if (m_margin.top < 0) m_margin.top = 0;
-            if (m_margin.right < 0) m_margin.right = 0;
-            if (m_margin.bottom < 0) m_margin.bottom = 0;
+            if (m_margin == null)
+            {
+                m_margin = new Margin();
+            }
+            m_margin.Normalize();
+        }
+
+        private void ApplyInputBoxAutoMargin()
+        {
+            inputBox?.SetAutoMargin(m_margin.Left.Auto,
+                m_margin.Top.Auto,
+                m_margin.Right.Auto,
+                m_margin.Bottom.Auto);
         }
 
         private void RetireInputBox()

@@ -237,13 +237,8 @@ namespace Milestro.Binding
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaReusableTextDrawSnapshotCreate")]
-        internal static extern unsafe long SkiaReusableTextDrawSnapshotCreate(out IntPtr ret,
-                                                                              IntPtr font,
-                                                                              ulong capacity,
-                                                                              int r,
-                                                                              int g,
-                                                                              int b,
-                                                                              int a);
+        internal static extern unsafe long
+        SkiaReusableTextDrawSnapshotCreate(out IntPtr ret, IntPtr font, ulong capacity, int r, int g, int b, int a);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaReusableTextDrawSnapshotUpdateText")]
@@ -520,6 +515,16 @@ namespace Milestro.Binding
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxSetCaretVisible")]
         internal static extern unsafe long SkiaTextlayoutInputBoxSetCaretVisible(IntPtr inputBox, int visible);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxSetAutoMargin")]
+        internal static extern unsafe long
+        SkiaTextlayoutInputBoxSetAutoMargin(IntPtr inputBox, int left, int top, int right, int bottom);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxGetAutoMargin")]
+        internal static extern unsafe long
+        SkiaTextlayoutInputBoxGetAutoMargin(IntPtr inputBox, out int left, out int top, out int right, out int bottom);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutInputBoxInsertText")]

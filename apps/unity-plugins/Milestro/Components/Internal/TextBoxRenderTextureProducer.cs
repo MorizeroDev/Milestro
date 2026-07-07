@@ -19,7 +19,7 @@ namespace Milestro.Components.Internal
         private string m_content = "";
 
         [SerializeField]
-        private RectOffset m_margin = new RectOffset();
+        private Margin m_margin = new Margin();
 
         [SerializeField]
         private List<string> m_fontFamilies = new List<string>() { "Source Han Sans VF" };
@@ -197,12 +197,12 @@ namespace Milestro.Components.Internal
             }
         }
 
-        public RectOffset margin
+        public Margin margin
         {
             get => m_margin;
             set
             {
-                m_margin = value ?? new RectOffset();
+                m_margin = value ?? new Margin();
                 MarkPropertiesChanged();
             }
         }
@@ -269,6 +269,11 @@ namespace Milestro.Components.Internal
 #if UNITY_EDITOR
         private void OnValidate()
         {
+            if (m_margin == null)
+            {
+                m_margin = new Margin();
+            }
+            m_margin.Normalize();
             m_scrollX = FloatUtil.IsFinite(m_scrollX) ? Mathf.Max(0f, m_scrollX) : 0f;
             m_scrollY = FloatUtil.IsFinite(m_scrollY) ? Mathf.Max(0f, m_scrollY) : 0f;
             MarkPropertiesChanged();
@@ -362,6 +367,10 @@ namespace Milestro.Components.Internal
 
         private TextBoxRenderTargetSettings CurrentSettings()
         {
+            if (m_margin == null)
+            {
+                m_margin = new Margin();
+            }
             return new TextBoxRenderTargetSettings(m_content,
                 m_margin,
                 m_fontFamilies,

@@ -1,12 +1,5 @@
 namespace Milestro.Configuration
 {
-    public enum PointerScrollTweenMode
-    {
-        Auto,
-        AlwaysTween,
-        BypassFractional
-    }
-
     public class ScrollTweenConfiguration
     {
         public const float DefaultFractionalDeltaTolerance = 0.001f;

@@ -1,8 +1,8 @@
-#include "Milestro/skia/FontRegistry.h"
 #include "Milestro/game/milestro_game_interface.h"
 #include "Milestro/game/milestro_game_model.h"
 #include "Milestro/game/milestro_game_retcode.h"
 #include "Milestro/skia/Canvas.h"
+#include "Milestro/skia/FontRegistry.h"
 #include "Milestro/skia/textlayout/InputBox.h"
 #include "Milestro/skia/textlayout/ParagraphStyle.h"
 #include "Milestro/skia/textlayout/TextStyle.h"
@@ -51,10 +51,11 @@ int RegisterFontsInDirectory(const fs::path& dirPath) {
     return successCount;
 }
 
-std::unique_ptr<milestro_text::InputBox> MakeInputBox(
-        ::skia::textlayout::TextAlign textAlign = ::skia::textlayout::TextAlign::kLeft,
-        bool useMonospace = false,
-        bool unlimitedLines = false) {
+std::unique_ptr<milestro_text::InputBox>
+MakeInputBox(::skia::textlayout::TextAlign textAlign = ::skia::textlayout::TextAlign::kLeft,
+             bool useMonospace = false,
+             bool unlimitedLines = false,
+             ::skia::textlayout::TextDirection textDirection = ::skia::textlayout::TextDirection::kLtr) {
     auto textStyle = std::make_unique<milestro_text::TextStyle>();
     std::vector<SkString> fontFamilies;
     fontFamilies.emplace_back(useMonospace ? "Fira Code" : "Source Han Sans VF");
@@ -72,6 +73,7 @@ std::unique_ptr<milestro_text::InputBox> MakeInputBox(
         paragraphStyle->setMaxLines(1);
     }
     paragraphStyle->setTextAlign(textAlign);
+    paragraphStyle->setTextDirection(textDirection);
 
     auto inputBox = std::make_unique<milestro_text::InputBox>(paragraphStyle.get(), textStyle.get());
     inputBox->setViewport(320, 64);
@@ -121,9 +123,7 @@ size_t CountInkPixels(const PaintedInputBox& image, int left = 0, int right = -1
     for (int y = 0; y < image.height; ++y) {
         for (int x = left; x < right; ++x) {
             const auto base = static_cast<size_t>((y * image.width + x) * 4);
-            if (image.pixels[base] != 0 ||
-                image.pixels[base + 1] != 0 ||
-                image.pixels[base + 2] != 0 ||
+            if (image.pixels[base] != 0 || image.pixels[base + 1] != 0 || image.pixels[base + 2] != 0 ||
                 image.pixels[base + 3] != 0) {
                 ++count;
             }
@@ -132,10 +132,26 @@ size_t CountInkPixels(const PaintedInputBox& image, int left = 0, int right = -1
     return count;
 }
 
+void ExpectSingleLineInkInsideViewport(::skia::textlayout::TextAlign textAlign,
+                                       ::skia::textlayout::TextDirection textDirection,
+                                       float minLeft,
+                                       float maxRight) {
+    auto inputBox = MakeInputBox(textAlign, true, false, textDirection);
+    inputBox->setViewport(320, 96);
+    inputBox->setSoftWrap(false);
+    inputBox->setText("abc", 3);
+
+    milestro_text::InputBoxLineMetrics lineMetrics;
+    ASSERT_TRUE(inputBox->getLineMetrics(0, lineMetrics));
+    EXPECT_GE(lineMetrics.left, minLeft);
+    EXPECT_LE(lineMetrics.left + lineMetrics.width, maxRight);
+
+    const auto image = PaintSnapshot(*inputBox, 320, 96, 320.0f, 96.0f);
+    EXPECT_GT(CountInkPixels(image, 0, 320), 0U);
+}
+
 bool ImagesEqual(const PaintedInputBox& left, const PaintedInputBox& right) {
-    return left.width == right.width &&
-           left.height == right.height &&
-           left.pixels == right.pixels;
+    return left.width == right.width && left.height == right.height && left.pixels == right.pixels;
 }
 
 size_t GraphemeClusterCount(const std::string& text) {
@@ -166,13 +182,11 @@ void ExpectNoSelectionRectOverlap(const std::vector<milestro_text::InputBoxCaret
     constexpr float epsilon = 0.001f;
     for (size_t i = 0; i < rects.size(); ++i) {
         for (size_t j = i + 1; j < rects.size(); ++j) {
-            const auto overlapWidth = std::min(rects[i].right, rects[j].right) -
-                                      std::max(rects[i].left, rects[j].left);
-            const auto overlapHeight = std::min(rects[i].bottom, rects[j].bottom) -
-                                       std::max(rects[i].top, rects[j].top);
+            const auto overlapWidth = std::min(rects[i].right, rects[j].right) - std::max(rects[i].left, rects[j].left);
+            const auto overlapHeight =
+                    std::min(rects[i].bottom, rects[j].bottom) - std::max(rects[i].top, rects[j].top);
             EXPECT_FALSE(overlapWidth > epsilon && overlapHeight > epsilon)
-                    << "rect " << i << " overlaps rect " << j
-                    << " width=" << overlapWidth
+                    << "rect " << i << " overlaps rect " << j << " width=" << overlapWidth
                     << " height=" << overlapHeight;
         }
     }
@@ -185,8 +199,7 @@ protected:
     static void SetUpTestSuite() {
         std::ifstream icudtl(MILESTRO_TEST_ICUDTL_PATH, std::ios::binary);
         ASSERT_TRUE(icudtl.is_open()) << MILESTRO_TEST_ICUDTL_PATH;
-        std::vector<uint8_t> data((std::istreambuf_iterator<char>(icudtl)),
-                                  std::istreambuf_iterator<char>());
+        std::vector<uint8_t> data((std::istreambuf_iterator<char>(icudtl)), std::istreambuf_iterator<char>());
         ASSERT_FALSE(data.empty());
         ASSERT_EQ(MilestroCopyAndLoadICU(data.data(), data.size(), nullptr), MILESTRO_API_RET_OK);
     }
@@ -239,11 +252,10 @@ TEST_F(InputBoxTest, BackspaceDeletesWholeRepresentativeClusters) {
 }
 
 TEST_F(InputBoxTest, CaretMovementSnapsToBoundaryMapForComplexScripts) {
-    const std::string text =
-            "A e\xCC\x81 \xE6\x97\xA5\xE6\x9C\xAC "
-            "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7 "
-            "\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD "
-            "\xE0\xB8\xAA\xE0\xB8\xA7\xE0\xB8\xB1\xE0\xB8\xAA\xE0\xB8\x94\xE0\xB8\xB5";
+    const std::string text = "A e\xCC\x81 \xE6\x97\xA5\xE6\x9C\xAC "
+                             "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7 "
+                             "\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD "
+                             "\xE0\xB8\xAA\xE0\xB8\xA7\xE0\xB8\xB1\xE0\xB8\xAA\xE0\xB8\x94\xE0\xB8\xB5";
 
     auto inputBox = MakeInputBox();
     inputBox->setText(text.c_str(), text.size());
@@ -359,11 +371,10 @@ TEST_F(InputBoxTest, ManualVerticalScrollDoesNotConsumeWhenContentFits) {
 }
 
 TEST_F(InputBoxTest, MixedEmojiCjkAndLongNumberWrapWithoutHorizontalScroll) {
-    const std::string firstRuntimeCase =
-            "\xF0\x9F\xA4\x94 \xF0\xB0\xBB\x9D \xF0\x9F\xAB\x84 \xF0\x9F\xA4\xB0 "
-            "\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x92 "
-            "\xE6\xB5\x8B\xE8\xAF\x95 123 "
-            "3.14159265358979323846264338327950288419716939937510";
+    const std::string firstRuntimeCase = "\xF0\x9F\xA4\x94 \xF0\xB0\xBB\x9D \xF0\x9F\xAB\x84 \xF0\x9F\xA4\xB0 "
+                                         "\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x92 "
+                                         "\xE6\xB5\x8B\xE8\xAF\x95 123 "
+                                         "3.14159265358979323846264338327950288419716939937510";
     const std::string secondRuntimeCase =
             "\xF0\x9F\xA4\x94 \xF0\xB0\xBB\x9D \xF0\x9F\xAB\x84 \xF0\x9F\xA4\xB0 "
             "\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x92 "
@@ -409,6 +420,25 @@ TEST_F(InputBoxTest, NoWrapModeKeepsLongNumberOnOneLineAndScrollsHorizontally) {
 
     EXPECT_TRUE(inputBox->scrollByX(-metrics.scrollX));
     EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollX, 0.0f);
+}
+
+TEST_F(InputBoxTest, NoWrapSingleLineCenterAndEndAlignTextInsideViewport) {
+    ExpectSingleLineInkInsideViewport(::skia::textlayout::TextAlign::kCenter,
+                                      ::skia::textlayout::TextDirection::kLtr,
+                                      40.0f,
+                                      280.0f);
+    ExpectSingleLineInkInsideViewport(::skia::textlayout::TextAlign::kRight,
+                                      ::skia::textlayout::TextDirection::kLtr,
+                                      120.0f,
+                                      320.0f);
+    ExpectSingleLineInkInsideViewport(::skia::textlayout::TextAlign::kEnd,
+                                      ::skia::textlayout::TextDirection::kLtr,
+                                      120.0f,
+                                      320.0f);
+    ExpectSingleLineInkInsideViewport(::skia::textlayout::TextAlign::kEnd,
+                                      ::skia::textlayout::TextDirection::kRtl,
+                                      0.0f,
+                                      200.0f);
 }
 
 TEST_F(InputBoxTest, SharedNoWrapMeasurementKeepsMixedPiLineOnOneLine) {
@@ -525,8 +555,7 @@ TEST_F(InputBoxTest, MultilineIgnoresEllipsisDisplayMode) {
     ellipsisInputBox->setFocused(false);
 
     EXPECT_GT(ellipsisInputBox->getLineCount(), 1U);
-    EXPECT_TRUE(ImagesEqual(PaintSnapshot(*clipInputBox, 160, 120),
-                            PaintSnapshot(*ellipsisInputBox, 160, 120)));
+    EXPECT_TRUE(ImagesEqual(PaintSnapshot(*clipInputBox, 160, 120), PaintSnapshot(*ellipsisInputBox, 160, 120)));
 }
 
 TEST_F(InputBoxTest, CompositionSuppressesUnfocusedEllipsisDisplay) {
@@ -623,7 +652,7 @@ TEST_F(InputBoxTest, LineEndUsesUtf8OffsetForMixedNoWrapLine) {
     EXPECT_EQ(inputBox->getText(), text + "\n");
 }
 
-TEST_F(InputBoxTest, MultiLineIntentDoesNotVerticallyCenterSingleVisualLine) {
+TEST_F(InputBoxTest, FixedMarginsDoNotVerticallyCenterSingleVisualLine) {
     auto singleLineInputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, false);
     singleLineInputBox->setViewport(320, 160);
     singleLineInputBox->setText("abc", 3);
@@ -634,13 +663,54 @@ TEST_F(InputBoxTest, MultiLineIntentDoesNotVerticallyCenterSingleVisualLine) {
 
     const auto singleLineCaret = singleLineInputBox->getCaretRect();
     const auto multiLineCaret = multiLineInputBox->getCaretRect();
-    EXPECT_GT(singleLineCaret.top, multiLineCaret.top + 1.0f);
+    EXPECT_NEAR(singleLineCaret.top, 0.0f, 1.0f);
     EXPECT_NEAR(multiLineCaret.top, 0.0f, 1.0f);
 }
 
+TEST_F(InputBoxTest, AutoVerticalMarginsMoveContentWithinViewport) {
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    inputBox->setViewport(320, 160);
+    inputBox->setText("abc", 3);
+
+    inputBox->setAutoMargin(false, false, false, false);
+    const auto startCaret = inputBox->getCaretRect();
+    EXPECT_NEAR(startCaret.top, 0.0f, 1.0f);
+
+    inputBox->setAutoMargin(false, true, false, true);
+    const auto centerCaret = inputBox->getCaretRect();
+    EXPECT_GT(centerCaret.top, startCaret.top + 20.0f);
+    EXPECT_LT(centerCaret.bottom, 160.0f);
+
+    inputBox->setAutoMargin(false, true, false, false);
+    const auto endCaret = inputBox->getCaretRect();
+    EXPECT_GT(endCaret.top, centerCaret.top + 20.0f);
+    EXPECT_LE(endCaret.bottom, 160.0f);
+}
+
+TEST_F(InputBoxTest, AutoHorizontalMarginsMoveContentWithinViewport) {
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    inputBox->setViewport(320, 96);
+    inputBox->setSoftWrap(false);
+    inputBox->setText("abc", 3);
+    inputBox->setCursorUtf8(0, skia::textlayout::Affinity::kDownstream);
+
+    inputBox->setAutoMargin(false, false, false, false);
+    const auto startCaret = inputBox->getCaretRect();
+    EXPECT_NEAR(startCaret.left, 0.0f, 1.0f);
+
+    inputBox->setAutoMargin(true, false, true, false);
+    const auto centerCaret = inputBox->getCaretRect();
+    EXPECT_GT(centerCaret.left, startCaret.left + 40.0f);
+    EXPECT_LT(centerCaret.right, 320.0f);
+
+    inputBox->setAutoMargin(true, false, false, false);
+    const auto endCaret = inputBox->getCaretRect();
+    EXPECT_GT(endCaret.left, centerCaret.left + 40.0f);
+    EXPECT_LE(endCaret.right, 320.0f);
+}
+
 TEST_F(InputBoxTest, MaskInputDoesNotMutateTextSelectionOrEditingOffsets) {
-    const std::string text =
-            "ab\xE6\x97\xA5\xE6\x9C\xAC\xF0\x9F\x91\x8D";
+    const std::string text = "ab\xE6\x97\xA5\xE6\x9C\xAC\xF0\x9F\x91\x8D";
     auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, false, true);
     inputBox->setViewport(320, 160);
     inputBox->setText(text.c_str(), text.size());
@@ -666,12 +736,11 @@ TEST_F(InputBoxTest, MaskInputDoesNotMutateTextSelectionOrEditingOffsets) {
 }
 
 TEST_F(InputBoxTest, MaskInputRendersOneMaskClusterPerVisibleTextCluster) {
-    const std::string text =
-            "ab"
-            "\xE6\x97\xA5\xE6\x9C\xAC"
-            "e\xCC\x81"
-            "\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD"
-            "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7";
+    const std::string text = "ab"
+                             "\xE6\x97\xA5\xE6\x9C\xAC"
+                             "e\xCC\x81"
+                             "\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD"
+                             "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7";
     const auto clusterCount = GraphemeClusterCount(text);
     ASSERT_GT(clusterCount, 1U);
 
@@ -688,19 +757,18 @@ TEST_F(InputBoxTest, MaskInputRendersOneMaskClusterPerVisibleTextCluster) {
     expectedInputBox->setSoftWrap(false);
     expectedInputBox->setText(expectedMask.c_str(), expectedMask.size());
 
-    EXPECT_TRUE(ImagesEqual(PaintSnapshot(*maskedInputBox, 520, 120),
-                            PaintSnapshot(*expectedInputBox, 520, 120)));
+    EXPECT_TRUE(ImagesEqual(PaintSnapshot(*maskedInputBox, 520, 120), PaintSnapshot(*expectedInputBox, 520, 120)));
     EXPECT_EQ(maskedInputBox->getText(), text);
     EXPECT_EQ(maskedInputBox->getCursorUtf8(), 0U);
 
     maskedInputBox->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
     ASSERT_TRUE(maskedInputBox->deleteBackward());
     EXPECT_EQ(maskedInputBox->getText(),
-              text.substr(0, text.size() -
-                                  std::string("\xF0\x9F\x91\xA8\xE2\x80\x8D"
-                                              "\xF0\x9F\x91\xA9\xE2\x80\x8D"
-                                              "\xF0\x9F\x91\xA7")
-                                          .size()));
+              text.substr(0,
+                          text.size() - std::string("\xF0\x9F\x91\xA8\xE2\x80\x8D"
+                                                    "\xF0\x9F\x91\xA9\xE2\x80\x8D"
+                                                    "\xF0\x9F\x91\xA7")
+                                                .size()));
 }
 
 TEST_F(InputBoxTest, MaskCharUsesFirstVisibleClusterAndFallbackForEmptyInput) {
@@ -824,8 +892,7 @@ TEST_F(InputBoxTest, EmptyCommitUsesCurrentCompositionText) {
 }
 
 TEST_F(InputBoxTest, SelectionReplacementUsesClusterBoundaries) {
-    const std::string family =
-            "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7";
+    const std::string family = "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7";
     const std::string text = "a" + family + "b";
     auto inputBox = MakeInputBox();
     inputBox->setText(text.c_str(), text.size());
@@ -1160,11 +1227,10 @@ TEST_F(InputBoxTest, ProgrammaticSetTextClearsEditHistory) {
 }
 
 TEST_F(InputBoxTest, UndoRedoPreservesRepresentativeUnicodeClusters) {
-    const std::string text =
-            "e\xCC\x81"
-            "\xF0\x9F\xA4\x94"
-            "\xF0\xB0\xBB\x9D"
-            "\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x92";
+    const std::string text = "e\xCC\x81"
+                             "\xF0\x9F\xA4\x94"
+                             "\xF0\xB0\xBB\x9D"
+                             "\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x91\xE2\x80\x8D\xF0\x9F\xA7\x92";
     auto inputBox = MakeInputBox();
 
     inputBox->insertText(text.c_str(), text.size());
@@ -1179,8 +1245,7 @@ TEST_F(InputBoxTest, UndoRedoPreservesRepresentativeUnicodeClusters) {
 
 TEST_F(InputBoxTest, SelectedTextAbiReturnsClusterSafeUtf8Slice) {
     auto inputBox = MakeInputBox();
-    const std::string family =
-            "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7";
+    const std::string family = "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7";
     const std::string text = "x" + family + "y";
     inputBox->setText(text.c_str(), text.size());
 
@@ -1193,7 +1258,7 @@ TEST_F(InputBoxTest, SelectedTextAbiReturnsClusterSafeUtf8Slice) {
     ASSERT_EQ(MilestroSkiaTextlayoutInputBoxGetSelectedText(inputBox.get(), selectedText), 0);
     ASSERT_NE(selectedText, nullptr);
     std::unique_ptr<milestro::game::model::BytesWrapper> selectedTextOwner(selectedText);
-    EXPECT_EQ(std::string(reinterpret_cast<char *>(selectedTextOwner->GetPtr()), selectedTextOwner->GetSize()), family);
+    EXPECT_EQ(std::string(reinterpret_cast<char*>(selectedTextOwner->GetPtr()), selectedTextOwner->GetSize()), family);
 
     ASSERT_TRUE(inputBox->clearSelection());
     selectedText = nullptr;
@@ -1223,7 +1288,8 @@ TEST_F(InputBoxTest, RightAlignedSelectionRectsUseParagraphGeometry) {
 
 TEST_F(InputBoxTest, SelectionRectsUseUniformLineHeightAcrossFontRuns) {
     auto inputBox = MakeInputBox();
-    const std::string text = "A\xF0\x9F\xA4\x94\xE6\x97\xA5" "B";
+    const std::string text = "A\xF0\x9F\xA4\x94\xE6\x97\xA5"
+                             "B";
     inputBox->setText(text.c_str(), text.size());
 
     ASSERT_TRUE(inputBox->selectAll());
@@ -1272,15 +1338,14 @@ TEST_F(InputBoxTest, SelectionRectsPreservePerLineHeightAcrossLines) {
 }
 
 TEST_F(InputBoxTest, SelectionRectsDoNotOverlapForWrappedMixedParagraph) {
-    const std::string text =
-            "大型语言模型（英语：large language model，LLM），也称大语言模型，简称大模型，"
-            "是一种基于人工神经网络的语言模型。其名称中的“大型”指模型具有庞大的参数量"
-            "（通常23在数十亿至数万亿级别，如GPT-3含1750亿参数）以及巨大的训练数据规模。"
-            "大语言模型通常采用自监督机器学习方法，从而能够基于海量无标注的文本进行训练。"
-            "大语言模型专为自然语言处理任务而设计，尤其适用于语言生成。[1][2]其中包含"
-            "Gemini和GPT-4o在内的部分多模态大模型能够同时处理文字、图片、音频和视频等"
-            "不同输入形式。规模最大、功能最强大的LLM基本采用生成式预训练 Transformer (GPT) "
-            "模型，它们为ChatGPT、Gemini、Perplexity和Claude等聊天机器人提供了核心功能。";
+    const std::string text = "大型语言模型（英语：large language model，LLM），也称大语言模型，简称大模型，"
+                             "是一种基于人工神经网络的语言模型。其名称中的“大型”指模型具有庞大的参数量"
+                             "（通常23在数十亿至数万亿级别，如GPT-3含1750亿参数）以及巨大的训练数据规模。"
+                             "大语言模型通常采用自监督机器学习方法，从而能够基于海量无标注的文本进行训练。"
+                             "大语言模型专为自然语言处理任务而设计，尤其适用于语言生成。[1][2]其中包含"
+                             "Gemini和GPT-4o在内的部分多模态大模型能够同时处理文字、图片、音频和视频等"
+                             "不同输入形式。规模最大、功能最强大的LLM基本采用生成式预训练 Transformer (GPT) "
+                             "模型，它们为ChatGPT、Gemini、Perplexity和Claude等聊天机器人提供了核心功能。";
     auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, false, true);
     inputBox->setViewport(1680, 480);
     inputBox->setSoftWrap(true);
@@ -1293,10 +1358,9 @@ TEST_F(InputBoxTest, SelectionRectsDoNotOverlapForWrappedMixedParagraph) {
 }
 
 TEST_F(InputBoxTest, SelectionRectsDoNotOverlapForNoWrapMixedParagraph) {
-    const std::string text =
-            "大型语言模型（英语：large language model，LLM），也称大语言模型，简称大模型，"
-            "是一种基于人工神经网络的语言模型。\n其名称中的“大型”指模型具有庞大的参数量"
-            "（通常23在数十亿至数万亿级别，如GPT-3含1750亿参数）以及巨大的训练数据规模。";
+    const std::string text = "大型语言模型（英语：large language model，LLM），也称大语言模型，简称大模型，"
+                             "是一种基于人工神经网络的语言模型。\n其名称中的“大型”指模型具有庞大的参数量"
+                             "（通常23在数十亿至数万亿级别，如GPT-3含1750亿参数）以及巨大的训练数据规模。";
     auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, false, true);
     inputBox->setViewport(1680, 240);
     inputBox->setSoftWrap(false);
@@ -1311,6 +1375,7 @@ TEST_F(InputBoxTest, SelectionRectsDoNotOverlapForNoWrapMixedParagraph) {
 TEST_F(InputBoxTest, SingleLineGeometryUsesStableBaselineInViewport) {
     auto inputBox = MakeInputBox();
     inputBox->setViewport(320, 96);
+    inputBox->setAutoMargin(false, true, false, true);
     inputBox->setText("abc", 3);
 
     const auto metrics = inputBox->getMetrics();
@@ -1322,7 +1387,8 @@ TEST_F(InputBoxTest, SingleLineGeometryUsesStableBaselineInViewport) {
     EXPECT_GT(caret.top, 0.0f);
     EXPECT_LT(caret.bottom, metrics.viewportHeight);
 
-    const std::string mixedText = "A\xF0\x9F\xA4\x94\xE6\x97\xA5" "B";
+    const std::string mixedText = "A\xF0\x9F\xA4\x94\xE6\x97\xA5"
+                                  "B";
     inputBox->setText(mixedText.c_str(), mixedText.size());
     const auto mixedCaret = inputBox->getCaretRect();
     milestro_text::InputBoxLineMetrics mixedLineMetrics;

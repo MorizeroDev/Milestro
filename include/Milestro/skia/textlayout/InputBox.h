@@ -1,9 +1,9 @@
 #ifndef MILESTRO_SKIA_TEXTLAYOUT_INPUTBOX_H
 #define MILESTRO_SKIA_TEXTLAYOUT_INPUTBOX_H
 
+#include "../unicode/Unicode.h"
 #include "FontCollection.h"
 #include "Milestro/common/milestro_export_macros.h"
-#include "../unicode/Unicode.h"
 #include "ParagraphStyle.h"
 #include "TextStyle.h"
 
@@ -85,9 +85,15 @@ public:
 
     void rebuild(std::string text);
 
-    const std::string& text() const { return text_; }
-    size_t utf8Length() const { return text_.size(); }
-    size_t utf16Length() const { return utf8ForUtf16_.empty() ? 0 : utf8ForUtf16_.size() - 1; }
+    const std::string& text() const {
+        return text_;
+    }
+    size_t utf8Length() const {
+        return text_.size();
+    }
+    size_t utf16Length() const {
+        return utf8ForUtf16_.empty() ? 0 : utf8ForUtf16_.size() - 1;
+    }
 
     size_t utf8ToUtf16(size_t utf8Offset) const;
     size_t utf16ToUtf8(size_t utf16Offset) const;
@@ -97,7 +103,9 @@ public:
     size_t nextBoundary(size_t utf8Offset) const;
     size_t nearestBoundary(size_t utf8Offset) const;
     size_t snapUtf8(size_t utf8Offset, TextBoundarySnapMode mode) const;
-    size_t boundaryCount() const { return boundariesUtf8_.size(); }
+    size_t boundaryCount() const {
+        return boundariesUtf8_.size();
+    }
     size_t boundaryAt(size_t index) const;
 
 private:
@@ -117,33 +125,76 @@ public:
     ~InputBox();
 
     void setText(const char* text, size_t length);
-    const std::string& getText() const { return boundaryMap_.text(); }
+    const std::string& getText() const {
+        return boundaryMap_.text();
+    }
 
     void setViewport(SkScalar width, SkScalar height);
     void setSoftWrap(bool softWrap);
-    bool getSoftWrap() const { return softWrap_; }
+    bool getSoftWrap() const {
+        return softWrap_;
+    }
     void setFocused(bool focused);
-    bool getFocused() const { return focused_; }
+    bool getFocused() const {
+        return focused_;
+    }
     void setTextOverflow(TextOverflow textOverflow);
-    TextOverflow getTextOverflow() const { return textOverflow_; }
+    TextOverflow getTextOverflow() const {
+        return textOverflow_;
+    }
     void setEllipsis(const char* text, size_t length);
-    const std::string& getEllipsis() const { return ellipsisText_; }
+    const std::string& getEllipsis() const {
+        return ellipsisText_;
+    }
     void setMaskInput(bool maskInput);
-    bool getMaskInput() const { return maskInput_; }
+    bool getMaskInput() const {
+        return maskInput_;
+    }
     void setMaskChar(const char* text, size_t length);
-    const std::string& getMaskChar() const { return maskText_; }
-    void setCaretColor(SkColor color) { caretColor_ = color; }
-    void setSelectionColor(SkColor color) { selectionColor_ = color; }
+    const std::string& getMaskChar() const {
+        return maskText_;
+    }
+    void setCaretColor(SkColor color) {
+        caretColor_ = color;
+    }
+    void setSelectionColor(SkColor color) {
+        selectionColor_ = color;
+    }
     void setCaretWidth(SkScalar width);
-    void setCaretVisible(bool visible) { caretVisible_ = visible; }
+    void setCaretVisible(bool visible) {
+        caretVisible_ = visible;
+    }
+    void setAutoMargin(bool left, bool top, bool right, bool bottom);
+    bool getAutoMarginLeft() const {
+        return autoMarginLeft_;
+    }
+    bool getAutoMarginTop() const {
+        return autoMarginTop_;
+    }
+    bool getAutoMarginRight() const {
+        return autoMarginRight_;
+    }
+    bool getAutoMarginBottom() const {
+        return autoMarginBottom_;
+    }
 
-    size_t getCursorUtf8() const { return cursorUtf8_; }
-    size_t getCursorUtf16() const { return boundaryMap_.utf8ToUtf16(cursorUtf8_); }
-    ::skia::textlayout::Affinity getAffinity() const { return affinity_; }
+    size_t getCursorUtf8() const {
+        return cursorUtf8_;
+    }
+    size_t getCursorUtf16() const {
+        return boundaryMap_.utf8ToUtf16(cursorUtf8_);
+    }
+    ::skia::textlayout::Affinity getAffinity() const {
+        return affinity_;
+    }
     void setCursorUtf8(size_t utf8Offset, ::skia::textlayout::Affinity affinity);
 
-    size_t utf8ToUtf16(size_t utf8Offset) const { return boundaryMap_.utf8ToUtf16(utf8Offset); }
-    size_t utf16ToUtf8(size_t utf16Offset) const { return boundaryMap_.utf16ToUtf8(utf16Offset); }
+    size_t utf8ToUtf16(size_t utf8Offset) const {
+        return boundaryMap_.utf8ToUtf16(utf8Offset);
+    }
+    size_t utf16ToUtf8(size_t utf16Offset) const {
+        return boundaryMap_.utf16ToUtf8(utf16Offset);
+    }
     size_t snapUtf8(size_t utf8Offset, TextBoundarySnapMode mode) const {
         return boundaryMap_.snapUtf8(utf8Offset, mode);
     }
@@ -152,7 +203,9 @@ public:
     bool setComposition(const char* text, size_t length);
     bool commitComposition(const char* text, size_t length);
     bool clearComposition();
-    bool hasComposition() const { return !compositionText_.empty(); }
+    bool hasComposition() const {
+        return !compositionText_.empty();
+    }
     InputBoxSelection getSelection() const;
     bool hasSelection() const;
     bool setSelectionUtf8(size_t anchorUtf8,
@@ -208,7 +261,10 @@ private:
     bool focused_ = true;
     bool singleLineInput_ = true;
     bool maskInput_ = false;
-    bool centerSingleLineVertically_ = true;
+    bool autoMarginLeft_ = false;
+    bool autoMarginTop_ = false;
+    bool autoMarginRight_ = false;
+    bool autoMarginBottom_ = false;
     bool paragraphDirty_ = true;
     bool paintParagraphDirty_ = true;
     bool selectionRectsDirty_ = true;
@@ -273,8 +329,7 @@ private:
     void markSelectionRectsDirty();
     void rebuildParagraphIfNeeded();
     std::unique_ptr<::skia::textlayout::Paragraph> buildParagraph() const;
-    std::unique_ptr<::skia::textlayout::Paragraph> buildParagraphForText(const std::string& text,
-                                                                         bool ellipsize) const;
+    std::unique_ptr<::skia::textlayout::Paragraph> buildParagraphForText(const std::string& text, bool ellipsize) const;
     std::unique_ptr<::skia::textlayout::Paragraph> buildPaintParagraph() const;
     std::shared_ptr<::skia::textlayout::Paragraph> getPaintParagraphSnapshot();
     std::shared_ptr<const std::vector<InputBoxCaretRect>> getSelectionRectsSnapshot();
@@ -301,9 +356,7 @@ private:
                                           ::skia::textlayout::LineMetrics& lineMetrics,
                                           int& lineNumber);
     bool getLineMetricsAt(int lineNumber, ::skia::textlayout::LineMetrics& lineMetrics) const;
-    size_t displayUtf8ForLineX(int lineNumber,
-                               SkScalar x,
-                               ::skia::textlayout::Affinity& affinity);
+    size_t displayUtf8ForLineX(int lineNumber, SkScalar x, ::skia::textlayout::Affinity& affinity);
     SkScalar caretXForDisplayOffset(size_t displayUtf8,
                                     const ::skia::textlayout::LineMetrics& lineMetrics,
                                     const TextBoundaryMap& displayMap);
@@ -314,6 +367,9 @@ private:
     bool moveVertical(int lineDelta, bool extendSelection);
     size_t selectionStartUtf8() const;
     size_t selectionEndUtf8() const;
+    SkScalar visualOffsetX();
+    SkScalar visualOffsetXForParagraph(::skia::textlayout::Paragraph* paragraph) const;
+    SkScalar visualContentWidthForParagraph(::skia::textlayout::Paragraph* paragraph) const;
     SkScalar visualOffsetY();
     SkScalar visualOffsetYForParagraph(::skia::textlayout::Paragraph* paragraph) const;
     SkScalar contentHeight();
@@ -351,6 +407,7 @@ public:
                          InputBoxCaretRect compositionRect,
                          std::shared_ptr<const std::vector<InputBoxCaretRect>> selectionRects,
                          SkScalar caretWidth,
+                         SkScalar visualOffsetX,
                          SkScalar visualOffsetY,
                          SkColor caretColor,
                          SkColor selectionColor,
@@ -367,6 +424,7 @@ private:
     InputBoxCaretRect compositionRect_;
     std::shared_ptr<const std::vector<InputBoxCaretRect>> selectionRects_;
     SkScalar caretWidth_ = 1.0f;
+    SkScalar visualOffsetX_ = 0.0f;
     SkScalar visualOffsetY_ = 0.0f;
     SkColor caretColor_ = SK_ColorWHITE;
     SkColor selectionColor_ = SkColorSetARGB(0x66, 0x33, 0x7D, 0xFF);

@@ -21,6 +21,8 @@ namespace Milestro.Components.Internal
         private string paragraphPlainText = "";
         private float paragraphHeight;
         private float paragraphContentWidth;
+        private float paragraphVisualLeft;
+        private float paragraphVisualWidth;
         private long outputVersion;
         private Vector2 scrollOffset;
         private Vector2 contentSize;
@@ -94,6 +96,8 @@ namespace Milestro.Components.Internal
             paintChanged = true;
             paragraphHeight = 0f;
             paragraphContentWidth = 0f;
+            paragraphVisualLeft = 0f;
+            paragraphVisualWidth = 0f;
             scrollOffset = Vector2.zero;
             contentSize = Vector2.zero;
             viewportSize = Vector2.zero;
@@ -187,12 +191,9 @@ namespace Milestro.Components.Internal
             return segments.ToParagraph(paragraphStyle, textStyle);
         }
 
-        private static void ValidateMargin(RectOffset margin)
+        private static void ValidateMargin(Margin margin)
         {
-            if (margin.left < 0) margin.left = 0;
-            if (margin.top < 0) margin.top = 0;
-            if (margin.right < 0) margin.right = 0;
-            if (margin.bottom < 0) margin.bottom = 0;
+            margin.Normalize();
         }
 
         private bool ResizeParagraph(Paragraph? targetParagraph,
@@ -218,6 +219,8 @@ namespace Milestro.Components.Internal
             layoutWidth = newLayoutWidth;
             targetParagraph.Layout(layoutWidth);
             paragraphContentWidth = layoutWidth;
+            paragraphVisualWidth = Mathf.Clamp(targetParagraph.LongestLine, 0f, layoutWidth);
+            paragraphVisualLeft = ResolveParagraphVisualLeft(settings, paragraphVisualWidth, layoutWidth);
             paragraphHeight = Mathf.Max(0f, targetParagraph.Height);
             return true;
         }
@@ -233,6 +236,8 @@ namespace Milestro.Components.Internal
                     settings.Size,
                     viewportWidth));
                 paragraphContentWidth = targetParagraph.ResolveNoWrapContentWidth(paragraphPlainText);
+                paragraphVisualWidth = paragraphContentWidth;
+                paragraphVisualLeft = ResolveParagraphVisualLeft(settings, paragraphVisualWidth, viewportWidth);
             }
 
             var newLayoutWidth = CeilToPositiveInt(Paragraph.ResolveNoWrapLayoutWidth(viewportWidth, paragraphContentWidth));
@@ -243,6 +248,8 @@ namespace Milestro.Components.Internal
 
             layoutWidth = newLayoutWidth;
             targetParagraph.Layout(layoutWidth);
+            paragraphVisualWidth = paragraphContentWidth;
+            paragraphVisualLeft = ResolveParagraphVisualLeft(settings, paragraphVisualWidth, layoutWidth);
             paragraphHeight = Mathf.Max(0f, targetParagraph.Height);
             return true;
         }
@@ -275,12 +282,19 @@ namespace Milestro.Components.Internal
 
         private int ContentViewportWidth(TextBoxRenderTargetSettings settings)
         {
-            return Math.Max(1, OutputWidth - settings.Margin.horizontal);
+            var margin = ResolveMargin(settings);
+            return CeilToPositiveInt(OutputWidth - margin.FixedHorizontalSize);
         }
 
         private int ContentViewportHeight(TextBoxRenderTargetSettings settings)
         {
-            return Math.Max(1, OutputHeight - settings.Margin.vertical);
+            var margin = ResolveMargin(settings);
+            return CeilToPositiveInt(OutputHeight - margin.FixedVerticalSize);
+        }
+
+        private ResolvedMargin ResolveMargin(TextBoxRenderTargetSettings settings)
+        {
+            return settings.Margin.Resolve(new MarginResolveContext(OutputWidth, OutputHeight, settings.Size));
         }
 
         private static int CeilToPositiveInt(float value)
@@ -303,6 +317,42 @@ namespace Milestro.Components.Internal
             return settings.WrapMode == TextBoxWrapMode.NoWrap;
         }
 
+        private static float ResolveParagraphVisualLeft(TextBoxRenderTargetSettings settings,
+            float visualWidth,
+            float containingWidth)
+        {
+            if (!FloatUtil.IsFinite(visualWidth) ||
+                !FloatUtil.IsFinite(containingWidth) ||
+                visualWidth <= 0f ||
+                visualWidth >= containingWidth)
+            {
+                return 0f;
+            }
+
+            switch (EffectiveAlign(settings))
+            {
+                case TextAlign.Center:
+                    return (containingWidth - visualWidth) * 0.5f;
+                case TextAlign.Right:
+                    return containingWidth - visualWidth;
+                default:
+                    return 0f;
+            }
+        }
+
+        private static TextAlign EffectiveAlign(TextBoxRenderTargetSettings settings)
+        {
+            switch (settings.TextAlign)
+            {
+                case TextAlign.Start:
+                    return settings.TextDirection == TextDirection.Rtl ? TextAlign.Right : TextAlign.Left;
+                case TextAlign.End:
+                    return settings.TextDirection == TextDirection.Rtl ? TextAlign.Left : TextAlign.Right;
+                default:
+                    return settings.TextAlign;
+            }
+        }
+
         private static string PlainText(RichTextParser.ParagraphPayload payload)
         {
             var builder = new StringBuilder();
@@ -320,11 +370,16 @@ namespace Milestro.Components.Internal
             var commands = new UnitySkiaRenderCommandList();
             if (paragraph != null)
             {
-                var paintPosition = new Vector2(settings.Margin.left - scrollOffset.x,
-                    settings.Margin.top - scrollOffset.y);
+                var margin = ResolveMargin(settings);
+                var autoOffset = AutoContentOffset(settings);
+                var paintPosition = new Vector2(margin.Left + autoOffset.x - scrollOffset.x,
+                    margin.Top + autoOffset.y - scrollOffset.y);
                 var clipRect = settings.TextOverflow == TextOverflow.Overflow
                     ? new Rect(0f, 0f, OutputWidth, OutputHeight)
-                    : new Rect(settings.Margin.left, settings.Margin.top, viewportSize.x, viewportSize.y);
+                    : new Rect(margin.Left,
+                        margin.Top,
+                        viewportSize.x,
+                        viewportSize.y);
                 commands.DrawParagraphSnapshot(() => BuildPaintParagraph(settings), paintPosition, clipRect);
             }
             else
@@ -333,6 +388,45 @@ namespace Milestro.Components.Internal
             }
 
             return commands;
+        }
+
+        private Vector2 AutoContentOffset(TextBoxRenderTargetSettings settings)
+        {
+            return new Vector2(ResolveAutoMarginOffset(settings.Margin.Left.Auto,
+                    settings.Margin.Right.Auto,
+                    viewportSize.x,
+                    paragraphVisualLeft,
+                    paragraphVisualWidth),
+                ResolveAutoMarginOffset(settings.Margin.Top.Auto,
+                    settings.Margin.Bottom.Auto,
+                    viewportSize.y,
+                    0f,
+                    paragraphHeight));
+        }
+
+        private static float ResolveAutoMarginOffset(bool startAuto,
+            bool endAuto,
+            float viewportLength,
+            float contentStart,
+            float contentLength)
+        {
+            if ((!startAuto && !endAuto) ||
+                !FloatUtil.IsFinite(viewportLength) ||
+                !FloatUtil.IsFinite(contentStart) ||
+                !FloatUtil.IsFinite(contentLength) ||
+                contentLength <= 0f ||
+                contentLength >= viewportLength)
+            {
+                return 0f;
+            }
+
+            var spare = viewportLength - contentLength;
+            if (startAuto && endAuto)
+            {
+                return spare * 0.5f - contentStart;
+            }
+
+            return startAuto ? spare - contentStart : -contentStart;
         }
 
         private void MarkOutputChanged()

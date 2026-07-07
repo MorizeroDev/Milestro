@@ -6,7 +6,7 @@ namespace Milestro.Model
     internal readonly struct TextBoxRenderTargetSettings
     {
         public TextBoxRenderTargetSettings(string content,
-            RectOffset margin,
+            Margin margin,
             List<string> fontFamilies,
             TextAlign textAlign,
             TextDirection textDirection,
@@ -20,7 +20,8 @@ namespace Milestro.Model
             string locale)
         {
             Content = content ?? "";
-            Margin = margin ?? new RectOffset();
+            Margin = margin ?? Margin.FixedZero();
+            Margin.Normalize();
             FontFamilies = fontFamilies ?? new List<string>();
             TextAlign = textAlign;
             TextDirection = textDirection;
@@ -35,7 +36,7 @@ namespace Milestro.Model
         }
 
         public string Content { get; }
-        public RectOffset Margin { get; }
+        public Margin Margin { get; }
         public List<string> FontFamilies { get; }
         public TextAlign TextAlign { get; }
         public TextDirection TextDirection { get; }

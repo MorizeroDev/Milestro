@@ -141,6 +141,7 @@ tasks {
             listOf("milestro::skia::Image") to "IntPtr",
             listOf("milestro::skia::Typeface") to "IntPtr",
             listOf("milestro::skia::Font") to "IntPtr",
+            listOf("milestro::skia::SlimTextDrawSnapshot") to "IntPtr",
             listOf("milestro::skia::TextDrawSnapshot") to "IntPtr",
             listOf("milestro::skia::Path") to "IntPtr",
             listOf("milestro::skia::Svg") to "IntPtr",
@@ -158,6 +159,8 @@ tasks {
             listOf("milestro::skia::textlayout::TextStyle") to "IntPtr",
             listOf("milestro::skia::textlayout::InputBox") to "IntPtr",
             listOf("milestro::skia::textlayout::InputBoxDrawSnapshot") to "IntPtr",
+            listOf("MilestroSkiaTextlayoutParagraphSplitGlyphCallback") to
+                "MilestroCTypes.SkiaTextlayoutParagraphSplitGlyphCallback",
         )
 
         doLast {

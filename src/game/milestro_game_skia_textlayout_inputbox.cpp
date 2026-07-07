@@ -32,16 +32,16 @@ milestro::skia::textlayout::TextBoundarySnapMode ToSnapMode(int32_t mode) {
 
 extern "C" {
 
-int64_t MilestroSkiaTextlayoutInputBoxCreate(milestro::skia::textlayout::InputBox *&ret,
-                                             milestro::skia::textlayout::ParagraphStyle *paragraphStyle,
-                                             milestro::skia::textlayout::TextStyle *textStyle) try {
+int64_t MilestroSkiaTextlayoutInputBoxCreate(milestro::skia::textlayout::InputBox*& ret,
+                                             milestro::skia::textlayout::ParagraphStyle* paragraphStyle,
+                                             milestro::skia::textlayout::TextStyle* textStyle) try {
     ret = new milestro::skia::textlayout::InputBox(paragraphStyle, textStyle);
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxDestroy(milestro::skia::textlayout::InputBox *&ret) try {
+int64_t MilestroSkiaTextlayoutInputBoxDestroy(milestro::skia::textlayout::InputBox*& ret) try {
     delete ret;
     ret = nullptr;
     return MILESTRO_API_RET_OK;
@@ -49,9 +49,8 @@ int64_t MilestroSkiaTextlayoutInputBoxDestroy(milestro::skia::textlayout::InputB
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxCreateDrawSnapshot(
-        milestro::skia::textlayout::InputBox *inputBox,
-        milestro::skia::textlayout::InputBoxDrawSnapshot *&ret) try {
+int64_t MilestroSkiaTextlayoutInputBoxCreateDrawSnapshot(milestro::skia::textlayout::InputBox* inputBox,
+                                                         milestro::skia::textlayout::InputBoxDrawSnapshot*& ret) try {
     if (inputBox == nullptr) {
         ret = nullptr;
         return MILESTRO_API_RET_FAILED;
@@ -63,8 +62,7 @@ int64_t MilestroSkiaTextlayoutInputBoxCreateDrawSnapshot(
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxDrawSnapshotDestroy(
-        milestro::skia::textlayout::InputBoxDrawSnapshot *&ret) try {
+int64_t MilestroSkiaTextlayoutInputBoxDrawSnapshotDestroy(milestro::skia::textlayout::InputBoxDrawSnapshot*& ret) try {
     delete ret;
     ret = nullptr;
     return MILESTRO_API_RET_OK;
@@ -72,24 +70,23 @@ int64_t MilestroSkiaTextlayoutInputBoxDrawSnapshotDestroy(
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSetText(milestro::skia::textlayout::InputBox *inputBox,
-                                              void *text,
-                                              uint64_t size) try {
-    inputBox->setText(static_cast<const char *>(text), static_cast<size_t>(size));
+int64_t
+MilestroSkiaTextlayoutInputBoxSetText(milestro::skia::textlayout::InputBox* inputBox, void* text, uint64_t size) try {
+    inputBox->setText(static_cast<const char*>(text), static_cast<size_t>(size));
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxGetText(milestro::skia::textlayout::InputBox *inputBox,
-                                              milestro::game::model::BytesWrapper *&value) try {
+int64_t MilestroSkiaTextlayoutInputBoxGetText(milestro::skia::textlayout::InputBox* inputBox,
+                                              milestro::game::model::BytesWrapper*& value) try {
     value = new milestro::game::model::BytesWrapper(inputBox->getText());
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSetViewport(milestro::skia::textlayout::InputBox *inputBox,
+int64_t MilestroSkiaTextlayoutInputBoxSetViewport(milestro::skia::textlayout::InputBox* inputBox,
                                                   float width,
                                                   float height) try {
     inputBox->setViewport(width, height);
@@ -98,7 +95,7 @@ int64_t MilestroSkiaTextlayoutInputBoxSetViewport(milestro::skia::textlayout::In
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSetSoftWrap(milestro::skia::textlayout::InputBox *inputBox,
+int64_t MilestroSkiaTextlayoutInputBoxSetSoftWrap(milestro::skia::textlayout::InputBox* inputBox,
                                                   int32_t softWrap) try {
     inputBox->setSoftWrap(softWrap != 0);
     return MILESTRO_API_RET_OK;
@@ -106,31 +103,29 @@ int64_t MilestroSkiaTextlayoutInputBoxSetSoftWrap(milestro::skia::textlayout::In
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxGetSoftWrap(milestro::skia::textlayout::InputBox *inputBox,
-                                                  int32_t &softWrap) try {
+int64_t MilestroSkiaTextlayoutInputBoxGetSoftWrap(milestro::skia::textlayout::InputBox* inputBox,
+                                                  int32_t& softWrap) try {
     softWrap = inputBox->getSoftWrap() ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSetFocused(milestro::skia::textlayout::InputBox *inputBox,
-                                                 int32_t focused) try {
+int64_t MilestroSkiaTextlayoutInputBoxSetFocused(milestro::skia::textlayout::InputBox* inputBox, int32_t focused) try {
     inputBox->setFocused(focused != 0);
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxGetFocused(milestro::skia::textlayout::InputBox *inputBox,
-                                                 int32_t &focused) try {
+int64_t MilestroSkiaTextlayoutInputBoxGetFocused(milestro::skia::textlayout::InputBox* inputBox, int32_t& focused) try {
     focused = inputBox->getFocused() ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSetTextOverflow(milestro::skia::textlayout::InputBox *inputBox,
+int64_t MilestroSkiaTextlayoutInputBoxSetTextOverflow(milestro::skia::textlayout::InputBox* inputBox,
                                                       int32_t textOverflow) try {
     inputBox->setTextOverflow(static_cast<milestro::skia::textlayout::TextOverflow>(textOverflow));
     return MILESTRO_API_RET_OK;
@@ -138,24 +133,24 @@ int64_t MilestroSkiaTextlayoutInputBoxSetTextOverflow(milestro::skia::textlayout
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxGetTextOverflow(milestro::skia::textlayout::InputBox *inputBox,
-                                                      int32_t &textOverflow) try {
+int64_t MilestroSkiaTextlayoutInputBoxGetTextOverflow(milestro::skia::textlayout::InputBox* inputBox,
+                                                      int32_t& textOverflow) try {
     textOverflow = static_cast<int32_t>(inputBox->getTextOverflow());
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSetEllipsis(milestro::skia::textlayout::InputBox *inputBox,
-                                                  void *text,
+int64_t MilestroSkiaTextlayoutInputBoxSetEllipsis(milestro::skia::textlayout::InputBox* inputBox,
+                                                  void* text,
                                                   uint64_t size) try {
-    inputBox->setEllipsis(reinterpret_cast<const char *>(text), static_cast<size_t>(size));
+    inputBox->setEllipsis(reinterpret_cast<const char*>(text), static_cast<size_t>(size));
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSetMaskInput(milestro::skia::textlayout::InputBox *inputBox,
+int64_t MilestroSkiaTextlayoutInputBoxSetMaskInput(milestro::skia::textlayout::InputBox* inputBox,
                                                    int32_t maskInput) try {
     inputBox->setMaskInput(maskInput != 0);
     return MILESTRO_API_RET_OK;
@@ -163,60 +158,55 @@ int64_t MilestroSkiaTextlayoutInputBoxSetMaskInput(milestro::skia::textlayout::I
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxGetMaskInput(milestro::skia::textlayout::InputBox *inputBox,
-                                                   int32_t &maskInput) try {
+int64_t MilestroSkiaTextlayoutInputBoxGetMaskInput(milestro::skia::textlayout::InputBox* inputBox,
+                                                   int32_t& maskInput) try {
     maskInput = inputBox->getMaskInput() ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSetMaskChar(milestro::skia::textlayout::InputBox *inputBox,
-                                                  void *text,
+int64_t MilestroSkiaTextlayoutInputBoxSetMaskChar(milestro::skia::textlayout::InputBox* inputBox,
+                                                  void* text,
                                                   uint64_t size) try {
-    inputBox->setMaskChar(reinterpret_cast<const char *>(text), static_cast<size_t>(size));
+    inputBox->setMaskChar(reinterpret_cast<const char*>(text), static_cast<size_t>(size));
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSetCaretColor(milestro::skia::textlayout::InputBox *inputBox,
+int64_t MilestroSkiaTextlayoutInputBoxSetCaretColor(milestro::skia::textlayout::InputBox* inputBox,
                                                     int32_t r,
                                                     int32_t g,
                                                     int32_t b,
                                                     int32_t a) try {
-    inputBox->setCaretColor(SkColorSetARGB(static_cast<U8CPU>(a),
-                                           static_cast<U8CPU>(r),
-                                           static_cast<U8CPU>(g),
-                                           static_cast<U8CPU>(b)));
+    inputBox->setCaretColor(
+            SkColorSetARGB(static_cast<U8CPU>(a), static_cast<U8CPU>(r), static_cast<U8CPU>(g), static_cast<U8CPU>(b)));
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSetSelectionColor(milestro::skia::textlayout::InputBox *inputBox,
+int64_t MilestroSkiaTextlayoutInputBoxSetSelectionColor(milestro::skia::textlayout::InputBox* inputBox,
                                                         int32_t r,
                                                         int32_t g,
                                                         int32_t b,
                                                         int32_t a) try {
-    inputBox->setSelectionColor(SkColorSetARGB(static_cast<U8CPU>(a),
-                                               static_cast<U8CPU>(r),
-                                               static_cast<U8CPU>(g),
-                                               static_cast<U8CPU>(b)));
+    inputBox->setSelectionColor(
+            SkColorSetARGB(static_cast<U8CPU>(a), static_cast<U8CPU>(r), static_cast<U8CPU>(g), static_cast<U8CPU>(b)));
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSetCaretWidth(milestro::skia::textlayout::InputBox *inputBox,
-                                                    float width) try {
+int64_t MilestroSkiaTextlayoutInputBoxSetCaretWidth(milestro::skia::textlayout::InputBox* inputBox, float width) try {
     inputBox->setCaretWidth(width);
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSetCaretVisible(milestro::skia::textlayout::InputBox *inputBox,
+int64_t MilestroSkiaTextlayoutInputBoxSetCaretVisible(milestro::skia::textlayout::InputBox* inputBox,
                                                       int32_t visible) try {
     inputBox->setCaretVisible(visible != 0);
     return MILESTRO_API_RET_OK;
@@ -224,233 +214,243 @@ int64_t MilestroSkiaTextlayoutInputBoxSetCaretVisible(milestro::skia::textlayout
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxInsertText(milestro::skia::textlayout::InputBox *inputBox,
-                                                 void *text,
+int64_t MilestroSkiaTextlayoutInputBoxSetAutoMargin(milestro::skia::textlayout::InputBox* inputBox,
+                                                    int32_t left,
+                                                    int32_t top,
+                                                    int32_t right,
+                                                    int32_t bottom) try {
+    inputBox->setAutoMargin(left != 0, top != 0, right != 0, bottom != 0);
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxGetAutoMargin(milestro::skia::textlayout::InputBox* inputBox,
+                                                    int32_t& left,
+                                                    int32_t& top,
+                                                    int32_t& right,
+                                                    int32_t& bottom) try {
+    left = inputBox->getAutoMarginLeft() ? 1 : 0;
+    top = inputBox->getAutoMarginTop() ? 1 : 0;
+    right = inputBox->getAutoMarginRight() ? 1 : 0;
+    bottom = inputBox->getAutoMarginBottom() ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutInputBoxInsertText(milestro::skia::textlayout::InputBox* inputBox,
+                                                 void* text,
                                                  uint64_t size) try {
-    inputBox->insertText(static_cast<const char *>(text), static_cast<size_t>(size));
+    inputBox->insertText(static_cast<const char*>(text), static_cast<size_t>(size));
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSetComposition(milestro::skia::textlayout::InputBox *inputBox,
-                                                     void *text,
+int64_t MilestroSkiaTextlayoutInputBoxSetComposition(milestro::skia::textlayout::InputBox* inputBox,
+                                                     void* text,
                                                      uint64_t size,
-                                                     int32_t &changed) try {
-    changed = inputBox->setComposition(static_cast<const char *>(text), static_cast<size_t>(size)) ? 1 : 0;
+                                                     int32_t& changed) try {
+    changed = inputBox->setComposition(static_cast<const char*>(text), static_cast<size_t>(size)) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxCommitComposition(milestro::skia::textlayout::InputBox *inputBox,
-                                                        void *text,
+int64_t MilestroSkiaTextlayoutInputBoxCommitComposition(milestro::skia::textlayout::InputBox* inputBox,
+                                                        void* text,
                                                         uint64_t size,
-                                                        int32_t &changed) try {
-    changed = inputBox->commitComposition(static_cast<const char *>(text), static_cast<size_t>(size)) ? 1 : 0;
+                                                        int32_t& changed) try {
+    changed = inputBox->commitComposition(static_cast<const char*>(text), static_cast<size_t>(size)) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxClearComposition(milestro::skia::textlayout::InputBox *inputBox,
-                                                       int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxClearComposition(milestro::skia::textlayout::InputBox* inputBox,
+                                                       int32_t& changed) try {
     changed = inputBox->clearComposition() ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxDeleteBackward(milestro::skia::textlayout::InputBox *inputBox,
-                                                     int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxDeleteBackward(milestro::skia::textlayout::InputBox* inputBox,
+                                                     int32_t& changed) try {
     changed = inputBox->deleteBackward() ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxDeleteForward(milestro::skia::textlayout::InputBox *inputBox,
-                                                    int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxDeleteForward(milestro::skia::textlayout::InputBox* inputBox,
+                                                    int32_t& changed) try {
     changed = inputBox->deleteForward() ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxUndo(milestro::skia::textlayout::InputBox *inputBox,
-                                           int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxUndo(milestro::skia::textlayout::InputBox* inputBox, int32_t& changed) try {
     changed = inputBox->undo() ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxRedo(milestro::skia::textlayout::InputBox *inputBox,
-                                           int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxRedo(milestro::skia::textlayout::InputBox* inputBox, int32_t& changed) try {
     changed = inputBox->redo() ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxBreakUndoGroup(
-        milestro::skia::textlayout::InputBox *inputBox) try {
+int64_t MilestroSkiaTextlayoutInputBoxBreakUndoGroup(milestro::skia::textlayout::InputBox* inputBox) try {
     inputBox->breakUndoGroup();
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxMovePrevious(milestro::skia::textlayout::InputBox *inputBox,
-                                                   int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxMovePrevious(milestro::skia::textlayout::InputBox* inputBox,
+                                                   int32_t& changed) try {
     changed = inputBox->movePrevious() ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxMoveNext(milestro::skia::textlayout::InputBox *inputBox,
-                                               int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxMoveNext(milestro::skia::textlayout::InputBox* inputBox, int32_t& changed) try {
     changed = inputBox->moveNext() ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxMovePreviousExtendingSelection(
-        milestro::skia::textlayout::InputBox *inputBox,
-        int32_t extendSelection,
-        int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxMovePreviousExtendingSelection(milestro::skia::textlayout::InputBox* inputBox,
+                                                                     int32_t extendSelection,
+                                                                     int32_t& changed) try {
     changed = inputBox->movePrevious(extendSelection != 0) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxMoveNextExtendingSelection(
-        milestro::skia::textlayout::InputBox *inputBox,
-        int32_t extendSelection,
-        int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxMoveNextExtendingSelection(milestro::skia::textlayout::InputBox* inputBox,
+                                                                 int32_t extendSelection,
+                                                                 int32_t& changed) try {
     changed = inputBox->moveNext(extendSelection != 0) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxMoveUpExtendingSelection(
-        milestro::skia::textlayout::InputBox *inputBox,
-        int32_t extendSelection,
-        int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxMoveUpExtendingSelection(milestro::skia::textlayout::InputBox* inputBox,
+                                                               int32_t extendSelection,
+                                                               int32_t& changed) try {
     changed = inputBox->moveUp(extendSelection != 0) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxMoveDownExtendingSelection(
-        milestro::skia::textlayout::InputBox *inputBox,
-        int32_t extendSelection,
-        int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxMoveDownExtendingSelection(milestro::skia::textlayout::InputBox* inputBox,
+                                                                 int32_t extendSelection,
+                                                                 int32_t& changed) try {
     changed = inputBox->moveDown(extendSelection != 0) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxMoveLineStartExtendingSelection(
-        milestro::skia::textlayout::InputBox *inputBox,
-        int32_t extendSelection,
-        int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxMoveLineStartExtendingSelection(milestro::skia::textlayout::InputBox* inputBox,
+                                                                      int32_t extendSelection,
+                                                                      int32_t& changed) try {
     changed = inputBox->moveLineStart(extendSelection != 0) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxMoveLineEndExtendingSelection(
-        milestro::skia::textlayout::InputBox *inputBox,
-        int32_t extendSelection,
-        int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxMoveLineEndExtendingSelection(milestro::skia::textlayout::InputBox* inputBox,
+                                                                    int32_t extendSelection,
+                                                                    int32_t& changed) try {
     changed = inputBox->moveLineEnd(extendSelection != 0) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxMoveDocumentStartExtendingSelection(
-        milestro::skia::textlayout::InputBox *inputBox,
-        int32_t extendSelection,
-        int32_t &changed) try {
+int64_t
+MilestroSkiaTextlayoutInputBoxMoveDocumentStartExtendingSelection(milestro::skia::textlayout::InputBox* inputBox,
+                                                                  int32_t extendSelection,
+                                                                  int32_t& changed) try {
     changed = inputBox->moveDocumentStart(extendSelection != 0) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxMoveDocumentEndExtendingSelection(
-        milestro::skia::textlayout::InputBox *inputBox,
-        int32_t extendSelection,
-        int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxMoveDocumentEndExtendingSelection(milestro::skia::textlayout::InputBox* inputBox,
+                                                                        int32_t extendSelection,
+                                                                        int32_t& changed) try {
     changed = inputBox->moveDocumentEnd(extendSelection != 0) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxHitTest(milestro::skia::textlayout::InputBox *inputBox,
+int64_t MilestroSkiaTextlayoutInputBoxHitTest(milestro::skia::textlayout::InputBox* inputBox,
                                               float x,
                                               float y,
-                                              int32_t &changed) try {
+                                              int32_t& changed) try {
     changed = inputBox->hitTest(x, y) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxHitTestExtendingSelection(
-        milestro::skia::textlayout::InputBox *inputBox,
-        float x,
-        float y,
-        int32_t extendSelection,
-        int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxHitTestExtendingSelection(milestro::skia::textlayout::InputBox* inputBox,
+                                                                float x,
+                                                                float y,
+                                                                int32_t extendSelection,
+                                                                int32_t& changed) try {
     changed = inputBox->hitTest(x, y, extendSelection != 0) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxEnsureCaretVisible(
-        milestro::skia::textlayout::InputBox *inputBox) try {
+int64_t MilestroSkiaTextlayoutInputBoxEnsureCaretVisible(milestro::skia::textlayout::InputBox* inputBox) try {
     inputBox->ensureCaretVisible();
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxScrollByX(
-        milestro::skia::textlayout::InputBox *inputBox,
-        float delta,
-        int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxScrollByX(milestro::skia::textlayout::InputBox* inputBox,
+                                                float delta,
+                                                int32_t& changed) try {
     changed = inputBox->scrollByX(delta) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxScrollByY(
-        milestro::skia::textlayout::InputBox *inputBox,
-        float delta,
-        int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxScrollByY(milestro::skia::textlayout::InputBox* inputBox,
+                                                float delta,
+                                                int32_t& changed) try {
     changed = inputBox->scrollByY(delta) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxGetCursor(milestro::skia::textlayout::InputBox *inputBox,
-                                                uint64_t &utf8Offset,
-                                                uint64_t &utf16Offset,
-                                                int32_t &affinity) try {
+int64_t MilestroSkiaTextlayoutInputBoxGetCursor(milestro::skia::textlayout::InputBox* inputBox,
+                                                uint64_t& utf8Offset,
+                                                uint64_t& utf16Offset,
+                                                int32_t& affinity) try {
     utf8Offset = inputBox->getCursorUtf8();
     utf16Offset = inputBox->getCursorUtf16();
     affinity = static_cast<int32_t>(inputBox->getAffinity());
@@ -459,7 +459,7 @@ int64_t MilestroSkiaTextlayoutInputBoxGetCursor(milestro::skia::textlayout::Inpu
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSetCursorUtf8(milestro::skia::textlayout::InputBox *inputBox,
+int64_t MilestroSkiaTextlayoutInputBoxSetCursorUtf8(milestro::skia::textlayout::InputBox* inputBox,
                                                     uint64_t utf8Offset,
                                                     int32_t affinity) try {
     inputBox->setCursorUtf8(static_cast<size_t>(utf8Offset), ToAffinity(affinity));
@@ -468,14 +468,14 @@ int64_t MilestroSkiaTextlayoutInputBoxSetCursorUtf8(milestro::skia::textlayout::
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxGetSelection(milestro::skia::textlayout::InputBox *inputBox,
-                                                   uint64_t &anchorUtf8,
-                                                   uint64_t &focusUtf8,
-                                                   uint64_t &startUtf8,
-                                                   uint64_t &endUtf8,
-                                                   int32_t &anchorAffinity,
-                                                   int32_t &focusAffinity,
-                                                   int32_t &hasSelection) try {
+int64_t MilestroSkiaTextlayoutInputBoxGetSelection(milestro::skia::textlayout::InputBox* inputBox,
+                                                   uint64_t& anchorUtf8,
+                                                   uint64_t& focusUtf8,
+                                                   uint64_t& startUtf8,
+                                                   uint64_t& endUtf8,
+                                                   int32_t& anchorAffinity,
+                                                   int32_t& focusAffinity,
+                                                   int32_t& hasSelection) try {
     const auto selection = inputBox->getSelection();
     anchorUtf8 = selection.anchorUtf8;
     focusUtf8 = selection.focusUtf8;
@@ -489,8 +489,8 @@ int64_t MilestroSkiaTextlayoutInputBoxGetSelection(milestro::skia::textlayout::I
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxGetSelectedText(milestro::skia::textlayout::InputBox *inputBox,
-                                                      milestro::game::model::BytesWrapper *&ret) try {
+int64_t MilestroSkiaTextlayoutInputBoxGetSelectedText(milestro::skia::textlayout::InputBox* inputBox,
+                                                      milestro::game::model::BytesWrapper*& ret) try {
     ret = nullptr;
     if (inputBox == nullptr) {
         return MILESTRO_API_RET_FAILED;
@@ -502,84 +502,83 @@ int64_t MilestroSkiaTextlayoutInputBoxGetSelectedText(milestro::skia::textlayout
         return MILESTRO_API_RET_OK;
     }
 
-    const auto &text = inputBox->getText();
+    const auto& text = inputBox->getText();
     if (selection.startUtf8 > selection.endUtf8 || selection.endUtf8 > text.size()) {
         return MILESTRO_API_RET_FAILED;
     }
 
-    ret = new milestro::game::model::BytesWrapper(text.substr(selection.startUtf8,
-                                                             selection.endUtf8 - selection.startUtf8));
+    ret = new milestro::game::model::BytesWrapper(
+            text.substr(selection.startUtf8, selection.endUtf8 - selection.startUtf8));
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSetSelectionUtf8(
-        milestro::skia::textlayout::InputBox *inputBox,
-        uint64_t anchorUtf8,
-        uint64_t focusUtf8,
-        int32_t anchorAffinity,
-        int32_t focusAffinity,
-        int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxSetSelectionUtf8(milestro::skia::textlayout::InputBox* inputBox,
+                                                       uint64_t anchorUtf8,
+                                                       uint64_t focusUtf8,
+                                                       int32_t anchorAffinity,
+                                                       int32_t focusAffinity,
+                                                       int32_t& changed) try {
     changed = inputBox->setSelectionUtf8(static_cast<size_t>(anchorUtf8),
                                          static_cast<size_t>(focusUtf8),
                                          ToAffinity(anchorAffinity),
-                                         ToAffinity(focusAffinity)) ? 1 : 0;
+                                         ToAffinity(focusAffinity))
+                      ? 1
+                      : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxClearSelection(
-        milestro::skia::textlayout::InputBox *inputBox,
-        int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxClearSelection(milestro::skia::textlayout::InputBox* inputBox,
+                                                     int32_t& changed) try {
     changed = inputBox->clearSelection() ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSelectAll(milestro::skia::textlayout::InputBox *inputBox,
-                                                int32_t &changed) try {
+int64_t MilestroSkiaTextlayoutInputBoxSelectAll(milestro::skia::textlayout::InputBox* inputBox, int32_t& changed) try {
     changed = inputBox->selectAll() ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxUtf8ToUtf16(milestro::skia::textlayout::InputBox *inputBox,
+int64_t MilestroSkiaTextlayoutInputBoxUtf8ToUtf16(milestro::skia::textlayout::InputBox* inputBox,
                                                   uint64_t utf8Offset,
-                                                  uint64_t &utf16Offset) try {
+                                                  uint64_t& utf16Offset) try {
     utf16Offset = inputBox->utf8ToUtf16(static_cast<size_t>(utf8Offset));
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxUtf16ToUtf8(milestro::skia::textlayout::InputBox *inputBox,
+int64_t MilestroSkiaTextlayoutInputBoxUtf16ToUtf8(milestro::skia::textlayout::InputBox* inputBox,
                                                   uint64_t utf16Offset,
-                                                  uint64_t &utf8Offset) try {
+                                                  uint64_t& utf8Offset) try {
     utf8Offset = inputBox->utf16ToUtf8(static_cast<size_t>(utf16Offset));
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxSnapUtf8(milestro::skia::textlayout::InputBox *inputBox,
+int64_t MilestroSkiaTextlayoutInputBoxSnapUtf8(milestro::skia::textlayout::InputBox* inputBox,
                                                uint64_t utf8Offset,
                                                int32_t mode,
-                                               uint64_t &snappedUtf8Offset) try {
+                                               uint64_t& snappedUtf8Offset) try {
     snappedUtf8Offset = inputBox->snapUtf8(static_cast<size_t>(utf8Offset), ToSnapMode(mode));
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxGetCaretRect(milestro::skia::textlayout::InputBox *inputBox,
-                                                   float &left,
-                                                   float &top,
-                                                   float &right,
-                                                   float &bottom) try {
+int64_t MilestroSkiaTextlayoutInputBoxGetCaretRect(milestro::skia::textlayout::InputBox* inputBox,
+                                                   float& left,
+                                                   float& top,
+                                                   float& right,
+                                                   float& bottom) try {
     const auto rect = inputBox->getCaretRect();
     left = rect.left;
     top = rect.top;
@@ -590,11 +589,11 @@ int64_t MilestroSkiaTextlayoutInputBoxGetCaretRect(milestro::skia::textlayout::I
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxGetCompositionRect(milestro::skia::textlayout::InputBox *inputBox,
-                                                         float &left,
-                                                         float &top,
-                                                         float &right,
-                                                         float &bottom) try {
+int64_t MilestroSkiaTextlayoutInputBoxGetCompositionRect(milestro::skia::textlayout::InputBox* inputBox,
+                                                         float& left,
+                                                         float& top,
+                                                         float& right,
+                                                         float& bottom) try {
     const auto rect = inputBox->getCompositionRect();
     left = rect.left;
     top = rect.top;
@@ -605,16 +604,16 @@ int64_t MilestroSkiaTextlayoutInputBoxGetCompositionRect(milestro::skia::textlay
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxGetMetrics(milestro::skia::textlayout::InputBox *inputBox,
-                                                 float &height,
-                                                 float &longestLine,
-                                                 float &minIntrinsicWidth,
-                                                 float &maxIntrinsicWidth,
-                                                 float &contentWidth,
-                                                 float &scrollX,
-                                                 float &scrollY,
-                                                 float &viewportWidth,
-                                                 float &viewportHeight) try {
+int64_t MilestroSkiaTextlayoutInputBoxGetMetrics(milestro::skia::textlayout::InputBox* inputBox,
+                                                 float& height,
+                                                 float& longestLine,
+                                                 float& minIntrinsicWidth,
+                                                 float& maxIntrinsicWidth,
+                                                 float& contentWidth,
+                                                 float& scrollX,
+                                                 float& scrollY,
+                                                 float& viewportWidth,
+                                                 float& viewportHeight) try {
     const auto metrics = inputBox->getMetrics();
     height = metrics.height;
     longestLine = metrics.longestLine;
@@ -630,25 +629,25 @@ int64_t MilestroSkiaTextlayoutInputBoxGetMetrics(milestro::skia::textlayout::Inp
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxGetLineCount(milestro::skia::textlayout::InputBox *inputBox,
-                                                   uint64_t &lineCount) try {
+int64_t MilestroSkiaTextlayoutInputBoxGetLineCount(milestro::skia::textlayout::InputBox* inputBox,
+                                                   uint64_t& lineCount) try {
     lineCount = inputBox->getLineCount();
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxGetLineMetrics(milestro::skia::textlayout::InputBox *inputBox,
+int64_t MilestroSkiaTextlayoutInputBoxGetLineMetrics(milestro::skia::textlayout::InputBox* inputBox,
                                                      uint64_t lineNumber,
-                                                     uint64_t &startUtf8,
-                                                     uint64_t &endUtf8,
-                                                     float &ascent,
-                                                     float &descent,
-                                                     float &unscaledAscent,
-                                                     float &height,
-                                                     float &width,
-                                                     float &left,
-                                                     float &baseline) try {
+                                                     uint64_t& startUtf8,
+                                                     uint64_t& endUtf8,
+                                                     float& ascent,
+                                                     float& descent,
+                                                     float& unscaledAscent,
+                                                     float& height,
+                                                     float& width,
+                                                     float& left,
+                                                     float& baseline) try {
     milestro::skia::textlayout::InputBoxLineMetrics metrics;
     if (!inputBox->getLineMetrics(static_cast<size_t>(lineNumber), metrics)) {
         return MILESTRO_API_RET_FAILED;
@@ -667,5 +666,4 @@ int64_t MilestroSkiaTextlayoutInputBoxGetLineMetrics(milestro::skia::textlayout:
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
 }
-
 }
