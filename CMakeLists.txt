@@ -10,6 +10,7 @@ option(MILESTRO_ENABLE_RELEASE_SYMBOLS "Build release binaries with debug info f
 option(MILESTRO_REMAP_SOURCE_PATHS "Remap absolute source and build paths in release debug info" ON)
 option(MILESTRO_ENABLE_DESKTOP_OPENGL_RENDER "Enable experimental Unity OpenGLCore RenderTexture backend" OFF)
 option(MILESTRO_ENABLE_DESKTOP_VULKAN_RENDER "Enable experimental Unity Vulkan RenderTexture backend" OFF)
+option(MILESTRO_RENDER_DEBUG_LOG "Enable Unity render-flow debug logs" OFF)
 option(MILESTRO_SKIA_LIB_PATH "Skia library path")
 option(MILESTRO_SKIA_INCLUDE_PATH "Skia include path")
 option(MILESTRO_SKIA_CMAKE "Skia cmake path")
@@ -530,6 +531,10 @@ if (MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
     set(MILESTRO_DEFINITIONS ${MILESTRO_DEFINITIONS} "MILESTRO_ENABLE_UNITY_VULKAN_RENDER")
     list(APPEND MILESTRO_APPLICATION_FILE
             src/unity_render/MilestroUnityRenderVulkanBackend.cpp)
+endif ()
+
+if (MILESTRO_RENDER_DEBUG_LOG)
+    set(MILESTRO_DEFINITIONS ${MILESTRO_DEFINITIONS} "MILESTRO_RENDER_DEBUG_LOG")
 endif ()
 
 set(

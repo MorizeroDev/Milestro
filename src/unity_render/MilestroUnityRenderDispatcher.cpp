@@ -6,13 +6,14 @@
 #include "unity_render/MilestroUnityRenderSubmissionDraw.h"
 
 #include <IUnityGraphics.h>
-#include <Milestro/log/log.h>
 
 #include <array>
 #include <atomic>
 #include <cstring>
 #include <mutex>
 #include <vector>
+
+#include "unity_render/MilestroUnityRenderLog.h"
 
 #if defined(__APPLE__)
 #include "unity_render/MilestroUnityRenderMetalBackend.h"
@@ -193,7 +194,7 @@ int64_t EnqueueSubmission(int32_t graphicsBackend, MilestroUnityRenderSubmission
         gSubmissionQueues[queueIndex].push_back(submission);
     }
     for (MilestroUnityRenderSubmission* superseded: supersededSubmissions) {
-        MILESTROLOG_WARN("Dropping superseded Milestro Metal render submission before queue drain.");
+        MILESTRO_RENDER_LOG_WARN("Dropping superseded Milestro Metal render submission before queue drain.");
         MarkSubmissionCompleted(superseded, MilestroUnityRenderSubmissionStatus::Failed);
     }
     return MILESTRO_API_RET_OK;
@@ -338,7 +339,7 @@ void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* subm
         return;
     }
 
-    MILESTROLOG_WARN("Ignoring unknown Milestro Unity render event offset: {}", eventOffset);
+    MILESTRO_RENDER_LOG_WARN("Ignoring unknown Milestro Unity render event offset: {}", eventOffset);
     MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
 }
 
@@ -391,7 +392,7 @@ void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType
 
 void UNITY_INTERFACE_API OnRenderEvent(int eventId, void* data) {
     if (gEventBase < 0) {
-        MILESTROLOG_WARN("Ignoring unknown Milestro Unity render event: {}", eventId);
+        MILESTRO_RENDER_LOG_WARN("Ignoring unknown Milestro Unity render event: {}", eventId);
         MarkDrainCompleted(static_cast<MilestroUnityRenderDrain*>(data));
         return;
     }
@@ -523,7 +524,7 @@ void Load(IUnityInterfaces* unityInterfaces) {
     gUnityInterfaces = unityInterfaces;
     gUnityGraphics = unityInterfaces != nullptr ? unityInterfaces->Get<IUnityGraphics>() : nullptr;
     if (gUnityGraphics == nullptr) {
-        MILESTROLOG_WARN("IUnityGraphics is unavailable; Unity render PoC is disabled.");
+        MILESTRO_RENDER_LOG_WARN("IUnityGraphics is unavailable; Unity render PoC is disabled.");
         return;
     }
 

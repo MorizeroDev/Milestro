@@ -5,10 +5,10 @@
 #include "unity_render/MilestroUnityRenderTextureHandleKind.h"
 
 #include <IUnityGraphicsMetal.h>
-#include <Milestro/log/log.h>
 
 #import <Metal/Metal.h>
 
+#include "unity_render/MilestroUnityRenderLog.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkSurface.h"
@@ -86,7 +86,7 @@ id<MTLTexture> TextureFromRenderBuffer(void* renderBufferHandle) {
     if (gMetalV2 != nullptr) {
         UnityRenderBuffer renderBuffer = gMetalV2->RenderBufferFromHandle(renderBufferHandle);
         if (renderBuffer == nullptr) {
-            MILESTROLOG_WARN("Unity Metal V2 returned a null render buffer for handle {}.", renderBufferHandle);
+            MILESTRO_RENDER_LOG_WARN("Unity Metal V2 returned a null render buffer for handle {}.", renderBufferHandle);
             return nil;
         }
         return gMetalV2->TextureFromRenderBuffer(renderBuffer);
@@ -94,7 +94,7 @@ id<MTLTexture> TextureFromRenderBuffer(void* renderBufferHandle) {
     if (gMetalV1 != nullptr) {
         UnityRenderBuffer renderBuffer = gMetalV1->RenderBufferFromHandle(renderBufferHandle);
         if (renderBuffer == nullptr) {
-            MILESTROLOG_WARN("Unity Metal V1 returned a null render buffer for handle {}.", renderBufferHandle);
+            MILESTRO_RENDER_LOG_WARN("Unity Metal V1 returned a null render buffer for handle {}.", renderBufferHandle);
             return nil;
         }
         return gMetalV1->TextureFromRenderBuffer(renderBuffer);
@@ -170,7 +170,7 @@ SkColorType ColorTypeForTexture(id<MTLTexture> texture) {
         case MTLPixelFormatRGBA8Unorm_sRGB:
             return kRGBA_8888_SkColorType;
         default:
-            MILESTROLOG_WARN("Unexpected Metal texture format {}; trying BGRA_8888.",
+            MILESTRO_RENDER_LOG_WARN("Unexpected Metal texture format {}; trying BGRA_8888.",
                              static_cast<unsigned int>(texture.pixelFormat));
             return kBGRA_8888_SkColorType;
     }
@@ -224,7 +224,7 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
     if (RequiresUnityRenderBufferLookup(payload) &&
         (CurrentCommandBuffer() == nil || CurrentRenderPassDescriptor() == nil)) {
         if (!gLoggedMissingCommandBufferSkip) {
-            MILESTROLOG_WARN("Skipping Milestro Metal render because Unity has no current Metal render context.");
+            MILESTRO_RENDER_LOG_WARN("Skipping Milestro Metal render because Unity has no current Metal render context.");
             gLoggedMissingCommandBufferSkip = true;
         }
         return static_cast<int64_t>(MilestroUnityRenderSubmissionStatus::Skipped);

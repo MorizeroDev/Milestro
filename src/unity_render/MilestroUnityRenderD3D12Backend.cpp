@@ -8,14 +8,13 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 
-#include <Milestro/log/log.h>
-
 #include <algorithm>
 #include <atomic>
 #include <cstdio>
 #include <string>
 #include <vector>
 
+#include "unity_render/MilestroUnityRenderLog.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkSurface.h"
@@ -144,7 +143,7 @@ void LogCommandRecordingStateProbe() {
 
     UnityGraphicsD3D12RecordingState recordingState = {};
     bool available = gD3D12v8->CommandRecordingState(&recordingState);
-    MILESTROLOG_INFO("Milestro D3D12 v8 event contract probe: queueAccess=Allow, CommandRecordingState available={}, "
+    MILESTRO_RENDER_LOG_INFO("Milestro D3D12 v8 event contract probe: queueAccess=Allow, CommandRecordingState available={}, "
                      "commandList={}.",
                      available ? 1 : 0,
                      static_cast<void*>(recordingState.commandList));
@@ -265,7 +264,7 @@ GrDirectContext* DirectContext() {
     }
 
     if (gDirectContext != nullptr && gDirectContextDevice == device && gDirectContextQueue == queue) {
-        MILESTROLOG_INFO("Reusing Skia D3D12 direct context={}, unityDevice={}, queue={}, adapterLuid={}.",
+        MILESTRO_RENDER_LOG_INFO("Reusing Skia D3D12 direct context={}, unityDevice={}, queue={}, adapterLuid={}.",
                          static_cast<void*>(gDirectContext.get()),
                          static_cast<void*>(device),
                          static_cast<void*>(queue),
@@ -289,7 +288,7 @@ GrDirectContext* DirectContext() {
 
     DXGI_ADAPTER_DESC1 adapterDesc = {};
     adapter->GetDesc1(&adapterDesc);
-    MILESTROLOG_INFO("Creating Skia D3D12 direct context: previousContext={}, previousDevice={}, previousQueue={}, "
+    MILESTRO_RENDER_LOG_INFO("Creating Skia D3D12 direct context: previousContext={}, previousDevice={}, previousQueue={}, "
                      "unityDevice={}, queue={}, deviceLuid={}, adapter={}, adapterLuid={}.",
                      static_cast<void*>(gDirectContext.get()),
                      static_cast<void*>(gDirectContextDevice),
@@ -306,7 +305,7 @@ GrDirectContext* DirectContext() {
     if (gDirectContext == nullptr) {
         MILESTROLOG_ERROR("Failed to create Skia D3D12 direct context.");
     } else {
-        MILESTROLOG_INFO("Created Skia D3D12 direct context={}.", static_cast<void*>(gDirectContext.get()));
+        MILESTRO_RENDER_LOG_INFO("Created Skia D3D12 direct context={}.", static_cast<void*>(gDirectContext.get()));
     }
     return gDirectContext.get();
 }
@@ -371,7 +370,7 @@ SkColorType ColorTypeForFormat(DXGI_FORMAT format) {
         case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
             return kRGBA_8888_SkColorType;
         default:
-            MILESTROLOG_WARN("Unexpected D3D12 texture format {}; trying BGRA_8888.",
+            MILESTRO_RENDER_LOG_WARN("Unexpected D3D12 texture format {}; trying BGRA_8888.",
                              static_cast<unsigned int>(format));
             return kBGRA_8888_SkColorType;
     }
@@ -445,7 +444,7 @@ bool CreateD3D12TextureResource(ID3D12Device* device,
         return false;
     }
 
-    MILESTROLOG_INFO(
+    MILESTRO_RENDER_LOG_INFO(
             "Created Milestro D3D12 external texture resource={}, device={}, size={}x{}, format={}, flags=0x{:x}.",
             static_cast<void*>(resource.get()),
             static_cast<void*>(device),
@@ -511,7 +510,7 @@ bool TransitionExternalTextureForUnity(ID3D12Device* device,
     state.expected = before;
     state.current = after;
     UINT64 fenceValue = gD3D12v8->ExecuteCommandList(commandList.get(), 1, &state);
-    MILESTROLOG_INFO("Submitted Milestro D3D12 external texture transition: event={}, resource={}, before={}, "
+    MILESTRO_RENDER_LOG_INFO("Submitted Milestro D3D12 external texture transition: event={}, resource={}, before={}, "
                      "after={}, fenceValue={}.",
                      renderSerial,
                      static_cast<void*>(resource),
@@ -524,7 +523,7 @@ bool TransitionExternalTextureForUnity(ID3D12Device* device,
 
     ID3D12Fence* fence = FrameFence();
     if (fence == nullptr) {
-        MILESTROLOG_WARN("Unity D3D12 frame fence is unavailable after external texture transition; retaining command "
+        MILESTRO_RENDER_LOG_WARN("Unity D3D12 frame fence is unavailable after external texture transition; retaining command "
                          "list until shutdown.");
     }
 
@@ -553,7 +552,7 @@ bool ProbeRenderTargetView(ID3D12Device* device, ID3D12Resource* resource, uint6
     }
 
     D3D12_CPU_DESCRIPTOR_HANDLE handle = heap->GetCPUDescriptorHandleForHeapStart();
-    MILESTROLOG_INFO("Milestro D3D12 direct RTV probe before CreateRenderTargetView: event={}, device={}, resource={}, "
+    MILESTRO_RENDER_LOG_INFO("Milestro D3D12 direct RTV probe before CreateRenderTargetView: event={}, device={}, resource={}, "
                      "heap={}, cpuHandle=0x{:x}.",
                      renderSerial,
                      static_cast<void*>(device),
@@ -561,7 +560,7 @@ bool ProbeRenderTargetView(ID3D12Device* device, ID3D12Resource* resource, uint6
                      static_cast<void*>(heap.get()),
                      static_cast<unsigned long long>(handle.ptr));
     device->CreateRenderTargetView(resource, nullptr, handle);
-    MILESTROLOG_INFO("Milestro D3D12 direct RTV probe succeeded: event={}, heap={}, cpuHandle=0x{:x}.",
+    MILESTRO_RENDER_LOG_INFO("Milestro D3D12 direct RTV probe succeeded: event={}, heap={}, cpuHandle=0x{:x}.",
                      renderSerial,
                      static_cast<void*>(heap.get()),
                      static_cast<unsigned long long>(handle.ptr));
@@ -638,7 +637,7 @@ CachedRenderTarget* GetOrCreateCachedRenderTarget(GrDirectContext* context,
                                                         colorSpace,
                                                         storageSrgb);
     if (cached != nullptr) {
-        MILESTROLOG_INFO("Reusing cached Skia D3D12 render target: event={}, resource={}, surface={}.",
+        MILESTRO_RENDER_LOG_INFO("Reusing cached Skia D3D12 render target: event={}, resource={}, surface={}.",
                          renderSerial,
                          static_cast<void*>(resource),
                          static_cast<void*>(cached->surface.get()));
@@ -679,7 +678,7 @@ CachedRenderTarget* GetOrCreateCachedRenderTarget(GrDirectContext* context,
         return nullptr;
     }
 
-    MILESTROLOG_INFO("Created cached Skia D3D12 render target: event={}, resource={}, surface={}, initialState={}.",
+    MILESTRO_RENDER_LOG_INFO("Created cached Skia D3D12 render target: event={}, resource={}, surface={}, initialState={}.",
                      renderSerial,
                      static_cast<void*>(resource),
                      static_cast<void*>(created.surface.get()),
@@ -694,7 +693,7 @@ void RequestResourceState(ID3D12Resource* resource, D3D12_RESOURCE_STATES state)
 
     if (!kUseUnityStateTrackerInQueueMode) {
         if (!gLoggedQueueModeStateApiSkip) {
-            MILESTROLOG_INFO("Skipping Unity D3D12 active-command-list resource state APIs in queueAccess=Allow mode; "
+            MILESTRO_RENDER_LOG_INFO("Skipping Unity D3D12 active-command-list resource state APIs in queueAccess=Allow mode; "
                              "Skia owns queue submission on this path.");
             gLoggedQueueModeStateApiSkip = true;
         }
@@ -702,7 +701,7 @@ void RequestResourceState(ID3D12Resource* resource, D3D12_RESOURCE_STATES state)
     }
 
     if (!gLoggedQueueModeStateApiSkip) {
-        MILESTROLOG_INFO(
+        MILESTRO_RENDER_LOG_INFO(
                 "Using Unity D3D12 active-command-list resource state APIs in queueAccess=Allow mode for diagnostics.");
         gLoggedQueueModeStateApiSkip = true;
     }
@@ -738,7 +737,7 @@ void ConfigureRenderEvent(int32_t renderEventId) {
 
     if (gD3D12v8 != nullptr) {
         gD3D12v8->ConfigureEvent(renderEventId, &config);
-        MILESTROLOG_INFO("Configured Milestro D3D12 render event {}: graphicsQueueAccess=Allow, flags=0x{:x}, "
+        MILESTRO_RENDER_LOG_INFO("Configured Milestro D3D12 render event {}: graphicsQueueAccess=Allow, flags=0x{:x}, "
                          "ensureActiveRenderTextureIsBound={}.",
                          renderEventId,
                          static_cast<unsigned int>(config.flags),
@@ -824,7 +823,7 @@ int64_t DestroyExternalTexture(void*& texture) {
     }
 
     RetainResourceUntilFrameFence(resource);
-    MILESTROLOG_INFO("Destroying Milestro D3D12 external texture resource={}.", static_cast<void*>(resource));
+    MILESTRO_RENDER_LOG_INFO("Destroying Milestro D3D12 external texture resource={}.", static_cast<void*>(resource));
     ClearCachedRenderTarget(resource);
     resource->Release();
     return MILESTRO_API_RET_OK;
@@ -884,7 +883,7 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
         return MILESTRO_API_RET_FAILED;
     }
 
-    MILESTROLOG_INFO("Milestro D3D12 resource/context identity: event={}, unityDevice={}, resourceDevice={}, queue={}, "
+    MILESTRO_RENDER_LOG_INFO("Milestro D3D12 resource/context identity: event={}, unityDevice={}, resourceDevice={}, queue={}, "
                      "skiaContext={}, contextDevice={}, contextQueue={}, deviceLuid={}, resourceDeviceLuid={}.",
                      renderSerial,
                      static_cast<void*>(device),
@@ -902,7 +901,7 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
     const uint32_t levelCount = desc.MipLevels == 0 ? 1 : desc.MipLevels;
     const unsigned int sampleQuality = desc.SampleDesc.Quality;
 
-    MILESTROLOG_INFO("Milestro D3D12 wrap target: event={}, source={}, resource={}, unityDevice={}, queue={}, "
+    MILESTRO_RENDER_LOG_INFO("Milestro D3D12 wrap target: event={}, source={}, resource={}, unityDevice={}, queue={}, "
                      "payload={}x{}, desc={}x{}, "
                      "dimension={}, format={}, normalizedFormat={}, sampleCount={}, sampleQuality={}, mipLevels={}, "
                      "flags=0x{:x}, "
@@ -954,7 +953,7 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
     }
 
     if (payload.width != static_cast<int32_t>(desc.Width) || payload.height != static_cast<int32_t>(desc.Height)) {
-        MILESTROLOG_WARN("Milestro D3D12 payload size {}x{} differs from resource desc {}x{}; using resource desc.",
+        MILESTRO_RENDER_LOG_WARN("Milestro D3D12 payload size {}x{} differs from resource desc {}x{}; using resource desc.",
                          payload.width,
                          payload.height,
                          static_cast<unsigned long long>(desc.Width),

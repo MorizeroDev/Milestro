@@ -440,7 +440,9 @@ namespace Milestro.Skia
         private IntPtr renderEventFunc;
         private int renderEventId;
         private IntPtr d3d12ExternalTexture;
+#if MILESTRO_RENDER_DEBUG_LOG
         private bool warnedMissingNativeTarget;
+#endif
         private bool disposed;
 
         internal event Action<RenderSubmissionStatus>? RenderEventCompleted;
@@ -580,7 +582,9 @@ namespace Milestro.Skia
             {
                 return false;
             }
+#if MILESTRO_RENDER_DEBUG_LOG
             warnedMissingNativeTarget = false;
+#endif
 
             var target = new RenderTargetPayload
             {
@@ -678,7 +682,9 @@ namespace Milestro.Skia
             {
                 return false;
             }
+#if MILESTRO_RENDER_DEBUG_LOG
             warnedMissingNativeTarget = false;
+#endif
 
             var target = new RenderTargetPayload
             {
@@ -1008,6 +1014,7 @@ namespace Milestro.Skia
 
         private void WarnMissingNativeTarget()
         {
+#if MILESTRO_RENDER_DEBUG_LOG
             if (warnedMissingNativeTarget)
             {
                 return;
@@ -1016,6 +1023,7 @@ namespace Milestro.Skia
             warnedMissingNativeTarget = true;
             Debug.LogWarning(
                 "Milestro skipped a RenderTexture draw because Unity did not expose a native render target handle for the current RenderTexture yet.");
+#endif
         }
 
         private void CreateD3D12Texture()

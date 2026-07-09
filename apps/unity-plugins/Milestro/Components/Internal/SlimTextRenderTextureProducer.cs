@@ -191,11 +191,15 @@ namespace Milestro.Components.Internal
         protected virtual void OnEnable()
         {
             rectTransformCache = GetComponent<RectTransform>();
-            MarkPropertiesChanged();
             RebuildResources();
         }
 
         protected virtual void OnDisable()
+        {
+            // Keep the render target alive across disable/enable cycles; OnDestroy owns final release.
+        }
+
+        protected virtual void OnDestroy()
         {
             DisposeRenderTarget();
         }

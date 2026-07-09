@@ -4,9 +4,10 @@
 #include "unity_render/MilestroUnityRenderTextureHandleKind.h"
 
 #include <IUnityGraphicsVulkan.h>
-#include <Milestro/log/log.h>
 
 #include <cstdint>
+
+#include "unity_render/MilestroUnityRenderLog.h"
 
 namespace milestro::unity_render::vulkan {
 
@@ -88,7 +89,7 @@ bool AccessNativeTexture(void* nativeTexture,
                                            access,
                                            mode,
                                            &image);
-    MILESTROLOG_INFO("Milestro Vulkan {} AccessTexture event={} ok={} mode={} requestedLayout={} "
+    MILESTRO_RENDER_LOG_INFO("Milestro Vulkan {} AccessTexture event={} ok={} mode={} requestedLayout={} "
                      "requestedStage=0x{:x} requestedAccess=0x{:x} image=0x{:x} returnedLayout={} "
                      "format={} extent={}x{}x{} samples={} mipCount={} layers={}.",
                      label,
@@ -120,7 +121,7 @@ bool LogRecordingState(uint64_t renderSerial, const char* label) {
 
     UnityVulkanRecordingState state = {};
     const bool ok = gVulkan->CommandRecordingState(&state, kUnityVulkanGraphicsQueueAccess_DontCare);
-    MILESTROLOG_INFO("Milestro Vulkan {} CommandRecordingState event={} ok={} commandBuffer={} level={} "
+    MILESTRO_RENDER_LOG_INFO("Milestro Vulkan {} CommandRecordingState event={} ok={} commandBuffer={} level={} "
                      "renderPass={} framebuffer={} subPass={} frame={} safeFrame={}.",
                      label,
                      renderSerial,
@@ -146,7 +147,7 @@ void ConfigureEvent(int renderEventId) {
     config.flags = kUnityVulkanEventConfigFlag_EnsurePreviousFrameSubmission |
                    kUnityVulkanEventConfigFlag_ModifiesCommandBuffersState;
     gVulkan->ConfigureEvent(renderEventId, &config);
-    MILESTROLOG_INFO("Configured Milestro Vulkan render event {}: renderPassPrecondition=EnsureOutside, "
+    MILESTRO_RENDER_LOG_INFO("Configured Milestro Vulkan render event {}: renderPassPrecondition=EnsureOutside, "
                      "graphicsQueueAccess=DontCare, flags=0x{:x}.",
                      renderEventId,
                      static_cast<unsigned int>(config.flags));
@@ -157,7 +158,7 @@ void LogHeaderContract() {
         return;
     }
 
-    MILESTROLOG_INFO("Milestro Vulkan PluginAPI contract: IUnityGraphicsVulkan::Instance() returns "
+    MILESTRO_RENDER_LOG_INFO("Milestro Vulkan PluginAPI contract: IUnityGraphicsVulkan::Instance() returns "
                      "UnityVulkanInstance with instance/physicalDevice/device/graphicsQueue/queueFamilyIndex; "
                      "AccessTexture requires desired layout/stage/access/mode and invalidates "
                      "CommandRecordingState; resource access must not run in graphicsQueueAccess=Allow or "
@@ -188,7 +189,7 @@ void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
 
     LogHeaderContract();
     UnityVulkanInstance instance = gVulkan->Instance();
-    MILESTROLOG_INFO("Milestro Vulkan instance identity: instance={}, physicalDevice={}, device={}, queue={}, "
+    MILESTRO_RENDER_LOG_INFO("Milestro Vulkan instance identity: instance={}, physicalDevice={}, device={}, queue={}, "
                      "queueFamilyIndex={}, hasGetInstanceProcAddr={}.",
                      static_cast<void*>(instance.instance),
                      static_cast<void*>(instance.physicalDevice),
@@ -227,7 +228,7 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
 
     LogHeaderContract();
     UnityVulkanInstance instance = gVulkan != nullptr ? gVulkan->Instance() : UnityVulkanInstance {};
-    MILESTROLOG_INFO("Milestro Vulkan contract spike event={} payloadSize={}x{}, nativeTexture={}, device={}, "
+    MILESTRO_RENDER_LOG_INFO("Milestro Vulkan contract spike event={} payloadSize={}x{}, nativeTexture={}, device={}, "
                      "queue={}, queueFamilyIndex={}.",
                      renderSerial,
                      payload.width,
@@ -285,7 +286,7 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
         return MILESTRO_API_RET_FAILED;
     }
 
-    MILESTROLOG_WARN("Milestro Vulkan contract spike completed without Skia drawing or vkCmdCopyImage on event {}.",
+    MILESTRO_RENDER_LOG_WARN("Milestro Vulkan contract spike completed without Skia drawing or vkCmdCopyImage on event {}.",
                      renderSerial);
     return MILESTRO_API_RET_OK;
 }

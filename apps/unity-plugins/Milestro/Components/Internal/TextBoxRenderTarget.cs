@@ -512,7 +512,9 @@ namespace Milestro.Components.Internal
             }
             else
             {
+#if MILESTRO_RENDER_DEBUG_LOG
                 Debug.LogWarning("No paragraph selected", logContext);
+#endif
             }
 
             return commands;

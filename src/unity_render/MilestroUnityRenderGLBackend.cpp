@@ -4,14 +4,14 @@
 #include "unity_render/MilestroUnityRenderSubmissionDraw.h"
 #include "unity_render/MilestroUnityRenderTextureHandleKind.h"
 
-#include <Milestro/log/log.h>
-
 #include <algorithm>
 #include <array>
 #include <cstdint>
 #include <limits>
 #include <utility>
 #include <vector>
+
+#include "unity_render/MilestroUnityRenderLog.h"
 
 #if defined(__ANDROID__)
 #include <EGL/egl.h>
@@ -109,7 +109,7 @@ GrDirectContext* DirectContext(uint64_t renderSerial) {
     }
 
     if (gDirectContext != nullptr) {
-        MILESTROLOG_WARN("Milestro GL context identity changed on event {}; abandoning cached Skia GL context.",
+        MILESTRO_RENDER_LOG_WARN("Milestro GL context identity changed on event {}; abandoning cached Skia GL context.",
                          renderSerial);
         ResetDirectContext(true);
     }
@@ -134,7 +134,7 @@ GrDirectContext* DirectContext(uint64_t renderSerial) {
     if (gDirectContext == nullptr) {
         MILESTROLOG_ERROR("Failed to create Skia GL direct context on event {}.", renderSerial);
     } else {
-        MILESTROLOG_INFO("Created Skia GL direct context={} for Unity context={} on event {}.",
+        MILESTRO_RENDER_LOG_INFO("Created Skia GL direct context={} for Unity context={} on event {}.",
                          static_cast<void*>(gDirectContext.get()),
                          identity.context,
                          renderSerial);
@@ -445,7 +445,7 @@ int64_t Render(const MilestroUnityRenderSubmission& submission, UnityGfxRenderer
         return MILESTRO_API_RET_FAILED;
     }
 
-    MILESTROLOG_INFO("Milestro GL wrap target: event={}, renderer={}, texture={}, fbo={}, size={}x{}, "
+    MILESTRO_RENDER_LOG_INFO("Milestro GL wrap target: event={}, renderer={}, texture={}, fbo={}, size={}x{}, "
                      "format=0x{:x}, colorSpace={}, storageSrgb={}, preferredFormat={}.",
                      renderSerial,
                      RendererName(renderer),
