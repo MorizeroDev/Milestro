@@ -7,6 +7,7 @@ using UnityEditorInternal;
 #endif
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 namespace Milestro.Components
 {
@@ -26,14 +27,25 @@ namespace Milestro.Components
         [NonSerialized] private readonly ScrollAxisLock scrollAxisLock = new ScrollAxisLock();
         [NonSerialized] private long observedOutputVersion = long.MinValue;
         [NonSerialized] private TextBoxRenderTextureProducer? observedProducer;
+        [NonSerialized] private bool flowModeActive;
+        [NonSerialized] private bool flowVisible;
+        [NonSerialized] private float flowVisibleStartY;
+        [NonSerialized] private float flowVisibleEndY;
+        [NonSerialized] private float flowVisibleCapacityHeight;
+#if MILESTRO_FLOW_TEXTBOX_DEBUG
+        [NonSerialized] private bool flowDiagnosticsEnabled;
+#endif
 #if UNITY_EDITOR
         [NonSerialized] private bool m_editorApplyQueued;
 #endif
+
+        internal event Action? LayoutChanged;
 
         protected override void OnEnable()
         {
             base.OnEnable();
             EnsureConfigured(forceText: true, forceApply: true);
+            LayoutChanged?.Invoke();
         }
 
         protected override void OnDisable()
@@ -44,13 +56,17 @@ namespace Milestro.Components
             SetObservedProducer(null);
             Texture = null;
             observedOutputVersion = long.MinValue;
+            LayoutChanged?.Invoke();
         }
 
         private void Update()
         {
             var producer = ProducerComponent();
             producer.RebuildOutput(forceText: false);
-            TickScrollTweens(producer);
+            if (!flowModeActive)
+            {
+                TickScrollTweens(producer);
+            }
             ApplyProducerOutput(producer, force: false);
         }
 
@@ -133,6 +149,22 @@ namespace Milestro.Components
                 return;
             }
 
+            if (flowModeActive)
+            {
+                CancelScrollTweens();
+                scrollAxisLock.Reset();
+                ScrollEventUtil.PassScrollToParent(transform, eventData, eventData.scrollDelta);
+                return;
+            }
+
+            if (ShouldForwardPointerScrollToParent())
+            {
+                CancelScrollTweens();
+                scrollAxisLock.Reset();
+                ScrollEventUtil.PassScrollToParent(transform, eventData, eventData.scrollDelta);
+                return;
+            }
+
             var producer = ProducerComponent();
             producer.RebuildOutput(forceText: false);
             ApplyProducerOutput(producer, force: false);
@@ -191,6 +223,11 @@ namespace Milestro.Components
 
         public Vector2 GetScrollPercent()
         {
+            if (flowModeActive)
+            {
+                return Vector2.zero;
+            }
+
             var producer = ProducerComponent();
             producer.RebuildOutput(forceText: false);
             ApplyProducerOutput(producer, force: false);
@@ -199,6 +236,11 @@ namespace Milestro.Components
 
         public float GetScrollPercentX()
         {
+            if (flowModeActive)
+            {
+                return 0f;
+            }
+
             var producer = ProducerComponent();
             producer.RebuildOutput(forceText: false);
             ApplyProducerOutput(producer, force: false);
@@ -207,6 +249,11 @@ namespace Milestro.Components
 
         public float GetScrollPercentY()
         {
+            if (flowModeActive)
+            {
+                return 0f;
+            }
+
             var producer = ProducerComponent();
             producer.RebuildOutput(forceText: false);
             ApplyProducerOutput(producer, force: false);
@@ -215,6 +262,11 @@ namespace Milestro.Components
 
         public void ScrollToPercent(Vector2 percent, bool animated = false)
         {
+            if (flowModeActive)
+            {
+                return;
+            }
+
             var producer = ProducerComponent();
             producer.RebuildOutput(forceText: false);
             ApplyProducerOutput(producer, force: false);
@@ -231,6 +283,11 @@ namespace Milestro.Components
 
         public void ScrollToPercentX(float percent, bool animated = false)
         {
+            if (flowModeActive)
+            {
+                return;
+            }
+
             var producer = ProducerComponent();
             producer.RebuildOutput(forceText: false);
             ApplyProducerOutput(producer, force: false);
@@ -245,6 +302,11 @@ namespace Milestro.Components
 
         public void ScrollToPercentY(float percent, bool animated = false)
         {
+            if (flowModeActive)
+            {
+                return;
+            }
+
             var producer = ProducerComponent();
             producer.RebuildOutput(forceText: false);
             ApplyProducerOutput(producer, force: false);
@@ -259,7 +321,7 @@ namespace Milestro.Components
 
         public bool TryGetScrollState(out TextBoxScrollState state)
         {
-            if (!isActiveAndEnabled)
+            if (!isActiveAndEnabled || flowModeActive)
             {
                 state = default;
                 return false;
@@ -275,6 +337,167 @@ namespace Milestro.Components
                 producer.contentWidth,
                 producer.contentHeight);
             return true;
+        }
+
+        internal void EnsureLayoutProducerObserved()
+        {
+            ProducerComponent();
+        }
+
+#if MILESTRO_FLOW_TEXTBOX_DEBUG
+        internal void SetFlowDiagnosticsEnabled(bool enabled)
+        {
+            flowDiagnosticsEnabled = enabled;
+            if (producerCache != null)
+            {
+                producerCache.flowDiagnosticsEnabled = enabled;
+            }
+        }
+#endif
+
+        internal void SetFlowModeActive(bool active)
+        {
+            if (flowModeActive == active)
+            {
+                return;
+            }
+
+            flowModeActive = active;
+            flowVisible = false;
+            flowVisibleStartY = 0f;
+            flowVisibleEndY = 0f;
+            flowVisibleCapacityHeight = 0f;
+            CancelScrollTweens();
+            scrollAxisLock.Reset();
+
+            var producer = ProducerComponent();
+            producer.flowMode = active;
+#if MILESTRO_FLOW_TEXTBOX_DEBUG
+            producer.flowDiagnosticsEnabled = flowDiagnosticsEnabled;
+#endif
+            if (!active)
+            {
+                producer.ClearVisibleRange();
+            }
+
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: true);
+            SetVerticesDirty();
+            SetMaterialDirty();
+        }
+
+        internal void SetFlowVisibleRange(bool visible, float localStartY, float localEndY)
+        {
+            SetFlowVisibleRange(visible, localStartY, localEndY, localEndY - localStartY);
+        }
+
+        internal void SetFlowVisibleRange(bool visible,
+            float localStartY,
+            float localEndY,
+            float visibleCapacityHeight)
+        {
+            if (!flowModeActive)
+            {
+                return;
+            }
+
+            var nextStartY = 0f;
+            var nextEndY = 0f;
+            var nextVisible = visible &&
+                              TextBoxFlowVisibleRange.TryNormalize(localStartY,
+                                  localEndY,
+                                  out nextStartY,
+                                  out nextEndY);
+            if (!nextVisible)
+            {
+                nextStartY = 0f;
+                nextEndY = 0f;
+                visibleCapacityHeight = 0f;
+            }
+
+            var geometryChanged = flowVisible != nextVisible ||
+                                  !Mathf.Approximately(flowVisibleStartY, nextStartY) ||
+                                  !Mathf.Approximately(flowVisibleEndY, nextEndY);
+            flowVisible = nextVisible;
+            flowVisibleStartY = nextStartY;
+            flowVisibleEndY = nextEndY;
+            flowVisibleCapacityHeight = visibleCapacityHeight;
+
+            var producer = ProducerComponent();
+#if MILESTRO_FLOW_TEXTBOX_DEBUG
+            producer.flowDiagnosticsEnabled = flowDiagnosticsEnabled;
+#endif
+            var producerChanged = false;
+            if (nextVisible)
+            {
+                producerChanged = producer.SetVisibleRange(nextStartY, nextEndY, visibleCapacityHeight);
+            }
+            else
+            {
+                producerChanged = producer.ClearVisibleRange();
+            }
+
+            DebugFlow("set visible range " +
+                      $"inputVisible={visible} input=[{localStartY:F3},{localEndY:F3}] " +
+                      $"nextVisible={nextVisible} next=[{nextStartY:F3},{nextEndY:F3}] capacity={flowVisibleCapacityHeight:F3} " +
+                      $"geometryChanged={geometryChanged} producerChanged={producerChanged} " +
+                      $"producerHasOutput={producer.HasOutput} producerOutput={producer.OutputWidth}x{producer.OutputHeight}");
+
+            if (!geometryChanged && !producerChanged)
+            {
+                return;
+            }
+
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: true);
+            DebugFlow("after rebuild " +
+                      $"flowVisible={flowVisible} flowRange=[{flowVisibleStartY:F3},{flowVisibleEndY:F3}] capacity={flowVisibleCapacityHeight:F3} " +
+                      $"texture={(Texture != null ? "set" : "null")} " +
+                      $"producerHasOutput={producer.HasOutput} producerOutput={producer.OutputWidth}x{producer.OutputHeight}");
+            if (geometryChanged)
+            {
+                SetVerticesDirty();
+                SetMaterialDirty();
+            }
+        }
+
+        internal bool TryGetLayoutMeasurement(out TextBoxLayoutMeasurement measurement)
+        {
+            if (!isActiveAndEnabled)
+            {
+                measurement = default;
+                return false;
+            }
+
+            var producer = ProducerComponent();
+            if (!producer.TryGetLayoutMeasurement(out measurement))
+            {
+                return false;
+            }
+
+            ApplyProducerOutput(producer, force: false);
+            return true;
+        }
+
+        protected override void OnPopulateMesh(VertexHelper vh)
+        {
+            if (!flowModeActive)
+            {
+                base.OnPopulateMesh(vh);
+                return;
+            }
+
+            PopulateFlowMesh(vh);
+        }
+
+        public override bool Raycast(Vector2 sp, Camera eventCamera)
+        {
+            if (flowModeActive && !FlowVisibleRangeContainsScreenPoint(sp, eventCamera))
+            {
+                return false;
+            }
+
+            return base.Raycast(sp, eventCamera);
         }
 
         private bool TryScrollX(TextBoxRenderTextureProducer producer,
@@ -448,6 +671,12 @@ namespace Milestro.Components
             return producerCache;
         }
 
+        private bool ShouldForwardPointerScrollToParent()
+        {
+            var layoutElement = GetComponent<TextBoxLayoutElement>();
+            return layoutElement != null && layoutElement.ShouldForwardPointerScrollToParent();
+        }
+
         private void SetObservedProducer(TextBoxRenderTextureProducer? producer)
         {
             if (observedProducer == producer)
@@ -458,12 +687,14 @@ namespace Milestro.Components
             if (observedProducer != null)
             {
                 observedProducer.OutputChanged -= OnProducerOutputChanged;
+                observedProducer.LayoutChanged -= OnProducerLayoutChanged;
             }
 
             observedProducer = producer;
             if (observedProducer != null)
             {
                 observedProducer.OutputChanged += OnProducerOutputChanged;
+                observedProducer.LayoutChanged += OnProducerLayoutChanged;
             }
         }
 
@@ -475,6 +706,11 @@ namespace Milestro.Components
                 QueueEditorApply();
             }
 #endif
+        }
+
+        private void OnProducerLayoutChanged()
+        {
+            LayoutChanged?.Invoke();
         }
 
         private void ApplyProducerOutput(TextBoxRenderTextureProducer producer, bool force)
@@ -549,5 +785,97 @@ namespace Milestro.Components
                 ? Mathf.Max(0f, m_scrollTweenDurationSeconds)
                 : DefaultScrollTweenDurationSeconds;
         }
+
+        private void PopulateFlowMesh(VertexHelper vh)
+        {
+            vh.Clear();
+            if (!flowVisible || flowVisibleEndY <= flowVisibleStartY || Texture == null)
+            {
+                DebugFlow("mesh skip before texture " +
+                          $"flowVisible={flowVisible} range=[{flowVisibleStartY:F3},{flowVisibleEndY:F3}] " +
+                          $"texture={(Texture != null ? "set" : "null")}");
+                return;
+            }
+
+            var targetTexture = mainTexture;
+            if (targetTexture == null)
+            {
+                DebugFlow("mesh skip null main texture");
+                return;
+            }
+
+            var rect = GetPixelAdjustedRect();
+            var top = Mathf.Clamp(rect.yMax - flowVisibleStartY, rect.yMin, rect.yMax);
+            var bottom = Mathf.Clamp(rect.yMax - flowVisibleEndY, rect.yMin, rect.yMax);
+            if (bottom >= top)
+            {
+                DebugFlow("mesh skip empty bounds " +
+                          $"range=[{flowVisibleStartY:F3},{flowVisibleEndY:F3}] " +
+                          $"rect=({rect.xMin:F3},{rect.yMin:F3},{rect.width:F3},{rect.height:F3}) " +
+                          $"top={top:F3} bottom={bottom:F3}");
+                return;
+            }
+
+            var bounds = new Vector4(rect.xMin, bottom, rect.xMax, top);
+            var texelSize = targetTexture.texelSize;
+            var scaleX = targetTexture.width * texelSize.x;
+            var scaleY = targetTexture.height * texelSize.y;
+            var color32 = color;
+            var uvRect = UvRect;
+            DebugFlow("mesh submit " +
+                      $"range=[{flowVisibleStartY:F3},{flowVisibleEndY:F3}] " +
+                      $"bounds=({bounds.x:F3},{bounds.y:F3},{bounds.z:F3},{bounds.w:F3}) " +
+                      $"texture={targetTexture.width}x{targetTexture.height} uv={uvRect}");
+
+            vh.AddVert(new Vector3(bounds.x, bounds.y), color32,
+                new Vector4(uvRect.xMin * scaleX, uvRect.yMin * scaleY));
+            vh.AddVert(new Vector3(bounds.x, bounds.w), color32,
+                new Vector4(uvRect.xMin * scaleX, uvRect.yMax * scaleY));
+            vh.AddVert(new Vector3(bounds.z, bounds.w), color32,
+                new Vector4(uvRect.xMax * scaleX, uvRect.yMax * scaleY));
+            vh.AddVert(new Vector3(bounds.z, bounds.y), color32,
+                new Vector4(uvRect.xMax * scaleX, uvRect.yMin * scaleY));
+
+            vh.AddTriangle(0, 1, 2);
+            vh.AddTriangle(2, 3, 0);
+        }
+
+        private bool FlowVisibleRangeContainsScreenPoint(Vector2 screenPoint, Camera? eventCamera)
+        {
+            if (!flowVisible || flowVisibleEndY <= flowVisibleStartY)
+            {
+                return false;
+            }
+
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform,
+                    screenPoint,
+                    eventCamera,
+                    out var localPoint))
+            {
+                return false;
+            }
+
+            var rect = rectTransform.rect;
+            var top = Mathf.Clamp(rect.yMax - flowVisibleStartY, rect.yMin, rect.yMax);
+            var bottom = Mathf.Clamp(rect.yMax - flowVisibleEndY, rect.yMin, rect.yMax);
+            return localPoint.x >= rect.xMin &&
+                   localPoint.x <= rect.xMax &&
+                   localPoint.y >= bottom &&
+                   localPoint.y <= top;
+        }
+
+        [System.Diagnostics.Conditional("MILESTRO_FLOW_TEXTBOX_DEBUG")]
+        private void DebugFlow(string message)
+        {
+#if MILESTRO_FLOW_TEXTBOX_DEBUG
+            if (!flowDiagnosticsEnabled)
+            {
+                return;
+            }
+
+            Debug.Log($"[Milestro FlowTextBox][TextBox:{name}] {message}", this);
+#endif
+        }
+
     }
 }

@@ -25,6 +25,11 @@ namespace Milestro.Util
             return isActive;
         }
 
+        internal float PendingDeltaFrom(float currentValue)
+        {
+            return isActive ? target - currentValue : 0f;
+        }
+
         public bool ScrollTo(float currentValue,
             float targetValue,
             float maxValue,
