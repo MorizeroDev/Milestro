@@ -3,17 +3,15 @@
 Milestro's native library is built with CMake. Binding generation, Unity plugin
 packaging, and C# source formatting are handled by Gradle.
 
-Skia is not vendored in this repository. Build Skia separately, then point
-Milestro at the Skia source root and either the Skia library output directory or
-the Skia CMake directory.
+The normal CMake flow also prepares the native third-party dependencies needed
+by Milestro. No separate Skia build step is required for a standard local build.
 
 ## Requirements
 
 - CMake 3.26 or newer.
-- A C++20 compiler. The external Skia library path flow requires Clang,
-  AppleClang, or `clang-cl`.
-- Ninja, Xcode, or another CMake generator suitable for the target platform.
-- A separate Skia checkout and build output.
+- A C++20 compiler.
+- Ninja, Python 3, and Git for third-party dependency setup, plus a CMake
+  generator suitable for the target platform.
 - Java/Gradle for `h2cs` binding generation and Unity plugin packaging.
 - Optional: `clang-format` for generated binding formatting.
 - Optional: `dotnet format` for C# formatting.
@@ -33,25 +31,18 @@ newer is required because the CMake project checks for Swift C++ interop support
 
 ## Common CMake Configuration
 
-Using prebuilt Skia static libraries:
+Configure and build from the repository root:
 
 ```sh
 cmake -S . -B cmake-build-relwithdebinfo -G Ninja \
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DMILESTRO_SKIA_LIB_PATH=/path/to/skia/out/build \
-  -DMILESTRO_SKIA_INCLUDE_PATH=/path/to/skia
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
 cmake --build cmake-build-relwithdebinfo --target Milestro
 ```
 
-Using Skia CMake targets instead:
-
-```sh
-cmake -S . -B cmake-build-relwithdebinfo -G Ninja \
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DMILESTRO_SKIA_CMAKE=/path/to/skia/cmake-or-build-dir \
-  -DMILESTRO_SKIA_INCLUDE_PATH=/path/to/skia
-```
+On the first configure, CMake may download native dependency sources into
+ignored paths under `ext/`. Generated dependency build output stays under the
+chosen CMake build directory.
 
 Do not set CMake's global `BUILD_SHARED_LIBS`; the project intentionally forces
 third-party dependencies to static libraries.
@@ -60,9 +51,6 @@ third-party dependencies to static libraries.
 
 | Option | Default | Notes |
 | --- | --- | --- |
-| `MILESTRO_SKIA_INCLUDE_PATH` | unset | Skia source root. Required. |
-| `MILESTRO_SKIA_LIB_PATH` | unset | Skia output directory containing `.a` or `.lib` files. |
-| `MILESTRO_SKIA_CMAKE` | unset | Optional Skia CMake directory. Use instead of `MILESTRO_SKIA_LIB_PATH` when consuming Skia CMake targets. |
 | `MILESTRO_BUILD_SHARED_LIBS` | `ON` | Builds `Milestro` as a shared library. |
 | `MILESTRO_BUILD_FRAMEWORK_LIBS` | `OFF` | Builds `Milestro` as an Apple framework when building for iOS. |
 | `MILESTRO_ENABLE_CLI` | `ON` | Builds `MilestroCli`. Turn off for Unity plugin-only builds. |
@@ -209,55 +197,10 @@ The copied `.bytes` asset is ignored by git.
 
 This section covers the current Windows build flow.
 
-The examples assume:
-
-- Milestro repo: `C:/work/Milestro`
-- Skia source: `C:/work/skia`
-- Visual Studio LLVM: `C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64`
-
-Adjust the paths for your local machine.
-
 Run commands from a Visual Studio x64 Developer PowerShell, or make sure
 `clang-cl`, `lld-link`, CMake, Ninja, and the Windows SDK tools are on `PATH`.
 
 ### Debug
-
-Build Skia from the Skia source root:
-
-```powershell
-$gnArgs = @'
-target_os="win"
-target_cpu="x64"
-is_official_build=false
-is_debug=true
-
-skia_enable_fontmgr_custom_empty=true
-skia_use_freetype=true
-skia_use_system_freetype2=false
-skia_use_freetype_woff2=true
-skia_use_libavif=true
-
-skia_use_metal=false
-skia_use_gl=false
-
-skia_use_direct3d=true
-skia_use_vulkan=true
-
-skia_use_icu=false
-skia_use_client_icu=true
-
-skia_enable_tools=false
-
-extra_cflags=["/D_ITERATOR_DEBUG_LEVEL=2", "/MDd"]
-
-clang_win="C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64"
-cc="clang-cl"
-cxx="clang-cl"
-'@
-
-.\bin\gn.exe gen out\MSVC-CL-MDd "--args=$gnArgs"
-ninja -C out\MSVC-CL-MDd
-```
 
 Build Milestro from the repo root:
 
@@ -266,51 +209,12 @@ cmake -S . -B cmake-build-nocli-debug -G Ninja `
   -DCMAKE_BUILD_TYPE=Debug `
   -DCMAKE_C_COMPILER=clang-cl `
   -DCMAKE_CXX_COMPILER=clang-cl `
-  -DMILESTRO_SKIA_LIB_PATH=C:/work/skia/out/MSVC-CL-MDd `
-  -DMILESTRO_SKIA_INCLUDE_PATH=C:/work/skia `
   -DMILESTRO_ENABLE_CLI=OFF
 
 cmake --build cmake-build-nocli-debug --target Milestro
 ```
 
 ### RelWithDebInfo
-
-Build Skia from the Skia source root:
-
-```powershell
-$gnArgs = @'
-target_os="win"
-target_cpu="x64"
-is_official_build=false
-is_debug=false
-
-skia_enable_fontmgr_custom_empty=true
-skia_use_freetype=true
-skia_use_system_freetype2=false
-skia_use_freetype_woff2=true
-skia_use_libavif=true
-
-skia_use_metal=false
-skia_use_gl=false
-
-skia_use_direct3d=true
-skia_use_vulkan=true
-
-skia_use_icu=false
-skia_use_client_icu=true
-
-skia_enable_tools=false
-
-extra_cflags=["/MD"]
-
-clang_win="C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64"
-cc="clang-cl"
-cxx="clang-cl"
-'@
-
-.\bin\gn.exe gen out\MSVC-CL-MD "--args=$gnArgs"
-ninja -C out\MSVC-CL-MD
-```
 
 Build Milestro from the repo root:
 
@@ -319,14 +223,7 @@ cmake -S . -B cmake-build-nocli-relwithdebinfo -G Ninja `
   -DCMAKE_BUILD_TYPE=RelWithDebInfo `
   -DCMAKE_C_COMPILER=clang-cl `
   -DCMAKE_CXX_COMPILER=clang-cl `
-  -DMILESTRO_SKIA_LIB_PATH=C:/work/skia/out/MSVC-CL-MD `
-  -DMILESTRO_SKIA_INCLUDE_PATH=C:/work/skia `
   -DMILESTRO_ENABLE_CLI=OFF
 
 cmake --build cmake-build-nocli-relwithdebinfo --target Milestro
 ```
-
-The Skia build must match Milestro's runtime mode:
-
-- Debug: Skia `/MDd`, Milestro `CMAKE_BUILD_TYPE=Debug`
-- Release-like: Skia `/MD`, Milestro `CMAKE_BUILD_TYPE=RelWithDebInfo` or `Release`

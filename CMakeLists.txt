@@ -11,9 +11,6 @@ option(MILESTRO_REMAP_SOURCE_PATHS "Remap absolute source and build paths in rel
 option(MILESTRO_ENABLE_DESKTOP_OPENGL_RENDER "Enable experimental Unity OpenGLCore RenderTexture backend" OFF)
 option(MILESTRO_ENABLE_DESKTOP_VULKAN_RENDER "Enable experimental Unity Vulkan RenderTexture backend" OFF)
 option(MILESTRO_RENDER_DEBUG_LOG "Enable Unity render-flow debug logs" OFF)
-option(MILESTRO_SKIA_LIB_PATH "Skia library path")
-option(MILESTRO_SKIA_INCLUDE_PATH "Skia include path")
-option(MILESTRO_SKIA_CMAKE "Skia cmake path")
 
 set(MILESTRO_REMAP_SOURCE_PREFIX "Milestro" CACHE STRING "Logical source root used in release debug info and __FILE__ remapping")
 set(MILESTRO_REMAP_BUILD_PREFIX "MilestroBuild" CACHE STRING "Logical build root used in release debug info and __FILE__ remapping")
@@ -227,63 +224,13 @@ add_subdirectory("ext/icu-cmake")
 set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} "icu")
 set(PROJECT_PLATFORM_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${icu_includes})
 
-if (MILESTRO_SKIA_CMAKE AND MILESTRO_SKIA_INCLUDE_PATH)
-    add_subdirectory("${MILESTRO_SKIA_CMAKE}" "ext/skia" EXCLUDE_FROM_ALL)
-    set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES}
-            "modules__skparagraph"
-            "modules__svg"
-            "third_party__icu"
-    )
-    set(SKIA_INCLUDE_PATH "${MILESTRO_SKIA_INCLUDE_PATH}")
-    target_compile_definitions(third_party__icu INTERFACE
-            U_USING_ICU_NAMESPACE=0
-            U_DISABLE_RENAMING=1
-            U_NOEXCEPT=
-            U_STATIC_IMPLEMENTATION
-    )
-elseif (MILESTRO_SKIA_LIB_PATH AND MILESTRO_SKIA_INCLUDE_PATH)
-    add_library(skia INTERFACE IMPORTED)
-    if (MSVC)
-        file(GLOB SKIA_LIB_FILES "${MILESTRO_SKIA_LIB_PATH}/*.lib")
-    else ()
-        file(GLOB SKIA_LIB_FILES "${MILESTRO_SKIA_LIB_PATH}/*.a")
-    endif ()
-
-    if (NOT SKIA_LIB_FILES)
-        message(FATAL_ERROR "Unknown Skia : ${MILESTRO_SKIA_LIB_PATH}")
-    endif ()
-
-    set(MILESTRO_SKIA_EXCLUDED_LIB_NAMES pathkit)
-    set(SKIA_LIB_LIST)
-    foreach (SKIA_LIB_FILE ${SKIA_LIB_FILES})
-        get_filename_component(SKIA_LIB_NAME "${SKIA_LIB_FILE}" NAME_WE)
-        if (SKIA_LIB_NAME MATCHES "^lib(.+)$")
-            set(SKIA_LIB_NAME "${CMAKE_MATCH_1}")
-        endif ()
-
-        if (SKIA_LIB_NAME IN_LIST MILESTRO_SKIA_EXCLUDED_LIB_NAMES)
-            message(STATUS "Skipping Skia library: ${SKIA_LIB_FILE}")
-        else ()
-            list(APPEND SKIA_LIB_LIST "${SKIA_LIB_FILE}")
-        endif ()
-    endforeach ()
-    set(SKIA_INCLUDE_PATH "${MILESTRO_SKIA_INCLUDE_PATH}")
-    target_link_libraries(skia INTERFACE ${SKIA_LIB_LIST})
-    target_include_directories(skia INTERFACE ${SKIA_INCLUDE_PATH})
-    target_compile_definitions(skia INTERFACE
-            U_USING_ICU_NAMESPACE=0
-            U_DISABLE_RENAMING=1
-            U_NOEXCEPT=
-            U_STATIC_IMPLEMENTATION
-    )
-
-    if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-        message(STATUS ${CMAKE_CXX_COMPILER_ID})
-        message(FATAL_ERROR "Must use Clang compiler")
-    endif ()
-else ()
-    message(FATAL_ERROR "No Skia set")
-endif ()
+add_subdirectory("ext/skia-cmake" "ext/skia" EXCLUDE_FROM_ALL)
+set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES}
+        "modules__skparagraph"
+        "modules__svg"
+        "third_party__icu"
+)
+set(SKIA_INCLUDE_PATH "${PROJECT_SOURCE_DIR}/ext/skia")
 
 if (APPLE AND CMAKE_GENERATOR STREQUAL "Ninja")
     if(IOS)
@@ -426,8 +373,8 @@ endif ()
 set(MILESTRO_DEFINITIONS "MILESTRO_BUILDING_ENV")
 set(MILESTRO_CLI_DEFINITIONS "MILESTRO_BUILDING_ENV")
 
-set(MILESTRO_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${MILESTRO_SKIA_INCLUDE_PATH})
-set(MILESTRO_CLI_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${MILESTRO_SKIA_INCLUDE_PATH} "${PROJECT_SOURCE_DIR}/ext/json/include")
+set(MILESTRO_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${SKIA_INCLUDE_PATH})
+set(MILESTRO_CLI_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${SKIA_INCLUDE_PATH} "${PROJECT_SOURCE_DIR}/ext/json/include")
 
 set(MILESTRO_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES})
 set(MILESTRO_CLI_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES})

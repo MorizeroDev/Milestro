@@ -111,14 +111,12 @@ Unity layer:
 Milestro uses CMake for native code and Gradle for C header to C# binding
 generation.
 
-Skia is not vendored in this repository. Build Skia separately and pass either
-its library output directory or its CMake directory to Milestro:
+The normal CMake build prepares the native dependencies it needs. A standard
+local build does not require a separate Skia build step:
 
 ```sh
 cmake -S . -B cmake-build-relwithdebinfo -G Ninja \
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DMILESTRO_SKIA_LIB_PATH=/path/to/skia/out/build \
-  -DMILESTRO_SKIA_INCLUDE_PATH=/path/to/skia
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
 cmake --build cmake-build-relwithdebinfo --target Milestro
 ```
