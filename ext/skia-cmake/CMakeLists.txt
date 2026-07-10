@@ -5,12 +5,12 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_program(MILESTRO_SKIA_NINJA_EXECUTABLE ninja REQUIRED)
 
 set(MILESTRO_SKIA_REPOSITORY_URL
-        "https://github.com/google/skia.git"
+        "https://github.com/ExerciseBook/skia.git"
         CACHE STRING
         "Skia git repository URL used when the source checkout is missing."
 )
 set(MILESTRO_SKIA_COMMIT
-        "b84eb57f975c607b489afe22abacc6b97155a23f"
+        "8b136c7c44cf5f144c8edbb289890b9610cedfe2"
         CACHE STRING
         "Skia git commit checked out after cloning. Leave empty to use the repository default branch."
 )
