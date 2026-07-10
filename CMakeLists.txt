@@ -225,11 +225,6 @@ set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} "icu")
 set(PROJECT_PLATFORM_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${icu_includes})
 
 add_subdirectory("ext/skia-cmake" "ext/skia" EXCLUDE_FROM_ALL)
-set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES}
-        "modules__skparagraph"
-        "modules__svg"
-        "third_party__icu"
-)
 set(SKIA_INCLUDE_PATH "${PROJECT_SOURCE_DIR}/ext/skia")
 
 if (APPLE AND CMAKE_GENERATOR STREQUAL "Ninja")

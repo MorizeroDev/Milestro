@@ -272,6 +272,16 @@ if (NOT MILESTRO_SKIA_DEFAULT_CXX)
     set(MILESTRO_SKIA_DEFAULT_CXX "${CMAKE_CXX_COMPILER}")
 endif ()
 
+set(MILESTRO_SKIA_DEFAULT_CLANG_WIN "")
+if (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+    get_filename_component(MILESTRO_SKIA_CXX_COMPILER_NAME "${CMAKE_CXX_COMPILER}" NAME_WE)
+    if (MILESTRO_SKIA_CXX_COMPILER_NAME STREQUAL "clang-cl")
+        get_filename_component(MILESTRO_SKIA_CLANG_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+        get_filename_component(MILESTRO_SKIA_DEFAULT_CLANG_WIN "${MILESTRO_SKIA_CLANG_BIN_DIR}" DIRECTORY)
+        file(TO_CMAKE_PATH "${MILESTRO_SKIA_DEFAULT_CLANG_WIN}" MILESTRO_SKIA_DEFAULT_CLANG_WIN)
+    endif ()
+endif ()
+
 set(MILESTRO_SKIA_CC
         "${MILESTRO_SKIA_DEFAULT_CC}"
         CACHE FILEPATH
@@ -282,6 +292,11 @@ set(MILESTRO_SKIA_CXX
         CACHE FILEPATH
         "C++ compiler passed to Skia GN."
 )
+set(MILESTRO_SKIA_CLANG_WIN
+        "${MILESTRO_SKIA_DEFAULT_CLANG_WIN}"
+        CACHE PATH
+        "LLVM root passed to Skia GN as clang_win for Windows clang-cl builds."
+)
 
 set(MILESTRO_SKIA_USE_METAL OFF)
 set(MILESTRO_SKIA_USE_GL OFF)
@@ -289,6 +304,9 @@ set(MILESTRO_SKIA_GL_STANDARD "")
 set(MILESTRO_SKIA_USE_EGL OFF)
 set(MILESTRO_SKIA_USE_DIRECT3D OFF)
 set(MILESTRO_SKIA_USE_VULKAN OFF)
+option(MILESTRO_SKIA_USE_PARTITION_ALLOC
+        "Build Skia with PartitionAlloc/raw_ptr backing. Disabled for standalone plugin builds to avoid allocator interposition."
+        OFF)
 
 if (APPLE)
     set(MILESTRO_SKIA_USE_METAL ON)
@@ -327,6 +345,18 @@ function(milestro_skia_append_gn_string name value)
     set(MILESTRO_SKIA_GN_ARGS "${MILESTRO_SKIA_GN_ARGS}" PARENT_SCOPE)
 endfunction()
 
+function(milestro_skia_append_gn_string_list name)
+    set(MILESTRO_SKIA_GN_STRING_LIST)
+    foreach (value IN LISTS ARGN)
+        string(REPLACE "\\" "\\\\" value "${value}")
+        string(REPLACE "\"" "\\\"" value "${value}")
+        list(APPEND MILESTRO_SKIA_GN_STRING_LIST "\"${value}\"")
+    endforeach ()
+    list(JOIN MILESTRO_SKIA_GN_STRING_LIST "," MILESTRO_SKIA_GN_STRING_LIST_JOINED)
+    list(APPEND MILESTRO_SKIA_GN_ARGS "${name}=[${MILESTRO_SKIA_GN_STRING_LIST_JOINED}]")
+    set(MILESTRO_SKIA_GN_ARGS "${MILESTRO_SKIA_GN_ARGS}" PARENT_SCOPE)
+endfunction()
+
 set(MILESTRO_SKIA_GN_ARGS)
 milestro_skia_append_gn_string(target_os "${MILESTRO_SKIA_TARGET_OS}")
 milestro_skia_append_gn_string(target_cpu "${MILESTRO_SKIA_TARGET_CPU}")
@@ -351,10 +381,32 @@ milestro_skia_append_gn_string(skia_gl_standard "${MILESTRO_SKIA_GL_STANDARD}")
 milestro_skia_append_gn_bool(skia_use_egl MILESTRO_SKIA_USE_EGL)
 milestro_skia_append_gn_bool(skia_use_direct3d MILESTRO_SKIA_USE_DIRECT3D)
 milestro_skia_append_gn_bool(skia_use_vulkan MILESTRO_SKIA_USE_VULKAN)
+milestro_skia_append_gn_bool(skia_use_partition_alloc MILESTRO_SKIA_USE_PARTITION_ALLOC)
 
 milestro_skia_append_gn_bool(skia_use_icu OFF)
 milestro_skia_append_gn_bool(skia_use_client_icu ON)
 milestro_skia_append_gn_bool(skia_enable_tools OFF)
+
+if (WIN32 AND (MSVC OR CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC"))
+    if (MILESTRO_SKIA_IS_DEBUG)
+        set(MILESTRO_SKIA_MSVC_ITERATOR_DEBUG_LEVEL "2")
+        set(MILESTRO_SKIA_MSVC_RUNTIME_FLAG "/MDd")
+    else ()
+        set(MILESTRO_SKIA_MSVC_ITERATOR_DEBUG_LEVEL "0")
+        set(MILESTRO_SKIA_MSVC_RUNTIME_FLAG "/MD")
+    endif ()
+
+    if (NOT MILESTRO_SKIA_EXTRA_GN_ARGS MATCHES "(^|[ \t])extra_cflags[ \t]*=")
+        milestro_skia_append_gn_string_list(extra_cflags
+                "/D_ITERATOR_DEBUG_LEVEL=${MILESTRO_SKIA_MSVC_ITERATOR_DEBUG_LEVEL}"
+                "${MILESTRO_SKIA_MSVC_RUNTIME_FLAG}"
+        )
+    endif ()
+endif ()
+
+if (MILESTRO_SKIA_CLANG_WIN)
+    milestro_skia_append_gn_string(clang_win "${MILESTRO_SKIA_CLANG_WIN}")
+endif ()
 
 milestro_skia_append_gn_string(cc "${MILESTRO_SKIA_CC}")
 milestro_skia_append_gn_string(cxx "${MILESTRO_SKIA_CXX}")
@@ -394,49 +446,79 @@ function(milestro_skia_lib_path out_var library_name)
     endif ()
 endfunction()
 
-set(MILESTRO_SKIA_LIBRARY_NAMES
-        skia
-        skparagraph
-        svg
-        skshaper
-        skunicode_client_icu
-        skunicode_core
-        skresources
-        skcms
-        freetype2
-        harfbuzz
-        icu_bidi
-        avif
-        gav1
-        png
-        zlib
-        brotli
-        expat
-        jpeg
-        jpeg12
-        jpeg16
-        webp
-        webp_sse41
-        yuv
-        dng_sdk
-        piex
-        wuffs
-        raw_ptr
-        allocator_base
-        allocator_core
-        allocator_shim
-        spvtools
-        spvtools_link
-        spvtools_opt
-        spvtools_reduce
-        spvtools_val
-)
+function(milestro_skia_collect_static_libraries out_var target_label target_library_name)
+    milestro_skia_lib_path(MILESTRO_SKIA_TARGET_LIBRARY_FILE "${target_library_name}")
+    set(MILESTRO_SKIA_COLLECTED_LIBRARIES "${MILESTRO_SKIA_TARGET_LIBRARY_FILE}")
 
-set(MILESTRO_SKIA_LIBRARY_FILES)
-foreach (MILESTRO_SKIA_LIBRARY_NAME IN LISTS MILESTRO_SKIA_LIBRARY_NAMES)
-    milestro_skia_lib_path(MILESTRO_SKIA_LIBRARY_FILE "${MILESTRO_SKIA_LIBRARY_NAME}")
-    list(APPEND MILESTRO_SKIA_LIBRARY_FILES "${MILESTRO_SKIA_LIBRARY_FILE}")
-endforeach ()
+    execute_process(
+            COMMAND "${MILESTRO_SKIA_GN_EXECUTABLE}"
+                    "--root=${MILESTRO_SKIA_SOURCE_DIR}"
+                    desc
+                    "${MILESTRO_SKIA_OUT_DIR}"
+                    "${target_label}"
+                    deps
+                    --all
+                    --as=output
+                    --type=static_library
+            OUTPUT_VARIABLE MILESTRO_SKIA_GN_DEPS_OUTPUT
+            ERROR_VARIABLE MILESTRO_SKIA_GN_DEPS_ERROR
+            RESULT_VARIABLE MILESTRO_SKIA_GN_DEPS_RESULT
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if (NOT MILESTRO_SKIA_GN_DEPS_RESULT EQUAL 0)
+        message(FATAL_ERROR
+                "Failed to query Skia GN static-library deps for ${target_label}: "
+                "${MILESTRO_SKIA_GN_DEPS_ERROR}"
+        )
+    endif ()
+
+    string(REPLACE "\r\n" "\n" MILESTRO_SKIA_GN_DEPS_OUTPUT "${MILESTRO_SKIA_GN_DEPS_OUTPUT}")
+    string(REPLACE "\r" "\n" MILESTRO_SKIA_GN_DEPS_OUTPUT "${MILESTRO_SKIA_GN_DEPS_OUTPUT}")
+    string(REPLACE "\n" ";" MILESTRO_SKIA_GN_DEPS "${MILESTRO_SKIA_GN_DEPS_OUTPUT}")
+    foreach (MILESTRO_SKIA_GN_DEP IN LISTS MILESTRO_SKIA_GN_DEPS)
+        string(STRIP "${MILESTRO_SKIA_GN_DEP}" MILESTRO_SKIA_GN_DEP)
+        if (MILESTRO_SKIA_GN_DEP STREQUAL "")
+            continue()
+        endif ()
+
+        if (IS_ABSOLUTE "${MILESTRO_SKIA_GN_DEP}")
+            set(MILESTRO_SKIA_GN_DEP_FILE "${MILESTRO_SKIA_GN_DEP}")
+        else ()
+            set(MILESTRO_SKIA_GN_DEP_FILE "${MILESTRO_SKIA_OUT_DIR}/${MILESTRO_SKIA_GN_DEP}")
+        endif ()
+        list(APPEND MILESTRO_SKIA_COLLECTED_LIBRARIES "${MILESTRO_SKIA_GN_DEP_FILE}")
+    endforeach ()
+
+    list(REMOVE_DUPLICATES MILESTRO_SKIA_COLLECTED_LIBRARIES)
+    set(${out_var} "${MILESTRO_SKIA_COLLECTED_LIBRARIES}" PARENT_SCOPE)
+endfunction()
+
+milestro_skia_collect_static_libraries(MILESTRO_SKIA_LIBRARIES_SKIA "//:skia" skia)
+milestro_skia_collect_static_libraries(MILESTRO_SKIA_LIBRARIES_SKPARAGRAPH "//modules/skparagraph:skparagraph" skparagraph)
+milestro_skia_collect_static_libraries(MILESTRO_SKIA_LIBRARIES_SVG "//modules/svg:svg" svg)
+
+milestro_skia_lib_path(MILESTRO_SKIA_LIB_SKIA skia)
+milestro_skia_lib_path(MILESTRO_SKIA_LIB_SKPARAGRAPH skparagraph)
+milestro_skia_lib_path(MILESTRO_SKIA_LIB_SVG svg)
+
+set(MILESTRO_SKIA_LIBRARY_FILES
+        ${MILESTRO_SKIA_LIBRARIES_SKIA}
+        ${MILESTRO_SKIA_LIBRARIES_SKPARAGRAPH}
+        ${MILESTRO_SKIA_LIBRARIES_SVG}
+)
+list(REMOVE_DUPLICATES MILESTRO_SKIA_LIBRARY_FILES)
+
+set(MILESTRO_SKIA_LINK_LIBRARIES
+        ${MILESTRO_SKIA_LIB_SKPARAGRAPH}
+        ${MILESTRO_SKIA_LIB_SVG}
+        ${MILESTRO_SKIA_LIB_SKIA}
+        ${MILESTRO_SKIA_LIBRARIES_SKPARAGRAPH}
+        ${MILESTRO_SKIA_LIBRARIES_SVG}
+        ${MILESTRO_SKIA_LIBRARIES_SKIA}
+)
+if (APPLE)
+    list(REMOVE_DUPLICATES MILESTRO_SKIA_LINK_LIBRARIES)
+endif ()
 
 set(MILESTRO_SKIA_NINJA_TARGETS skia skparagraph svg)
 add_custom_target(skia_gn_build
@@ -451,16 +533,8 @@ add_custom_target(skia_gn_build
 set(MILESTRO_SKIA_PUBLIC_INCLUDES
         "${MILESTRO_SKIA_SOURCE_DIR}"
         "${MILESTRO_SKIA_OUT_DIR}/gen"
+        "${MILESTRO_SKIA_SOURCE_DIR}/third_party/externals/icu/source/common"
 )
-
-milestro_skia_lib_path(MILESTRO_SKIA_LIB_SKIA skia)
-milestro_skia_lib_path(MILESTRO_SKIA_LIB_SKPARAGRAPH skparagraph)
-milestro_skia_lib_path(MILESTRO_SKIA_LIB_SVG svg)
-milestro_skia_lib_path(MILESTRO_SKIA_LIB_SKSHAPER skshaper)
-milestro_skia_lib_path(MILESTRO_SKIA_LIB_SKUNICODE_CLIENT_ICU skunicode_client_icu)
-milestro_skia_lib_path(MILESTRO_SKIA_LIB_SKUNICODE_CORE skunicode_core)
-milestro_skia_lib_path(MILESTRO_SKIA_LIB_SKRESOURCES skresources)
-milestro_skia_lib_path(MILESTRO_SKIA_LIB_ICU_BIDI icu_bidi)
 
 add_library(skia INTERFACE)
 add_dependencies(skia skia_gn_build)
@@ -468,45 +542,12 @@ target_include_directories(skia INTERFACE ${MILESTRO_SKIA_PUBLIC_INCLUDES})
 target_compile_definitions(skia INTERFACE
         SK_UNICODE_AVAILABLE
         SK_UNICODE_CLIENT_IMPLEMENTATION
+        SK_ENABLE_PARAGRAPH
+        SK_ENABLE_SVG
 )
+# Skia's static archives do not carry GN transitive dependency metadata.
 target_link_libraries(skia INTERFACE
-        ${MILESTRO_SKIA_LIB_SKIA}
-)
-
-add_library(third_party__icu INTERFACE)
-add_dependencies(third_party__icu skia_gn_build)
-target_include_directories(third_party__icu INTERFACE
-        "${MILESTRO_SKIA_SOURCE_DIR}/third_party/externals/icu/source/common"
-)
-target_link_libraries(third_party__icu INTERFACE
-        ${MILESTRO_SKIA_LIB_ICU_BIDI}
-)
-
-add_library(modules__skparagraph INTERFACE)
-add_dependencies(modules__skparagraph skia_gn_build)
-target_include_directories(modules__skparagraph INTERFACE ${MILESTRO_SKIA_PUBLIC_INCLUDES})
-target_compile_definitions(modules__skparagraph INTERFACE SK_ENABLE_PARAGRAPH)
-target_link_libraries(modules__skparagraph INTERFACE
-        ${MILESTRO_SKIA_LIB_SKPARAGRAPH}
-        ${MILESTRO_SKIA_LIB_SKSHAPER}
-        ${MILESTRO_SKIA_LIB_SKUNICODE_CLIENT_ICU}
-        ${MILESTRO_SKIA_LIB_SKUNICODE_CORE}
-        third_party__icu
-        skia
-)
-
-add_library(modules__svg INTERFACE)
-add_dependencies(modules__svg skia_gn_build)
-target_include_directories(modules__svg INTERFACE ${MILESTRO_SKIA_PUBLIC_INCLUDES})
-target_compile_definitions(modules__svg INTERFACE SK_ENABLE_SVG)
-target_link_libraries(modules__svg INTERFACE
-        ${MILESTRO_SKIA_LIB_SVG}
-        ${MILESTRO_SKIA_LIB_SKRESOURCES}
-        ${MILESTRO_SKIA_LIB_SKSHAPER}
-        ${MILESTRO_SKIA_LIB_SKUNICODE_CLIENT_ICU}
-        ${MILESTRO_SKIA_LIB_SKUNICODE_CORE}
-        third_party__icu
-        skia
+        ${MILESTRO_SKIA_LINK_LIBRARIES}
 )
 
 message(STATUS "Skia source: ${MILESTRO_SKIA_SOURCE_DIR}")
