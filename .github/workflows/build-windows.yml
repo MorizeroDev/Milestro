@@ -1,0 +1,107 @@
+name: Windows Native
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  MILESTRO_TARGET_OS: windows
+  MILESTRO_TARGET_ARCH: amd64
+  MILESTRO_INSTALL_DIR: milestro-native-windows-amd64
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.0
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.3.0
+        with:
+          python-version: "3.x"
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: x64
+
+      - name: Print tool versions
+        shell: cmd
+        run: |
+          cmake --version
+          ninja --version
+          clang-cl --version
+          where clang-cl
+          where link
+
+      - name: Configure Milestro
+        shell: cmd
+        run: |
+          cmake -S . -B build_native ^
+            -GNinja ^
+            -DCMAKE_C_COMPILER=clang-cl ^
+            -DCMAKE_CXX_COMPILER=clang-cl ^
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
+            -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=ProgramDatabase ^
+            -DCMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO="/DEBUG /PDBALTPATH:%%_PDB%%" ^
+            -DMILESTRO_ENABLE_CLI=OFF ^
+            -DMILESTRO_ENABLE_TESTS=OFF ^
+            -DMILESTRO_BUILD_SHARED_LIBS=ON ^
+            -DCMAKE_INSTALL_PREFIX="./%MILESTRO_INSTALL_DIR%"
+
+      - name: Build and install Milestro
+        run: cmake --build build_native --target install --config RelWithDebInfo
+
+      - name: Prepare release symbols
+        shell: pwsh
+        run: |
+          $pdb = Get-ChildItem -Recurse -LiteralPath build_native -Filter *.pdb |
+            Where-Object { $_.Name -in @("libMilestro.pdb", "Milestro.pdb") } |
+            Sort-Object FullName |
+            Select-Object -First 1
+          if (-not $pdb) {
+            Get-ChildItem -Recurse -LiteralPath build_native -Filter *.pdb | Select-Object FullName
+            throw "Milestro PDB was not found under build_native."
+          }
+
+          python scripts/milestro_symbols.py prepare `
+            --kind pdb `
+            --commit "$env:GITHUB_SHA" `
+            --tag "${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}" `
+            --platform "$env:MILESTRO_TARGET_OS" `
+            --arch "$env:MILESTRO_TARGET_ARCH" `
+            --variant unity-lib `
+            --binary "$env:MILESTRO_INSTALL_DIR/bin/libMilestro.dll" `
+            --pdb "$($pdb.FullName)" `
+            --symbols-root milestro-symbols `
+            --manifest milestro-symbols/manifest.json `
+            --source-root "$env:GITHUB_WORKSPACE"
+
+      - name: Package native artifact
+        shell: pwsh
+        run: Compress-Archive -Path "$env:MILESTRO_INSTALL_DIR" -DestinationPath "milestro-native-$env:MILESTRO_TARGET_OS-$env:MILESTRO_TARGET_ARCH.zip" -Force
+
+      - name: Package symbols
+        shell: pwsh
+        run: Compress-Archive -Path milestro-symbols -DestinationPath "milestro-symbols-$env:MILESTRO_TARGET_OS-$env:MILESTRO_TARGET_ARCH.zip" -Force
+
+      - name: Upload native artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: milestro-native-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}
+          path: milestro-native-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}.zip
+          retention-days: 1
+
+      - name: Upload symbols artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: milestro-symbols-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}
+          path: milestro-symbols-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}.zip
+          retention-days: 1

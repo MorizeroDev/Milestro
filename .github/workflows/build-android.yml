@@ -1,0 +1,103 @@
+name: Android Native
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  ANDROID_NDK_VERSION: r29
+  MILESTRO_TARGET_OS: android
+  MILESTRO_TARGET_ARCH: arm64
+  MILESTRO_INSTALL_DIR: milestro-native-android-arm64
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.0
+        with:
+          submodules: recursive
+
+      - name: Set up Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1.6.0
+        with:
+          ndk-version: ${{ env.ANDROID_NDK_VERSION }}
+          add-to-path: true
+
+      - name: Set Android NDK environment
+        run: echo "ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
+
+      - name: Set Android symbol tools
+        run: |
+          echo "MILESTRO_OBJCOPY=${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-objcopy" >> "$GITHUB_ENV"
+          echo "MILESTRO_READELF=${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" >> "$GITHUB_ENV"
+          test -x "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-objcopy"
+          test -x "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.3.0
+        with:
+          python-version: "3.x"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build nasm
+
+      - name: Configure Milestro
+        run: |
+          cmake -S . -B build_native -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DMILESTRO_ENABLE_CLI=OFF \
+            -DMILESTRO_ENABLE_TESTS=OFF \
+            -DMILESTRO_BUILD_SHARED_LIBS=ON \
+            -DCMAKE_TOOLCHAIN_FILE="${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake" \
+            -DCMAKE_SYSTEM_NAME=Android \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-23 \
+            -DANDROID_USE_LEGACY_TOOLCHAIN_FILE=OFF \
+            -DCMAKE_ANDROID_NDK="${ANDROID_NDK_HOME}" \
+            -DCMAKE_INSTALL_PREFIX="./${MILESTRO_INSTALL_DIR}"
+
+      - name: Build and install Milestro
+        run: cmake --build build_native --target install --config Release
+
+      - name: Prepare release symbols
+        run: |
+          python3 scripts/milestro_symbols.py prepare \
+            --kind elf \
+            --commit "${GITHUB_SHA}" \
+            --tag "${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}" \
+            --platform "${MILESTRO_TARGET_OS}" \
+            --arch "${MILESTRO_TARGET_ARCH}" \
+            --variant unity-lib \
+            --binary "${MILESTRO_INSTALL_DIR}/lib/libMilestro.so" \
+            --symbols-root milestro-symbols \
+            --manifest milestro-symbols/manifest.json \
+            --source-root "${GITHUB_WORKSPACE}"
+
+      - name: Package native artifact
+        run: tar -czf "milestro-native-${MILESTRO_TARGET_OS}-${MILESTRO_TARGET_ARCH}.tar.gz" "${MILESTRO_INSTALL_DIR}"
+
+      - name: Package symbols
+        run: tar -czf "milestro-symbols-${MILESTRO_TARGET_OS}-${MILESTRO_TARGET_ARCH}.tar.gz" milestro-symbols
+
+      - name: Upload native artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: milestro-native-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}
+          path: milestro-native-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}.tar.gz
+          retention-days: 1
+
+      - name: Upload symbols artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: milestro-symbols-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}
+          path: milestro-symbols-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}.tar.gz
+          retention-days: 1

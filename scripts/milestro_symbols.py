@@ -221,6 +221,16 @@ def split_pe_coff(binary, symbol_dir, symbol_name):
     return symbol_path
 
 
+def collect_pdb(pdb, symbol_dir, symbol_name):
+    pdb = Path(pdb).resolve()
+    if not pdb.exists():
+        fail(f"PDB was not found: {pdb}")
+    symbol_path = symbol_dir / (symbol_name or pdb.name)
+    symbol_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(pdb, symbol_path)
+    return symbol_path
+
+
 def apple_uuid(path):
     dwarfdump = find_tool("dwarfdump")
     output = run([dwarfdump, "--uuid", str(path)]).stdout
@@ -287,6 +297,11 @@ def prepare(args):
         symbol_name = args.symbol_name or f"{binary.name}.debug"
         symbol_path = split_pe_coff(binary, symbol_dir, symbol_name)
         debug_id["pe"] = pe_debug_id(binary)
+    elif args.kind == "pdb":
+        if not args.pdb:
+            fail("--pdb is required when --kind=pdb")
+        symbol_path = collect_pdb(args.pdb, symbol_dir, args.symbol_name)
+        debug_id["pdb_sha256"] = sha256_file(symbol_path)
     elif args.kind == "apple":
         symbol_name = args.symbol_name or f"{binary.name}.dSYM"
         symbol_path = split_apple(binary, symbol_dir, symbol_name)
@@ -319,7 +334,7 @@ def main():
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     prepare_parser = subparsers.add_parser("prepare")
-    prepare_parser.add_argument("--kind", choices=["elf", "apple", "pe-coff"], required=True)
+    prepare_parser.add_argument("--kind", choices=["elf", "apple", "pe-coff", "pdb"], required=True)
     prepare_parser.add_argument("--repo", default="Milestro")
     prepare_parser.add_argument("--commit", required=True)
     prepare_parser.add_argument("--tag", default="")
@@ -327,6 +342,7 @@ def main():
     prepare_parser.add_argument("--arch", required=True)
     prepare_parser.add_argument("--variant", required=True)
     prepare_parser.add_argument("--binary", required=True)
+    prepare_parser.add_argument("--pdb")
     prepare_parser.add_argument("--symbol-name")
     prepare_parser.add_argument("--symbols-root", required=True)
     prepare_parser.add_argument("--manifest", required=True)

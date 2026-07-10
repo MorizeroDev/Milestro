@@ -14,8 +14,12 @@ subprojects {
 repositories { repo() }
 
 val h2csSourceFile = file("include/Milestro/game/milestro_game_interface.h")
-val h2csCsharpBindingOutputFile = file("apps/unity-plugins/Milestro/Binding/BindingC.cs")
-val h2csCppFrameworkBindingOutputFile = file("apps/unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp")
+val h2csCsharpBindingOutputFile = providers.gradleProperty("milestroH2csCsharpBindingOutputPath")
+    .map { file(it) }
+    .getOrElse(file("apps/unity-plugins/Milestro/Binding/BindingC.cs"))
+val h2csCppFrameworkBindingOutputFile = providers.gradleProperty("milestroH2csCppFrameworkBindingOutputPath")
+    .map { file(it) }
+    .getOrElse(file("apps/unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp"))
 val unityPluginsFormatSolutionFile = file("apps/unity-plugins/Milestro.UnityPlugins.Format.slnx")
 val unityPluginSourceDir = file("apps/unity-plugins")
 val unityPluginPackageOutputDir = providers.gradleProperty("milestroUnityPluginOutputDir")

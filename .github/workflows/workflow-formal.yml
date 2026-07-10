@@ -1,0 +1,166 @@
+name: Formal Build and Release
+
+on:
+  push:
+    branches:
+      - master
+      - release/**
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-amd64:
+    name: Windows amd64
+    uses: ./.github/workflows/build-windows.yml
+
+  build-linux-amd64:
+    name: Linux amd64
+    uses: ./.github/workflows/build-linux.yml
+
+  build-android-arm64:
+    name: Android arm64
+    uses: ./.github/workflows/build-android.yml
+
+  build-macos-arm64:
+    name: macOS arm64
+    uses: ./.github/workflows/build-macos.yml
+
+  build-ios-arm64:
+    name: iOS arm64
+    uses: ./.github/workflows/build-ios.yml
+
+  unity-plugins:
+    name: Unity plugins
+    needs:
+      - build-windows-amd64
+      - build-linux-amd64
+      - build-android-arm64
+      - build-macos-arm64
+      - build-ios-arm64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.0
+        with:
+          submodules: recursive
+
+      - name: Set up Java
+        uses: actions/setup-java@v5.5.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Package Unity C# assets
+        run: ./gradlew --no-daemon packageUnityPlugin -PmilestroUnityPluginOutputDir="$GITHUB_WORKSPACE/build/unity-plugins"
+
+      - name: Generate Unity bindings in package
+        run: |
+          mkdir -p build/unity-plugins/Milestro/Binding
+          mkdir -p build/unity-plugins/Milestro/Plugins/iOS
+          ./gradlew --no-daemon h2cs \
+            -PmilestroH2csCsharpBindingOutputPath="$GITHUB_WORKSPACE/build/unity-plugins/Milestro/Binding/BindingC.cs" \
+            -PmilestroH2csCppFrameworkBindingOutputPath="$GITHUB_WORKSPACE/build/unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp"
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v8.0.1
+        with:
+          path: downloaded-artifacts
+
+      - name: Assemble Unity plugin native binaries
+        run: |
+          set -euo pipefail
+
+          mkdir -p extracted/android extracted/linux extracted/macos extracted/ios extracted/windows
+          tar -xzf downloaded-artifacts/milestro-native-android-arm64/milestro-native-android-arm64.tar.gz -C extracted/android
+          tar -xzf downloaded-artifacts/milestro-native-linux-amd64/milestro-native-linux-amd64.tar.gz -C extracted/linux
+          tar -xzf downloaded-artifacts/milestro-native-macos-arm64/milestro-native-macos-arm64.tar.gz -C extracted/macos
+          tar -xzf downloaded-artifacts/milestro-native-ios-arm64/milestro-native-ios-arm64.tar.gz -C extracted/ios
+          unzip -q downloaded-artifacts/milestro-native-windows-amd64/milestro-native-windows-amd64.zip -d extracted/windows
+
+          install -D extracted/android/milestro-native-android-arm64/lib/libMilestro.so \
+            build/unity-plugins/Milestro/Plugins/Android/arm64-v8a/libMilestro.so
+          install -D extracted/linux/milestro-native-linux-amd64/lib/libMilestro.so \
+            build/unity-plugins/Milestro/Plugins/Linux/x86_64/libMilestro.so
+          install -D extracted/macos/milestro-native-macos-arm64/lib/libMilestro.dylib \
+            build/unity-plugins/Milestro/Plugins/MacOS/Aarch64/libMilestro.dylib
+          install -D extracted/windows/milestro-native-windows-amd64/bin/libMilestro.dll \
+            build/unity-plugins/Milestro/Plugins/Win64/libMilestro.dll
+
+          rm -rf build/unity-plugins/Milestro/Plugins/iOS/Milestro.framework
+          cp -R extracted/ios/milestro-native-ios-arm64/lib/Milestro.framework \
+            build/unity-plugins/Milestro/Plugins/iOS/Milestro.framework
+
+          test -f build/unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp
+          find build/unity-plugins/Milestro/Plugins -maxdepth 4 -type f | sort
+
+      - name: Package release symbols
+        run: |
+          mkdir -p milestro-symbols-all
+          cp downloaded-artifacts/milestro-symbols-android-arm64/milestro-symbols-android-arm64.tar.gz milestro-symbols-all/
+          cp downloaded-artifacts/milestro-symbols-ios-arm64/milestro-symbols-ios-arm64.tar.gz milestro-symbols-all/
+          cp downloaded-artifacts/milestro-symbols-linux-amd64/milestro-symbols-linux-amd64.tar.gz milestro-symbols-all/
+          cp downloaded-artifacts/milestro-symbols-macos-arm64/milestro-symbols-macos-arm64.tar.gz milestro-symbols-all/
+          cp downloaded-artifacts/milestro-symbols-windows-amd64/milestro-symbols-windows-amd64.zip milestro-symbols-all/
+          tar -czf milestro-symbols-all.tar.gz milestro-symbols-all
+
+      - name: Package complete Unity plugins
+        run: tar -czf milestro-unity-plugins.tar.gz -C build unity-plugins
+
+      - name: Upload complete Unity plugins artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: milestro-unity-plugins
+          path: milestro-unity-plugins.tar.gz
+          retention-days: 30
+
+      - name: Upload release symbols artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: milestro-symbols-all
+          path: milestro-symbols-all.tar.gz
+          retention-days: 30
+
+  deploy:
+    name: GitHub Release
+    needs: unity-plugins
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download complete Unity plugins artifact
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: milestro-unity-plugins
+          path: release-artifacts
+
+      - name: Download release symbols artifact
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: milestro-symbols-all
+          path: release-artifacts
+
+      - name: Upload artifacts to GitHub Release
+        uses: softprops/action-gh-release@v3.0.1
+        with:
+          files: |
+            release-artifacts/milestro-unity-plugins.tar.gz
+            release-artifacts/milestro-symbols-all.tar.gz
+          name: Release ${{ github.ref_name }}
+          body: Release of ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          tag_name: ${{ github.ref_name }}
