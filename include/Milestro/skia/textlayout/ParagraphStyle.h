@@ -4,8 +4,13 @@
 #include "modules/skparagraph/include/ParagraphStyle.h"
 #include "TextStyle.h"
 #include "Milestro/common/milestro_export_macros.h"
+#include "Milestro/skia/FontFamilyDeclaration.h"
 
+#include <cstddef>
 #include <limits>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace milestro::skia::textlayout {
 
@@ -14,11 +19,22 @@ public:
     StrutStyle() {}
 
     explicit StrutStyle(::skia::textlayout::StrutStyle style) {
-        this->style = style;
+        this->style = std::move(style);
+        setFontFamilyDeclarationFromSkiaFamilies(this->style.getFontFamilies(), false);
     }
 
     const std::vector<SkString> &getFontFamilies() const { return style.getFontFamilies(); }
-    void setFontFamilies(std::vector<SkString> families) { style.setFontFamilies(std::move(families)); }
+    void setFontFamilies(std::vector<SkString> families) {
+        setFontFamilyDeclarationFromSkiaFamilies(families, true);
+        style.setFontFamilies(std::move(families));
+    }
+    void setFontFamilyTokens(std::vector<FontFamilyToken> families) {
+        fontFamilyTokens = std::move(families);
+        hasFontFamilyDeclaration = true;
+        style.setFontFamilies(toSkiaFamilies(fontFamilyTokens));
+    }
+    const std::vector<FontFamilyToken> &getFontFamilyTokens() const { return fontFamilyTokens; }
+    bool hasFontFamilyTokens() const { return hasFontFamilyDeclaration; }
 
     SkFontStyle getFontStyle() const { return style.getFontStyle(); }
     void setFontStyle(SkFontStyle fontStyle) { style.setFontStyle(fontStyle); }
@@ -44,21 +60,68 @@ public:
     void setHalfLeading(bool halfLeading) { style.setHalfLeading(halfLeading); }
     bool getHalfLeading() const { return style.getHalfLeading(); }
 
-    const ::skia::textlayout::StrutStyle spawn() {
+    const ::skia::textlayout::StrutStyle spawn() const {
         return style;
     }
 
 private:
+    static std::vector<SkString> toSkiaFamilies(const std::vector<FontFamilyToken> &families) {
+        std::vector<SkString> ret;
+        ret.reserve(families.size());
+        for (const auto &family: families) {
+            ret.emplace_back(family.value.c_str());
+        }
+
+        return ret;
+    }
+
+    void setFontFamilyDeclarationFromSkiaFamilies(const std::vector<SkString> &families, bool declarationSet) {
+        fontFamilyTokens.clear();
+        fontFamilyTokens.reserve(families.size());
+        for (const auto &family: families) {
+            fontFamilyTokens.emplace_back(FontFamilyToken::Bare(family.c_str()));
+        }
+
+        hasFontFamilyDeclaration = declarationSet || !fontFamilyTokens.empty();
+    }
+
     ::skia::textlayout::StrutStyle style;
+    std::vector<FontFamilyToken> fontFamilyTokens;
+    bool hasFontFamilyDeclaration = false;
 };
 
 class MILESTRO_API ParagraphStyle {
 public:
-    StrutStyle *getStrutStyle() const { return new StrutStyle(style.getStrutStyle()); }
-    void setStrutStyle(StrutStyle *strutStyle) { style.setStrutStyle(strutStyle->spawn()); }
+    StrutStyle *getStrutStyle() const {
+        auto ret = new StrutStyle(style.getStrutStyle());
+        if (hasStrutFontFamilyDeclaration) {
+            ret->setFontFamilyTokens(strutFontFamilyTokens);
+        }
+        return ret;
+    }
+    void setStrutStyle(StrutStyle *strutStyle) {
+        style.setStrutStyle(strutStyle->spawn());
+        strutFontFamilyTokens = strutStyle->getFontFamilyTokens();
+        hasStrutFontFamilyDeclaration = strutStyle->hasFontFamilyTokens();
+    }
 
-    TextStyle *getTextStyle() const { return new TextStyle(style.getTextStyle()); }
-    void setTextStyle(TextStyle *textStyle) { style.setTextStyle(textStyle->spawn()); }
+    TextStyle *getTextStyle() const {
+        auto ret = new TextStyle(style.getTextStyle());
+        if (hasTextFontFamilyDeclaration) {
+            ret->setFontFamilyTokens(textFontFamilyTokens);
+        }
+        return ret;
+    }
+    void setTextStyle(TextStyle *textStyle) {
+        style.setTextStyle(textStyle->spawn());
+        textFontFamilyTokens = textStyle->getFontFamilyTokens();
+        hasTextFontFamilyDeclaration = textStyle->hasFontFamilyTokens();
+    }
+
+    const std::vector<FontFamilyToken> &getTextFontFamilyTokens() const { return textFontFamilyTokens; }
+    bool hasTextFontFamilyTokens() const { return hasTextFontFamilyDeclaration; }
+    const std::vector<FontFamilyToken> &getStrutFontFamilyTokens() const { return strutFontFamilyTokens; }
+    bool hasStrutFontFamilyTokens() const { return hasStrutFontFamilyDeclaration; }
 
     ::skia::textlayout::TextDirection getTextDirection() const { return style.getTextDirection(); }
     void setTextDirection(::skia::textlayout::TextDirection direction) { style.setTextDirection(direction); }
@@ -99,9 +162,13 @@ public:
 
 private:
     ::skia::textlayout::ParagraphStyle style;
+    std::vector<FontFamilyToken> textFontFamilyTokens;
+    std::vector<FontFamilyToken> strutFontFamilyTokens;
+    bool hasTextFontFamilyDeclaration = false;
+    bool hasStrutFontFamilyDeclaration = false;
 
 public:
-    const ::skia::textlayout::ParagraphStyle unwrap() {
+    const ::skia::textlayout::ParagraphStyle unwrap() const {
         return style;
     }
 };

@@ -3,6 +3,11 @@
 
 #include "modules/skparagraph/include/TextStyle.h"
 #include "Milestro/common/milestro_export_macros.h"
+#include "Milestro/skia/FontFamilyDeclaration.h"
+#include <cstddef>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace milestro::skia::textlayout {
 
@@ -11,7 +16,8 @@ public:
     TextStyle() {}
 
     explicit TextStyle(::skia::textlayout::TextStyle textStyle) {
-        this->textStyle = textStyle;
+        this->textStyle = std::move(textStyle);
+        setFontFamilyDeclarationFromSkiaFamilies(this->textStyle.getFontFamilies(), false);
     }
 
     SkColor getColor() const { return textStyle.getColor(); }
@@ -51,7 +57,15 @@ public:
 
     const std::vector<SkString> &getFontFamilies() const { return textStyle.getFontFamilies(); }
     void setFontFamilies(std::vector<SkString> families) {
+        setFontFamilyDeclarationFromSkiaFamilies(families, true);
         textStyle.setFontFamilies(std::move(families));
+    }
+    const std::vector<FontFamilyToken> &getFontFamilyTokens() const { return fontFamilyTokens; }
+    bool hasFontFamilyTokens() const { return hasFontFamilyDeclaration; }
+    void setFontFamilyTokens(std::vector<FontFamilyToken> families) {
+        fontFamilyTokens = std::move(families);
+        hasFontFamilyDeclaration = true;
+        textStyle.setFontFamilies(toSkiaFamilies(fontFamilyTokens));
     }
 
     SkScalar getBaselineShift() const { return textStyle.getBaselineShift(); }
@@ -89,11 +103,33 @@ public:
     bool isPlaceholder() const { return textStyle.isPlaceholder(); }
     void setPlaceholder() { textStyle.setPlaceholder(); }
 
-    const ::skia::textlayout::TextStyle spawn() {
+    const ::skia::textlayout::TextStyle spawn() const {
         return textStyle;
     }
 private:
+    static std::vector<SkString> toSkiaFamilies(const std::vector<FontFamilyToken> &families) {
+        std::vector<SkString> ret;
+        ret.reserve(families.size());
+        for (const auto &family: families) {
+            ret.emplace_back(family.value.c_str());
+        }
+
+        return ret;
+    }
+
+    void setFontFamilyDeclarationFromSkiaFamilies(const std::vector<SkString> &families, bool declarationSet) {
+        fontFamilyTokens.clear();
+        fontFamilyTokens.reserve(families.size());
+        for (const auto &family: families) {
+            fontFamilyTokens.emplace_back(FontFamilyToken::Bare(family.c_str()));
+        }
+
+        hasFontFamilyDeclaration = declarationSet || !fontFamilyTokens.empty();
+    }
+
     ::skia::textlayout::TextStyle textStyle;
+    std::vector<FontFamilyToken> fontFamilyTokens;
+    bool hasFontFamilyDeclaration = false;
 };
 
 }

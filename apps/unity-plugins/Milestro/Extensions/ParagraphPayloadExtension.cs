@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Milestro.Model;
 using Milestro.RichTextParser;
+using Milestro.Skia;
 using Milestro.Skia.TextLayout;
 
 namespace Milestro.Extensions
@@ -70,7 +71,18 @@ namespace Milestro.Extensions
             }
 
             ret.SetFontStyle(weight, width, slant);
-            ret.SetFontFamilies(new List<string>(t.FontFamilies ?? baseTextStyle.GetFontFamilies()));
+            if (t.FontFamilyTokens != null)
+            {
+                ret.SetFontFamilyTokens(t.FontFamilyTokens);
+            }
+            else if (t.FontFamilies != null)
+            {
+                ret.SetFontFamilies(new List<string>(t.FontFamilies));
+            }
+            else
+            {
+                ret.SetFontFamilyTokens(baseTextStyle.GetFontFamilyTokens());
+            }
 
             if (t.Color.HasValue)
             {

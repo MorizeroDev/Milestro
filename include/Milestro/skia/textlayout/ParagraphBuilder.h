@@ -15,15 +15,13 @@ public:
     explicit ParagraphBuilder(ParagraphStyle *style) {
         auto fontCollection = GetFontCollection();
         auto unicodeProvider = GetUnicodeProvider();
-        builder = ::skia::textlayout::ParagraphBuilder::make(style->unwrap(),
-                                                             fontCollection->unwrap(),
-                                                             unicodeProvider->unwrap());
+        builder = fontCollection->MakeParagraphBuilder(*style, unicodeProvider->unwrap());
     }
 
     MILESTRO_DECLARE_NON_COPYABLE(ParagraphBuilder)
 
     void pushStyle(TextStyle *style) {
-        builder->pushStyle(style->spawn());
+        GetFontCollection()->PushStyle(builder.get(), *style);
     };
 
     void pop() {

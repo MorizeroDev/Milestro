@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using Milestro.Model;
+using Milestro.Skia;
 using Paraparty.Colors;
 using UnityEngine;
 
@@ -72,6 +73,12 @@ namespace Milestro.RichTextParser
         public List<string>? FontFamilies { get; set; } = null;
 
         /// <summary>
+        /// Optional tokenized font family override. This preserves whether rich text wrote
+        /// <c>serif</c> as a keyword or <c>"serif"</c> as a literal font name.
+        /// </summary>
+        public List<FontFamilyToken>? FontFamilyTokens { get; set; } = null;
+
+        /// <summary>
         /// Optional glyph color override.
         /// </summary>
         public Color? Color { get; set; } = null;
@@ -111,6 +118,7 @@ namespace Milestro.RichTextParser
             ret.FontWidth = FontWidth;
             ret.FontSlant = FontSlant;
             ret.FontFamilies = FontFamilies == null ? null : new List<string>(FontFamilies);
+            ret.FontFamilyTokens = FontFamilyTokens == null ? null : new List<FontFamilyToken>(FontFamilyTokens);
             ret.Color = Color;
             ret.FontSize = FontSize;
             ret.LetterSpacing = LetterSpacing;
@@ -124,7 +132,8 @@ namespace Milestro.RichTextParser
         public string GenerateRichText()
         {
             var sb = new StringBuilder();
-            if (FontWeight.HasValue || Color.HasValue || FontSize.HasValue || FontFamilies != null)
+            if (FontWeight.HasValue || Color.HasValue || FontSize.HasValue ||
+                FontFamilies != null || FontFamilyTokens != null)
             {
                 sb.Append("<font");
                 if (FontWeight.HasValue)
@@ -142,7 +151,11 @@ namespace Milestro.RichTextParser
                     AppendAttribute(sb, "size", FontSize.Value.ToString(CultureInfo.InvariantCulture));
                 }
 
-                if (FontFamilies != null)
+                if (FontFamilyTokens != null)
+                {
+                    AppendAttribute(sb, "face", FontFamilyParser.FormatFontFamilyList(FontFamilyTokens));
+                }
+                else if (FontFamilies != null)
                 {
                     AppendAttribute(sb, "face", string.Join(", ", FontFamilies));
                 }

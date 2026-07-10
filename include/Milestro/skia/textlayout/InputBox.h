@@ -245,6 +245,7 @@ public:
 private:
     ::skia::textlayout::ParagraphStyle paragraphStyle_;
     ::skia::textlayout::TextStyle textStyle_;
+    TextStyle textStyleDeclaration_;
     TextBoundaryMap boundaryMap_;
     std::unique_ptr<::skia::textlayout::Paragraph> paragraph_;
     size_t cursorUtf8_ = 0;

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Milestro.Binding;
 using Milestro.Model;
+using Milestro.Skia;
 using Paraparty.UnityNative;
 using Paraparty.UnityNative.Base;
 using UnityEngine;
@@ -223,14 +224,28 @@ namespace Milestro.Skia.TextLayout
 
 
         private List<string> _cachedFontFamily = new List<string>() { "sans-serif" };
-
-        public unsafe void SetFontFamilies(List<string> fontFamily)
+        private List<FontFamilyToken> _cachedFontFamilyTokens = new List<FontFamilyToken>()
         {
-            using var families = new UnmanagedStringArray(fontFamily);
-            ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutTextStyleSetFontFamilies(NativePtr, families.Ptr, families.Length)
-            );
-            _cachedFontFamily = fontFamily;
+            FontFamilyToken.Bare("sans-serif")
+        };
+
+        public void SetFontFamilies(List<string> fontFamily)
+        {
+            var sourceTokens = FontFamilyDeclaration.ToBareTokens(fontFamily);
+            SetFontFamilyTokens(sourceTokens);
+        }
+
+        public void SetFontFamilyTokens(List<FontFamilyToken> fontFamilies)
+        {
+            var sourceTokens = fontFamilies ?? new List<FontFamilyToken>();
+            FontRegistry.ApplyTextStyleFontFamilyTokens(NativePtr, sourceTokens);
+            _cachedFontFamilyTokens = new List<FontFamilyToken>(sourceTokens);
+            _cachedFontFamily = FontFamilyParser.ToSourceFamilyList(sourceTokens);
+        }
+
+        public List<FontFamilyToken> GetFontFamilyTokens()
+        {
+            return new List<FontFamilyToken>(_cachedFontFamilyTokens);
         }
 
         public List<string> GetFontFamilies()

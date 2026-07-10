@@ -22,7 +22,7 @@ namespace Milestro.Components.Internal
         private Margin m_margin = new Margin();
 
         [SerializeField]
-        private List<string> m_fontFamilies = new List<string>() { "Source Han Sans VF" };
+        private List<string> m_fontFamilies = new List<string>() { "system-ui" };
 
         [SerializeField]
         private TextAlign m_textAlign = TextAlign.Start;

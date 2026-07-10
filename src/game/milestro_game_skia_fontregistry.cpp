@@ -3,62 +3,17 @@
 #include "Milestro/skia/FontRegistry.h"
 #include "milestro_game_retcode.h"
 #include "Milestro/skia/textlayout/FontCollection.h"
+#include "milestro_game_skia_fontfamilytokens.h"
 #include <include/core/SkFontMgr.h>
-#include <include/core/SkFontStyle.h>
 #include <include/core/SkTypeface.h>
 #include <algorithm>
 #include <cmath>
 #include <string>
-
-namespace {
-
-constexpr int32_t NormalizeFontWeight(int32_t weight) {
-    return std::clamp(weight,
-                      static_cast<int32_t>(SkFontStyle::kThin_Weight),
-                      static_cast<int32_t>(SkFontStyle::kExtraBlack_Weight));
-}
-
-sk_sp<SkTypeface> MatchTypeface(const sk_sp<SkFontMgr> &fontMgr, const std::string &family, const SkFontStyle &style) {
-    if (fontMgr == nullptr) {
-        return nullptr;
-    }
-
-    if (!family.empty()) {
-        auto typeface = fontMgr->matchFamilyStyle(family.c_str(), style);
-        if (typeface != nullptr) {
-            return typeface;
-        }
-    }
-
-    return fontMgr->matchFamilyStyle(nullptr, style);
-}
-
-sk_sp<SkTypeface> ResolveTypeface(const std::string &family, int32_t weight, bool fallbackToSystem) {
-    auto *fontRegistry = milestro::skia::GetFontRegistry();
-    const SkFontStyle style(NormalizeFontWeight(weight),
-                            SkFontStyle::kNormal_Width,
-                            SkFontStyle::kUpright_Slant);
-
-    if (fontRegistry != nullptr) {
-        auto typeface = MatchTypeface(fontRegistry->GetRegisteredFontMgr(), family, style);
-        if (typeface != nullptr) {
-            return typeface;
-        }
-
-        if (fallbackToSystem) {
-            typeface = MatchTypeface(fontRegistry->GetSystemFontMgr(), family, style);
-            if (typeface != nullptr) {
-                return typeface;
-            }
-        }
-    }
-
-    return SkTypeface::MakeEmpty();
-}
-
-} // namespace
+#include <utility>
+#include <vector>
 
 extern "C" {
+// Keep the existing FontRegistry C ABI while TextLayout FontCollection owns resolution policy.
 int64_t MilestroSkiaFontRegistryResolveTypeface(milestro::skia::Font *&ret,
                                         uint8_t *family,
                                         uint64_t familySize,
@@ -70,10 +25,79 @@ int64_t MilestroSkiaFontRegistryResolveTypeface(milestro::skia::Font *&ret,
         familyName.assign(reinterpret_cast<const char *>(family), static_cast<size_t>(familySize));
     }
 
-    auto typeface = ResolveTypeface(familyName, weight, fallbackToSystem != 0);
+    std::vector<milestro::skia::FontFamilyToken> families;
+    if (!familyName.empty()) {
+        families.emplace_back(milestro::skia::FontFamilyToken::Bare(std::move(familyName)));
+    }
+
+    auto fontCollection = milestro::skia::textlayout::GetFontCollection();
+    auto typeface = fontCollection->ResolveTypeface(families, weight, fallbackToSystem != 0);
     SkFont font(typeface, std::max(0.0f, size));
     font.setEdging(SkFont::Edging::kAntiAlias);
     ret = new milestro::skia::Font(std::move(font));
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaFontRegistryResolveTypefaceFromFamilies(milestro::skia::Font *&ret,
+                                                            uint8_t **families,
+                                                            uint32_t familyCount,
+                                                            int32_t weight,
+                                                            float size,
+                                                            int32_t fallbackToSystem) try {
+    auto fontCollection = milestro::skia::textlayout::GetFontCollection();
+    auto typeface = fontCollection->ResolveTypeface(ReadBareFamilyTokens(families, familyCount),
+                                                    weight,
+                                                    fallbackToSystem != 0);
+    SkFont font(typeface, std::max(0.0f, size));
+    font.setEdging(SkFont::Edging::kAntiAlias);
+    ret = new milestro::skia::Font(std::move(font));
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaFontRegistryResolveTypefaceFromFamilyTokens(milestro::skia::Font *&ret,
+                                                                uint8_t **families,
+                                                                int32_t *familyKinds,
+                                                                uint32_t familyCount,
+                                                                int32_t weight,
+                                                                float size,
+                                                                int32_t fallbackToSystem) try {
+    auto fontCollection = milestro::skia::textlayout::GetFontCollection();
+    auto typeface = fontCollection->ResolveTypeface(ReadFamilyTokens(families, familyKinds, familyCount),
+                                                    weight,
+                                                    fallbackToSystem != 0);
+    SkFont font(typeface, std::max(0.0f, size));
+    font.setEdging(SkFont::Edging::kAntiAlias);
+    ret = new milestro::skia::Font(std::move(font));
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaFontRegistryResetFontFamilyKeywordMappings() try {
+    auto fontCollection = milestro::skia::textlayout::GetFontCollection();
+    fontCollection->ClearFontFamilyKeywordMappings();
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaFontRegistrySetFontFamilyKeywordMapping(uint8_t *keyword,
+                                                            uint64_t keywordSize,
+                                                            uint8_t **families,
+                                                            int32_t *familyKinds,
+                                                            uint32_t familyCount) try {
+    std::string keywordName;
+    if (keyword != nullptr && keywordSize > 0) {
+        keywordName.assign(reinterpret_cast<const char *>(keyword), static_cast<size_t>(keywordSize));
+    }
+
+    auto fontCollection = milestro::skia::textlayout::GetFontCollection();
+    fontCollection->SetFontFamilyKeywordMapping(std::move(keywordName),
+                                                ReadFamilyTokens(families, familyKinds, familyCount));
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;
@@ -86,7 +110,11 @@ int64_t MilestroSkiaFontRegistryRegisterFontFromFile(uint8_t *path, uint64_t pat
     }
 
     auto fontRegistry = milestro::skia::GetFontRegistry();
-    return (int64_t) fontRegistry->RegisterFontFromFile(pathString.c_str());
+    const auto result = fontRegistry->RegisterFontFromFile(pathString.c_str());
+    if (result != milestro::skia::MilestroRegisteredFontMgr::RegisterResult::Failed) {
+        milestro::skia::textlayout::GetFontCollection()->clearCaches();
+    }
+    return static_cast<int64_t>(result);
 }
 
 int64_t MilestroSkiaFontRegistryGetRegisteredFontFamilyList(milestro::skia::MilestroFontFamilyList *&ret) {

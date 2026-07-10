@@ -25,7 +25,7 @@ namespace Milestro.Experimental.Components
 
         [SerializeField]
         [FormerlySerializedAs("fontFamilies")]
-        private List<string> m_fontFamilies = new List<string>() { "Source Han Sans VF" };
+        private List<string> m_fontFamilies = new List<string>() { "system-ui" };
 
         [SerializeField]
         [FormerlySerializedAs("size")]

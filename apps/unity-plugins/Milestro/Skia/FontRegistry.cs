@@ -2,30 +2,173 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Milestro.Binding;
+using Milestro.Configuration;
 using Milestro.Model;
 using Milestro.Skia.TextLayout;
 using Milestro.Util;
+using Paraparty.UnityNative;
 
 namespace Milestro.Skia
 {
     public static class FontRegistry
     {
+        private static readonly object FontFamilyConfigurationSyncLock = new object();
+
         public static unsafe Font ResolveFont(string familyName,
                                               int weight = FontWeight.Normal,
                                               float size = 16f,
                                               bool fallbackToSystem = true)
         {
-            var payload = Encoding.UTF8.GetBytes(familyName ?? "");
-            fixed (byte* familyPtr = payload)
+            return ResolveFontFromFamilies(new[] { familyName ?? "" }, weight, size, fallbackToSystem);
+        }
+
+        public static Font ResolveFontFromFamilies(IEnumerable<string> familyNames,
+                                                   int weight = FontWeight.Normal,
+                                                   float size = 16f,
+                                                   bool fallbackToSystem = true)
+        {
+            return ResolveFontFamilyTokens(FontFamilyDeclaration.ToBareTokens(familyNames),
+                weight,
+                size,
+                fallbackToSystem);
+        }
+
+        public static Font ResolveFontFromFamilyTokens(IEnumerable<FontFamilyToken> familyTokens,
+                                                       int weight = FontWeight.Normal,
+                                                       float size = 16f,
+                                                       bool fallbackToSystem = true)
+        {
+            return ResolveFontFamilyTokens(familyTokens,
+                weight,
+                size,
+                fallbackToSystem);
+        }
+
+        internal static void ApplyTextStyleFontFamilyTokens(IntPtr textStyle, IEnumerable<FontFamilyToken> familyTokens)
+        {
+            SyncFontFamilyConfiguration();
+            unsafe
             {
-                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontRegistryResolveTypeface(out var font,
-                    familyPtr,
-                    (ulong)payload.Length,
+                var payload = BuildFontFamilyPayload(familyTokens);
+                using var families = new UnmanagedStringArray(payload.Names);
+                fixed (int* kinds = payload.Kinds)
+                {
+                    ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleSetFontFamilyTokens(textStyle,
+                        families.Ptr,
+                        kinds,
+                        families.Length));
+                }
+            }
+        }
+
+        internal static void ApplyStrutStyleFontFamilyTokens(IntPtr strutStyle, IEnumerable<FontFamilyToken> familyTokens)
+        {
+            SyncFontFamilyConfiguration();
+            unsafe
+            {
+                var payload = BuildFontFamilyPayload(familyTokens);
+                using var families = new UnmanagedStringArray(payload.Names);
+                fixed (int* kinds = payload.Kinds)
+                {
+                    ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutStrutStyleSetFontFamilyTokens(strutStyle,
+                        families.Ptr,
+                        kinds,
+                        families.Length));
+                }
+            }
+        }
+
+        private static unsafe Font ResolveFontFamilyTokens(IEnumerable<FontFamilyToken> familyTokens,
+                                                          int weight,
+                                                          float size,
+                                                          bool fallbackToSystem)
+        {
+            SyncFontFamilyConfiguration();
+            var payload = BuildFontFamilyPayload(familyTokens);
+            using var families = new UnmanagedStringArray(payload.Names);
+            fixed (int* kinds = payload.Kinds)
+            {
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontRegistryResolveTypefaceFromFamilyTokens(out var font,
+                    families.Ptr,
+                    kinds,
+                    families.Length,
                     weight,
                     size,
                     fallbackToSystem ? 1 : 0));
                 return new Font(font);
             }
+        }
+
+        private static void SyncFontFamilyConfiguration()
+        {
+            lock (FontFamilyConfigurationSyncLock)
+            {
+                unsafe
+                {
+                    ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontRegistryResetFontFamilyKeywordMappings());
+                }
+
+                var configuration = MilestroConfiguration.Configuration?.FontFamily;
+                if (configuration == null)
+                {
+                    return;
+                }
+
+                foreach (var mapping in configuration.GetKeywordMappings())
+                {
+                    SyncFontFamilyKeywordMapping(mapping.Key, mapping.Value);
+                }
+            }
+        }
+
+        private static unsafe void SyncFontFamilyKeywordMapping(string keyword, IEnumerable<FontFamilyToken> familyTokens)
+        {
+            var keywordBytes = Encoding.UTF8.GetBytes(keyword ?? "");
+            var payload = BuildFontFamilyPayload(familyTokens);
+            using var families = new UnmanagedStringArray(payload.Names);
+            fixed (byte* keywordPtr = keywordBytes)
+            fixed (int* kinds = payload.Kinds)
+            {
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontRegistrySetFontFamilyKeywordMapping(keywordPtr,
+                    (ulong)keywordBytes.Length,
+                    families.Ptr,
+                    kinds,
+                    families.Length));
+            }
+        }
+
+        private static FontFamilyPayload BuildFontFamilyPayload(IEnumerable<FontFamilyToken> familyTokens)
+        {
+            var names = new List<string>();
+            var kinds = new List<int>();
+            if (familyTokens != null)
+            {
+                foreach (var token in familyTokens)
+                {
+                    if (token.Value.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    names.Add(token.Value);
+                    kinds.Add((int)token.Kind);
+                }
+            }
+
+            return new FontFamilyPayload(names, kinds.ToArray());
+        }
+
+        private sealed class FontFamilyPayload
+        {
+            public FontFamilyPayload(List<string> names, int[] kinds)
+            {
+                Names = names;
+                Kinds = kinds;
+            }
+
+            public List<string> Names { get; }
+
+            public int[] Kinds { get; }
         }
 
         public static void RegisterFontFromPath(string path)

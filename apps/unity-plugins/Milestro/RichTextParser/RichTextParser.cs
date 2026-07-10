@@ -6,6 +6,7 @@ using System.Text;
 using System.Xml;
 using Milestro.Model;
 using Milestro.RichTextParser.AST;
+using Milestro.Skia;
 using Paraparty.Colors;
 using UnityEngine;
 using XmlNode = Milestro.RichTextParser.AST.XmlNode;
@@ -224,9 +225,10 @@ namespace Milestro.RichTextParser
                 }
 
                 if (node.Attributes.TryGetValue("face", out var face)
-                    && TryParseFontFamilies(face, out var fontFamilies))
+                    && FontFamilyParser.TryParseFontFamilyList(face, out var fontFamilies))
                 {
-                    state.FontFamilies = fontFamilies;
+                    state.FontFamilyTokens = fontFamilies;
+                    state.FontFamilies = FontFamilyParser.ToSourceFamilyList(fontFamilies);
                 }
             }
             else if (node.Tag == "span")
@@ -249,9 +251,10 @@ namespace Milestro.RichTextParser
                 }
 
                 if (node.Attributes.TryGetValue("face", out var face)
-                    && TryParseFontFamilies(face, out var fontFamilies))
+                    && FontFamilyParser.TryParseFontFamilyList(face, out var fontFamilies))
                 {
-                    state.FontFamilies = fontFamilies;
+                    state.FontFamilyTokens = fontFamilies;
+                    state.FontFamilies = FontFamilyParser.ToSourceFamilyList(fontFamilies);
                 }
 
                 if (node.Attributes.TryGetValue("weight", out var weight)
@@ -372,27 +375,5 @@ namespace Milestro.RichTextParser
             return false;
         }
 
-        private static bool TryParseFontFamilies(string value, out List<string> fontFamilies)
-        {
-            fontFamilies = new List<string>();
-
-            foreach (var item in value.Split(','))
-            {
-                var family = item.Trim();
-                if (family.Length >= 2
-                    && ((family[0] == '"' && family[family.Length - 1] == '"')
-                        || (family[0] == '\'' && family[family.Length - 1] == '\'')))
-                {
-                    family = family.Substring(1, family.Length - 2).Trim();
-                }
-
-                if (family.Length > 0)
-                {
-                    fontFamilies.Add(family);
-                }
-            }
-
-            return fontFamilies.Count > 0;
-        }
     }
 }

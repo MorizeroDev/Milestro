@@ -83,6 +83,37 @@ namespace Milestro.Binding
                                                                            int fallbackToSystem);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontRegistryResolveTypefaceFromFamilies")]
+        internal static extern unsafe long SkiaFontRegistryResolveTypefaceFromFamilies(out IntPtr ret,
+                                                                                       void** families,
+                                                                                       uint familyCount,
+                                                                                       int weight,
+                                                                                       float size,
+                                                                                       int fallbackToSystem);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontRegistryResolveTypefaceFromFamilyTokens")]
+        internal static extern unsafe long SkiaFontRegistryResolveTypefaceFromFamilyTokens(out IntPtr ret,
+                                                                                           void** families,
+                                                                                           int* familyKinds,
+                                                                                           uint familyCount,
+                                                                                           int weight,
+                                                                                           float size,
+                                                                                           int fallbackToSystem);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontRegistryResetFontFamilyKeywordMappings")]
+        internal static extern unsafe long SkiaFontRegistryResetFontFamilyKeywordMappings();
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontRegistrySetFontFamilyKeywordMapping")]
+        internal static extern unsafe long SkiaFontRegistrySetFontFamilyKeywordMapping(byte* keyword,
+                                                                                       ulong keywordSize,
+                                                                                       void** families,
+                                                                                       int* familyKinds,
+                                                                                       uint familyCount);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontFamilyListDestroy")]
         internal static extern unsafe long SkiaFontFamilyListDestroy(ref IntPtr ret);
 
@@ -889,6 +920,11 @@ namespace Milestro.Binding
         internal static extern unsafe long SkiaTextlayoutStrutStyleSetFontFamilies(IntPtr s, void** families, uint size);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutStrutStyleSetFontFamilyTokens")]
+        internal static extern unsafe long
+        SkiaTextlayoutStrutStyleSetFontFamilyTokens(IntPtr s, void** families, int* familyKinds, uint size);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutStrutStyleSetFontStyle")]
         internal static extern unsafe long SkiaTextlayoutStrutStyleSetFontStyle(IntPtr s, int weight, int width, int slant);
 
@@ -1062,6 +1098,11 @@ namespace Milestro.Binding
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleSetFontFamilies")]
         internal static extern unsafe long SkiaTextlayoutTextStyleSetFontFamilies(IntPtr s, void** families, uint size);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleSetFontFamilyTokens")]
+        internal static extern unsafe long
+        SkiaTextlayoutTextStyleSetFontFamilyTokens(IntPtr s, void** families, int* familyKinds, uint size);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleSetBaselineShift")]

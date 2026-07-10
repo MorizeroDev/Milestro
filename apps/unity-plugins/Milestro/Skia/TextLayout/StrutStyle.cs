@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Milestro.Binding;
 using Milestro.Model;
+using Milestro.Skia;
 using Paraparty.UnityNative;
 using Paraparty.UnityNative.Base;
 
@@ -34,12 +35,14 @@ namespace Milestro.Skia.TextLayout
             base.DisposeUnmanaged();
         }
 
-        public unsafe void SetFontFamilies(List<string> fontFamily)
+        public void SetFontFamilies(List<string> fontFamily)
         {
-            using var families = new UnmanagedStringArray(fontFamily);
-            ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutStrutStyleSetFontFamilies(NativePtr, families.Ptr, families.Length)
-            );
+            SetFontFamilyTokens(FontFamilyDeclaration.ToBareTokens(fontFamily));
+        }
+
+        public void SetFontFamilyTokens(List<FontFamilyToken> fontFamilies)
+        {
+            FontRegistry.ApplyStrutStyleFontFamilyTokens(NativePtr, fontFamilies ?? new List<FontFamilyToken>());
         }
 
         public void GetFontStyle(out int weight, out FontWidth width, out FontSlant slant)

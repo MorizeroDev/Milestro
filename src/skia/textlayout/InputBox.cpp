@@ -520,6 +520,7 @@ InputBox::InputBox(ParagraphStyle* paragraphStyle, TextStyle* textStyle) : Input
         }
     }
     if (textStyle != nullptr) {
+        textStyleDeclaration_ = *textStyle;
         textStyle_ = textStyle->spawn();
         paragraphStyle_.setTextStyle(textStyle_);
     }
@@ -1391,10 +1392,10 @@ std::unique_ptr<::skia::textlayout::Paragraph> InputBox::buildParagraphForText(c
         paragraphStyle.setEllipsis(SkString(ellipsisText_.c_str()));
     }
 
-    auto builder = ::skia::textlayout::ParagraphBuilder::make(paragraphStyle,
-                                                              fontCollection->unwrap(),
-                                                              unicodeProvider->unwrap());
-    builder->pushStyle(textStyle_);
+    auto builder = fontCollection->MakeInputParagraphBuilder(
+            paragraphStyle,
+            textStyleDeclaration_,
+            unicodeProvider->unwrap());
     builder->addText(text.c_str(), text.size());
     auto paragraph = builder->Build();
     if (softWrap_ || ellipsize) {

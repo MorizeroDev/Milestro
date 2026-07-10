@@ -2,6 +2,7 @@
 #include <Milestro/log/log.h>
 #include "milestro_game_retcode.h"
 #include "Milestro/skia/textlayout/ParagraphStyle.h"
+#include "milestro_game_skia_fontfamilytokens.h"
 
 extern "C" {
 int64_t MilestroSkiaTextlayoutStrutStyleCreate(milestro::skia::textlayout::StrutStyle *&ret) try {
@@ -22,11 +23,15 @@ int64_t MilestroSkiaTextlayoutStrutStyleDestroy(milestro::skia::textlayout::Stru
 int64_t MilestroSkiaTextlayoutStrutStyleSetFontFamilies(milestro::skia::textlayout::StrutStyle *s,
                                                         uint8_t **families,
                                                         uint32_t size) {
-    std::vector<SkString> fontFamilies(size);
-    for (int i = 0; i < size; i++) {
-        fontFamilies[i] = SkString(reinterpret_cast<const char *>(families[i]));
-    }
-    s->setFontFamilies(std::move(fontFamilies));
+    s->setFontFamilyTokens(ReadFamilyTokens(families, nullptr, size));
+    return MILESTRO_API_RET_OK;
+}
+
+int64_t MilestroSkiaTextlayoutStrutStyleSetFontFamilyTokens(milestro::skia::textlayout::StrutStyle *s,
+                                                            uint8_t **families,
+                                                            int32_t *familyKinds,
+                                                            uint32_t size) {
+    s->setFontFamilyTokens(ReadFamilyTokens(families, familyKinds, size));
     return MILESTRO_API_RET_OK;
 }
 

@@ -149,9 +149,14 @@ Internal component building blocks:
 - `RenderTextureGraphic` and `RenderTextureMeshPresenter`: present render texture
   output in UI and world-space contexts.
 
-Current default text components use `Source Han Sans VF` as the initial font
-family. Register that font, or change the component's font family list before
-rendering.
+Current default text components use `system-ui` as the initial font family.
+Font family lists accept keyword mappings. Milestro predefines `serif`,
+`sans-serif`, `monospace`, and `system-ui`, and applications can add or override
+their own keywords such as `heading`, `body`, or `code`. Unquoted rich text
+values first check keyword mappings; quoted rich-text values such as `"serif"`
+are treated as literal named families. The TextLayout `FontCollection` expands
+these declarations when a paragraph is built, then delegates concrete family
+matching to SkParagraph's registered and system font managers.
 
 ## Configuration
 
@@ -163,6 +168,10 @@ Milestro.Configuration.MilestroConfiguration.Configuration
 
 Current configuration groups:
 
+- `FontFamily`: override built-in font-family keywords such as `sans-serif` or
+  `system-ui`, or define additional keyword mappings. Mapping values may refer
+  to other keywords, and quoted values stay literal named families. Resetting a
+  built-in keyword mapping restores its Milestro default.
 - `InputBoxShortcut`: undo/redo and clipboard shortcut variants.
 - `ScrollAxisLock`: scroll gesture deadzone, dominance ratio, and timeout values.
 - `TextInput`: scroll-wheel step, key repeat timing, keyboard scroll interlock,

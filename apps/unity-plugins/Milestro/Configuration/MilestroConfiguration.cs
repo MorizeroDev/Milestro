@@ -10,6 +10,8 @@ namespace Milestro.Configuration
 
         public ScrollTweenConfiguration ScrollTween { get; set; } = new ScrollTweenConfiguration();
 
+        public FontFamilyConfiguration FontFamily { get; set; } = new FontFamilyConfiguration();
+
         public TextInputConfiguration TextInput { get; set; } = new TextInputConfiguration();
 
         public WorldSpaceTextBoxConfiguration WorldSpaceTextBox { get; set; } = new WorldSpaceTextBoxConfiguration();

@@ -395,6 +395,7 @@ set(
         src/log/log_unitylog.cpp
         src/io/milestro_io.cpp
 
+        src/skia/FontFamilyKeywordMap.cpp
         src/skia/FontRegistry.cpp
         src/skia/MilestroRegisteredFontMgr.cpp
         src/skia/unicode/SkUnicodeNop.cpp

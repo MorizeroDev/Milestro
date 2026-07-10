@@ -9,7 +9,7 @@ namespace Milestro.Experimental.Components
     {
         [TextArea(3, 10)][SerializeField] string content = "";
 
-        [SerializeField] List<string> fontFamilies = new List<string>() { "Source Han Sans VF" };
+        [SerializeField] List<string> fontFamilies = new List<string>() { "system-ui" };
         [SerializeField] float size = 36;
         [SerializeField] string locale = "zh-Hans";
 

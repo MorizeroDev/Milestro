@@ -2,7 +2,8 @@
 #include <Milestro/log/log.h>
 #include "milestro_game_retcode.h"
 #include "Milestro/skia/textlayout/TextStyle.h"
-#include "Milestro/skia/FontRegistry.h"
+#include "Milestro/skia/Typeface.h"
+#include "milestro_game_skia_fontfamilytokens.h"
 
 extern "C" {
 int64_t MilestroSkiaTextlayoutTextStyleCreate(milestro::skia::textlayout::TextStyle *&ret) try {
@@ -171,11 +172,15 @@ int64_t MilestroSkiaTextlayoutTextStyleGetFontSize(milestro::skia::textlayout::T
 int64_t MilestroSkiaTextlayoutTextStyleSetFontFamilies(milestro::skia::textlayout::TextStyle *s,
                                                        uint8_t **families,
                                                        uint32_t size) {
-    std::vector<SkString> fontFamilies(size);
-    for (int i = 0; i < size; i++) {
-        fontFamilies[i] = SkString(reinterpret_cast<const char *>(families[i]));
-    }
-    s->setFontFamilies(std::move(fontFamilies));
+    s->setFontFamilyTokens(ReadFamilyTokens(families, nullptr, size));
+    return MILESTRO_API_RET_OK;
+}
+
+int64_t MilestroSkiaTextlayoutTextStyleSetFontFamilyTokens(milestro::skia::textlayout::TextStyle *s,
+                                                           uint8_t **families,
+                                                           int32_t *familyKinds,
+                                                           uint32_t size) {
+    s->setFontFamilyTokens(ReadFamilyTokens(families, familyKinds, size));
     return MILESTRO_API_RET_OK;
 }
 

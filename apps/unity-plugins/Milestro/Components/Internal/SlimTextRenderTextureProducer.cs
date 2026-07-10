@@ -13,7 +13,7 @@ namespace Milestro.Components.Internal
     [AddComponentMenu("Milestro/Internal/Slim Text Render Texture Producer")]
     public class SlimTextRenderTextureProducer : RenderTextureProducer
     {
-        private const string DefaultFontFamily = "Source Han Sans VF";
+        private const string DefaultFontFamily = "system-ui";
 
         [SerializeField] private string m_text = "";
         [SerializeField] private string m_fontFamily = DefaultFontFamily;
