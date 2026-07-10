@@ -1,9 +1,13 @@
 # ignore Unity Plugins Binary
-unity-plugins/Milestro/Plugins/**
-!unity-plugins/Milestro/Plugins/iOS.meta
-!unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp
-!unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp.meta
+unity-plugins/Milestro/Plugins/**/*.so
+unity-plugins/Milestro/Plugins/**/*.dll
+unity-plugins/Milestro/Plugins/**/*.dylib
+unity-plugins/Milestro/Plugins/iOS/Milestro.framework
 
 # ignore icudtl
 unity-plugins/Resources/Milestro/icudtl.dat.bytes
 !unity-plugins/Resources/Milestro/icudtl.dat.bytes.meta
+
+# ignore old platform
+unity-plugins/Milestro/Plugins/Android/armeabi-v7a/
+unity-plugins/Milestro/Plugins/Android/armeabi-v7a.meta
