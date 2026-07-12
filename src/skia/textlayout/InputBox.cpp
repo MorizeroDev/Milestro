@@ -1806,9 +1806,6 @@ SkScalar InputBox::caretXForDisplayOffset(size_t displayUtf8,
     if (displayUtf8 <= lineStartUtf8) {
         return ToFloat(lineMetrics.fLeft);
     }
-    if (displayUtf8 >= lineEndUtf8) {
-        return ToFloat(lineMetrics.fLeft + lineMetrics.fWidth);
-    }
 
     const auto caretUtf16 = displayMap.utf8ToUtf16(displayUtf8);
     const auto utf16Length = displayMap.utf16Length();
@@ -1818,7 +1815,9 @@ SkScalar InputBox::caretXForDisplayOffset(size_t displayUtf8,
 
     ::skia::textlayout::Paragraph::GlyphInfo glyphInfo;
     auto glyphProbeUtf16 = caretUtf16;
-    if (glyphProbeUtf16 >= utf16Length) {
+    if (displayUtf8 >= lineEndUtf8 && lineEndUtf8 > lineStartUtf8) {
+        glyphProbeUtf16 = displayMap.utf8ToUtf16(displayMap.previousBoundary(lineEndUtf8));
+    } else if (glyphProbeUtf16 >= utf16Length) {
         glyphProbeUtf16 = utf16Length - 1;
     }
 

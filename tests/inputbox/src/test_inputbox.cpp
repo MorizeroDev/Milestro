@@ -1002,6 +1002,176 @@ TEST_F(InputBoxTest, CaretMovesToEmptyTrailingLineAfterInsertedNewline) {
     EXPECT_NEAR(trailingLineCaret.left, 0.0f, 0.001f);
 }
 
+TEST_F(InputBoxTest, TrailingAsciiSpacesAdvanceCaretAndEditingState) {
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true);
+    inputBox->setSoftWrap(false);
+    inputBox->setText("ab", 2);
+    inputBox->setCursorUtf8(2, skia::textlayout::Affinity::kDownstream);
+    const auto beforeSpace = inputBox->getCaretRect();
+
+    inputBox->insertText(" ", 1);
+    const auto afterOneSpace = inputBox->getCaretRect();
+    EXPECT_EQ(inputBox->getText(), "ab ");
+    EXPECT_EQ(inputBox->getCursorUtf8(), 3U);
+    EXPECT_FALSE(inputBox->hasSelection());
+    EXPECT_GT(afterOneSpace.left, beforeSpace.left);
+
+    inputBox->insertText(" ", 1);
+    const auto afterTwoSpaces = inputBox->getCaretRect();
+    EXPECT_EQ(inputBox->getText(), "ab  ");
+    EXPECT_EQ(inputBox->getCursorUtf8(), 4U);
+    EXPECT_GT(afterTwoSpaces.left, afterOneSpace.left);
+
+    ASSERT_TRUE(inputBox->movePrevious(true));
+    const auto selection = inputBox->getSelection();
+    ASSERT_TRUE(selection.hasSelection);
+    EXPECT_EQ(selection.startUtf8, 3U);
+    EXPECT_EQ(selection.endUtf8, 4U);
+    EXPECT_NEAR(inputBox->getCaretRect().left, afterOneSpace.left, 0.001f);
+    const auto selectionRects = inputBox->getSelectionRects();
+    ASSERT_FALSE(selectionRects.empty());
+    EXPECT_GT(selectionRects.back().right, selectionRects.back().left);
+
+    ASSERT_TRUE(inputBox->moveNext(false));
+    EXPECT_FALSE(inputBox->hasSelection());
+    EXPECT_EQ(inputBox->getCursorUtf8(), 4U);
+    EXPECT_NEAR(inputBox->getCaretRect().left, afterTwoSpaces.left, 0.001f);
+
+    ASSERT_TRUE(inputBox->deleteBackward());
+    EXPECT_EQ(inputBox->getText(), "ab ");
+    EXPECT_NEAR(inputBox->getCaretRect().left, afterOneSpace.left, 0.001f);
+    ASSERT_TRUE(inputBox->undo());
+    EXPECT_EQ(inputBox->getText(), "ab  ");
+    EXPECT_NEAR(inputBox->getCaretRect().left, afterTwoSpaces.left, 0.001f);
+    ASSERT_TRUE(inputBox->redo());
+    EXPECT_EQ(inputBox->getText(), "ab ");
+    EXPECT_NEAR(inputBox->getCaretRect().left, afterOneSpace.left, 0.001f);
+}
+
+TEST_F(InputBoxTest, TrailingAsciiSpacesAdvanceAtAlignedAndExplicitLineEnds) {
+    const std::vector<::skia::textlayout::TextAlign> alignments = {
+            ::skia::textlayout::TextAlign::kLeft,
+            ::skia::textlayout::TextAlign::kCenter,
+            ::skia::textlayout::TextAlign::kRight,
+    };
+
+    for (const auto alignment: alignments) {
+        auto inputBox = MakeInputBox(alignment, true, true);
+        inputBox->setViewport(320, 160);
+        inputBox->setSoftWrap(false);
+
+        const std::string text = "ab  \ncd  ";
+        inputBox->setText(text.c_str(), text.size());
+
+        inputBox->setCursorUtf8(2, skia::textlayout::Affinity::kDownstream);
+        const auto firstLineBeforeSpaces = inputBox->getCaretRect();
+        inputBox->setCursorUtf8(3, skia::textlayout::Affinity::kDownstream);
+        const auto firstLineAfterOneSpace = inputBox->getCaretRect();
+        inputBox->setCursorUtf8(4, skia::textlayout::Affinity::kDownstream);
+        const auto firstLineAfterTwoSpaces = inputBox->getCaretRect();
+        EXPECT_GT(firstLineAfterOneSpace.left, firstLineBeforeSpaces.left);
+        EXPECT_GT(firstLineAfterTwoSpaces.left, firstLineAfterOneSpace.left);
+        EXPECT_NEAR(firstLineAfterTwoSpaces.top, firstLineBeforeSpaces.top, 0.001f);
+
+        inputBox->setCursorUtf8(7, skia::textlayout::Affinity::kDownstream);
+        const auto finalLineBeforeSpaces = inputBox->getCaretRect();
+        inputBox->setCursorUtf8(8, skia::textlayout::Affinity::kDownstream);
+        const auto finalLineAfterOneSpace = inputBox->getCaretRect();
+        inputBox->setCursorUtf8(9, skia::textlayout::Affinity::kDownstream);
+        const auto finalLineAfterTwoSpaces = inputBox->getCaretRect();
+        EXPECT_GT(finalLineAfterOneSpace.left, finalLineBeforeSpaces.left);
+        EXPECT_GT(finalLineAfterTwoSpaces.left, finalLineAfterOneSpace.left);
+        EXPECT_NEAR(finalLineAfterTwoSpaces.top, finalLineBeforeSpaces.top, 0.001f);
+        EXPECT_GT(finalLineAfterTwoSpaces.top, firstLineAfterTwoSpaces.top);
+    }
+}
+
+TEST_F(InputBoxTest, SoftWrappedTrailingSpaceAdvancesCaretOnItsResolvedLine) {
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    inputBox->setViewport(58, 160);
+    inputBox->setSoftWrap(true);
+    const std::string text = "ab  cd";
+    inputBox->setText(text.c_str(), text.size());
+
+    ASSERT_GT(inputBox->getLineCount(), 1U);
+    milestro_text::InputBoxLineMetrics firstLine;
+    ASSERT_TRUE(inputBox->getLineMetrics(0, firstLine));
+    ASSERT_GT(firstLine.endUtf8, firstLine.startUtf8);
+    ASSERT_EQ(text[firstLine.endUtf8 - 1], ' ');
+
+    inputBox->setCursorUtf8(firstLine.endUtf8 - 1, skia::textlayout::Affinity::kUpstream);
+    const auto beforeTrailingSpace = inputBox->getCaretRect();
+    inputBox->setCursorUtf8(firstLine.endUtf8, skia::textlayout::Affinity::kUpstream);
+    const auto afterTrailingSpace = inputBox->getCaretRect();
+    EXPECT_NEAR(afterTrailingSpace.top, beforeTrailingSpace.top, 0.001f);
+    EXPECT_GT(afterTrailingSpace.left, beforeTrailingSpace.left);
+    EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollX, 0.0f);
+}
+
+TEST_F(InputBoxTest, NbspRemainsVisibleWhileAsciiTrailingSpacesUseCaretGeometry) {
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true);
+    const std::string text = "ab\xC2\xA0";
+    inputBox->setText(text.c_str(), text.size());
+    inputBox->setCursorUtf8(2, skia::textlayout::Affinity::kDownstream);
+    const auto beforeNbsp = inputBox->getCaretRect();
+    inputBox->setCursorUtf8(text.size(), skia::textlayout::Affinity::kDownstream);
+    const auto afterNbsp = inputBox->getCaretRect();
+    EXPECT_GT(afterNbsp.left, beforeNbsp.left);
+}
+
+TEST_F(InputBoxTest, LineEndRangeProbePreservesEmojiAndRtlDirection) {
+    const std::string family = "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7";
+    auto emojiInputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, false);
+    emojiInputBox->setText(("a" + family).c_str(), 1 + family.size());
+    emojiInputBox->setCursorUtf8(1, skia::textlayout::Affinity::kDownstream);
+    const auto beforeEmoji = emojiInputBox->getCaretRect();
+    emojiInputBox->setCursorUtf8(1 + family.size(), skia::textlayout::Affinity::kDownstream);
+    EXPECT_GT(emojiInputBox->getCaretRect().left, beforeEmoji.left);
+
+    const std::string rtlText = "\xD7\x90\xD7\x91  ";
+    auto rtlInputBox = MakeInputBox(::skia::textlayout::TextAlign::kRight,
+                                    true,
+                                    false,
+                                    ::skia::textlayout::TextDirection::kRtl);
+    rtlInputBox->setText(rtlText.c_str(), rtlText.size());
+    rtlInputBox->setCursorUtf8(4, skia::textlayout::Affinity::kDownstream);
+    const auto beforeSpaces = rtlInputBox->getCaretRect();
+    rtlInputBox->setCursorUtf8(5, skia::textlayout::Affinity::kDownstream);
+    const auto afterOneSpace = rtlInputBox->getCaretRect();
+    rtlInputBox->setCursorUtf8(6, skia::textlayout::Affinity::kDownstream);
+    const auto afterTwoSpaces = rtlInputBox->getCaretRect();
+    EXPECT_LT(afterOneSpace.left, beforeSpaces.left);
+    EXPECT_LT(afterTwoSpaces.left, afterOneSpace.left);
+}
+
+TEST_F(InputBoxTest, CompositionTrailingSpacesAdvanceAndStayHorizontallyVisible) {
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true);
+    inputBox->setViewport(96, 72);
+    inputBox->setSoftWrap(false);
+    const std::string committed = "1234567890";
+    inputBox->setText(committed.c_str(), committed.size());
+    inputBox->setCursorUtf8(committed.size(), skia::textlayout::Affinity::kDownstream);
+    const auto beforeComposition = inputBox->getCaretRect();
+
+    ASSERT_TRUE(inputBox->setComposition("  ", 2));
+    const auto duringComposition = inputBox->getCaretRect();
+    EXPECT_GT(duringComposition.left, beforeComposition.left);
+    EXPECT_LE(duringComposition.right - inputBox->getMetrics().scrollX,
+              inputBox->getMetrics().viewportWidth + 0.001f);
+
+    ASSERT_TRUE(inputBox->commitComposition(nullptr, 0));
+    EXPECT_EQ(inputBox->getText(), committed + "  ");
+    EXPECT_EQ(inputBox->getCursorUtf8(), committed.size() + 2U);
+    const auto afterCommit = inputBox->getCaretRect();
+    EXPECT_NEAR(afterCommit.left, duringComposition.left, 0.001f);
+    const auto metrics = inputBox->getMetrics();
+    EXPECT_GT(metrics.scrollX, 0.0f);
+    EXPECT_LE(afterCommit.right - metrics.scrollX, metrics.viewportWidth + 0.001f);
+
+    ASSERT_TRUE(inputBox->hitTest(afterCommit.left - 1.0f, (afterCommit.top + afterCommit.bottom) * 0.5f));
+    EXPECT_GE(inputBox->getCursorUtf8(), committed.size() + 1U);
+}
+
 TEST_F(InputBoxTest, CaretWidthCanBeZeroForHiddenCaretGeometry) {
     auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
     inputBox->setViewport(320, 160);
