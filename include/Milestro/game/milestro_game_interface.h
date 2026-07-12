@@ -27,6 +27,7 @@ extern "C" {
 
 // 返回值为大版本号 major
 MILESTRO_API int64_t MilestroGetVersion(int32_t& major, int32_t& minor, int32_t& patch);
+MILESTRO_API int64_t MilestroImeCancelComposition(int32_t& result);
 
 [[milize::CSharpType("IntPtr")]] MILESTRO_API void* MilestroUnityRenderGetRenderEventAndDataFunc();
 MILESTRO_API int64_t MilestroUnityRenderGetMetalRenderEventId(int32_t& eventId);

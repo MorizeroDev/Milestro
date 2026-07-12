@@ -18,6 +18,7 @@ finished UPM package.
 - An iOS framework/static-link bridge in `apps/unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp`.
 - Managed Unity wrappers for Skia canvas, images, paths, SVG, fonts, text layout, render textures, and Unicode helpers.
 - Unity components for UI text, world-space text, and editable text input.
+- Hybrid legacy/Input System routing for keyboard, text, composition, and IME.
 - Rich text parsing helpers for a small XML-like tag set.
 - Native Unity render-event integration for selected graphics backends.
 
@@ -43,6 +44,12 @@ These are required by `Milestro.asmdef`: `party.para.util.colors` is used by the
 rich text color parser, and `party.para.util.unitynative` is used by managed
 native-object wrappers and native callback helpers.
 
+`com.unity.inputsystem` is optional. With a version in `[1.18.0,2.0.0)`, the
+packaged `Milestro.InputSystem` assembly serves projects using
+`InputSystemUIInputModule`. Without it, the base `Milestro` assembly remains
+importable and can use Unity's legacy `StandaloneInputModule` when the Legacy
+Input Manager is enabled.
+
 If a consuming Unity project defines `MILEASE_HAS_NEWTONSOFT` and provides
 `Newtonsoft.Json`, Milestro model DTOs include optional `JsonProperty` metadata.
 Newtonsoft remains optional and is not required by default.
@@ -55,7 +62,9 @@ Runtime assets needed by the current code:
   the source data is `ext/icu-cmake/common/icudtl.dat`, and the Unity target path
   maps to `apps/unity-plugins/Resources/Milestro/icudtl.dat.bytes`.
 
-See [docs/unity.md](docs/unity.md) for the full Unity integration notes.
+See [docs/unity.md](docs/unity.md) for the full Unity integration notes and
+[docs/hybrid-input.md](docs/hybrid-input.md) for provider selection,
+capabilities, and migration from the removed legacy input components.
 
 ## Main Unity APIs
 
@@ -109,7 +118,7 @@ Unity layer:
 ## Build And Tooling
 
 Milestro uses CMake for native code and Gradle for C header to C# binding
-generation.
+generation and allowlisted Unity release packaging.
 
 The normal CMake build prepares the native dependencies it needs. A standard
 local build does not require a separate Skia build step:

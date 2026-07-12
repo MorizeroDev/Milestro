@@ -312,12 +312,18 @@ if (APPLE)
     find_library(CORESERVICES CoreServices)
     find_library(COREGRAPHICS CoreGraphics)
     find_library(METAL Metal)
+    if (NOT IOS)
+        find_library(APPKIT AppKit)
+    endif ()
     set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES}
             "${FOUNDATION}" "${COREFOUNDATION}" "${CORETEXT}" "${CORESERVICES}" "${COREGRAPHICS}" "${METAL}")
+    if (APPKIT)
+        set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} "${APPKIT}")
+    endif ()
 endif ()
 
 if (WIN32)
-    set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} d3d12 dxgi d3dcompiler dwrite gdi32 ole32 uuid)
+    set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} d3d12 dxgi d3dcompiler dwrite gdi32 imm32 ole32 uuid)
 elseif (CMAKE_DL_LIBS)
     set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} ${CMAKE_DL_LIBS})
 endif ()
@@ -394,6 +400,8 @@ set(
         src/log/log.cpp
         src/log/log_unitylog.cpp
         src/io/milestro_io.cpp
+        src/ime/ImeSession_unsupported.cpp
+        src/ime/ImeSession_windows.cpp
 
         src/skia/FontFamilyKeywordMap.cpp
         src/skia/FontRegistry.cpp
@@ -423,10 +431,17 @@ set(
         src/unicode/util.cpp
 )
 
+if (APPLE)
+    list(APPEND MILESTRO_CORE_FILE
+            src/ime/ImeSession_ios.mm
+            src/ime/ImeSession_macos.mm)
+endif ()
+
 set(
         MILESTRO_APPLICATION_FILE
 
         src/game/milestro_game_plugin_main.cpp
+        src/game/milestro_game_ime.cpp
         src/game/milestro_game_unity_render.cpp
         src/unity_render/MilestroUnityRenderDispatcher.cpp
         src/unity_render/MilestroUnityRenderSubmissionDraw.cpp

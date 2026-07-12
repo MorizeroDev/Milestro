@@ -11,6 +11,10 @@ int64_t FrameworkBindingMilestroGetVersion(int32_t& major, int32_t& minor, int32
     return MilestroGetVersion(major, minor, patch);
 }
 
+int64_t FrameworkBindingMilestroImeCancelComposition(int32_t& result) {
+    return MilestroImeCancelComposition(result);
+}
+
 void* FrameworkBindingMilestroUnityRenderGetRenderEventAndDataFunc() {
     return MilestroUnityRenderGetRenderEventAndDataFunc();
 }
@@ -84,6 +88,55 @@ int64_t FrameworkBindingMilestroSkiaFontRegistryResolveTypeface(milestro::skia::
                                                                 float size,
                                                                 int32_t fallbackToSystem) {
     return MilestroSkiaFontRegistryResolveTypeface(ret, family, familySize, weight, size, fallbackToSystem);
+}
+
+int64_t
+FrameworkBindingMilestroSkiaFontRegistryResolveTypefaceFromFamilies(milestro::skia::Font*& ret,
+                                                                    [[milize::CSharpType("void**")]] uint8_t** families,
+                                                                    uint32_t familyCount,
+                                                                    int32_t weight,
+                                                                    float size,
+                                                                    int32_t fallbackToSystem) {
+    return MilestroSkiaFontRegistryResolveTypefaceFromFamilies(ret,
+                                                               families,
+                                                               familyCount,
+                                                               weight,
+                                                               size,
+                                                               fallbackToSystem);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontRegistryResolveTypefaceFromFamilyTokens(
+        milestro::skia::Font*& ret,
+        [[milize::CSharpType("void**")]] uint8_t** families,
+        [[milize::CSharpType("int*")]] int32_t* familyKinds,
+        uint32_t familyCount,
+        int32_t weight,
+        float size,
+        int32_t fallbackToSystem) {
+    return MilestroSkiaFontRegistryResolveTypefaceFromFamilyTokens(ret,
+                                                                   families,
+                                                                   familyKinds,
+                                                                   familyCount,
+                                                                   weight,
+                                                                   size,
+                                                                   fallbackToSystem);
+}
+
+int64_t FrameworkBindingMilestroSkiaFontRegistryResetFontFamilyKeywordMappings() {
+    return MilestroSkiaFontRegistryResetFontFamilyKeywordMappings();
+}
+
+int64_t
+FrameworkBindingMilestroSkiaFontRegistrySetFontFamilyKeywordMapping([[milize::CSharpType("byte*")]] uint8_t* keyword,
+                                                                    uint64_t keywordSize,
+                                                                    [[milize::CSharpType("void**")]] uint8_t** families,
+                                                                    [[milize::CSharpType("int*")]] int32_t* familyKinds,
+                                                                    uint32_t familyCount) {
+    return MilestroSkiaFontRegistrySetFontFamilyKeywordMapping(keyword,
+                                                               keywordSize,
+                                                               families,
+                                                               familyKinds,
+                                                               familyCount);
 }
 
 int64_t FrameworkBindingMilestroSkiaFontFamilyListDestroy(
@@ -1154,6 +1207,14 @@ FrameworkBindingMilestroSkiaTextlayoutStrutStyleSetFontFamilies(milestro::skia::
     return MilestroSkiaTextlayoutStrutStyleSetFontFamilies(s, families, size);
 }
 
+int64_t
+FrameworkBindingMilestroSkiaTextlayoutStrutStyleSetFontFamilyTokens(milestro::skia::textlayout::StrutStyle* s,
+                                                                    [[milize::CSharpType("void**")]] uint8_t** families,
+                                                                    [[milize::CSharpType("int*")]] int32_t* familyKinds,
+                                                                    uint32_t size) {
+    return MilestroSkiaTextlayoutStrutStyleSetFontFamilyTokens(s, families, familyKinds, size);
+}
+
 int64_t FrameworkBindingMilestroSkiaTextlayoutStrutStyleSetFontStyle(milestro::skia::textlayout::StrutStyle* s,
                                                                      int32_t weight,
                                                                      int32_t width,
@@ -1379,6 +1440,14 @@ FrameworkBindingMilestroSkiaTextlayoutTextStyleSetFontFamilies(milestro::skia::t
                                                                [[milize::CSharpType("void**")]] uint8_t** families,
                                                                uint32_t size) {
     return MilestroSkiaTextlayoutTextStyleSetFontFamilies(s, families, size);
+}
+
+int64_t
+FrameworkBindingMilestroSkiaTextlayoutTextStyleSetFontFamilyTokens(milestro::skia::textlayout::TextStyle* s,
+                                                                   [[milize::CSharpType("void**")]] uint8_t** families,
+                                                                   [[milize::CSharpType("int*")]] int32_t* familyKinds,
+                                                                   uint32_t size) {
+    return MilestroSkiaTextlayoutTextStyleSetFontFamilyTokens(s, families, familyKinds, size);
 }
 
 int64_t FrameworkBindingMilestroSkiaTextlayoutTextStyleSetBaselineShift(milestro::skia::textlayout::TextStyle* s,

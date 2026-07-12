@@ -1,0 +1,25 @@
+{
+    "name": "Milestro.InputSystem",
+    "rootNamespace": "",
+    "references": [
+        "Milestro",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "MILESTRO_INPUT_SYSTEM_1_18_OR_NEWER"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.inputsystem",
+            "expression": "[1.18.0,2.0.0)",
+            "define": "MILESTRO_INPUT_SYSTEM_1_18_OR_NEWER"
+        }
+    ],
+    "noEngineReferences": false
+}

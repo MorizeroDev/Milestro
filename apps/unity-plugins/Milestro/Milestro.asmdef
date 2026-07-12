@@ -3,8 +3,7 @@
     "rootNamespace": "",
     "references": [
         "party.para.util.colors",
-        "party.para.util.unitynative",
-        "Unity.InputSystem"
+        "party.para.util.unitynative"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

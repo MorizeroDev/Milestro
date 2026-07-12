@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
+using Milestro.Input;
 using Milestro.Unicode;
 using UnityEngine;
 
@@ -29,6 +30,7 @@ namespace Milestro
         private static void RuntimeBoot()
         {
             Boot();
+            HybridInputRuntime.ResetAndInitialize();
         }
 
 #if UNITY_EDITOR

@@ -1,3 +1,8 @@
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.StandardOpenOption
+
 plugins {
     id("party.para.h2cs") version "2.0.0" apply true
 }
@@ -25,58 +30,216 @@ val unityPluginSourceDir = file("apps/unity-plugins")
 val unityPluginPackageOutputDir = providers.gradleProperty("milestroUnityPluginOutputDir")
     .map { file(it) }
     .orElse(layout.buildDirectory.dir("unity-plugin").map { it.asFile })
+val normalizedUnityPluginPackageOutputDir = unityPluginPackageOutputDir.map {
+    it.toPath().toAbsolutePath().normalize().toFile()
+}
+val canonicalUnityPluginPackageOutputDir = normalizedUnityPluginPackageOutputDir.map { it.canonicalFile }
 val icuDataFile = file("ext/icu-cmake/common/icudtl.dat")
+val unityPackageSourceRoots = listOf(
+    "Milestro",
+    "Milestro.Editor",
+    "Milestro.Experimental",
+    "Milestro.InputSystem",
+    "Resources",
+)
+val unityPackageSourceEntries = unityPackageSourceRoots + unityPackageSourceRoots
+    .map { "$it.meta" }
+    .filter { unityPluginSourceDir.resolve(it).isFile }
+val unityPackageSourceIncludes = unityPackageSourceEntries.map { entry ->
+    if (unityPluginSourceDir.resolve(entry).isDirectory) "$entry/**" else entry
+}
+val unityPackageSourceExcludes = listOf("**/.DS_Store")
+val unityPackageSourceFiles = fileTree(unityPluginSourceDir) {
+    include(unityPackageSourceIncludes)
+    exclude(unityPackageSourceExcludes)
+}
+val generatedUnityPackageFiles = setOf("Resources/Milestro/icudtl.dat.bytes")
+
+fun unityPackageOutputSentinel(outputDir: File) =
+    outputDir.parentFile.resolve(".${outputDir.name}.milestro-unity-package-output")
+
+fun unityPackageOutputSentinelContents(projectDir: File, outputDir: File) =
+    "milestro-unity-package-output-v1\nproject=${projectDir.path}\noutput=${outputDir.path}\n"
+
+fun unityPackageOutputSentinelIsValid(sentinel: File, expectedContents: String): Boolean {
+    val path = sentinel.toPath()
+    return Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) &&
+        Files.size(path) <= 4096L &&
+        Files.readString(path) == expectedContents
+}
 
 tasks {
-    val syncUnityPluginMilestro = register<Sync>("syncUnityPluginMilestro") {
+    val copyUnityPluginRuntime = register<Copy>("copyUnityPluginRuntime") {
         group = "build"
-        description = "Copies the Milestro Unity runtime assembly sources into the package output."
-
-        from(unityPluginSourceDir.resolve("Milestro"))
-        into(unityPluginPackageOutputDir.map { it.resolve("Milestro") })
-    }
-
-    val syncUnityPluginEditor = register<Sync>("syncUnityPluginEditor") {
-        group = "build"
-        description = "Copies the Milestro Unity editor assembly sources into the package output."
-
-        from(unityPluginSourceDir.resolve("Milestro.Editor"))
-        into(unityPluginPackageOutputDir.map { it.resolve("Milestro.Editor") })
-    }
-
-    val syncUnityPluginExperimental = register<Sync>("syncUnityPluginExperimental") {
-        group = "build"
-        description = "Copies the Milestro Unity experimental assembly sources into the package output."
-
-        from(unityPluginSourceDir.resolve("Milestro.Experimental"))
-        into(unityPluginPackageOutputDir.map { it.resolve("Milestro.Experimental") })
-    }
-
-    val syncUnityPluginResources = register<Sync>("syncUnityPluginResources") {
-        group = "build"
-        description = "Copies Milestro Unity resources and generates the ICU TextAsset."
+        description = "Copies the explicitly allowlisted Milestro Unity package roots into the package output."
         duplicatesStrategy = DuplicatesStrategy.FAIL
+        doNotTrackState("The validated Unity package output is completely rebuilt on every run.")
 
-        from(unityPluginSourceDir.resolve("Resources"))
-        into(unityPluginPackageOutputDir.map { it.resolve("Resources") })
+        doFirst {
+            val configuredOutputDir = normalizedUnityPluginPackageOutputDir.get()
+            val outputDir = canonicalUnityPluginPackageOutputDir.get()
+            val outputPath = outputDir.toPath()
+            val projectPath = projectDir.canonicalFile.toPath()
+            val sourcePath = unityPluginSourceDir.canonicalFile.toPath()
+            var unsafeReason = when {
+                Files.isSymbolicLink(configuredOutputDir.toPath()) ->
+                    "the configured output path is a symbolic link"
+                outputDir.parentFile == null -> "it is a filesystem root"
+                projectPath.startsWith(outputPath) -> "it contains the project directory"
+                sourcePath.startsWith(outputPath) -> "it contains the Unity package source directory"
+                outputPath.startsWith(sourcePath) -> "it is inside the Unity package source directory"
+                outputDir.exists() && !outputDir.isDirectory -> "the output exists but is not a directory"
+                else -> null
+            }
+            if (unsafeReason == null) {
+                val sentinel = unityPackageOutputSentinel(outputDir)
+                val expectedSentinel = unityPackageOutputSentinelContents(projectDir.canonicalFile, outputDir)
+                val sentinelExists = Files.exists(sentinel.toPath(), LinkOption.NOFOLLOW_LINKS)
+                val sentinelIsValid = unityPackageOutputSentinelIsValid(sentinel, expectedSentinel)
+                val outputEntries = outputDir.listFiles()
+                unsafeReason = when {
+                    sentinelExists && !sentinelIsValid ->
+                        "the ownership sentinel does not match this project and destination"
+                    outputDir.isDirectory && outputEntries == null ->
+                        "the output directory cannot be inspected"
+                    outputEntries?.isNotEmpty() == true && !sentinelIsValid ->
+                        "the non-empty output is not owned by this task"
+                    else -> null
+                }
+            }
+            if (unsafeReason != null) {
+                throw GradleException(
+                    "Unsafe Unity package output directory " +
+                        "(configured '$configuredOutputDir', canonical '$outputDir'): $unsafeReason.",
+                )
+            }
+            if (outputDir.exists() && !outputDir.deleteRecursively()) {
+                throw GradleException(
+                    "Could not rebuild Unity package output directory " +
+                        "(configured '$configuredOutputDir', canonical '$outputDir').",
+                )
+            }
+        }
+        from(unityPackageSourceFiles)
         from(icuDataFile) {
-            into("Milestro")
+            into("Resources/Milestro")
             rename { "icudtl.dat.bytes" }
+        }
+        into(canonicalUnityPluginPackageOutputDir)
+
+        doLast {
+            val configuredOutputDir = normalizedUnityPluginPackageOutputDir.get()
+            val outputDir = canonicalUnityPluginPackageOutputDir.get()
+            val sentinel = unityPackageOutputSentinel(outputDir)
+            val expectedSentinel = unityPackageOutputSentinelContents(projectDir.canonicalFile, outputDir)
+            val sentinelPath = sentinel.toPath()
+            if (Files.exists(sentinelPath, LinkOption.NOFOLLOW_LINKS)) {
+                if (!unityPackageOutputSentinelIsValid(sentinel, expectedSentinel)) {
+                    throw GradleException(
+                        "Unity package output sentinel changed during packaging " +
+                            "(configured '$configuredOutputDir', canonical '$outputDir'): ${sentinel.path}",
+                    )
+                }
+            } else {
+                Files.writeString(
+                    sentinelPath,
+                    expectedSentinel,
+                    StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.WRITE,
+                )
+            }
+        }
+    }
+
+    val verifyUnityPluginPackage = register("verifyUnityPluginPackage") {
+        group = "verification"
+        description = "Verifies that the Unity package exactly matches the release-root allowlist."
+        dependsOn(copyUnityPluginRuntime)
+
+        doLast {
+            unityPackageSourceEntries.forEach { entry ->
+                val source = unityPluginSourceDir.resolve(entry)
+                if (!source.exists()) {
+                    throw GradleException("Unity package allowlist source is missing: $entry")
+                }
+            }
+            val expectedFiles = unityPackageSourceFiles.files
+                .asSequence()
+                .filter { it.isFile }
+                .map { it.relativeTo(unityPluginSourceDir).invariantSeparatorsPath }
+                .toMutableSet()
+            expectedFiles.addAll(generatedUnityPackageFiles)
+
+            val outputDir = canonicalUnityPluginPackageOutputDir.get()
+            val actualFiles = if (outputDir.isDirectory) {
+                outputDir.walkTopDown()
+                    .filter { it.isFile }
+                    .map { it.relativeTo(outputDir).invariantSeparatorsPath }
+                    .toSet()
+            } else {
+                emptySet()
+            }
+            val missingFiles = expectedFiles - actualFiles
+            val unexpectedFiles = actualFiles - expectedFiles
+            if (missingFiles.isNotEmpty() || unexpectedFiles.isNotEmpty()) {
+                val details = buildString {
+                    if (missingFiles.isNotEmpty()) {
+                        appendLine("Missing Unity package files:")
+                        missingFiles.sorted().forEach { appendLine("  $it") }
+                    }
+                    if (unexpectedFiles.isNotEmpty()) {
+                        appendLine("Unexpected or stale Unity package files:")
+                        unexpectedFiles.sorted().forEach { appendLine("  $it") }
+                    }
+                }.trimEnd()
+                throw GradleException(details)
+            }
+
+            val guidPattern = Regex("(?m)^guid:\\s*(\\S+)\\s*$")
+            val metaFiles = actualFiles.filter { it.endsWith(".meta") }.sorted()
+            val metaWithoutGuid = mutableListOf<String>()
+            val filesByGuid = mutableMapOf<String, MutableList<String>>()
+            metaFiles.forEach { relativePath ->
+                val guid = guidPattern.find(outputDir.resolve(relativePath).readText())?.groupValues?.get(1)
+                if (guid == null) {
+                    metaWithoutGuid.add(relativePath)
+                } else {
+                    filesByGuid.getOrPut(guid) { mutableListOf() }.add(relativePath)
+                }
+            }
+            val duplicateGuids = filesByGuid.filterValues { it.size > 1 }
+            if (metaWithoutGuid.isNotEmpty() || duplicateGuids.isNotEmpty()) {
+                val details = buildString {
+                    if (metaWithoutGuid.isNotEmpty()) {
+                        appendLine("Unity package meta files without GUIDs:")
+                        metaWithoutGuid.forEach { appendLine("  $it") }
+                    }
+                    if (duplicateGuids.isNotEmpty()) {
+                        appendLine("Duplicate Unity package GUIDs:")
+                        duplicateGuids.toSortedMap().forEach { (guid, files) ->
+                            appendLine("  $guid")
+                            files.sorted().forEach { appendLine("    $it") }
+                        }
+                    }
+                }.trimEnd()
+                throw GradleException(details)
+            }
+
+            logger.lifecycle("Verified ${actualFiles.size} allowlisted Unity package files and ${metaFiles.size} unique GUIDs.")
         }
     }
 
     register("packageUnityPlugin") {
         group = "build"
-        description = "Packages Milestro Unity plugin sources and resources."
-        dependsOn(
-            syncUnityPluginMilestro,
-            syncUnityPluginEditor,
-            syncUnityPluginExperimental,
-            syncUnityPluginResources,
-        )
+        description = "Packages and verifies allowlisted Milestro Unity release roots and resources."
+        dependsOn(verifyUnityPluginPackage)
 
         doLast {
-            logger.lifecycle("Packaged Milestro Unity plugin to ${unityPluginPackageOutputDir.get()}.")
+            logger.lifecycle(
+                "Packaged Milestro Unity plugin " +
+                    "(configured '${normalizedUnityPluginPackageOutputDir.get()}', " +
+                    "canonical '${canonicalUnityPluginPackageOutputDir.get()}').",
+            )
         }
     }
 

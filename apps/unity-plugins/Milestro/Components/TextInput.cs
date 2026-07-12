@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Milestro.Components.Internal;
 using Milestro.Configuration;
-using Milestro.InputManagement;
+using Milestro.Input;
 using Milestro.Model;
 using Milestro.Skia;
 using Milestro.Skia.TextLayout;
@@ -18,7 +18,7 @@ using UnityEngine.Serialization;
 namespace Milestro.Components
 {
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(CanvasRenderer), typeof(InputStringReceiver))]
+    [RequireComponent(typeof(CanvasRenderer))]
     [AddComponentMenu("Milestro/Text Input")]
     public class TextInput : RenderTextureGraphic,
         IPointerDownHandler,
@@ -116,7 +116,9 @@ namespace Milestro.Components
         [NonSerialized] private RectTransform rectTransformCache;
         [NonSerialized] private UnityAutoRenderTextureSurface? surface;
         [NonSerialized] private InputBox? inputBox;
-        [NonSerialized] private InputStringReceiver receiver;
+        [NonSerialized] private HybridInputDispatcher.HybridInputSinkRegistration? inputRegistration;
+        [NonSerialized] private InputSink? inputSink;
+        [NonSerialized] private readonly TextInputFrameState inputFrameState = new TextInputFrameState();
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
         [NonSerialized] private bool styleDirty = true;
         [NonSerialized] private bool layoutDirty = true;
@@ -396,7 +398,9 @@ namespace Milestro.Components
         {
             base.OnEnable();
             rectTransformCache = GetComponent<RectTransform>();
-            receiver = GetComponent<InputStringReceiver>();
+            inputRegistration?.Dispose();
+            inputSink ??= new InputSink(this);
+            inputRegistration = HybridInputRuntime.RegisterSink(inputSink);
             styleDirty = true;
             layoutDirty = true;
             paintDirty = true;
@@ -408,6 +412,8 @@ namespace Milestro.Components
         {
             base.OnDisable();
             ReleaseInputFocus();
+            inputRegistration?.Dispose();
+            inputRegistration = null;
             Texture = null;
             RetireInputBox();
             DisposeSurface();
@@ -425,7 +431,6 @@ namespace Milestro.Components
             {
                 if (CanReadInput())
                 {
-                    ReadKeyboardInput();
                     UpdateCaretBlink();
                 }
                 else
@@ -674,11 +679,6 @@ namespace Milestro.Components
                 rectTransformCache = GetComponent<RectTransform>();
             }
 
-            if (receiver == null)
-            {
-                receiver = GetComponent<InputStringReceiver>();
-            }
-
             RebuildResources();
             if (inputBox == null)
             {
@@ -900,6 +900,34 @@ namespace Milestro.Components
             ReleaseInputFocus();
         }
 
+        private void OnInputFrame(HybridInputFrame frame)
+        {
+            if (!focused)
+            {
+                return;
+            }
+            if (!CanReadInput())
+            {
+                ReleaseInputFocus();
+                return;
+            }
+
+            ReadKeyboardInput(frame);
+            RebuildResources();
+        }
+
+        private void OnInputReset(HybridInputResetReason reason)
+        {
+            var releaseFocus = reason == HybridInputResetReason.FocusChanged ||
+                               reason == HybridInputResetReason.OwnerDisabled ||
+                               reason == HybridInputResetReason.DispatcherReset;
+            ResetLocalInputState(releaseFocus);
+            if (isActiveAndEnabled)
+            {
+                RebuildResources();
+            }
+        }
+
 #if UNITY_EDITOR
         protected override void OnValidate()
         {
@@ -980,7 +1008,17 @@ namespace Milestro.Components
 
         private void Focus()
         {
+            var wasFocused = focused;
+            if (!AcquireDispatcherFocus())
+            {
+                return;
+            }
+
             focused = true;
+            if (!wasFocused)
+            {
+                inputFrameState.Reset();
+            }
             inputBox?.SetFocused(true);
             ApplyImeCompositionMode();
             ResetBlink();
@@ -989,20 +1027,53 @@ namespace Milestro.Components
 
         private void ReleaseInputFocus()
         {
-            focused = false;
+            if (focused && inputRegistration != null)
+            {
+                inputRegistration.ReleaseFocus();
+                if (!focused)
+                {
+                    return;
+                }
+            }
+
+            ResetLocalInputState(releaseFocus: true);
+        }
+
+        private bool AcquireDispatcherFocus()
+        {
+            if (inputRegistration?.AcquireFocus() == true)
+            {
+                return true;
+            }
+
+            inputRegistration?.Dispose();
+            inputSink ??= new InputSink(this);
+            inputRegistration = HybridInputRuntime.RegisterSink(inputSink);
+            return inputRegistration.AcquireFocus();
+        }
+
+        private void ResetLocalInputState(bool releaseFocus)
+        {
             compositionActive = false;
             lastCompositionText = "";
+            inputFrameState.Reset();
             ResetSurrogateInputState();
             ResetKeyRepeatState();
-            HybridInput.SetIMEEnabled(false);
-            caretVisible = false;
+            if (releaseFocus)
+            {
+                focused = false;
+                caretVisible = false;
+            }
             if (inputBox != null)
             {
                 inputBox.BreakUndoGroup();
                 inputBox.ClearComposition();
-                inputBox.ClearSelection();
-                inputBox.SetCaretVisible(false);
-                inputBox.SetFocused(false);
+                if (releaseFocus)
+                {
+                    inputBox.ClearSelection();
+                    inputBox.SetCaretVisible(false);
+                    inputBox.SetFocused(false);
+                }
             }
             paintDirty = true;
         }
@@ -1047,20 +1118,22 @@ namespace Milestro.Components
             paintDirty = true;
         }
 
-        private void ReadKeyboardInput()
+        private void ReadKeyboardInput(HybridInputFrame frame)
         {
+            var providerInput = inputFrameState.Apply(frame);
             if (m_readOnly)
             {
                 ClearPendingTextInput();
                 var readOnlyChanged = ClearActiveComposition();
-                readOnlyChanged |= ReadEditingKeys(false, false);
+                readOnlyChanged |= ReadEditingKeys(frame, false, false);
                 ApplyInputChange(readOnlyChanged);
                 return;
             }
 
             var changed = false;
-            var hadCompositionBeforeInput = compositionActive || !string.IsNullOrEmpty(receiver.CompositionString);
-            var committedText = ReadCommittedText();
+            var hadCompositionBeforeInput = compositionActive ||
+                                            !string.IsNullOrEmpty(inputFrameState.CompositionText);
+            var committedText = ReadCommittedText(frame, providerInput);
             var committedTextHadLineBreak = ContainsLineBreak(committedText);
             if (committedText.Length > 0 && inputBox != null)
             {
@@ -1075,17 +1148,24 @@ namespace Milestro.Components
                     inputBox.InsertText(committedText);
                     changed = true;
                 }
+
+                if (!string.IsNullOrEmpty(inputFrameState.CompositionText))
+                {
+                    changed |= UpdateComposition(inputFrameState.CompositionText);
+                }
             }
             else
             {
-                changed |= UpdateComposition();
+                changed |= UpdateComposition(inputFrameState.CompositionText);
             }
 
-            changed |= ReadEditingKeys(hadCompositionBeforeInput, committedTextHadLineBreak);
+            changed |= ReadEditingKeys(frame, hadCompositionBeforeInput, committedTextHadLineBreak);
             ApplyInputChange(changed);
         }
 
-        private bool ReadEditingKeys(bool suppressForComposition, bool suppressEnterInsertion)
+        private bool ReadEditingKeys(HybridInputFrame frame,
+            bool suppressForComposition,
+            bool suppressEnterInsertion)
         {
             if (suppressForComposition || compositionActive || inputBox == null)
             {
@@ -1093,18 +1173,18 @@ namespace Milestro.Components
                 return false;
             }
 
-            if (TryHandleUndoRedoShortcut(out var historyChanged))
+            if (TryHandleUndoRedoShortcut(frame, out var historyChanged))
             {
                 return historyChanged;
             }
 
-            if (TryHandleClipboardShortcut(out var clipboardChanged))
+            if (TryHandleClipboardShortcut(frame, out var clipboardChanged))
             {
                 return clipboardChanged;
             }
 
             var changed = false;
-            if (HybridInput.GetKeyDown(KeyCode.Return) || HybridInput.GetKeyDown(KeyCode.KeypadEnter))
+            if (frame.WasKeyPressed(KeyCode.Return) || frame.WasKeyPressed(KeyCode.KeypadEnter))
             {
                 ResetSurrogateInputState();
                 if (!m_readOnly && m_lineMode == TextInputLineMode.MultiLine && !suppressEnterInsertion)
@@ -1114,7 +1194,7 @@ namespace Milestro.Components
                 }
             }
 
-            if (InputBoxShortcutUtil.IsSelectAllDown())
+            if (InputBoxShortcutUtil.IsSelectAllDown(frame))
             {
                 ResetSurrogateInputState();
                 if (m_selectionEnabled)
@@ -1123,42 +1203,42 @@ namespace Milestro.Components
                 }
             }
 
-            var extendSelection = m_selectionEnabled && InputBoxShortcutUtil.IsSelectionExtendDown();
-            if (ShouldProcessRepeatingKey(KeyCode.LeftArrow, ref nextLeftRepeatTime))
+            var extendSelection = m_selectionEnabled && InputBoxShortcutUtil.IsSelectionExtendDown(frame);
+            if (ShouldProcessRepeatingKey(frame, KeyCode.LeftArrow, ref nextLeftRepeatTime))
             {
                 ResetSurrogateInputState();
-                changed |= MoveLeftArrow(inputBox, extendSelection);
+                changed |= MoveLeftArrow(frame, inputBox, extendSelection);
             }
-            if (ShouldProcessRepeatingKey(KeyCode.RightArrow, ref nextRightRepeatTime))
+            if (ShouldProcessRepeatingKey(frame, KeyCode.RightArrow, ref nextRightRepeatTime))
             {
                 ResetSurrogateInputState();
-                changed |= MoveRightArrow(inputBox, extendSelection);
+                changed |= MoveRightArrow(frame, inputBox, extendSelection);
             }
-            if (ShouldProcessRepeatingKey(KeyCode.UpArrow, ref nextUpRepeatTime))
+            if (ShouldProcessRepeatingKey(frame, KeyCode.UpArrow, ref nextUpRepeatTime))
             {
                 ResetSurrogateInputState();
-                changed |= MoveUpArrow(inputBox, extendSelection);
+                changed |= MoveUpArrow(frame, inputBox, extendSelection);
             }
-            if (ShouldProcessRepeatingKey(KeyCode.DownArrow, ref nextDownRepeatTime))
+            if (ShouldProcessRepeatingKey(frame, KeyCode.DownArrow, ref nextDownRepeatTime))
             {
                 ResetSurrogateInputState();
-                changed |= MoveDownArrow(inputBox, extendSelection);
+                changed |= MoveDownArrow(frame, inputBox, extendSelection);
             }
-            if (ShouldProcessRepeatingKey(KeyCode.Home, ref nextHomeRepeatTime))
+            if (ShouldProcessRepeatingKey(frame, KeyCode.Home, ref nextHomeRepeatTime))
             {
                 ResetSurrogateInputState();
-                changed |= InputBoxShortcutUtil.IsDocumentBoundaryModifierDown()
+                changed |= InputBoxShortcutUtil.IsDocumentBoundaryModifierDown(frame)
                     ? inputBox.MoveDocumentStart(extendSelection)
                     : inputBox.MoveLineStart(extendSelection);
             }
-            if (ShouldProcessRepeatingKey(KeyCode.End, ref nextEndRepeatTime))
+            if (ShouldProcessRepeatingKey(frame, KeyCode.End, ref nextEndRepeatTime))
             {
                 ResetSurrogateInputState();
-                changed |= InputBoxShortcutUtil.IsDocumentBoundaryModifierDown()
+                changed |= InputBoxShortcutUtil.IsDocumentBoundaryModifierDown(frame)
                     ? inputBox.MoveDocumentEnd(extendSelection)
                     : inputBox.MoveLineEnd(extendSelection);
             }
-            if (ShouldProcessRepeatingKey(KeyCode.Backspace, ref nextBackspaceRepeatTime))
+            if (ShouldProcessRepeatingKey(frame, KeyCode.Backspace, ref nextBackspaceRepeatTime))
             {
                 ResetSurrogateInputState();
                 if (!m_readOnly)
@@ -1166,7 +1246,7 @@ namespace Milestro.Components
                     changed |= inputBox.DeleteBackward();
                 }
             }
-            if (ShouldProcessRepeatingKey(KeyCode.Delete, ref nextDeleteRepeatTime))
+            if (ShouldProcessRepeatingKey(frame, KeyCode.Delete, ref nextDeleteRepeatTime))
             {
                 ResetSurrogateInputState();
                 if (!m_readOnly)
@@ -1177,35 +1257,35 @@ namespace Milestro.Components
             return changed;
         }
 
-        private static bool MoveLeftArrow(InputBox editor, bool extendSelection)
+        private static bool MoveLeftArrow(HybridInputFrame frame, InputBox editor, bool extendSelection)
         {
-            return InputBoxShortcutUtil.IsMacBoundaryArrowModifierDown()
+            return InputBoxShortcutUtil.IsMacBoundaryArrowModifierDown(frame)
                 ? editor.MoveLineStart(extendSelection)
                 : editor.MovePrevious(extendSelection);
         }
 
-        private static bool MoveRightArrow(InputBox editor, bool extendSelection)
+        private static bool MoveRightArrow(HybridInputFrame frame, InputBox editor, bool extendSelection)
         {
-            return InputBoxShortcutUtil.IsMacBoundaryArrowModifierDown()
+            return InputBoxShortcutUtil.IsMacBoundaryArrowModifierDown(frame)
                 ? editor.MoveLineEnd(extendSelection)
                 : editor.MoveNext(extendSelection);
         }
 
-        private static bool MoveUpArrow(InputBox editor, bool extendSelection)
+        private static bool MoveUpArrow(HybridInputFrame frame, InputBox editor, bool extendSelection)
         {
-            return InputBoxShortcutUtil.IsMacBoundaryArrowModifierDown()
+            return InputBoxShortcutUtil.IsMacBoundaryArrowModifierDown(frame)
                 ? editor.MoveDocumentStart(extendSelection)
                 : editor.MoveUp(extendSelection);
         }
 
-        private static bool MoveDownArrow(InputBox editor, bool extendSelection)
+        private static bool MoveDownArrow(HybridInputFrame frame, InputBox editor, bool extendSelection)
         {
-            return InputBoxShortcutUtil.IsMacBoundaryArrowModifierDown()
+            return InputBoxShortcutUtil.IsMacBoundaryArrowModifierDown(frame)
                 ? editor.MoveDocumentEnd(extendSelection)
                 : editor.MoveDown(extendSelection);
         }
 
-        private bool TryHandleUndoRedoShortcut(out bool changed)
+        private bool TryHandleUndoRedoShortcut(HybridInputFrame frame, out bool changed)
         {
             changed = false;
             if (inputBox == null)
@@ -1213,7 +1293,7 @@ namespace Milestro.Components
                 return false;
             }
 
-            if (InputBoxShortcutUtil.IsUndoDown())
+            if (InputBoxShortcutUtil.IsUndoDown(frame))
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
@@ -1225,7 +1305,7 @@ namespace Milestro.Components
                 return true;
             }
 
-            if (InputBoxShortcutUtil.IsRedoDown())
+            if (InputBoxShortcutUtil.IsRedoDown(frame))
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
@@ -1240,7 +1320,7 @@ namespace Milestro.Components
             return false;
         }
 
-        private bool TryHandleClipboardShortcut(out bool changed)
+        private bool TryHandleClipboardShortcut(HybridInputFrame frame, out bool changed)
         {
             changed = false;
             if (inputBox == null)
@@ -1248,7 +1328,7 @@ namespace Milestro.Components
                 return false;
             }
 
-            if (InputBoxShortcutUtil.IsCopyDown())
+            if (InputBoxShortcutUtil.IsCopyDown(frame))
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
@@ -1265,7 +1345,7 @@ namespace Milestro.Components
                 return true;
             }
 
-            if (InputBoxShortcutUtil.IsCutDown())
+            if (InputBoxShortcutUtil.IsCutDown(frame))
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
@@ -1292,7 +1372,7 @@ namespace Milestro.Components
                 return true;
             }
 
-            if (InputBoxShortcutUtil.IsPasteDown())
+            if (InputBoxShortcutUtil.IsPasteDown(frame))
             {
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
@@ -1328,6 +1408,7 @@ namespace Milestro.Components
         {
             compositionActive = false;
             lastCompositionText = "";
+            inputFrameState.Reset();
             ResetSurrogateInputState();
         }
 
@@ -1348,19 +1429,19 @@ namespace Milestro.Components
                 return;
             }
 
-            HybridInput.SetIMEEnabled(!m_readOnly);
+            inputRegistration?.SetImeEnabled(!m_readOnly);
         }
 
-        private bool ShouldProcessRepeatingKey(KeyCode key, ref float nextRepeatTime)
+        private bool ShouldProcessRepeatingKey(HybridInputFrame frame, KeyCode key, ref float nextRepeatTime)
         {
             var now = Time.unscaledTime;
-            if (HybridInput.GetKeyDown(key))
+            if (frame.WasKeyPressed(key))
             {
                 nextRepeatTime = now + MilestroConfiguration.Configuration.TextInput.KeyRepeatInitialDelay;
                 return true;
             }
 
-            if (!HybridInput.GetKey(key))
+            if (!frame.IsKeyPressed(key))
             {
                 nextRepeatTime = 0;
                 return false;
@@ -1465,10 +1546,11 @@ namespace Milestro.Components
 
         private static bool IsHorizontalCaretNavigationDown()
         {
-            return HybridInput.GetKey(KeyCode.LeftArrow) || HybridInput.GetKey(KeyCode.RightArrow);
+            return HybridInputRuntime.IsKeyPressed(KeyCode.LeftArrow) ||
+                   HybridInputRuntime.IsKeyPressed(KeyCode.RightArrow);
         }
 
-        private bool UpdateComposition()
+        private bool UpdateComposition(string rawCompositionText)
         {
             if (inputBox == null)
             {
@@ -1477,7 +1559,6 @@ namespace Milestro.Components
                 return false;
             }
 
-            var rawCompositionText = receiver.CompositionString;
             if (rawCompositionText.Length > 0)
             {
                 ResetSurrogateInputState();
@@ -1527,7 +1608,7 @@ namespace Milestro.Components
                 rect.yMax - metrics.ScrollY));
             var worldPoint = rectTransformCache.TransformPoint(localPoint);
             var camera = canvas == null || canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
-            HybridInput.SetIMECursorPosition(RectTransformUtility.WorldToScreenPoint(camera, worldPoint));
+            inputRegistration?.SetImeCursorPosition(RectTransformUtility.WorldToScreenPoint(camera, worldPoint));
         }
 
         private static bool IsEscapeSequenceLead(char ch)
@@ -1602,9 +1683,9 @@ namespace Milestro.Components
             ClearPendingGuiHighSurrogate();
         }
 
-        private string ReadCommittedText()
+        private string ReadCommittedText(HybridInputFrame frame, string providerInput)
         {
-            if (InputBoxShortcutUtil.IsCommittedTextInputSuppressed())
+            if (InputBoxShortcutUtil.IsCommittedTextInputSuppressed(frame))
             {
                 ResetSurrogateInputState();
                 return string.Empty;
@@ -1613,10 +1694,10 @@ namespace Milestro.Components
             var queuedGuiInput = TakeQueuedGuiCommittedInput();
             if (queuedGuiInput.Length == 0)
             {
-                return FilterCommittedInput(receiver.InputString);
+                return FilterCommittedInput(providerInput);
             }
 
-            var mergedInput = MergeSupplementaryFallback(receiver.InputString, queuedGuiInput);
+            var mergedInput = MergeSupplementaryFallback(providerInput, queuedGuiInput);
             return FilterCommittedInput(mergedInput, keepReplacementCharacter: true);
         }
 
@@ -2166,6 +2247,26 @@ namespace Milestro.Components
             else
             {
                 oldInputBox.Dispose();
+            }
+        }
+
+        private sealed class InputSink : IHybridInputFrameSink
+        {
+            private readonly TextInput owner;
+
+            internal InputSink(TextInput owner)
+            {
+                this.owner = owner;
+            }
+
+            public void OnInputFrame(HybridInputFrame frame)
+            {
+                owner.OnInputFrame(frame);
+            }
+
+            public void OnInputReset(HybridInputResetReason reason)
+            {
+                owner.OnInputReset(reason);
             }
         }
     }

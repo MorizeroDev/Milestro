@@ -139,10 +139,23 @@ cmake --build cmake-build-relwithdebinfo --target milestro_unity_plugin
 ```
 
 Set `MILESTRO_UNITY_PLUGIN_OUTPUT_DIR` at configure time to choose the CMake
-target's output directory.
+target's output directory. The output directory must be dedicated to this
+package: every package run validates the path and completely rebuilds the
+directory before copying files. On first use, the destination must be absent or
+empty; clear a pre-existing non-empty directory before adopting it. Later runs
+verify task ownership before rebuilding the directory. Existing package outputs
+created before ownership validation must therefore be cleared once. Project/
+source roots, their unsafe ancestors, source descendants, and a symbolic link
+used as the output directory are rejected.
 
-The package task copies `Milestro`, `Milestro.Editor`, `Milestro.Experimental`,
-and `Resources` from `apps/unity-plugins/`. It also generates:
+The package task uses an explicit release-root allowlist. It recursively copies
+the complete `Milestro`, `Milestro.Editor`, `Milestro.Experimental`,
+`Milestro.InputSystem`, and `Resources` directories, plus each selected root's
+existing top-level `.meta` file. It does not package `Milestro.Tests`,
+`Milestro.InputSystem.Tests`, the formatting solution/project, or future unknown
+top-level entries until the allowlist is intentionally extended and reviewed.
+
+Packaging also generates:
 
 ```text
 Resources/Milestro/icudtl.dat.bytes
@@ -152,6 +165,17 @@ from:
 
 ```text
 ext/icu-cmake/common/icudtl.dat
+```
+
+Every `packageUnityPlugin` run performs a structural verification after the
+output rebuild and copy. The output file set must exactly equal the recursively
+expanded release roots and their top-level metadata plus the generated ICU
+asset; missing entries and unexpected or stale files fail the task. The verifier
+also rejects metadata files without GUIDs and duplicate GUIDs.
+Run the verifier directly with:
+
+```sh
+./gradlew verifyUnityPluginPackage
 ```
 
 The task does not compile native platform binaries. Any native binaries or

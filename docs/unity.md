@@ -32,6 +32,13 @@ provides `Newtonsoft.Json`, Milestro model DTOs include `JsonProperty` metadata
 for compatibility with Newtonsoft-based serialization. Milestro does not require
 that symbol or package by default.
 
+Optional: install `com.unity.inputsystem` version `1.18.0` or later, below `2.0`,
+to use Milestro with an active `InputSystemUIInputModule`. The packaged
+`Milestro.InputSystem` assembly is constrained to `[1.18.0,2.0.0)` and is not
+compiled when that package is absent. The base `Milestro` assembly has no Input
+System package reference and continues to support the legacy
+`StandaloneInputModule` when Unity enables the Legacy Input Manager.
+
 ## Asset Layout
 
 When mapped into a Unity project, the important directories are:
@@ -40,14 +47,17 @@ When mapped into a Unity project, the important directories are:
 Assets/
   Milestro/                 Core runtime assembly
   Milestro/Plugins/         Native plugin binaries and generated iOS bridge files
+  Milestro.InputSystem/     Optional Input System runtime provider
   Milestro.Editor/          Editor-only utilities
   Milestro.Experimental/    Optional experimental components
   Resources/Milestro/       Runtime resources
 ```
 
-`Milestro.Experimental` is optional. It contains older bitmap, mesh, and SDF text
-experiments that are useful for development but are not the primary component
-entry points.
+The Gradle package recursively includes those five release roots and their
+existing top-level metadata. `Milestro.Experimental` contains older bitmap,
+mesh, and SDF text experiments and remains optional at the component level. The
+package excludes `Milestro.Tests`, `Milestro.InputSystem.Tests`, formatting
+projects, and unknown top-level source trees.
 
 ## Native Plugin Binary
 
@@ -137,7 +147,8 @@ Primary runtime components:
   composition text, keyboard handling, pointer selection, single-line or
   multi-line modes, optional wrapping, masking, read-only mode, and scrollable
   overflow. Use the `ScrollPercent*` properties to link its normalized `0..1`
-  scroll position to other scrollbars.
+  scroll position to other scrollbars. Keyboard, committed text, composition,
+  and IME ownership are supplied by the process-wide HybridInput dispatcher.
 
 Internal component building blocks:
 
@@ -157,6 +168,33 @@ values first check keyword mappings; quoted rich-text values such as `"serif"`
 are treated as literal named families. The TextLayout `FontCollection` expands
 these declarations when a paragraph is built, then delegates concrete family
 matching to SkParagraph's registered and system font managers.
+
+## Hybrid Input
+
+Milestro selects one input provider from the active Unity event-system module:
+
+- `StandaloneInputModule` selects the built-in `legacy` provider when the
+  Legacy Input Manager is enabled.
+- `InputSystemUIInputModule` selects the optional `input-system` provider when
+  `com.unity.inputsystem` is `[1.18.0,2.0.0)` and `Milestro.InputSystem` is
+  present.
+
+Selection requires exactly one active `EventSystem`. No match, multiple active
+event systems, or equally ranked providers fail closed and are reported through
+`Milestro.Input.HybridInputRuntime.Diagnostics`. Applications may request a
+registered provider explicitly with:
+
+```csharp
+HybridInputRuntime.SetProviderOverride("input-system");
+```
+
+Pass `null` to restore automatic selection. An override is still rejected when
+that provider does not match the current environment. The Input System provider
+reports keyboard state, committed text, composition, IME control, and
+delta-only scroll capability; gesture phase, momentum phase, device
+classification, and scroll capture are not claimed yet. See
+[hybrid-input.md](hybrid-input.md) for the provider contract, diagnostics,
+package-optional behavior, and migration notes.
 
 ## Configuration
 

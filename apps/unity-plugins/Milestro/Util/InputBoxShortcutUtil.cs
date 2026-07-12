@@ -1,142 +1,139 @@
 using Milestro.Configuration;
-using Milestro.InputManagement;
+using Milestro.Input;
 using UnityEngine;
 
 namespace Milestro.Util
 {
     internal static class InputBoxShortcutUtil
     {
-        internal static bool IsSelectionExtendDown()
+        internal static bool IsSelectionExtendDown(HybridInputFrame frame)
         {
-            return HybridInput.GetKey(KeyCode.LeftShift) || HybridInput.GetKey(KeyCode.RightShift);
+            return frame.IsKeyPressed(KeyCode.LeftShift) || frame.IsKeyPressed(KeyCode.RightShift);
         }
 
-        private static bool IsSelectionModifierPressed()
+        private static bool IsSelectionModifierPressed(HybridInputFrame frame)
         {
-            return IsSelectionExtendDown();
+            return IsSelectionExtendDown(frame);
         }
 
-        private static bool IsControlPressed()
+        private static bool IsControlPressed(HybridInputFrame frame)
         {
-            return HybridInput.GetKey(KeyCode.LeftControl) || HybridInput.GetKey(KeyCode.RightControl);
+            return frame.IsKeyPressed(KeyCode.LeftControl) || frame.IsKeyPressed(KeyCode.RightControl);
         }
 
-        private static bool IsCommandPressed()
+        private static bool IsCommandPressed(HybridInputFrame frame)
         {
-            return HybridInput.GetKey(KeyCode.LeftCommand) || HybridInput.GetKey(KeyCode.RightCommand);
+            return frame.IsKeyPressed(KeyCode.LeftCommand) || frame.IsKeyPressed(KeyCode.RightCommand);
         }
 
-        private static bool IsAltPressed()
+        private static bool IsAltPressed(HybridInputFrame frame)
         {
-            return HybridInput.GetKey(KeyCode.LeftAlt) || HybridInput.GetKey(KeyCode.RightAlt);
+            return frame.IsKeyPressed(KeyCode.LeftAlt) || frame.IsKeyPressed(KeyCode.RightAlt);
         }
 
-        private static bool IsExactCommandOrControlModifier(bool shift)
+        private static bool IsExactCommandOrControlModifier(HybridInputFrame frame, bool shift)
         {
-            return IsControlPressed() != IsCommandPressed() &&
-                   IsSelectionModifierPressed() == shift &&
-                   !IsAltPressed();
+            return IsControlPressed(frame) != IsCommandPressed(frame) &&
+                   IsSelectionModifierPressed(frame) == shift &&
+                   !IsAltPressed(frame);
         }
 
-        private static bool IsExactControlModifier(bool shift)
+        private static bool IsExactControlModifier(HybridInputFrame frame, bool shift)
         {
-            return IsControlPressed() &&
-                   !IsCommandPressed() &&
-                   IsSelectionModifierPressed() == shift &&
-                   !IsAltPressed();
+            return IsControlPressed(frame) &&
+                   !IsCommandPressed(frame) &&
+                   IsSelectionModifierPressed(frame) == shift &&
+                   !IsAltPressed(frame);
         }
 
-        private static bool IsExactShiftOnlyModifier()
+        private static bool IsExactShiftOnlyModifier(HybridInputFrame frame)
         {
-            return IsSelectionModifierPressed() &&
-                   !IsControlPressed() &&
-                   !IsCommandPressed() &&
-                   !IsAltPressed();
+            return IsSelectionModifierPressed(frame) &&
+                   !IsControlPressed(frame) &&
+                   !IsCommandPressed(frame) &&
+                   !IsAltPressed(frame);
         }
 
-        private static bool IsClipboardCommandModifier()
+        private static bool IsClipboardCommandModifier(HybridInputFrame frame)
         {
-            return IsExactCommandOrControlModifier(false) ||
+            return IsExactCommandOrControlModifier(frame, false) ||
                    (MilestroConfiguration.Configuration.InputBoxShortcut.AcceptShiftClipboardShortcuts &&
-                    IsExactCommandOrControlModifier(true));
+                    IsExactCommandOrControlModifier(frame, true));
         }
 
-        internal static bool IsUndoDown()
+        internal static bool IsUndoDown(HybridInputFrame frame)
         {
-            return IsExactCommandOrControlModifier(false) &&
-                   HybridInput.GetKeyDown(KeyCode.Z);
+            return IsExactCommandOrControlModifier(frame, false) && frame.WasKeyPressed(KeyCode.Z);
         }
 
-        internal static bool IsRedoDown()
+        internal static bool IsRedoDown(HybridInputFrame frame)
         {
             return (MilestroConfiguration.Configuration.InputBoxShortcut.AcceptRedoWithShiftZ &&
-                    IsExactCommandOrControlModifier(true) &&
-                    HybridInput.GetKeyDown(KeyCode.Z)) ||
+                    IsExactCommandOrControlModifier(frame, true) && frame.WasKeyPressed(KeyCode.Z)) ||
                    (MilestroConfiguration.Configuration.InputBoxShortcut.AcceptRedoWithControlY &&
-                    IsExactControlModifier(false) &&
-                    HybridInput.GetKeyDown(KeyCode.Y));
+                    IsExactControlModifier(frame, false) && frame.WasKeyPressed(KeyCode.Y));
         }
 
-        internal static bool IsSelectAllDown()
+        internal static bool IsSelectAllDown(HybridInputFrame frame)
         {
-            return IsExactCommandOrControlModifier(false) && HybridInput.GetKeyDown(KeyCode.A);
+            return IsExactCommandOrControlModifier(frame, false) && frame.WasKeyPressed(KeyCode.A);
         }
 
-        internal static bool IsDocumentBoundaryModifierDown()
+        internal static bool IsDocumentBoundaryModifierDown(HybridInputFrame frame)
         {
-            return IsControlPressed() != IsCommandPressed() && !IsAltPressed();
+            return IsControlPressed(frame) != IsCommandPressed(frame) && !IsAltPressed(frame);
         }
 
-        internal static bool IsMacBoundaryArrowModifierDown()
+        internal static bool IsMacBoundaryArrowModifierDown(HybridInputFrame frame)
         {
-            return IsCommandPressed() && !IsControlPressed() && !IsAltPressed();
+            return IsCommandPressed(frame) && !IsControlPressed(frame) && !IsAltPressed(frame);
         }
 
-        internal static bool IsCopyDown()
+        internal static bool IsCopyDown(HybridInputFrame frame)
         {
-            return (IsClipboardCommandModifier() && HybridInput.GetKeyDown(KeyCode.C)) ||
-                   (IsExactControlModifier(false) && HybridInput.GetKeyDown(KeyCode.Insert));
+            return (IsClipboardCommandModifier(frame) && frame.WasKeyPressed(KeyCode.C)) ||
+                   (IsExactControlModifier(frame, false) && frame.WasKeyPressed(KeyCode.Insert));
         }
 
-        internal static bool IsCutDown()
+        internal static bool IsCutDown(HybridInputFrame frame)
         {
-            return (IsClipboardCommandModifier() && HybridInput.GetKeyDown(KeyCode.X)) ||
-                   (IsExactShiftOnlyModifier() && HybridInput.GetKeyDown(KeyCode.Delete));
+            return (IsClipboardCommandModifier(frame) && frame.WasKeyPressed(KeyCode.X)) ||
+                   (IsExactShiftOnlyModifier(frame) && frame.WasKeyPressed(KeyCode.Delete));
         }
 
-        internal static bool IsPasteDown()
+        internal static bool IsPasteDown(HybridInputFrame frame)
         {
-            return (IsClipboardCommandModifier() && HybridInput.GetKeyDown(KeyCode.V)) ||
-                   (IsExactShiftOnlyModifier() && HybridInput.GetKeyDown(KeyCode.Insert));
+            return (IsClipboardCommandModifier(frame) && frame.WasKeyPressed(KeyCode.V)) ||
+                   (IsExactShiftOnlyModifier(frame) && frame.WasKeyPressed(KeyCode.Insert));
         }
 
-        internal static bool IsCommittedTextInputSuppressed()
+        internal static bool IsCommittedTextInputSuppressed(HybridInputFrame frame)
         {
-            return IsCommittedTextShortcutSuppressed() || IsEditingKeyPressed();
+            return IsCommittedTextShortcutSuppressed(frame) || IsEditingKeyPressed(frame);
         }
 
-        private static bool IsCommittedTextShortcutSuppressed()
+        private static bool IsCommittedTextShortcutSuppressed(HybridInputFrame frame)
         {
-            return IsUndoDown() ||
-                   IsRedoDown() ||
-                   IsSelectAllDown() ||
-                   IsCopyDown() ||
-                   IsCutDown() ||
-                   IsPasteDown();
+            return IsUndoDown(frame) ||
+                   IsRedoDown(frame) ||
+                   IsSelectAllDown(frame) ||
+                   IsCopyDown(frame) ||
+                   IsCutDown(frame) ||
+                   IsPasteDown(frame);
         }
 
-        private static bool IsEditingKeyPressed()
+        private static bool IsEditingKeyPressed(HybridInputFrame frame)
         {
-            return HybridInput.GetKey(KeyCode.LeftArrow) ||
-                   HybridInput.GetKey(KeyCode.RightArrow) ||
-                   HybridInput.GetKey(KeyCode.UpArrow) ||
-                   HybridInput.GetKey(KeyCode.DownArrow) ||
-                   HybridInput.GetKey(KeyCode.Backspace) ||
-                   HybridInput.GetKey(KeyCode.Delete) ||
-                   HybridInput.GetKey(KeyCode.Home) ||
-                   HybridInput.GetKey(KeyCode.End) ||
-                   HybridInput.GetKey(KeyCode.PageUp) ||
-                   HybridInput.GetKey(KeyCode.PageDown);
+            return frame.IsKeyPressed(KeyCode.LeftArrow) ||
+                   frame.IsKeyPressed(KeyCode.RightArrow) ||
+                   frame.IsKeyPressed(KeyCode.UpArrow) ||
+                   frame.IsKeyPressed(KeyCode.DownArrow) ||
+                   frame.IsKeyPressed(KeyCode.Backspace) ||
+                   frame.IsKeyPressed(KeyCode.Delete) ||
+                   frame.IsKeyPressed(KeyCode.Home) ||
+                   frame.IsKeyPressed(KeyCode.End) ||
+                   frame.IsKeyPressed(KeyCode.PageUp) ||
+                   frame.IsKeyPressed(KeyCode.PageDown);
         }
     }
 }
