@@ -163,6 +163,21 @@ void WritePhasesTimestampWindowPod(NSEvent* event) {
     properties.directionInvertedFromDevice = 0;
 }
 
+void ReadPhasesTimestampWindow(NSEvent* event) {
+    volatile ScrollPhaseEventProperties properties;
+    properties.gesturePhase = ConvertPhase(event.phase);
+    properties.momentumPhase = ConvertPhase(event.momentumPhase);
+    properties.timestamp = event.timestamp;
+    properties.windowNumber = event.windowNumber;
+    properties.eventNumber = 1;
+    properties.deltaX = 1.0;
+    properties.deltaY = 1.0;
+    properties.scrollingDeltaX = 1.0;
+    properties.scrollingDeltaY = 1.0;
+    properties.precise = 1;
+    properties.directionInvertedFromDevice = 0;
+}
+
 void Enqueue(NSEvent* event) {
     const ScrollPhase gesturePhase = ConvertPhase(event.phase);
     const ScrollPhase momentumPhase = ConvertPhase(event.momentumPhase);
@@ -255,6 +270,7 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
         const bool readPhasesOnly = ShouldReadScrollPhasesOnly(mode);
         const bool readPhasesTimestamp = ShouldReadScrollPhasesTimestamp(mode);
         const bool writePhasesTimestampWindowPod = ShouldWriteScrollPhasesTimestampWindowPod(mode);
+        const bool readPhasesTimestampWindow = ShouldReadScrollPhasesTimestampWindow(mode);
         if (![NSThread isMainThread]) {
             return ScrollPhaseMonitorResult::WrongThread;
         }
@@ -288,6 +304,8 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
                                                                    ReadPhasesTimestamp(event);
                                                                } else if (writePhasesTimestampWindowPod) {
                                                                    WritePhasesTimestampWindowPod(event);
+                                                               } else if (readPhasesTimestampWindow) {
+                                                                   ReadPhasesTimestampWindow(event);
                                                                }
                                                                return event;
                                                              }];

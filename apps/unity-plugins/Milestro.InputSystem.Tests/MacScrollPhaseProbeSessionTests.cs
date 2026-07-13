@@ -67,6 +67,7 @@ namespace Milestro.InputSystemTests
             Assert.That((int)MacScrollPhaseProbeStage.NativePhasesOnly, Is.EqualTo(8));
             Assert.That((int)MacScrollPhaseProbeStage.NativePhasesTimestamp, Is.EqualTo(9));
             Assert.That((int)MacScrollPhaseProbeStage.NativePhasesTimestampWindowPod, Is.EqualTo(10));
+            Assert.That((int)MacScrollPhaseProbeStage.NativePhasesTimestampWindow, Is.EqualTo(11));
 
             var transport = new FakeTransport();
             var sink = new FakeSink();
@@ -232,6 +233,31 @@ namespace Milestro.InputSystemTests
 
             Assert.That(session.RequiresInputAction, Is.False);
             Assert.That(transport.LastStartMode, Is.EqualTo(MacScrollPhaseMonitorMode.WritePhasesTimestampWindowPod));
+            Assert.That(transport.PollCount, Is.Zero);
+            Assert.That(transport.StopCount, Is.EqualTo(1));
+            Assert.That(sink.FlushCount, Is.EqualTo(1));
+            Assert.That(sink.LastFailed, Is.False);
+            Assert.That(sink.LastTrace.Contains("action"), Is.False);
+            Assert.That(sink.LastTrace.Contains("ugui"), Is.False);
+        }
+
+        [Test]
+        public void NativePhasesTimestampWindowOnlyReplacesWindowRhs()
+        {
+            var transport = new FakeTransport();
+            var sink = new FakeSink();
+            var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativePhasesTimestampWindow);
+
+            session.Start(0d);
+            session.RecordActionAttachment("must-not-attach");
+            session.ObserveAction(1, 1d, new Vector2(1f, -1f), "/Mouse/scroll");
+            session.ObserveUgui(1, 7, new Vector2(1f, -1f));
+            session.Update(1, 0d);
+            session.LateUpdate(1);
+            session.Update(2, 4d);
+
+            Assert.That(session.RequiresInputAction, Is.False);
+            Assert.That(transport.LastStartMode, Is.EqualTo(MacScrollPhaseMonitorMode.ReadPhasesTimestampWindow));
             Assert.That(transport.PollCount, Is.Zero);
             Assert.That(transport.StopCount, Is.EqualTo(1));
             Assert.That(sink.FlushCount, Is.EqualTo(1));
