@@ -11,7 +11,8 @@ namespace Milestro.InputSystem.Service
         InputAction = 2,
         UguiAssociation = 3,
         NativeProperties = 4,
-        NativeEventProperties = 5
+        NativeEventProperties = 5,
+        NativeEventScalars = 6
     }
 
     internal enum MacScrollPhaseMonitorMode
@@ -19,7 +20,8 @@ namespace Milestro.InputSystem.Service
         PassThrough = 0,
         CaptureSamples = 1,
         ReadProperties = 2,
-        ReadEventProperties = 3
+        ReadEventProperties = 3,
+        ReadEventScalars = 4
     }
 
     internal readonly struct MacScrollPhaseNativeSample
@@ -150,7 +152,9 @@ namespace Milestro.InputSystem.Service
                     ? MacScrollPhaseMonitorMode.ReadProperties
                     : stage == MacScrollPhaseProbeStage.NativeEventProperties
                         ? MacScrollPhaseMonitorMode.ReadEventProperties
-                        : MacScrollPhaseMonitorMode.CaptureSamples;
+                        : stage == MacScrollPhaseProbeStage.NativeEventScalars
+                            ? MacScrollPhaseMonitorMode.ReadEventScalars
+                            : MacScrollPhaseMonitorMode.CaptureSamples;
             this.captureDurationSeconds = Math.Max(0.25f, captureDurationSeconds);
             this.ownerId = ownerId;
         }
