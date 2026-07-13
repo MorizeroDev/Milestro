@@ -106,6 +106,20 @@ void ReadEventScalars(NSEvent* event) {
     properties.directionInvertedFromDevice = event.isDirectionInvertedFromDevice ? 1 : 0;
 }
 
+void WriteLocalPod() {
+    volatile ScrollPhaseEventProperties properties;
+    properties.gesturePhase = ScrollPhase::Began;
+    properties.momentumPhase = ScrollPhase::None;
+    properties.timestamp = 1.0;
+    properties.eventNumber = 1;
+    properties.deltaX = 1.0;
+    properties.deltaY = 1.0;
+    properties.scrollingDeltaX = 1.0;
+    properties.scrollingDeltaY = 1.0;
+    properties.precise = 1;
+    properties.directionInvertedFromDevice = 0;
+}
+
 void Enqueue(NSEvent* event) {
     const ScrollPhase gesturePhase = ConvertPhase(event.phase);
     const ScrollPhase momentumPhase = ConvertPhase(event.momentumPhase);
@@ -194,6 +208,7 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
         const bool readProperties = ShouldReadScrollPhaseProperties(mode);
         const bool readEventProperties = ShouldReadScrollPhaseEventProperties(mode);
         const bool readEventScalars = ShouldReadScrollPhaseEventScalars(mode);
+        const bool writeLocalPod = ShouldWriteScrollPhaseLocalPod(mode);
         if (![NSThread isMainThread]) {
             return ScrollPhaseMonitorResult::WrongThread;
         }
@@ -219,6 +234,8 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
                                                                    ReadEventProperties(event);
                                                                } else if (readEventScalars) {
                                                                    ReadEventScalars(event);
+                                                               } else if (writeLocalPod) {
+                                                                   WriteLocalPod();
                                                                }
                                                                return event;
                                                              }];
