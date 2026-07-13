@@ -28,7 +28,7 @@ extern "C" {
 // 返回值为大版本号 major
 MILESTRO_API int64_t MilestroGetVersion(int32_t& major, int32_t& minor, int32_t& patch);
 MILESTRO_API int64_t MilestroImeCancelComposition(int32_t& result);
-MILESTRO_API int64_t MilestroScrollPhaseMonitorStart(int32_t& result, int64_t& leaseId);
+MILESTRO_API int64_t MilestroScrollPhaseMonitorStart(int32_t& result, int32_t mode, int64_t& leaseId);
 MILESTRO_API int64_t MilestroScrollPhaseMonitorStop(int32_t& result, int64_t leaseId);
 MILESTRO_API int64_t MilestroScrollPhaseMonitorPoll(int32_t& result,
                                                     int64_t leaseId,

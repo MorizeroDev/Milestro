@@ -15,8 +15,8 @@ int64_t FrameworkBindingMilestroImeCancelComposition(int32_t& result) {
     return MilestroImeCancelComposition(result);
 }
 
-int64_t FrameworkBindingMilestroScrollPhaseMonitorStart(int32_t& result, int64_t& leaseId) {
-    return MilestroScrollPhaseMonitorStart(result, leaseId);
+int64_t FrameworkBindingMilestroScrollPhaseMonitorStart(int32_t& result, int32_t mode, int64_t& leaseId) {
+    return MilestroScrollPhaseMonitorStart(result, mode, leaseId);
 }
 
 int64_t FrameworkBindingMilestroScrollPhaseMonitorStop(int32_t& result, int64_t leaseId) {

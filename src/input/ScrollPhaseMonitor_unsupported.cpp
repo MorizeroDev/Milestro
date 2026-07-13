@@ -5,7 +5,8 @@
 
 namespace milestro::input {
 
-ScrollPhaseMonitorResult StartScrollPhaseMonitor(int64_t& leaseId) noexcept {
+ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, int64_t& leaseId) noexcept {
+    (void) mode;
     leaseId = 0;
     return ScrollPhaseMonitorResult::Unsupported;
 }

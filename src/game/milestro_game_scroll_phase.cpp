@@ -4,8 +4,10 @@
 
 extern "C" {
 
-MILESTRO_API int64_t MilestroScrollPhaseMonitorStart(int32_t& result, int64_t& leaseId) {
-    result = static_cast<int32_t>(milestro::input::StartScrollPhaseMonitor(leaseId));
+MILESTRO_API int64_t MilestroScrollPhaseMonitorStart(int32_t& result, int32_t mode, int64_t& leaseId) {
+    result = static_cast<int32_t>(
+            milestro::input::StartScrollPhaseMonitor(static_cast<milestro::input::ScrollPhaseMonitorMode>(mode),
+                                                     leaseId));
     return MILESTRO_API_RET_OK;
 }
 

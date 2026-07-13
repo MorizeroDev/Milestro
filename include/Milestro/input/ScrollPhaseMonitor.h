@@ -14,6 +14,19 @@ enum class ScrollPhaseMonitorResult : int32_t {
     InvalidLease = 5,
 };
 
+enum class ScrollPhaseMonitorMode : int32_t {
+    PassThrough = 0,
+    CaptureSamples = 1,
+};
+
+constexpr bool IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode mode) noexcept {
+    return mode == ScrollPhaseMonitorMode::PassThrough || mode == ScrollPhaseMonitorMode::CaptureSamples;
+}
+
+constexpr bool ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode mode) noexcept {
+    return mode == ScrollPhaseMonitorMode::CaptureSamples;
+}
+
 enum class ScrollPhase : int32_t {
     Unknown = 0,
     None = 1,
@@ -48,7 +61,7 @@ struct ScrollPhaseSample {
     int32_t queueOverflowed = 0;
 };
 
-ScrollPhaseMonitorResult StartScrollPhaseMonitor(int64_t& leaseId) noexcept;
+ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, int64_t& leaseId) noexcept;
 ScrollPhaseMonitorResult StopScrollPhaseMonitor(int64_t leaseId) noexcept;
 ScrollPhaseMonitorResult PollScrollPhaseMonitor(int64_t leaseId, ScrollPhaseSample& sample, bool& hasSample) noexcept;
 bool HasActiveScrollPhaseMonitorLease() noexcept;

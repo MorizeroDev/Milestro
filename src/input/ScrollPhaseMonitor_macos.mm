@@ -124,9 +124,13 @@ bool ReleaseStartLease(int64_t& leaseId) {
 
 } // namespace
 
-ScrollPhaseMonitorResult StartScrollPhaseMonitor(int64_t& leaseId) noexcept {
+ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, int64_t& leaseId) noexcept {
     @autoreleasepool {
         leaseId = 0;
+        if (!IsValidScrollPhaseMonitorMode(mode)) {
+            return ScrollPhaseMonitorResult::Failed;
+        }
+        const bool captureSamples = ShouldCaptureScrollPhaseSamples(mode);
         if (![NSThread isMainThread]) {
             return ScrollPhaseMonitorResult::WrongThread;
         }
@@ -144,7 +148,9 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(int64_t& leaseId) noexcept {
             ResetState();
             newToken = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
                                                              handler:^NSEvent*(NSEvent* event) {
-                                                               Enqueue(event);
+                                                               if (captureSamples) {
+                                                                   Enqueue(event);
+                                                               }
                                                                return event;
                                                              }];
             if (newToken == nil) {

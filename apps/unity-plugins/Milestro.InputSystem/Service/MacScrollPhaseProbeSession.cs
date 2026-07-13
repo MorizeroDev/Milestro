@@ -12,6 +12,12 @@ namespace Milestro.InputSystem.Service
         UguiAssociation
     }
 
+    internal enum MacScrollPhaseMonitorMode
+    {
+        PassThrough = 0,
+        CaptureSamples = 1
+    }
+
     internal readonly struct MacScrollPhaseNativeSample
     {
         internal MacScrollPhaseNativeSample(bool hasSample,
@@ -83,7 +89,7 @@ namespace Milestro.InputSystem.Service
 
     internal interface IMacScrollPhaseMonitorTransport
     {
-        long Start(out int result, out long leaseId);
+        long Start(MacScrollPhaseMonitorMode mode, out int result, out long leaseId);
         long Poll(out int result, long leaseId, out MacScrollPhaseNativeSample sample);
         long Stop(out int result, long leaseId);
     }
@@ -106,6 +112,7 @@ namespace Milestro.InputSystem.Service
         private readonly IMacScrollPhaseMonitorTransport transport;
         private readonly IMacScrollPhaseProbeSink sink;
         private readonly MacScrollPhaseProbeStage stage;
+        private readonly MacScrollPhaseMonitorMode monitorMode;
         private readonly float captureDurationSeconds;
         private readonly int ownerId;
         private readonly StringBuilder trace = new StringBuilder(MaxTraceUtf8Bytes);
@@ -133,6 +140,9 @@ namespace Milestro.InputSystem.Service
             this.transport = transport ?? throw new ArgumentNullException(nameof(transport));
             this.sink = sink ?? throw new ArgumentNullException(nameof(sink));
             this.stage = stage;
+            monitorMode = stage == MacScrollPhaseProbeStage.NativeLifecycle
+                ? MacScrollPhaseMonitorMode.PassThrough
+                : MacScrollPhaseMonitorMode.CaptureSamples;
             this.captureDurationSeconds = Math.Max(0.25f, captureDurationSeconds);
             this.ownerId = ownerId;
         }
@@ -153,7 +163,7 @@ namespace Milestro.InputSystem.Service
             pollBudget.Reset();
             associationTracker.Reset();
             lifecycleTracker.Reset();
-            var apiResult = transport.Start(out var monitorResult, out monitorLeaseId);
+            var apiResult = transport.Start(monitorMode, out var monitorResult, out monitorLeaseId);
             AppendTrace($"monitor-start stage={stage} api={apiResult} result={monitorResult} lease={monitorLeaseId}");
             if (apiResult != 0 || monitorResult != 0 || monitorLeaseId == 0)
             {

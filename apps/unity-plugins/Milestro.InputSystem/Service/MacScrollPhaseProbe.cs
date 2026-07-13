@@ -148,9 +148,9 @@ namespace Milestro.InputSystem.Service
 
         private sealed class BindingTransport : IMacScrollPhaseMonitorTransport
         {
-            public long Start(out int result, out long leaseId)
+            public long Start(MacScrollPhaseMonitorMode mode, out int result, out long leaseId)
             {
-                return BindingC.ScrollPhaseMonitorStart(out result, out leaseId);
+                return BindingC.ScrollPhaseMonitorStart(out result, (int)mode, out leaseId);
             }
 
             public long Poll(out int result, long leaseId, out MacScrollPhaseNativeSample sample)

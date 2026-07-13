@@ -20,11 +20,34 @@ namespace Milestro.InputSystemTests
 
             Assert.That(MacScrollPhaseProbeSession.DefaultStage,
                 Is.EqualTo(MacScrollPhaseProbeStage.NativeLifecycle));
+            Assert.That(transport.LastStartMode, Is.EqualTo(MacScrollPhaseMonitorMode.PassThrough));
             Assert.That(transport.PollCount, Is.Zero);
             Assert.That(transport.StopCount, Is.EqualTo(1));
             Assert.That(transport.LastStopLease, Is.EqualTo(1));
             Assert.That(sink.FlushCount, Is.EqualTo(1));
             Assert.That(sink.LastFailed, Is.False);
+        }
+
+        [Test]
+        public void SamplingStagesStartInCaptureSamplesMode()
+        {
+            var stages = new[]
+            {
+                MacScrollPhaseProbeStage.NativePolling,
+                MacScrollPhaseProbeStage.InputAction,
+                MacScrollPhaseProbeStage.UguiAssociation
+            };
+
+            foreach (var stage in stages)
+            {
+                var transport = new FakeTransport();
+                var session = CreateSession(transport, new FakeSink(), stage);
+
+                session.Start(0d);
+
+                Assert.That(transport.LastStartMode, Is.EqualTo(MacScrollPhaseMonitorMode.CaptureSamples));
+                session.Disable();
+            }
         }
 
         [Test]
@@ -286,9 +309,11 @@ namespace Milestro.InputSystemTests
             internal int PollCount { get; private set; }
             internal int StopCount { get; private set; }
             internal long LastStopLease { get; private set; }
+            internal MacScrollPhaseMonitorMode LastStartMode { get; private set; }
 
-            public long Start(out int result, out long leaseId)
+            public long Start(MacScrollPhaseMonitorMode mode, out int result, out long leaseId)
             {
+                LastStartMode = mode;
                 result = StartResult;
                 leaseId = 1;
                 return 0;

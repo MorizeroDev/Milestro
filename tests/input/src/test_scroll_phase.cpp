@@ -8,8 +8,28 @@ namespace {
 using milestro::input::ScrollPhase;
 using milestro::input::ScrollPhaseGestureTracker;
 using milestro::input::ScrollPhaseLease;
+using milestro::input::ScrollPhaseMonitorMode;
 using milestro::input::ScrollPhaseMonitorResult;
 using milestro::input::ScrollPhasePluginUnloadDecision;
+
+TEST(ScrollPhaseMonitorModeTest, AcceptsOnlyPassThroughAndCaptureSamples) {
+    EXPECT_EQ(0, static_cast<int32_t>(ScrollPhaseMonitorMode::PassThrough));
+    EXPECT_EQ(1, static_cast<int32_t>(ScrollPhaseMonitorMode::CaptureSamples));
+    EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::PassThrough));
+    EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::CaptureSamples));
+    EXPECT_FALSE(milestro::input::IsValidScrollPhaseMonitorMode(static_cast<ScrollPhaseMonitorMode>(-1)));
+    EXPECT_FALSE(milestro::input::IsValidScrollPhaseMonitorMode(static_cast<ScrollPhaseMonitorMode>(2)));
+}
+
+TEST(ScrollPhaseMonitorModeTest, PassThroughHasNoSamplingSideEffect) {
+    int sampleCount = 0;
+    if (milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::PassThrough)) {
+        ++sampleCount;
+    }
+
+    EXPECT_EQ(0, sampleCount);
+    EXPECT_TRUE(milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::CaptureSamples));
+}
 
 TEST(ScrollPhaseGestureTrackerTest, KeepsOneIdThroughDelayedMomentum) {
     ScrollPhaseGestureTracker tracker;
