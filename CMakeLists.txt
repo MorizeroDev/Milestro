@@ -402,6 +402,8 @@ set(
         src/io/milestro_io.cpp
         src/ime/ImeSession_unsupported.cpp
         src/ime/ImeSession_windows.cpp
+        src/input/ScrollPhaseGestureTracker.cpp
+        src/input/ScrollPhaseMonitor_unsupported.cpp
 
         src/skia/FontFamilyKeywordMap.cpp
         src/skia/FontRegistry.cpp
@@ -434,7 +436,8 @@ set(
 if (APPLE)
     list(APPEND MILESTRO_CORE_FILE
             src/ime/ImeSession_ios.mm
-            src/ime/ImeSession_macos.mm)
+            src/ime/ImeSession_macos.mm
+            src/input/ScrollPhaseMonitor_macos.mm)
 endif ()
 
 set(
@@ -442,6 +445,7 @@ set(
 
         src/game/milestro_game_plugin_main.cpp
         src/game/milestro_game_ime.cpp
+        src/game/milestro_game_scroll_phase.cpp
         src/game/milestro_game_unity_render.cpp
         src/unity_render/MilestroUnityRenderDispatcher.cpp
         src/unity_render/MilestroUnityRenderSubmissionDraw.cpp

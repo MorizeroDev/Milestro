@@ -15,6 +15,48 @@ int64_t FrameworkBindingMilestroImeCancelComposition(int32_t& result) {
     return MilestroImeCancelComposition(result);
 }
 
+int64_t FrameworkBindingMilestroScrollPhaseMonitorStart(int32_t& result) {
+    return MilestroScrollPhaseMonitorStart(result);
+}
+
+int64_t FrameworkBindingMilestroScrollPhaseMonitorStop(int32_t& result) {
+    return MilestroScrollPhaseMonitorStop(result);
+}
+
+int64_t FrameworkBindingMilestroScrollPhaseMonitorPoll(int32_t& result,
+                                                       int32_t& hasSample,
+                                                       int64_t& sequence,
+                                                       int64_t& gestureId,
+                                                       double& timestamp,
+                                                       int64_t& windowNumber,
+                                                       int64_t& eventNumber,
+                                                       double& deltaX,
+                                                       double& deltaY,
+                                                       double& scrollingDeltaX,
+                                                       double& scrollingDeltaY,
+                                                       int32_t& gesturePhase,
+                                                       int32_t& momentumPhase,
+                                                       int32_t& precise,
+                                                       int32_t& directionInvertedFromDevice,
+                                                       int32_t& queueOverflowed) {
+    return MilestroScrollPhaseMonitorPoll(result,
+                                          hasSample,
+                                          sequence,
+                                          gestureId,
+                                          timestamp,
+                                          windowNumber,
+                                          eventNumber,
+                                          deltaX,
+                                          deltaY,
+                                          scrollingDeltaX,
+                                          scrollingDeltaY,
+                                          gesturePhase,
+                                          momentumPhase,
+                                          precise,
+                                          directionInvertedFromDevice,
+                                          queueOverflowed);
+}
+
 void* FrameworkBindingMilestroUnityRenderGetRenderEventAndDataFunc() {
     return MilestroUnityRenderGetRenderEventAndDataFunc();
 }

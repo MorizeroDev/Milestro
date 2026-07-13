@@ -22,6 +22,33 @@ namespace Milestro.Binding
         internal static extern unsafe long ImeCancelComposition(out int result);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroScrollPhaseMonitorStart")]
+        internal static extern unsafe long ScrollPhaseMonitorStart(out int result);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroScrollPhaseMonitorStop")]
+        internal static extern unsafe long ScrollPhaseMonitorStop(out int result);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroScrollPhaseMonitorPoll")]
+        internal static extern unsafe long ScrollPhaseMonitorPoll(out int result,
+                                                                  out int hasSample,
+                                                                  out long sequence,
+                                                                  out long gestureId,
+                                                                  out double timestamp,
+                                                                  out long windowNumber,
+                                                                  out long eventNumber,
+                                                                  out double deltaX,
+                                                                  out double deltaY,
+                                                                  out double scrollingDeltaX,
+                                                                  out double scrollingDeltaY,
+                                                                  out int gesturePhase,
+                                                                  out int momentumPhase,
+                                                                  out int precise,
+                                                                  out int directionInvertedFromDevice,
+                                                                  out int queueOverflowed);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetRenderEventAndDataFunc")]
         internal static extern unsafe IntPtr UnityRenderGetRenderEventAndDataFunc();
 

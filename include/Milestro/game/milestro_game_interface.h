@@ -28,6 +28,24 @@ extern "C" {
 // 返回值为大版本号 major
 MILESTRO_API int64_t MilestroGetVersion(int32_t& major, int32_t& minor, int32_t& patch);
 MILESTRO_API int64_t MilestroImeCancelComposition(int32_t& result);
+MILESTRO_API int64_t MilestroScrollPhaseMonitorStart(int32_t& result);
+MILESTRO_API int64_t MilestroScrollPhaseMonitorStop(int32_t& result);
+MILESTRO_API int64_t MilestroScrollPhaseMonitorPoll(int32_t& result,
+                                                    int32_t& hasSample,
+                                                    int64_t& sequence,
+                                                    int64_t& gestureId,
+                                                    double& timestamp,
+                                                    int64_t& windowNumber,
+                                                    int64_t& eventNumber,
+                                                    double& deltaX,
+                                                    double& deltaY,
+                                                    double& scrollingDeltaX,
+                                                    double& scrollingDeltaY,
+                                                    int32_t& gesturePhase,
+                                                    int32_t& momentumPhase,
+                                                    int32_t& precise,
+                                                    int32_t& directionInvertedFromDevice,
+                                                    int32_t& queueOverflowed);
 
 [[milize::CSharpType("IntPtr")]] MILESTRO_API void* MilestroUnityRenderGetRenderEventAndDataFunc();
 MILESTRO_API int64_t MilestroUnityRenderGetMetalRenderEventId(int32_t& eventId);
