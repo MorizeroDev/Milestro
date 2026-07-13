@@ -188,6 +188,76 @@ namespace Milestro.InputSystemTests
         }
 
         [Test]
+        public void ZeroDeltaEndFromAnotherWindowCannotEndTheBoundGesture()
+        {
+            var tracker = new ScrollPhaseAssociationTracker();
+            tracker.ObserveNative(1, Evidence(1, gestureId: 1, eventNumber: 10));
+            tracker.ObserveAction(1, 1d, new Vector2(0f, -1f));
+            tracker.ObserveUgui(1, 1, new Vector2(0f, -1f));
+            tracker.AdvanceFrame(1);
+            AssertAssociation(tracker, 1, 1);
+            var crossWindowEnd = Evidence(2,
+                gestureId: 1,
+                windowNumber: 5,
+                keyWindowNumber: 5,
+                eventNumber: 11,
+                delta: Vector2.zero,
+                gesturePhase: 5,
+                momentumPhase: 5);
+
+            tracker.ObserveNative(2, crossWindowEnd);
+
+            Assert.That(tracker.IsInvalid, Is.True);
+            Assert.That(tracker.FailureReason, Is.EqualTo("bound-gesture-window-changed"));
+            Assert.That(tracker.AcceptsLifecycle(crossWindowEnd), Is.False);
+        }
+
+        [Test]
+        public void ZeroDeltaEndFromBoundKeyWindowMayReachLifecycle()
+        {
+            var tracker = new ScrollPhaseAssociationTracker();
+            tracker.ObserveNative(1, Evidence(1, gestureId: 1, eventNumber: 10));
+            tracker.ObserveAction(1, 1d, new Vector2(0f, -1f));
+            tracker.ObserveUgui(1, 1, new Vector2(0f, -1f));
+            tracker.AdvanceFrame(1);
+            var boundEnd = Evidence(2,
+                gestureId: 1,
+                eventNumber: 11,
+                delta: Vector2.zero,
+                gesturePhase: 5,
+                momentumPhase: 5);
+
+            tracker.ObserveNative(2, boundEnd);
+
+            Assert.That(tracker.IsInvalid, Is.False);
+            Assert.That(tracker.AcceptsLifecycle(boundEnd), Is.True);
+        }
+
+        [Test]
+        public void ZeroDeltaEndIsRejectedWhenBoundWindowIsNotKey()
+        {
+            var tracker = new ScrollPhaseAssociationTracker();
+            tracker.ObserveNative(1, Evidence(1, gestureId: 1, eventNumber: 10));
+            tracker.ObserveAction(1, 1d, new Vector2(0f, -1f));
+            tracker.ObserveUgui(1, 1, new Vector2(0f, -1f));
+            tracker.AdvanceFrame(1);
+            var nonKeyEnd = Evidence(2,
+                gestureId: 1,
+                windowNumber: 4,
+                keyWindowNumber: 5,
+                eventNumber: 11,
+                delta: Vector2.zero,
+                gesturePhase: 5,
+                momentumPhase: 5);
+
+            tracker.ObserveNative(2, nonKeyEnd);
+
+            Assert.That(tracker.IsInvalid, Is.True);
+            Assert.That(tracker.FailureReason, Is.EqualTo("bound-gesture-window-not-key"));
+            Assert.That(tracker.AcceptsLifecycle(nonKeyEnd), Is.False);
+        }
+
+        [Test]
         public void MultipleActionsFailClosed()
         {
             var tracker = new ScrollPhaseAssociationTracker();

@@ -3,6 +3,8 @@
 #include <Milestro/input/ScrollPhaseMonitor.h>
 #include <Milestro/log/log.h>
 
+#include <cstdlib>
+
 #include "milestro_game_unity_render.h"
 
 static IUnityLog *unityLogPtr = nullptr;
@@ -19,10 +21,23 @@ UnityPluginLoad(IUnityInterfaces *unityInterfacesPtr) {
 
 UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API
 UnityPluginUnload() {
-    const auto scrollMonitorResult = milestro::input::ShutdownScrollPhaseMonitorForPluginUnload();
-    if (scrollMonitorResult != milestro::input::ScrollPhaseMonitorResult::Succeeded) {
-        MILESTROLOG_ERROR("Scroll phase monitor remained active during plugin unload; result={}.",
-                          static_cast<int32_t>(scrollMonitorResult));
+    using milestro::input::ScrollPhasePluginUnloadDecision;
+
+    auto decision = milestro::input::DecideScrollPhasePluginUnload(milestro::input::HasActiveScrollPhaseMonitorState(),
+                                                                   milestro::input::IsScrollPhaseMonitorMainThread(),
+                                                                   false,
+                                                                   false);
+    if (decision == ScrollPhasePluginUnloadDecision::Cleanup) {
+        const auto cleanupResult = milestro::input::ShutdownScrollPhaseMonitorForPluginUnload();
+        decision = milestro::input::DecideScrollPhasePluginUnload(
+                milestro::input::HasActiveScrollPhaseMonitorState(),
+                true,
+                true,
+                cleanupResult == milestro::input::ScrollPhaseMonitorResult::Succeeded);
+    }
+    if (decision == ScrollPhasePluginUnloadDecision::Abort) {
+        MILESTROLOG_ERROR("Active scroll phase monitor prevented safe plugin unload.");
+        std::abort();
     }
     milestro::game::unity_render::Unload();
     unityLogPtr = nullptr;

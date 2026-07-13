@@ -9,6 +9,7 @@ using milestro::input::ScrollPhase;
 using milestro::input::ScrollPhaseGestureTracker;
 using milestro::input::ScrollPhaseLease;
 using milestro::input::ScrollPhaseMonitorResult;
+using milestro::input::ScrollPhasePluginUnloadDecision;
 
 TEST(ScrollPhaseGestureTrackerTest, KeepsOneIdThroughDelayedMomentum) {
     ScrollPhaseGestureTracker tracker;
@@ -62,6 +63,30 @@ TEST(ScrollPhaseLeaseTest, ForceReleaseAllowsRecoveryWithANewId) {
     lease.ForceRelease();
     ASSERT_EQ(lease.Acquire(second), ScrollPhaseMonitorResult::Succeeded);
     EXPECT_NE(second, first);
+}
+
+TEST(ScrollPhasePluginUnloadPolicyTest, ReturnsWhenNoStateIsActive) {
+    EXPECT_EQ(milestro::input::DecideScrollPhasePluginUnload(false, false, false, false),
+              ScrollPhasePluginUnloadDecision::Return);
+}
+
+TEST(ScrollPhasePluginUnloadPolicyTest, RequestsCleanupForMainThreadResidualState) {
+    EXPECT_EQ(milestro::input::DecideScrollPhasePluginUnload(true, true, false, false),
+              ScrollPhasePluginUnloadDecision::Cleanup);
+}
+
+TEST(ScrollPhasePluginUnloadPolicyTest, AbortsForWrongThreadResidualState) {
+    EXPECT_EQ(milestro::input::DecideScrollPhasePluginUnload(true, false, false, false),
+              ScrollPhasePluginUnloadDecision::Abort);
+}
+
+TEST(ScrollPhasePluginUnloadPolicyTest, ReturnsOnlyAfterSuccessfulCleanupLeavesNoState) {
+    EXPECT_EQ(milestro::input::DecideScrollPhasePluginUnload(false, true, true, true),
+              ScrollPhasePluginUnloadDecision::Return);
+    EXPECT_EQ(milestro::input::DecideScrollPhasePluginUnload(true, true, true, true),
+              ScrollPhasePluginUnloadDecision::Abort);
+    EXPECT_EQ(milestro::input::DecideScrollPhasePluginUnload(false, true, true, false),
+              ScrollPhasePluginUnloadDecision::Abort);
 }
 
 } // namespace

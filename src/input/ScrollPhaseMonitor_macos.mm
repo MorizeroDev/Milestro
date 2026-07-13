@@ -8,6 +8,7 @@
 
 #import <AppKit/AppKit.h>
 
+#include <atomic>
 #include <deque>
 
 namespace milestro::input {
@@ -16,6 +17,7 @@ namespace {
 constexpr size_t kMaximumQueuedSamples = 256;
 
 id monitorToken = nil;
+std::atomic<bool> monitorPublished{false};
 std::deque<ScrollPhaseSample> samples;
 int64_t nextSequence = 1;
 ScrollPhaseLease lease;
@@ -77,22 +79,47 @@ void ResetState() {
     queueOverflowed = false;
 }
 
-ScrollPhaseMonitorResult RemoveMonitor() {
+ScrollPhaseMonitorResult RemoveMonitor(int64_t leaseId, bool forceRelease) {
     @try {
         if (monitorToken != nil) {
             [NSEvent removeMonitor:monitorToken];
-            monitorToken = nil;
         }
-        lease.ForceRelease();
-        ResetState();
-        return ScrollPhaseMonitorResult::Succeeded;
     } @catch (NSException* exception) {
         (void) exception;
-        monitorToken = nil;
-        lease.ForceRelease();
-        ResetState();
         return ScrollPhaseMonitorResult::Failed;
     }
+
+    monitorToken = nil;
+    monitorPublished.store(false, std::memory_order_release);
+    if (forceRelease) {
+        lease.ForceRelease();
+    } else {
+        const ScrollPhaseMonitorResult releaseResult = lease.Release(leaseId);
+        if (releaseResult != ScrollPhaseMonitorResult::Succeeded) {
+            return releaseResult;
+        }
+    }
+    ResetState();
+    return ScrollPhaseMonitorResult::Succeeded;
+}
+
+bool RemoveUnpublishedMonitor(id token) {
+    @try {
+        [NSEvent removeMonitor:token];
+        return true;
+    } @catch (NSException* exception) {
+        (void) exception;
+        return false;
+    }
+}
+
+bool ReleaseStartLease(int64_t& leaseId) {
+    if (lease.Release(leaseId) != ScrollPhaseMonitorResult::Succeeded) {
+        return false;
+    }
+    leaseId = 0;
+    ResetState();
+    return true;
 }
 
 } // namespace
@@ -103,30 +130,38 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(int64_t& leaseId) noexcept {
         if (![NSThread isMainThread]) {
             return ScrollPhaseMonitorResult::WrongThread;
         }
-        if (monitorToken != nil) {
+        if (monitorPublished.load(std::memory_order_acquire)) {
             return ScrollPhaseMonitorResult::AlreadyStarted;
         }
 
+        const ScrollPhaseMonitorResult leaseResult = lease.Acquire(leaseId);
+        if (leaseResult != ScrollPhaseMonitorResult::Succeeded) {
+            return leaseResult;
+        }
+
+        id newToken = nil;
         @try {
             ResetState();
-            monitorToken = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
-                                                                 handler:^NSEvent*(NSEvent* event) {
-                                                                   Enqueue(event);
-                                                                   return event;
-                                                                 }];
-            if (monitorToken == nil) {
+            newToken = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
+                                                             handler:^NSEvent*(NSEvent* event) {
+                                                               Enqueue(event);
+                                                               return event;
+                                                             }];
+            if (newToken == nil) {
+                (void) ReleaseStartLease(leaseId);
                 return ScrollPhaseMonitorResult::Failed;
             }
-            const ScrollPhaseMonitorResult leaseResult = lease.Acquire(leaseId);
-            if (leaseResult != ScrollPhaseMonitorResult::Succeeded) {
-                (void) RemoveMonitor();
-                return leaseResult;
-            }
+            monitorToken = newToken;
+            monitorPublished.store(true, std::memory_order_release);
             return ScrollPhaseMonitorResult::Succeeded;
         } @catch (NSException* exception) {
             (void) exception;
-            monitorToken = nil;
-            ResetState();
+            if (newToken != nil && !RemoveUnpublishedMonitor(newToken)) {
+                monitorToken = newToken;
+                monitorPublished.store(true, std::memory_order_release);
+                return ScrollPhaseMonitorResult::Failed;
+            }
+            (void) ReleaseStartLease(leaseId);
             return ScrollPhaseMonitorResult::Failed;
         }
     }
@@ -141,7 +176,7 @@ ScrollPhaseMonitorResult StopScrollPhaseMonitor(int64_t leaseId) noexcept {
         if (leaseResult != ScrollPhaseMonitorResult::Succeeded) {
             return leaseResult;
         }
-        return RemoveMonitor();
+        return RemoveMonitor(leaseId, false);
     }
 }
 
@@ -173,15 +208,23 @@ bool HasActiveScrollPhaseMonitorLease() noexcept {
     return lease.HasActiveLease();
 }
 
+bool HasActiveScrollPhaseMonitorState() noexcept {
+    return monitorPublished.load(std::memory_order_acquire) || lease.HasActiveLease();
+}
+
+bool IsScrollPhaseMonitorMainThread() noexcept {
+    return [NSThread isMainThread];
+}
+
 ScrollPhaseMonitorResult ShutdownScrollPhaseMonitorForPluginUnload() noexcept {
     @autoreleasepool {
-        if (!HasActiveScrollPhaseMonitorLease()) {
+        if (!HasActiveScrollPhaseMonitorState()) {
             return ScrollPhaseMonitorResult::Succeeded;
         }
-        if (![NSThread isMainThread]) {
+        if (!IsScrollPhaseMonitorMainThread()) {
             return ScrollPhaseMonitorResult::WrongThread;
         }
-        return RemoveMonitor();
+        return RemoveMonitor(0, true);
     }
 }
 

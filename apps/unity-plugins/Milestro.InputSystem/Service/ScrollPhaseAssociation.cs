@@ -168,6 +168,24 @@ namespace Milestro.InputSystem.Service
                 return;
             }
 
+            if (Association.HasValue)
+            {
+                var association = Association.Value;
+                if (evidence.GestureId != association.GestureId)
+                {
+                    return;
+                }
+                if (evidence.WindowNumber == 0 || evidence.WindowNumber != evidence.KeyWindowNumber)
+                {
+                    Invalidate("bound-gesture-window-not-key", awaitBegan: true);
+                    return;
+                }
+                if (evidence.WindowNumber != association.WindowNumber)
+                {
+                    Invalidate("bound-gesture-window-changed", awaitBegan: true);
+                }
+                return;
+            }
             if (!evidence.HasDelta || evidence.GestureId == 0)
             {
                 return;
@@ -177,16 +195,6 @@ namespace Milestro.InputSystem.Service
                 Invalidate("native-window-not-key", awaitBegan: true);
                 return;
             }
-
-            if (Association.HasValue)
-            {
-                var association = Association.Value;
-                if (evidence.GestureId == association.GestureId && evidence.WindowNumber != association.WindowNumber)
-                {
-                    Invalidate("bound-gesture-window-changed", awaitBegan: true);
-                }
-                return;
-            }
             if (nativeCount == nativeCandidates.Length)
             {
                 Invalidate("native-evidence-capacity-exhausted", awaitBegan: true);
@@ -194,6 +202,19 @@ namespace Milestro.InputSystem.Service
             }
 
             nativeCandidates[nativeCount++] = new NativeCandidate(frame, evidence);
+        }
+
+        internal bool AcceptsLifecycle(NativeScrollPhaseEvidence evidence)
+        {
+            if (IsInvalid || !Association.HasValue)
+            {
+                return false;
+            }
+
+            var association = Association.Value;
+            return evidence.GestureId == association.GestureId &&
+                   evidence.WindowNumber == association.WindowNumber &&
+                   evidence.WindowNumber == evidence.KeyWindowNumber;
         }
 
         internal void ObserveAction(int frame, double timestamp, Vector2 delta)

@@ -1,0 +1,506 @@
+using System;
+using System.Text;
+using UnityEngine;
+
+namespace Milestro.InputSystem.Service
+{
+    public enum MacScrollPhaseProbeStage
+    {
+        NativeLifecycle,
+        NativePolling,
+        InputAction,
+        UguiAssociation
+    }
+
+    internal readonly struct MacScrollPhaseNativeSample
+    {
+        internal MacScrollPhaseNativeSample(bool hasSample,
+            long sequence,
+            long gestureId,
+            double timestamp,
+            long windowNumber,
+            long keyWindowNumber,
+            long eventNumber,
+            double deltaX,
+            double deltaY,
+            double scrollingDeltaX,
+            double scrollingDeltaY,
+            int gesturePhase,
+            int momentumPhase,
+            int precise,
+            int directionInvertedFromDevice,
+            bool queueOverflowed)
+        {
+            HasSample = hasSample;
+            Sequence = sequence;
+            GestureId = gestureId;
+            Timestamp = timestamp;
+            WindowNumber = windowNumber;
+            KeyWindowNumber = keyWindowNumber;
+            EventNumber = eventNumber;
+            DeltaX = deltaX;
+            DeltaY = deltaY;
+            ScrollingDeltaX = scrollingDeltaX;
+            ScrollingDeltaY = scrollingDeltaY;
+            GesturePhase = gesturePhase;
+            MomentumPhase = momentumPhase;
+            Precise = precise;
+            DirectionInvertedFromDevice = directionInvertedFromDevice;
+            QueueOverflowed = queueOverflowed;
+        }
+
+        internal bool HasSample { get; }
+        internal long Sequence { get; }
+        internal long GestureId { get; }
+        internal double Timestamp { get; }
+        internal long WindowNumber { get; }
+        internal long KeyWindowNumber { get; }
+        internal long EventNumber { get; }
+        internal double DeltaX { get; }
+        internal double DeltaY { get; }
+        internal double ScrollingDeltaX { get; }
+        internal double ScrollingDeltaY { get; }
+        internal int GesturePhase { get; }
+        internal int MomentumPhase { get; }
+        internal int Precise { get; }
+        internal int DirectionInvertedFromDevice { get; }
+        internal bool QueueOverflowed { get; }
+
+        internal NativeScrollPhaseEvidence ToEvidence()
+        {
+            return new NativeScrollPhaseEvidence(Sequence,
+                GestureId,
+                Timestamp,
+                WindowNumber,
+                KeyWindowNumber,
+                EventNumber,
+                new Vector2((float)ScrollingDeltaX, (float)ScrollingDeltaY),
+                GesturePhase,
+                MomentumPhase,
+                QueueOverflowed);
+        }
+    }
+
+    internal interface IMacScrollPhaseMonitorTransport
+    {
+        long Start(out int result, out long leaseId);
+        long Poll(out int result, long leaseId, out MacScrollPhaseNativeSample sample);
+        long Stop(out int result, long leaseId);
+    }
+
+    internal interface IMacScrollPhaseProbeSink
+    {
+        void Flush(bool failed, string trace);
+    }
+
+    internal sealed class MacScrollPhaseProbeSession
+    {
+        internal const MacScrollPhaseProbeStage DefaultStage = MacScrollPhaseProbeStage.NativeLifecycle;
+        internal const int MaxPollsPerFrame = 32;
+        internal const int MaxConsoleTraceLines = 96;
+        internal const int MaxTraceUtf8Bytes = 8192;
+
+        private const string LogPrefix = "[MILESTRO_SCROLL_PHASE_POC]";
+        private const int MaxBufferedTraceLines = MaxConsoleTraceLines - 2;
+
+        private readonly IMacScrollPhaseMonitorTransport transport;
+        private readonly IMacScrollPhaseProbeSink sink;
+        private readonly MacScrollPhaseProbeStage stage;
+        private readonly float captureDurationSeconds;
+        private readonly int ownerId;
+        private readonly StringBuilder trace = new StringBuilder(MaxTraceUtf8Bytes);
+        private readonly ScrollPhasePollBudget pollBudget = new ScrollPhasePollBudget(MaxPollsPerFrame);
+        private readonly ScrollPhaseAssociationTracker associationTracker = new ScrollPhaseAssociationTracker();
+        private readonly ScrollPhaseLifecycleTracker lifecycleTracker = new ScrollPhaseLifecycleTracker();
+
+        private int traceLines;
+        private int traceUtf8Bytes;
+        private double captureStartedAt;
+        private long lastNativeSequence;
+        private long boundGestureId;
+        private long monitorLeaseId;
+        private bool started;
+        private bool captureFailed;
+        private bool captureComplete;
+        private bool traceFlushed;
+
+        internal MacScrollPhaseProbeSession(IMacScrollPhaseMonitorTransport transport,
+            IMacScrollPhaseProbeSink sink,
+            MacScrollPhaseProbeStage stage,
+            float captureDurationSeconds,
+            int ownerId)
+        {
+            this.transport = transport ?? throw new ArgumentNullException(nameof(transport));
+            this.sink = sink ?? throw new ArgumentNullException(nameof(sink));
+            this.stage = stage;
+            this.captureDurationSeconds = Math.Max(0.25f, captureDurationSeconds);
+            this.ownerId = ownerId;
+        }
+
+        internal MacScrollPhaseProbeStage Stage => stage;
+        internal bool IsFinished => captureFailed || captureComplete;
+        internal bool HasLease => monitorLeaseId != 0;
+
+        internal void Start(double now)
+        {
+            if (started)
+            {
+                return;
+            }
+
+            started = true;
+            captureStartedAt = now;
+            pollBudget.Reset();
+            associationTracker.Reset();
+            lifecycleTracker.Reset();
+            var apiResult = transport.Start(out var monitorResult, out monitorLeaseId);
+            AppendTrace($"monitor-start stage={stage} api={apiResult} result={monitorResult} lease={monitorLeaseId}");
+            if (apiResult != 0 || monitorResult != 0 || monitorLeaseId == 0)
+            {
+                FailCapture("monitor-start-failed");
+            }
+        }
+
+        internal void Update(int frame, double now)
+        {
+            if (IsFinished)
+            {
+                return;
+            }
+            if (now - captureStartedAt >= captureDurationSeconds)
+            {
+                CompleteCapture("duration-elapsed");
+                return;
+            }
+            if (stage >= MacScrollPhaseProbeStage.NativePolling)
+            {
+                DrainNativeSamples("update", frame);
+            }
+            if (!captureFailed && stage >= MacScrollPhaseProbeStage.UguiAssociation)
+            {
+                associationTracker.AdvanceFrame(frame);
+                SynchronizeAssociation();
+            }
+        }
+
+        internal void LateUpdate(int frame)
+        {
+            if (IsFinished || stage < MacScrollPhaseProbeStage.UguiAssociation)
+            {
+                return;
+            }
+
+            DrainNativeSamples("late-update", frame);
+            if (!captureFailed)
+            {
+                associationTracker.AdvanceFrame(frame);
+                SynchronizeAssociation();
+            }
+        }
+
+        internal void RecordActionAttachment(string name)
+        {
+            if (!IsFinished && stage >= MacScrollPhaseProbeStage.InputAction)
+            {
+                AppendTrace($"action-attached name={name}");
+            }
+        }
+
+        internal void ObserveAction(int frame, double timestamp, Vector2 delta, string controlPath)
+        {
+            if (IsFinished || stage < MacScrollPhaseProbeStage.InputAction)
+            {
+                return;
+            }
+            if (stage >= MacScrollPhaseProbeStage.UguiAssociation)
+            {
+                associationTracker.ObserveAction(frame, timestamp, delta);
+            }
+            AppendTrace($"action frame={frame} time={timestamp:F6} delta={Format(delta)} " +
+                        $"control={controlPath} bound={boundGestureId}");
+            SynchronizeAssociation();
+        }
+
+        internal void ObserveUgui(int frame, int pointerEventIdentity, Vector2 delta)
+        {
+            if (IsFinished || stage < MacScrollPhaseProbeStage.UguiAssociation)
+            {
+                return;
+            }
+            associationTracker.ObserveUgui(frame, pointerEventIdentity, delta);
+            AppendTrace($"ugui frame={frame} event={pointerEventIdentity} delta={Format(delta)} " +
+                        $"owner={ownerId} bound={boundGestureId}");
+            SynchronizeAssociation();
+        }
+
+        internal void Disable()
+        {
+            if (!IsFinished && stage >= MacScrollPhaseProbeStage.UguiAssociation)
+            {
+                associationTracker.Complete();
+                SynchronizeAssociation();
+                if (!captureFailed && boundGestureId == 0)
+                {
+                    FailCapture("association-not-proven");
+                }
+                if (!captureFailed)
+                {
+                    ValidateLifecycleCompletion();
+                }
+            }
+
+            if (IsFinished)
+            {
+                StopMonitor("component-disabled-retry");
+                return;
+            }
+
+            captureComplete = true;
+            if (!StopMonitor("component-disabled"))
+            {
+                captureFailed = true;
+                AppendTerminalTrace("FAIL monitor-stop-failed");
+            }
+            FlushTrace();
+        }
+
+        private void DrainNativeSamples(string source, int frame)
+        {
+            if (!HasLease)
+            {
+                return;
+            }
+
+            while (pollBudget.TryConsume(frame))
+            {
+                var apiResult = transport.Poll(out var monitorResult, monitorLeaseId, out var sample);
+                if (apiResult != 0 || monitorResult != 0)
+                {
+                    FailCapture($"poll-failed api={apiResult} result={monitorResult}");
+                    return;
+                }
+                if (!sample.HasSample)
+                {
+                    return;
+                }
+                if (lastNativeSequence != 0 && sample.Sequence != lastNativeSequence + 1)
+                {
+                    FailCapture($"native-sequence-gap previous={lastNativeSequence} current={sample.Sequence}");
+                    return;
+                }
+                lastNativeSequence = sample.Sequence;
+                if (sample.QueueOverflowed)
+                {
+                    FailCapture("native-queue-overflow");
+                    return;
+                }
+
+                var lifecycle = ScrollPhaseLifecycleDecision.None;
+                if (stage >= MacScrollPhaseProbeStage.UguiAssociation)
+                {
+                    var evidence = sample.ToEvidence();
+                    associationTracker.ObserveNative(frame, evidence);
+                    SynchronizeAssociation();
+                    if (captureFailed)
+                    {
+                        return;
+                    }
+                    if (associationTracker.AcceptsLifecycle(evidence))
+                    {
+                        lifecycle = lifecycleTracker.Observe(sample.GestureId,
+                            sample.GesturePhase,
+                            sample.MomentumPhase);
+                    }
+                }
+                AppendTrace($"native source={source} frame={frame} seq={sample.Sequence} " +
+                            $"gesture={sample.GestureId} timestamp={sample.Timestamp:F6} " +
+                            $"window={sample.WindowNumber} keyWindow={sample.KeyWindowNumber} " +
+                            $"event={sample.EventNumber} delta=({sample.DeltaX:F4},{sample.DeltaY:F4}) " +
+                            $"scrolling=({sample.ScrollingDeltaX:F4},{sample.ScrollingDeltaY:F4}) " +
+                            $"phase={sample.GesturePhase} momentum={sample.MomentumPhase} " +
+                            $"precise={sample.Precise} natural={sample.DirectionInvertedFromDevice} " +
+                            $"overflow={(sample.QueueOverflowed ? 1 : 0)} owner={ownerId} " +
+                            $"bound={boundGestureId} lifecycle={lifecycle}");
+                if (captureFailed)
+                {
+                    return;
+                }
+            }
+
+            FailCapture($"poll-budget-exhausted frame={frame} budget={MaxPollsPerFrame}");
+        }
+
+        private void AppendTrace(string message)
+        {
+            if (traceFlushed || captureFailed)
+            {
+                return;
+            }
+            var line = $"{LogPrefix} {message}{Environment.NewLine}";
+            var lineBytes = Encoding.UTF8.GetByteCount(line);
+            if (traceLines >= MaxBufferedTraceLines || traceUtf8Bytes + lineBytes > MaxTraceUtf8Bytes)
+            {
+                FailCapture("managed-trace-capacity-exhausted");
+                return;
+            }
+
+            trace.Append(line);
+            ++traceLines;
+            traceUtf8Bytes += lineBytes;
+        }
+
+        private void FailCapture(string reason)
+        {
+            if (captureFailed)
+            {
+                return;
+            }
+
+            captureFailed = true;
+            AppendTerminalTrace($"FAIL {reason}");
+            StopMonitor("fail-closed");
+            FlushTrace();
+        }
+
+        private void CompleteCapture(string reason)
+        {
+            if (IsFinished)
+            {
+                return;
+            }
+            if (stage >= MacScrollPhaseProbeStage.UguiAssociation)
+            {
+                associationTracker.Complete();
+                SynchronizeAssociation();
+                if (captureFailed)
+                {
+                    return;
+                }
+                if (boundGestureId == 0)
+                {
+                    FailCapture("association-not-proven");
+                    return;
+                }
+                ValidateLifecycleCompletion();
+                if (captureFailed)
+                {
+                    return;
+                }
+            }
+
+            captureComplete = true;
+            if (!StopMonitor(reason))
+            {
+                captureFailed = true;
+                AppendTerminalTrace("FAIL monitor-stop-failed");
+            }
+            FlushTrace();
+        }
+
+        private void ValidateLifecycleCompletion()
+        {
+            if (lifecycleTracker.HasReturned)
+            {
+                return;
+            }
+            FailCapture(lifecycleTracker.IsPendingEnd
+                ? "no-non-timeout-no-momentum-signal"
+                : "lifecycle-not-complete");
+        }
+
+        private bool StopMonitor(string reason)
+        {
+            if (!HasLease)
+            {
+                return true;
+            }
+
+            var apiResult = transport.Stop(out var monitorResult, monitorLeaseId);
+            AppendTerminalTrace($"monitor-stop reason={reason} api={apiResult} result={monitorResult} " +
+                                $"lease={monitorLeaseId}");
+            if (apiResult != 0 || monitorResult != 0)
+            {
+                return false;
+            }
+
+            monitorLeaseId = 0;
+            return true;
+        }
+
+        private void AppendTerminalTrace(string message)
+        {
+            var line = $"{LogPrefix} {message}{Environment.NewLine}";
+            var lineBytes = Encoding.UTF8.GetByteCount(line);
+            if (lineBytes > MaxTraceUtf8Bytes)
+            {
+                line = $"{LogPrefix} terminal-trace-too-large{Environment.NewLine}";
+                lineBytes = Encoding.UTF8.GetByteCount(line);
+            }
+            if (traceLines >= MaxConsoleTraceLines || traceUtf8Bytes + lineBytes > MaxTraceUtf8Bytes)
+            {
+                trace.Clear();
+                line = $"{LogPrefix} trace-truncated {message}{Environment.NewLine}";
+                if (Encoding.UTF8.GetByteCount(line) > MaxTraceUtf8Bytes)
+                {
+                    line = $"{LogPrefix} trace-truncated{Environment.NewLine}";
+                }
+                trace.Append(line);
+                traceLines = 1;
+                traceUtf8Bytes = Encoding.UTF8.GetByteCount(line);
+                return;
+            }
+            trace.Append(line);
+            ++traceLines;
+            traceUtf8Bytes += lineBytes;
+        }
+
+        private void FlushTrace()
+        {
+            if (traceFlushed || trace.Length == 0)
+            {
+                return;
+            }
+
+            traceFlushed = true;
+            sink.Flush(captureFailed, trace.ToString());
+        }
+
+        private void SynchronizeAssociation()
+        {
+            if (stage < MacScrollPhaseProbeStage.UguiAssociation || IsFinished)
+            {
+                return;
+            }
+            if (associationTracker.IsInvalid)
+            {
+                FailCapture($"association-failed reason={associationTracker.FailureReason}");
+                return;
+            }
+            if (!associationTracker.Association.HasValue)
+            {
+                return;
+            }
+
+            var association = associationTracker.Association.Value;
+            if (boundGestureId != 0)
+            {
+                if (boundGestureId != association.GestureId)
+                {
+                    FailCapture("association-changed-after-bind");
+                }
+                return;
+            }
+
+            boundGestureId = association.GestureId;
+            lifecycleTracker.Bind(boundGestureId);
+            AppendTrace($"associated gesture={association.GestureId} window={association.WindowNumber} " +
+                        $"ugui={association.PointerEventIdentity} " +
+                        $"observedClockOffset={association.ObservedTimestampOffset:F6}");
+        }
+
+        private static string Format(Vector2 value)
+        {
+            return $"({value.x:F4},{value.y:F4})";
+        }
+    }
+}

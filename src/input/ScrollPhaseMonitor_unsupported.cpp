@@ -26,6 +26,14 @@ bool HasActiveScrollPhaseMonitorLease() noexcept {
     return false;
 }
 
+bool HasActiveScrollPhaseMonitorState() noexcept {
+    return false;
+}
+
+bool IsScrollPhaseMonitorMainThread() noexcept {
+    return true;
+}
+
 ScrollPhaseMonitorResult ShutdownScrollPhaseMonitorForPluginUnload() noexcept {
     return ScrollPhaseMonitorResult::Succeeded;
 }

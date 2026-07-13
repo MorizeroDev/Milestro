@@ -24,6 +24,12 @@ enum class ScrollPhase : int32_t {
     Canceled = 6,
 };
 
+enum class ScrollPhasePluginUnloadDecision : int32_t {
+    Return = 0,
+    Cleanup = 1,
+    Abort = 2,
+};
+
 struct ScrollPhaseSample {
     int64_t sequence = 0;
     int64_t gestureId = 0;
@@ -46,7 +52,11 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(int64_t& leaseId) noexcept;
 ScrollPhaseMonitorResult StopScrollPhaseMonitor(int64_t leaseId) noexcept;
 ScrollPhaseMonitorResult PollScrollPhaseMonitor(int64_t leaseId, ScrollPhaseSample& sample, bool& hasSample) noexcept;
 bool HasActiveScrollPhaseMonitorLease() noexcept;
+bool HasActiveScrollPhaseMonitorState() noexcept;
+bool IsScrollPhaseMonitorMainThread() noexcept;
 ScrollPhaseMonitorResult ShutdownScrollPhaseMonitorForPluginUnload() noexcept;
+ScrollPhasePluginUnloadDecision
+DecideScrollPhasePluginUnload(bool activeState, bool mainThread, bool cleanupAttempted, bool cleanupSucceeded) noexcept;
 
 } // namespace milestro::input
 

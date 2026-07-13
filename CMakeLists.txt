@@ -405,6 +405,7 @@ set(
         src/input/ScrollPhaseGestureTracker.cpp
         src/input/ScrollPhaseLease.cpp
         src/input/ScrollPhaseMonitor_unsupported.cpp
+        src/input/ScrollPhaseUnloadPolicy.cpp
 
         src/skia/FontFamilyKeywordMap.cpp
         src/skia/FontRegistry.cpp
