@@ -1,5 +1,6 @@
 #include <IUnityLog.h>
 #include <Milestro/game/milestro_game_interface.h>
+#include <Milestro/input/ScrollPhaseMonitor.h>
 #include <Milestro/log/log.h>
 
 #include "milestro_game_unity_render.h"
@@ -18,6 +19,11 @@ UnityPluginLoad(IUnityInterfaces *unityInterfacesPtr) {
 
 UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API
 UnityPluginUnload() {
+    const auto scrollMonitorResult = milestro::input::ShutdownScrollPhaseMonitorForPluginUnload();
+    if (scrollMonitorResult != milestro::input::ScrollPhaseMonitorResult::Succeeded) {
+        MILESTROLOG_ERROR("Scroll phase monitor remained active during plugin unload; result={}.",
+                          static_cast<int32_t>(scrollMonitorResult));
+    }
     milestro::game::unity_render::Unload();
     unityLogPtr = nullptr;
 }

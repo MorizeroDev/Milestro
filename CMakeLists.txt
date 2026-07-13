@@ -403,6 +403,7 @@ set(
         src/ime/ImeSession_unsupported.cpp
         src/ime/ImeSession_windows.cpp
         src/input/ScrollPhaseGestureTracker.cpp
+        src/input/ScrollPhaseLease.cpp
         src/input/ScrollPhaseMonitor_unsupported.cpp
 
         src/skia/FontFamilyKeywordMap.cpp

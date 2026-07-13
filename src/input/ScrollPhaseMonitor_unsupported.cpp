@@ -5,18 +5,29 @@
 
 namespace milestro::input {
 
-ScrollPhaseMonitorResult StartScrollPhaseMonitor() noexcept {
+ScrollPhaseMonitorResult StartScrollPhaseMonitor(int64_t& leaseId) noexcept {
+    leaseId = 0;
     return ScrollPhaseMonitorResult::Unsupported;
 }
 
-ScrollPhaseMonitorResult StopScrollPhaseMonitor() noexcept {
+ScrollPhaseMonitorResult StopScrollPhaseMonitor(int64_t leaseId) noexcept {
+    (void) leaseId;
     return ScrollPhaseMonitorResult::Unsupported;
 }
 
-ScrollPhaseMonitorResult PollScrollPhaseMonitor(ScrollPhaseSample& sample, bool& hasSample) noexcept {
+ScrollPhaseMonitorResult PollScrollPhaseMonitor(int64_t leaseId, ScrollPhaseSample& sample, bool& hasSample) noexcept {
+    (void) leaseId;
     sample = {};
     hasSample = false;
     return ScrollPhaseMonitorResult::Unsupported;
+}
+
+bool HasActiveScrollPhaseMonitorLease() noexcept {
+    return false;
+}
+
+ScrollPhaseMonitorResult ShutdownScrollPhaseMonitorForPluginUnload() noexcept {
+    return ScrollPhaseMonitorResult::Succeeded;
 }
 
 } // namespace milestro::input

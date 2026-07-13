@@ -1,0 +1,67 @@
+#include "ScrollPhaseGestureTracker.h"
+#include "ScrollPhaseLease.h"
+
+#include <gtest/gtest.h>
+
+namespace {
+
+using milestro::input::ScrollPhase;
+using milestro::input::ScrollPhaseGestureTracker;
+using milestro::input::ScrollPhaseLease;
+using milestro::input::ScrollPhaseMonitorResult;
+
+TEST(ScrollPhaseGestureTrackerTest, KeepsOneIdThroughDelayedMomentum) {
+    ScrollPhaseGestureTracker tracker;
+
+    EXPECT_EQ(tracker.Resolve(ScrollPhase::Began, ScrollPhase::None), 1);
+    EXPECT_EQ(tracker.Resolve(ScrollPhase::Changed, ScrollPhase::None), 1);
+    EXPECT_EQ(tracker.Resolve(ScrollPhase::Ended, ScrollPhase::None), 1);
+    EXPECT_EQ(tracker.Resolve(ScrollPhase::None, ScrollPhase::Began), 1);
+    EXPECT_EQ(tracker.Resolve(ScrollPhase::None, ScrollPhase::Changed), 1);
+    EXPECT_EQ(tracker.Resolve(ScrollPhase::None, ScrollPhase::Ended), 1);
+}
+
+TEST(ScrollPhaseGestureTrackerTest, KeepsOneIdWhenMomentumBeginsOnGestureEnd) {
+    ScrollPhaseGestureTracker tracker;
+
+    EXPECT_EQ(tracker.Resolve(ScrollPhase::Began, ScrollPhase::None), 1);
+    EXPECT_EQ(tracker.Resolve(ScrollPhase::Ended, ScrollPhase::Began), 1);
+    EXPECT_EQ(tracker.Resolve(ScrollPhase::None, ScrollPhase::Changed), 1);
+    EXPECT_EQ(tracker.Resolve(ScrollPhase::None, ScrollPhase::Ended), 1);
+}
+
+TEST(ScrollPhaseGestureTrackerTest, ResetRestartsSequenceForANewMonitorLease) {
+    ScrollPhaseGestureTracker tracker;
+    EXPECT_EQ(tracker.Resolve(ScrollPhase::Began, ScrollPhase::None), 1);
+    tracker.Reset();
+    EXPECT_EQ(tracker.Resolve(ScrollPhase::Began, ScrollPhase::None), 1);
+}
+
+TEST(ScrollPhaseLeaseTest, RejectsSecondOwnerAndNonOwnerRelease) {
+    ScrollPhaseLease lease;
+    int64_t owner = 0;
+    int64_t second = 0;
+
+    EXPECT_EQ(lease.Acquire(owner), ScrollPhaseMonitorResult::Succeeded);
+    EXPECT_NE(owner, 0);
+    EXPECT_EQ(lease.Acquire(second), ScrollPhaseMonitorResult::AlreadyStarted);
+    EXPECT_EQ(second, 0);
+    EXPECT_EQ(lease.Validate(owner + 1), ScrollPhaseMonitorResult::InvalidLease);
+    EXPECT_EQ(lease.Release(owner + 1), ScrollPhaseMonitorResult::InvalidLease);
+    EXPECT_TRUE(lease.HasActiveLease());
+    EXPECT_EQ(lease.Release(owner), ScrollPhaseMonitorResult::Succeeded);
+    EXPECT_FALSE(lease.HasActiveLease());
+}
+
+TEST(ScrollPhaseLeaseTest, ForceReleaseAllowsRecoveryWithANewId) {
+    ScrollPhaseLease lease;
+    int64_t first = 0;
+    int64_t second = 0;
+
+    ASSERT_EQ(lease.Acquire(first), ScrollPhaseMonitorResult::Succeeded);
+    lease.ForceRelease();
+    ASSERT_EQ(lease.Acquire(second), ScrollPhaseMonitorResult::Succeeded);
+    EXPECT_NE(second, first);
+}
+
+} // namespace

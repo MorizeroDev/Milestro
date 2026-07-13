@@ -10,6 +10,8 @@ enum class ScrollPhaseMonitorResult : int32_t {
     Unsupported = 1,
     WrongThread = 2,
     Failed = 3,
+    AlreadyStarted = 4,
+    InvalidLease = 5,
 };
 
 enum class ScrollPhase : int32_t {
@@ -27,6 +29,7 @@ struct ScrollPhaseSample {
     int64_t gestureId = 0;
     double timestamp = 0.0;
     int64_t windowNumber = 0;
+    int64_t keyWindowNumber = 0;
     int64_t eventNumber = 0;
     double deltaX = 0.0;
     double deltaY = 0.0;
@@ -39,9 +42,11 @@ struct ScrollPhaseSample {
     int32_t queueOverflowed = 0;
 };
 
-ScrollPhaseMonitorResult StartScrollPhaseMonitor() noexcept;
-ScrollPhaseMonitorResult StopScrollPhaseMonitor() noexcept;
-ScrollPhaseMonitorResult PollScrollPhaseMonitor(ScrollPhaseSample& sample, bool& hasSample) noexcept;
+ScrollPhaseMonitorResult StartScrollPhaseMonitor(int64_t& leaseId) noexcept;
+ScrollPhaseMonitorResult StopScrollPhaseMonitor(int64_t leaseId) noexcept;
+ScrollPhaseMonitorResult PollScrollPhaseMonitor(int64_t leaseId, ScrollPhaseSample& sample, bool& hasSample) noexcept;
+bool HasActiveScrollPhaseMonitorLease() noexcept;
+ScrollPhaseMonitorResult ShutdownScrollPhaseMonitorForPluginUnload() noexcept;
 
 } // namespace milestro::input
 

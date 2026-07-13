@@ -2,6 +2,7 @@
 #include <Milestro/input/ScrollPhaseMonitor.h>
 
 #include "ScrollPhaseGestureTracker.h"
+#include "ScrollPhaseLease.h"
 
 #if MILESTRO_PLATFORM_MAC
 
@@ -17,6 +18,7 @@ constexpr size_t kMaximumQueuedSamples = 256;
 id monitorToken = nil;
 std::deque<ScrollPhaseSample> samples;
 int64_t nextSequence = 1;
+ScrollPhaseLease lease;
 ScrollPhaseGestureTracker gestureTracker;
 bool queueOverflowed = false;
 
@@ -50,6 +52,7 @@ void Enqueue(NSEvent* event) {
     sample.gestureId = gestureTracker.Resolve(gesturePhase, momentumPhase);
     sample.timestamp = event.timestamp;
     sample.windowNumber = event.windowNumber;
+    sample.keyWindowNumber = NSApp.keyWindow.windowNumber;
     sample.eventNumber = event.eventNumber;
     sample.deltaX = event.deltaX;
     sample.deltaY = event.deltaY;
@@ -74,15 +77,34 @@ void ResetState() {
     queueOverflowed = false;
 }
 
+ScrollPhaseMonitorResult RemoveMonitor() {
+    @try {
+        if (monitorToken != nil) {
+            [NSEvent removeMonitor:monitorToken];
+            monitorToken = nil;
+        }
+        lease.ForceRelease();
+        ResetState();
+        return ScrollPhaseMonitorResult::Succeeded;
+    } @catch (NSException* exception) {
+        (void) exception;
+        monitorToken = nil;
+        lease.ForceRelease();
+        ResetState();
+        return ScrollPhaseMonitorResult::Failed;
+    }
+}
+
 } // namespace
 
-ScrollPhaseMonitorResult StartScrollPhaseMonitor() noexcept {
+ScrollPhaseMonitorResult StartScrollPhaseMonitor(int64_t& leaseId) noexcept {
     @autoreleasepool {
+        leaseId = 0;
         if (![NSThread isMainThread]) {
             return ScrollPhaseMonitorResult::WrongThread;
         }
         if (monitorToken != nil) {
-            return ScrollPhaseMonitorResult::Succeeded;
+            return ScrollPhaseMonitorResult::AlreadyStarted;
         }
 
         @try {
@@ -92,28 +114,14 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor() noexcept {
                                                                    Enqueue(event);
                                                                    return event;
                                                                  }];
-            return monitorToken == nil ? ScrollPhaseMonitorResult::Failed : ScrollPhaseMonitorResult::Succeeded;
-        } @catch (NSException* exception) {
-            (void) exception;
-            monitorToken = nil;
-            ResetState();
-            return ScrollPhaseMonitorResult::Failed;
-        }
-    }
-}
-
-ScrollPhaseMonitorResult StopScrollPhaseMonitor() noexcept {
-    @autoreleasepool {
-        if (![NSThread isMainThread]) {
-            return ScrollPhaseMonitorResult::WrongThread;
-        }
-
-        @try {
-            if (monitorToken != nil) {
-                [NSEvent removeMonitor:monitorToken];
-                monitorToken = nil;
+            if (monitorToken == nil) {
+                return ScrollPhaseMonitorResult::Failed;
             }
-            ResetState();
+            const ScrollPhaseMonitorResult leaseResult = lease.Acquire(leaseId);
+            if (leaseResult != ScrollPhaseMonitorResult::Succeeded) {
+                (void) RemoveMonitor();
+                return leaseResult;
+            }
             return ScrollPhaseMonitorResult::Succeeded;
         } @catch (NSException* exception) {
             (void) exception;
@@ -124,15 +132,29 @@ ScrollPhaseMonitorResult StopScrollPhaseMonitor() noexcept {
     }
 }
 
-ScrollPhaseMonitorResult PollScrollPhaseMonitor(ScrollPhaseSample& sample, bool& hasSample) noexcept {
+ScrollPhaseMonitorResult StopScrollPhaseMonitor(int64_t leaseId) noexcept {
+    @autoreleasepool {
+        if (![NSThread isMainThread]) {
+            return ScrollPhaseMonitorResult::WrongThread;
+        }
+        const ScrollPhaseMonitorResult leaseResult = lease.Validate(leaseId);
+        if (leaseResult != ScrollPhaseMonitorResult::Succeeded) {
+            return leaseResult;
+        }
+        return RemoveMonitor();
+    }
+}
+
+ScrollPhaseMonitorResult PollScrollPhaseMonitor(int64_t leaseId, ScrollPhaseSample& sample, bool& hasSample) noexcept {
     @autoreleasepool {
         sample = {};
         hasSample = false;
         if (![NSThread isMainThread]) {
             return ScrollPhaseMonitorResult::WrongThread;
         }
-        if (monitorToken == nil) {
-            return ScrollPhaseMonitorResult::Failed;
+        const ScrollPhaseMonitorResult leaseResult = lease.Validate(leaseId);
+        if (leaseResult != ScrollPhaseMonitorResult::Succeeded) {
+            return leaseResult;
         }
         if (samples.empty()) {
             return ScrollPhaseMonitorResult::Succeeded;
@@ -144,6 +166,22 @@ ScrollPhaseMonitorResult PollScrollPhaseMonitor(ScrollPhaseSample& sample, bool&
         queueOverflowed = false;
         hasSample = true;
         return ScrollPhaseMonitorResult::Succeeded;
+    }
+}
+
+bool HasActiveScrollPhaseMonitorLease() noexcept {
+    return lease.HasActiveLease();
+}
+
+ScrollPhaseMonitorResult ShutdownScrollPhaseMonitorForPluginUnload() noexcept {
+    @autoreleasepool {
+        if (!HasActiveScrollPhaseMonitorLease()) {
+            return ScrollPhaseMonitorResult::Succeeded;
+        }
+        if (![NSThread isMainThread]) {
+            return ScrollPhaseMonitorResult::WrongThread;
+        }
+        return RemoveMonitor();
     }
 }
 

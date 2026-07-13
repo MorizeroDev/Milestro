@@ -15,20 +15,22 @@ int64_t FrameworkBindingMilestroImeCancelComposition(int32_t& result) {
     return MilestroImeCancelComposition(result);
 }
 
-int64_t FrameworkBindingMilestroScrollPhaseMonitorStart(int32_t& result) {
-    return MilestroScrollPhaseMonitorStart(result);
+int64_t FrameworkBindingMilestroScrollPhaseMonitorStart(int32_t& result, int64_t& leaseId) {
+    return MilestroScrollPhaseMonitorStart(result, leaseId);
 }
 
-int64_t FrameworkBindingMilestroScrollPhaseMonitorStop(int32_t& result) {
-    return MilestroScrollPhaseMonitorStop(result);
+int64_t FrameworkBindingMilestroScrollPhaseMonitorStop(int32_t& result, int64_t leaseId) {
+    return MilestroScrollPhaseMonitorStop(result, leaseId);
 }
 
 int64_t FrameworkBindingMilestroScrollPhaseMonitorPoll(int32_t& result,
+                                                       int64_t leaseId,
                                                        int32_t& hasSample,
                                                        int64_t& sequence,
                                                        int64_t& gestureId,
                                                        double& timestamp,
                                                        int64_t& windowNumber,
+                                                       int64_t& keyWindowNumber,
                                                        int64_t& eventNumber,
                                                        double& deltaX,
                                                        double& deltaY,
@@ -40,11 +42,13 @@ int64_t FrameworkBindingMilestroScrollPhaseMonitorPoll(int32_t& result,
                                                        int32_t& directionInvertedFromDevice,
                                                        int32_t& queueOverflowed) {
     return MilestroScrollPhaseMonitorPoll(result,
+                                          leaseId,
                                           hasSample,
                                           sequence,
                                           gestureId,
                                           timestamp,
                                           windowNumber,
+                                          keyWindowNumber,
                                           eventNumber,
                                           deltaX,
                                           deltaY,

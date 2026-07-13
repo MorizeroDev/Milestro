@@ -23,20 +23,22 @@ namespace Milestro.Binding
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroScrollPhaseMonitorStart")]
-        internal static extern unsafe long ScrollPhaseMonitorStart(out int result);
+        internal static extern unsafe long ScrollPhaseMonitorStart(out int result, out long leaseId);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroScrollPhaseMonitorStop")]
-        internal static extern unsafe long ScrollPhaseMonitorStop(out int result);
+        internal static extern unsafe long ScrollPhaseMonitorStop(out int result, long leaseId);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroScrollPhaseMonitorPoll")]
         internal static extern unsafe long ScrollPhaseMonitorPoll(out int result,
+                                                                  long leaseId,
                                                                   out int hasSample,
                                                                   out long sequence,
                                                                   out long gestureId,
                                                                   out double timestamp,
                                                                   out long windowNumber,
+                                                                  out long keyWindowNumber,
                                                                   out long eventNumber,
                                                                   out double deltaX,
                                                                   out double deltaY,

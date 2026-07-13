@@ -4,22 +4,24 @@
 
 extern "C" {
 
-MILESTRO_API int64_t MilestroScrollPhaseMonitorStart(int32_t& result) {
-    result = static_cast<int32_t>(milestro::input::StartScrollPhaseMonitor());
+MILESTRO_API int64_t MilestroScrollPhaseMonitorStart(int32_t& result, int64_t& leaseId) {
+    result = static_cast<int32_t>(milestro::input::StartScrollPhaseMonitor(leaseId));
     return MILESTRO_API_RET_OK;
 }
 
-MILESTRO_API int64_t MilestroScrollPhaseMonitorStop(int32_t& result) {
-    result = static_cast<int32_t>(milestro::input::StopScrollPhaseMonitor());
+MILESTRO_API int64_t MilestroScrollPhaseMonitorStop(int32_t& result, int64_t leaseId) {
+    result = static_cast<int32_t>(milestro::input::StopScrollPhaseMonitor(leaseId));
     return MILESTRO_API_RET_OK;
 }
 
 MILESTRO_API int64_t MilestroScrollPhaseMonitorPoll(int32_t& result,
+                                                    int64_t leaseId,
                                                     int32_t& hasSample,
                                                     int64_t& sequence,
                                                     int64_t& gestureId,
                                                     double& timestamp,
                                                     int64_t& windowNumber,
+                                                    int64_t& keyWindowNumber,
                                                     int64_t& eventNumber,
                                                     double& deltaX,
                                                     double& deltaY,
@@ -32,12 +34,13 @@ MILESTRO_API int64_t MilestroScrollPhaseMonitorPoll(int32_t& result,
                                                     int32_t& queueOverflowed) {
     milestro::input::ScrollPhaseSample sample;
     bool receivedSample = false;
-    result = static_cast<int32_t>(milestro::input::PollScrollPhaseMonitor(sample, receivedSample));
+    result = static_cast<int32_t>(milestro::input::PollScrollPhaseMonitor(leaseId, sample, receivedSample));
     hasSample = receivedSample ? 1 : 0;
     sequence = sample.sequence;
     gestureId = sample.gestureId;
     timestamp = sample.timestamp;
     windowNumber = sample.windowNumber;
+    keyWindowNumber = sample.keyWindowNumber;
     eventNumber = sample.eventNumber;
     deltaX = sample.deltaX;
     deltaY = sample.deltaY;
