@@ -46,6 +46,37 @@ ScrollPhase ConvertPhase(NSEventPhase phase) {
     return ScrollPhase::Unknown;
 }
 
+struct ScrollPhaseEventProperties {
+    ScrollPhase gesturePhase;
+    ScrollPhase momentumPhase;
+    double timestamp;
+    int64_t windowNumber;
+    int64_t keyWindowNumber;
+    int64_t eventNumber;
+    double deltaX;
+    double deltaY;
+    double scrollingDeltaX;
+    double scrollingDeltaY;
+    int32_t precise;
+    int32_t directionInvertedFromDevice;
+};
+
+void ReadProperties(NSEvent* event) {
+    volatile ScrollPhaseEventProperties properties;
+    properties.gesturePhase = ConvertPhase(event.phase);
+    properties.momentumPhase = ConvertPhase(event.momentumPhase);
+    properties.timestamp = event.timestamp;
+    properties.windowNumber = event.windowNumber;
+    properties.keyWindowNumber = NSApp.keyWindow.windowNumber;
+    properties.eventNumber = event.eventNumber;
+    properties.deltaX = event.deltaX;
+    properties.deltaY = event.deltaY;
+    properties.scrollingDeltaX = event.scrollingDeltaX;
+    properties.scrollingDeltaY = event.scrollingDeltaY;
+    properties.precise = event.hasPreciseScrollingDeltas ? 1 : 0;
+    properties.directionInvertedFromDevice = event.isDirectionInvertedFromDevice ? 1 : 0;
+}
+
 void Enqueue(NSEvent* event) {
     const ScrollPhase gesturePhase = ConvertPhase(event.phase);
     const ScrollPhase momentumPhase = ConvertPhase(event.momentumPhase);
@@ -131,6 +162,7 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
             return ScrollPhaseMonitorResult::Failed;
         }
         const bool captureSamples = ShouldCaptureScrollPhaseSamples(mode);
+        const bool readProperties = ShouldReadScrollPhaseProperties(mode);
         if (![NSThread isMainThread]) {
             return ScrollPhaseMonitorResult::WrongThread;
         }
@@ -150,6 +182,8 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
                                                              handler:^NSEvent*(NSEvent* event) {
                                                                if (captureSamples) {
                                                                    Enqueue(event);
+                                                               } else if (readProperties) {
+                                                                   ReadProperties(event);
                                                                }
                                                                return event;
                                                              }];

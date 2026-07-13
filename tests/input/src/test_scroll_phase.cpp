@@ -12,23 +12,33 @@ using milestro::input::ScrollPhaseMonitorMode;
 using milestro::input::ScrollPhaseMonitorResult;
 using milestro::input::ScrollPhasePluginUnloadDecision;
 
-TEST(ScrollPhaseMonitorModeTest, AcceptsOnlyPassThroughAndCaptureSamples) {
+TEST(ScrollPhaseMonitorModeTest, AcceptsOnlyDefinedModes) {
     EXPECT_EQ(0, static_cast<int32_t>(ScrollPhaseMonitorMode::PassThrough));
     EXPECT_EQ(1, static_cast<int32_t>(ScrollPhaseMonitorMode::CaptureSamples));
+    EXPECT_EQ(2, static_cast<int32_t>(ScrollPhaseMonitorMode::ReadProperties));
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::PassThrough));
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::CaptureSamples));
+    EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::ReadProperties));
     EXPECT_FALSE(milestro::input::IsValidScrollPhaseMonitorMode(static_cast<ScrollPhaseMonitorMode>(-1)));
-    EXPECT_FALSE(milestro::input::IsValidScrollPhaseMonitorMode(static_cast<ScrollPhaseMonitorMode>(2)));
+    EXPECT_FALSE(milestro::input::IsValidScrollPhaseMonitorMode(static_cast<ScrollPhaseMonitorMode>(3)));
 }
 
-TEST(ScrollPhaseMonitorModeTest, PassThroughHasNoSamplingSideEffect) {
+TEST(ScrollPhaseMonitorModeTest, ModesHaveMutuallyExclusiveCallbackSideEffects) {
     int sampleCount = 0;
+    int propertyReadCount = 0;
     if (milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::PassThrough)) {
         ++sampleCount;
     }
+    if (milestro::input::ShouldReadScrollPhaseProperties(ScrollPhaseMonitorMode::PassThrough)) {
+        ++propertyReadCount;
+    }
 
     EXPECT_EQ(0, sampleCount);
+    EXPECT_EQ(0, propertyReadCount);
     EXPECT_TRUE(milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::CaptureSamples));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseProperties(ScrollPhaseMonitorMode::CaptureSamples));
+    EXPECT_FALSE(milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::ReadProperties));
+    EXPECT_TRUE(milestro::input::ShouldReadScrollPhaseProperties(ScrollPhaseMonitorMode::ReadProperties));
 }
 
 TEST(ScrollPhaseGestureTrackerTest, KeepsOneIdThroughDelayedMomentum) {

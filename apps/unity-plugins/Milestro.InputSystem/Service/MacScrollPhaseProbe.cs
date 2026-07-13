@@ -38,7 +38,7 @@ namespace Milestro.InputSystem.Service
                 captureDurationSeconds,
                 GetInstanceID());
             session.Start(Time.realtimeSinceStartupAsDouble);
-            if (!session.IsFinished && session.Stage >= MacScrollPhaseProbeStage.InputAction)
+            if (!session.IsFinished && session.RequiresInputAction)
             {
                 TryAttachScrollAction();
             }
@@ -54,7 +54,7 @@ namespace Milestro.InputSystem.Service
             {
                 return;
             }
-            if (!session.IsFinished && session.Stage >= MacScrollPhaseProbeStage.InputAction)
+            if (!session.IsFinished && session.RequiresInputAction)
             {
                 TryAttachScrollAction();
             }

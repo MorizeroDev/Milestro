@@ -6,16 +6,18 @@ namespace Milestro.InputSystem.Service
 {
     public enum MacScrollPhaseProbeStage
     {
-        NativeLifecycle,
-        NativePolling,
-        InputAction,
-        UguiAssociation
+        NativeLifecycle = 0,
+        NativePolling = 1,
+        InputAction = 2,
+        UguiAssociation = 3,
+        NativeProperties = 4
     }
 
     internal enum MacScrollPhaseMonitorMode
     {
         PassThrough = 0,
-        CaptureSamples = 1
+        CaptureSamples = 1,
+        ReadProperties = 2
     }
 
     internal readonly struct MacScrollPhaseNativeSample
@@ -142,14 +144,20 @@ namespace Milestro.InputSystem.Service
             this.stage = stage;
             monitorMode = stage == MacScrollPhaseProbeStage.NativeLifecycle
                 ? MacScrollPhaseMonitorMode.PassThrough
-                : MacScrollPhaseMonitorMode.CaptureSamples;
+                : stage == MacScrollPhaseProbeStage.NativeProperties
+                    ? MacScrollPhaseMonitorMode.ReadProperties
+                    : MacScrollPhaseMonitorMode.CaptureSamples;
             this.captureDurationSeconds = Math.Max(0.25f, captureDurationSeconds);
             this.ownerId = ownerId;
         }
 
-        internal MacScrollPhaseProbeStage Stage => stage;
+        internal bool RequiresInputAction => stage == MacScrollPhaseProbeStage.InputAction ||
+                                             stage == MacScrollPhaseProbeStage.UguiAssociation;
         internal bool IsFinished => captureFailed || captureComplete;
         internal bool HasLease => monitorLeaseId != 0;
+
+        private bool PollsNativeSamples => stage == MacScrollPhaseProbeStage.NativePolling || RequiresInputAction;
+        private bool RequiresUguiAssociation => stage == MacScrollPhaseProbeStage.UguiAssociation;
 
         internal void Start(double now)
         {
@@ -182,11 +190,11 @@ namespace Milestro.InputSystem.Service
                 CompleteCapture("duration-elapsed");
                 return;
             }
-            if (stage >= MacScrollPhaseProbeStage.NativePolling)
+            if (PollsNativeSamples)
             {
                 DrainNativeSamples("update", frame);
             }
-            if (!captureFailed && stage >= MacScrollPhaseProbeStage.UguiAssociation)
+            if (!captureFailed && RequiresUguiAssociation)
             {
                 associationTracker.AdvanceFrame(frame);
                 SynchronizeAssociation();
@@ -195,7 +203,7 @@ namespace Milestro.InputSystem.Service
 
         internal void LateUpdate(int frame)
         {
-            if (IsFinished || stage < MacScrollPhaseProbeStage.UguiAssociation)
+            if (IsFinished || !RequiresUguiAssociation)
             {
                 return;
             }
@@ -210,7 +218,7 @@ namespace Milestro.InputSystem.Service
 
         internal void RecordActionAttachment(string name)
         {
-            if (!IsFinished && stage >= MacScrollPhaseProbeStage.InputAction)
+            if (!IsFinished && RequiresInputAction)
             {
                 AppendTrace($"action-attached name={name}");
             }
@@ -218,11 +226,11 @@ namespace Milestro.InputSystem.Service
 
         internal void ObserveAction(int frame, double timestamp, Vector2 delta, string controlPath)
         {
-            if (IsFinished || stage < MacScrollPhaseProbeStage.InputAction)
+            if (IsFinished || !RequiresInputAction)
             {
                 return;
             }
-            if (stage >= MacScrollPhaseProbeStage.UguiAssociation)
+            if (RequiresUguiAssociation)
             {
                 associationTracker.ObserveAction(frame, timestamp, delta);
             }
@@ -233,7 +241,7 @@ namespace Milestro.InputSystem.Service
 
         internal void ObserveUgui(int frame, int pointerEventIdentity, Vector2 delta)
         {
-            if (IsFinished || stage < MacScrollPhaseProbeStage.UguiAssociation)
+            if (IsFinished || !RequiresUguiAssociation)
             {
                 return;
             }
@@ -245,7 +253,7 @@ namespace Milestro.InputSystem.Service
 
         internal void Disable()
         {
-            if (!IsFinished && stage >= MacScrollPhaseProbeStage.UguiAssociation)
+            if (!IsFinished && RequiresUguiAssociation)
             {
                 associationTracker.Complete();
                 SynchronizeAssociation();
@@ -306,7 +314,7 @@ namespace Milestro.InputSystem.Service
                 }
 
                 var lifecycle = ScrollPhaseLifecycleDecision.None;
-                if (stage >= MacScrollPhaseProbeStage.UguiAssociation)
+                if (RequiresUguiAssociation)
                 {
                     var evidence = sample.ToEvidence();
                     associationTracker.ObserveNative(frame, evidence);
@@ -378,7 +386,7 @@ namespace Milestro.InputSystem.Service
             {
                 return;
             }
-            if (stage >= MacScrollPhaseProbeStage.UguiAssociation)
+            if (RequiresUguiAssociation)
             {
                 associationTracker.Complete();
                 SynchronizeAssociation();
@@ -477,7 +485,7 @@ namespace Milestro.InputSystem.Service
 
         private void SynchronizeAssociation()
         {
-            if (stage < MacScrollPhaseProbeStage.UguiAssociation || IsFinished)
+            if (!RequiresUguiAssociation || IsFinished)
             {
                 return;
             }

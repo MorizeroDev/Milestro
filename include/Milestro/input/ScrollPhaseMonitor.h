@@ -17,14 +17,20 @@ enum class ScrollPhaseMonitorResult : int32_t {
 enum class ScrollPhaseMonitorMode : int32_t {
     PassThrough = 0,
     CaptureSamples = 1,
+    ReadProperties = 2,
 };
 
 constexpr bool IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode mode) noexcept {
-    return mode == ScrollPhaseMonitorMode::PassThrough || mode == ScrollPhaseMonitorMode::CaptureSamples;
+    return mode == ScrollPhaseMonitorMode::PassThrough || mode == ScrollPhaseMonitorMode::CaptureSamples ||
+           mode == ScrollPhaseMonitorMode::ReadProperties;
 }
 
 constexpr bool ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode mode) noexcept {
     return mode == ScrollPhaseMonitorMode::CaptureSamples;
+}
+
+constexpr bool ShouldReadScrollPhaseProperties(ScrollPhaseMonitorMode mode) noexcept {
+    return mode == ScrollPhaseMonitorMode::ReadProperties;
 }
 
 enum class ScrollPhase : int32_t {
