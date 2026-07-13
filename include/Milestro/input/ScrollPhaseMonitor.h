@@ -25,6 +25,7 @@ enum class ScrollPhaseMonitorMode : int32_t {
     ReadPhasesTimestamp = 7,
     WritePhasesTimestampWindowPod = 8,
     ReadPhasesTimestampWindow = 9,
+    ReadPhasesTimestampWindowScrollingDelta = 10,
 };
 
 constexpr bool IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode mode) noexcept {
@@ -33,7 +34,8 @@ constexpr bool IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode mode) noexce
            mode == ScrollPhaseMonitorMode::ReadEventScalars || mode == ScrollPhaseMonitorMode::WriteLocalPod ||
            mode == ScrollPhaseMonitorMode::ReadPhasesOnly || mode == ScrollPhaseMonitorMode::ReadPhasesTimestamp ||
            mode == ScrollPhaseMonitorMode::WritePhasesTimestampWindowPod ||
-           mode == ScrollPhaseMonitorMode::ReadPhasesTimestampWindow;
+           mode == ScrollPhaseMonitorMode::ReadPhasesTimestampWindow ||
+           mode == ScrollPhaseMonitorMode::ReadPhasesTimestampWindowScrollingDelta;
 }
 
 constexpr bool ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode mode) noexcept {
@@ -70,6 +72,10 @@ constexpr bool ShouldWriteScrollPhasesTimestampWindowPod(ScrollPhaseMonitorMode 
 
 constexpr bool ShouldReadScrollPhasesTimestampWindow(ScrollPhaseMonitorMode mode) noexcept {
     return mode == ScrollPhaseMonitorMode::ReadPhasesTimestampWindow;
+}
+
+constexpr bool ShouldReadScrollPhasesTimestampWindowScrollingDelta(ScrollPhaseMonitorMode mode) noexcept {
+    return mode == ScrollPhaseMonitorMode::ReadPhasesTimestampWindowScrollingDelta;
 }
 
 enum class ScrollPhase : int32_t {

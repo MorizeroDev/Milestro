@@ -178,6 +178,21 @@ void ReadPhasesTimestampWindow(NSEvent* event) {
     properties.directionInvertedFromDevice = 0;
 }
 
+void ReadPhasesTimestampWindowScrollingDelta(NSEvent* event) {
+    volatile ScrollPhaseEventProperties properties;
+    properties.gesturePhase = ConvertPhase(event.phase);
+    properties.momentumPhase = ConvertPhase(event.momentumPhase);
+    properties.timestamp = event.timestamp;
+    properties.windowNumber = event.windowNumber;
+    properties.eventNumber = 1;
+    properties.deltaX = 1.0;
+    properties.deltaY = 1.0;
+    properties.scrollingDeltaX = event.scrollingDeltaX;
+    properties.scrollingDeltaY = event.scrollingDeltaY;
+    properties.precise = 1;
+    properties.directionInvertedFromDevice = 0;
+}
+
 void Enqueue(NSEvent* event) {
     const ScrollPhase gesturePhase = ConvertPhase(event.phase);
     const ScrollPhase momentumPhase = ConvertPhase(event.momentumPhase);
@@ -271,6 +286,7 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
         const bool readPhasesTimestamp = ShouldReadScrollPhasesTimestamp(mode);
         const bool writePhasesTimestampWindowPod = ShouldWriteScrollPhasesTimestampWindowPod(mode);
         const bool readPhasesTimestampWindow = ShouldReadScrollPhasesTimestampWindow(mode);
+        const bool readPhasesTimestampWindowScrollingDelta = ShouldReadScrollPhasesTimestampWindowScrollingDelta(mode);
         if (![NSThread isMainThread]) {
             return ScrollPhaseMonitorResult::WrongThread;
         }
@@ -306,6 +322,8 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
                                                                    WritePhasesTimestampWindowPod(event);
                                                                } else if (readPhasesTimestampWindow) {
                                                                    ReadPhasesTimestampWindow(event);
+                                                               } else if (readPhasesTimestampWindowScrollingDelta) {
+                                                                   ReadPhasesTimestampWindowScrollingDelta(event);
                                                                }
                                                                return event;
                                                              }];
