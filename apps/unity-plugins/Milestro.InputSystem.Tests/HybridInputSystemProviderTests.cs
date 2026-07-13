@@ -5,6 +5,7 @@ using Milestro.InputSystem.Model;
 using Milestro.InputSystem.Service;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 
 namespace Milestro.InputSystemTests
@@ -105,6 +106,21 @@ namespace Milestro.InputSystemTests
             Assert.That((provider.Capabilities & HybridInputCapabilities.ScrollDelta) != 0, Is.True);
             Assert.That((provider.Capabilities & HybridInputCapabilities.ScrollDevice) == 0, Is.True);
             Assert.That((provider.Capabilities & HybridInputCapabilities.ScrollPhase) == 0, Is.True);
+        }
+
+        [Test]
+        public void ScrollResolverEnrichesTheExistingUguiDeltaWithoutReadingAnotherSource()
+        {
+            var provider = new HybridInputSystemProvider(new FakeInputSystemSource());
+            var eventData = new PointerEventData(null!) { scrollDelta = new Vector2(1.25f, -2.5f) };
+
+            Assert.That(provider.TryResolveScrollInput(eventData, out var resolved), Is.True);
+            Assert.That(resolved.Delta, Is.EqualTo(eventData.scrollDelta));
+            Assert.That(resolved.Metadata.Capability, Is.EqualTo(HybridScrollCapability.DeltaOnly));
+            Assert.That(resolved.Metadata.DeviceKind, Is.EqualTo(HybridInputDeviceKind.Unknown));
+            Assert.That(resolved.Metadata.GesturePhase, Is.EqualTo(HybridInputPhase.Unknown));
+            Assert.That(resolved.Metadata.MomentumPhase, Is.EqualTo(HybridInputPhase.Unknown));
+            Assert.That(resolved.Metadata.GestureId, Is.Zero);
         }
 
         [Test]

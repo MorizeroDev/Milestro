@@ -2329,6 +2329,16 @@ InputBoxDrawSnapshot::InputBoxDrawSnapshot(std::shared_ptr<::skia::textlayout::P
 }
 
 void InputBoxDrawSnapshot::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, SkScalar height) const {
+    paint(canvas, x, y, width, height, 0.0f, 0.0f);
+}
+
+void InputBoxDrawSnapshot::paint(SkCanvas* canvas,
+                                 SkScalar x,
+                                 SkScalar y,
+                                 SkScalar width,
+                                 SkScalar height,
+                                 SkScalar presentationOffsetX,
+                                 SkScalar presentationOffsetY) const {
     if (canvas == nullptr) {
         return;
     }
@@ -2345,16 +2355,18 @@ void InputBoxDrawSnapshot::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkSca
         paint.setColor(selectionColor_);
         paint.setStyle(SkPaint::kFill_Style);
         for (const auto& rect: *selectionRects_) {
-            canvas->drawRect(SkRect::MakeLTRB(x + rect.left - metrics_.scrollX,
-                                              y + rect.top - metrics_.scrollY,
-                                              x + rect.right - metrics_.scrollX,
-                                              y + rect.bottom - metrics_.scrollY),
+            canvas->drawRect(SkRect::MakeLTRB(x + presentationOffsetX + rect.left - metrics_.scrollX,
+                                              y + presentationOffsetY + rect.top - metrics_.scrollY,
+                                              x + presentationOffsetX + rect.right - metrics_.scrollX,
+                                              y + presentationOffsetY + rect.bottom - metrics_.scrollY),
                              paint);
         }
     }
 
     if (paragraph_ != nullptr) {
-        paragraph_->paint(canvas, x + visualOffsetX_ - metrics_.scrollX, y + visualOffsetY_ - metrics_.scrollY);
+        paragraph_->paint(canvas,
+                          x + presentationOffsetX + visualOffsetX_ - metrics_.scrollX,
+                          y + presentationOffsetY + visualOffsetY_ - metrics_.scrollY);
     }
 
     if (compositionVisible_) {
@@ -2362,10 +2374,10 @@ void InputBoxDrawSnapshot::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkSca
         paint.setColor(caretColor_);
         paint.setStyle(SkPaint::kFill_Style);
         const auto underlineTop = std::max(compositionRect_.top, compositionRect_.bottom - kCompositionUnderlineHeight);
-        canvas->drawRect(SkRect::MakeLTRB(x + compositionRect_.left - metrics_.scrollX,
-                                          y + underlineTop - metrics_.scrollY,
-                                          x + compositionRect_.right - metrics_.scrollX,
-                                          y + compositionRect_.bottom - metrics_.scrollY),
+        canvas->drawRect(SkRect::MakeLTRB(x + presentationOffsetX + compositionRect_.left - metrics_.scrollX,
+                                          y + presentationOffsetY + underlineTop - metrics_.scrollY,
+                                          x + presentationOffsetX + compositionRect_.right - metrics_.scrollX,
+                                          y + presentationOffsetY + compositionRect_.bottom - metrics_.scrollY),
                          paint);
     }
 
@@ -2374,10 +2386,10 @@ void InputBoxDrawSnapshot::paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkSca
         paint.setColor(caretColor_);
         paint.setStyle(SkPaint::kFill_Style);
         const auto caretRight = std::max(caretRect_.right, caretRect_.left + caretWidth_);
-        canvas->drawRect(SkRect::MakeLTRB(x + caretRect_.left - metrics_.scrollX,
-                                          y + caretRect_.top - metrics_.scrollY,
-                                          x + caretRight - metrics_.scrollX,
-                                          y + caretRect_.bottom - metrics_.scrollY),
+        canvas->drawRect(SkRect::MakeLTRB(x + presentationOffsetX + caretRect_.left - metrics_.scrollX,
+                                          y + presentationOffsetY + caretRect_.top - metrics_.scrollY,
+                                          x + presentationOffsetX + caretRight - metrics_.scrollX,
+                                          y + presentationOffsetY + caretRect_.bottom - metrics_.scrollY),
                          paint);
     }
 

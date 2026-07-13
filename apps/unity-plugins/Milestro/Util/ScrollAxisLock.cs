@@ -114,11 +114,11 @@ namespace Milestro.Util
                 return ScrollAxis.None;
             }
 
-            // Unity scrollDelta is input-device movement. Milestro scroll offsets are
-            // content-space viewport offsets, so invert device deltas before applying them.
+            // Direct X already follows Milestro's logical horizontal direction. Vertical wheel
+            // input, including Shift-emulated horizontal input above, uses the opposite sign.
             if (resolvedAxis == ScrollAxis.Horizontal)
             {
-                contentOffsetDelta = new Vector2(-deltaX, 0f);
+                contentOffsetDelta = new Vector2(deltaX, 0f);
                 lockedScrollDelta = new Vector2(deltaX, 0f);
             }
             else if (resolvedAxis == ScrollAxis.Vertical)
@@ -128,7 +128,7 @@ namespace Milestro.Util
             }
             else
             {
-                contentOffsetDelta = new Vector2(-deltaX, -deltaY);
+                contentOffsetDelta = new Vector2(deltaX, -deltaY);
                 lockedScrollDelta = sanitizedDelta;
             }
 

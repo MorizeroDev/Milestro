@@ -56,6 +56,8 @@ namespace Milestro.Skia
             public float ClipY;
             public float ClipWidth;
             public float ClipHeight;
+            public float VisualOffsetX;
+            public float VisualOffsetY;
             public int ResourceOwnership;
         }
 
@@ -174,6 +176,8 @@ namespace Milestro.Skia
                 command->ClipY = 0f;
                 command->ClipWidth = 0f;
                 command->ClipHeight = 0f;
+                command->VisualOffsetX = 0f;
+                command->VisualOffsetY = 0f;
 
                 var submission = (RenderSubmissionPayload*)SubmissionPtr;
                 submission->Target = target;
@@ -823,6 +827,8 @@ namespace Milestro.Skia
                         ClipY = command.ClipY,
                         ClipWidth = command.ClipWidth,
                         ClipHeight = command.ClipHeight,
+                        VisualOffsetX = command.VisualOffsetX,
+                        VisualOffsetY = command.VisualOffsetY,
                         ResourceOwnership = (int)ownership
                     };
                     Marshal.StructureToPtr(payload, IntPtr.Add(commandsPtr, i * commandSize), false);

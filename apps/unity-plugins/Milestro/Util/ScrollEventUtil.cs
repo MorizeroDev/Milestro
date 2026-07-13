@@ -1,4 +1,5 @@
 using Milestro.Configuration;
+using System.Collections.Generic;
 using Milestro.Input;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -7,6 +8,36 @@ namespace Milestro.Util
 {
     internal static class ScrollEventUtil
     {
+        internal static bool HasActiveParentScrollHandler(Transform sourceTransform,
+            List<MonoBehaviour> scratchBehaviours)
+        {
+            scratchBehaviours.Clear();
+            for (var parent = sourceTransform != null ? sourceTransform.parent : null;
+                 parent != null;
+                 parent = parent.parent)
+            {
+                if (!parent.gameObject.activeInHierarchy)
+                {
+                    continue;
+                }
+
+                parent.GetComponents(scratchBehaviours);
+                for (var i = 0; i < scratchBehaviours.Count; ++i)
+                {
+                    var behaviour = scratchBehaviours[i];
+                    if (behaviour != null && behaviour.isActiveAndEnabled && behaviour is IScrollHandler)
+                    {
+                        scratchBehaviours.Clear();
+                        return true;
+                    }
+                }
+                scratchBehaviours.Clear();
+            }
+
+            scratchBehaviours.Clear();
+            return false;
+        }
+
         internal static bool IsHorizontalScrollModifierDown()
         {
             return HybridInputRuntime.IsKeyPressed(KeyCode.LeftShift) ||

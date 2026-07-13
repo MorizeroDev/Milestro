@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using Milestro.Components.Internal;
+using Milestro.Input;
+using Milestro.Model;
 using Milestro.Util;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -21,10 +24,33 @@ namespace Milestro.Components
         [SerializeField] private bool m_smoothScroll = true;
         [SerializeField][Min(0f)] private float m_scrollTweenDurationSeconds = DefaultScrollTweenDurationSeconds;
 
+        [SerializeField]
+        private ScrollElasticSettings? m_scrollElastic = new ScrollElasticSettings();
+
+        public ScrollElasticSettings scrollElastic
+        {
+            get => ScrollElasticSettings.Resolve(ref m_scrollElastic);
+            set
+            {
+                m_scrollElastic = value;
+                ScrollElasticSettings.Resolve(ref m_scrollElastic);
+            }
+        }
+
         [NonSerialized] private TextBoxRenderTextureProducer? producerCache;
         [NonSerialized] private readonly ScrollTween scrollTweenX = new ScrollTween();
         [NonSerialized] private readonly ScrollTween scrollTweenY = new ScrollTween();
         [NonSerialized] private readonly ScrollAxisLock scrollAxisLock = new ScrollAxisLock();
+        [NonSerialized] private readonly ScrollElasticAxis scrollElasticX = new ScrollElasticAxis();
+        [NonSerialized] private readonly ScrollElasticAxis scrollElasticY = new ScrollElasticAxis();
+        [NonSerialized]
+        private readonly List<MonoBehaviour> parentScrollHandlerScratch = new List<MonoBehaviour>(8);
+        [NonSerialized]
+        private readonly ScrollElasticReleasePolicy scrollElasticReleaseX =
+            new ScrollElasticReleasePolicy();
+        [NonSerialized]
+        private readonly ScrollElasticReleasePolicy scrollElasticReleaseY =
+            new ScrollElasticReleasePolicy();
         [NonSerialized] private long observedOutputVersion = long.MinValue;
         [NonSerialized] private TextBoxRenderTextureProducer? observedProducer;
         [NonSerialized] private bool flowModeActive;
@@ -44,12 +70,14 @@ namespace Milestro.Components
         protected override void OnEnable()
         {
             base.OnEnable();
+            ElasticSettings();
             EnsureConfigured(forceText: true, forceApply: true);
             LayoutChanged?.Invoke();
         }
 
         protected override void OnDisable()
         {
+            SettleElastic(producerCache, rebuild: false);
             base.OnDisable();
             CancelScrollTweens();
             scrollAxisLock.Reset();
@@ -66,6 +94,7 @@ namespace Milestro.Components
             if (!flowModeActive)
             {
                 TickScrollTweens(producer);
+                TickElastic(producer);
             }
             ApplyProducerOutput(producer, force: false);
         }
@@ -86,6 +115,7 @@ namespace Milestro.Components
             m_scrollTweenDurationSeconds = FloatUtil.IsFinite(m_scrollTweenDurationSeconds)
                 ? Mathf.Max(0f, m_scrollTweenDurationSeconds)
                 : DefaultScrollTweenDurationSeconds;
+            ElasticSettings().Validate();
             if (this && gameObject != null)
             {
                 EnsureConfigured(forceText: true, forceApply: true);
@@ -102,6 +132,7 @@ namespace Milestro.Components
             }
 
             EnsureConfigured(forceText: false, forceApply: true);
+            SettleElastic(producerCache, rebuild: false);
             CancelScrollTweens();
             scrollAxisLock.Reset();
             SetVerticesDirty();
@@ -151,6 +182,7 @@ namespace Milestro.Components
 
             if (flowModeActive)
             {
+                SettleElastic(producerCache, rebuild: false);
                 CancelScrollTweens();
                 scrollAxisLock.Reset();
                 ScrollEventUtil.PassScrollToParent(transform, eventData, eventData.scrollDelta);
@@ -159,12 +191,14 @@ namespace Milestro.Components
 
             if (ShouldForwardPointerScrollToParent())
             {
+                SettleElastic(producerCache, rebuild: false);
                 CancelScrollTweens();
                 scrollAxisLock.Reset();
                 ScrollEventUtil.PassScrollToParent(transform, eventData, eventData.scrollDelta);
                 return;
             }
 
+            var scrollInput = HybridInputRuntime.ResolveScrollInput(eventData);
             var producer = ProducerComponent();
             producer.RebuildOutput(forceText: false);
             ApplyProducerOutput(producer, force: false);
@@ -174,7 +208,7 @@ namespace Milestro.Components
                 ? Mathf.Max(1f, m_scrollWheelStepPixels)
                 : DefaultScrollWheelStepPixels;
 
-            var axis = scrollAxisLock.Resolve(eventData.scrollDelta,
+            var axis = scrollAxisLock.Resolve(scrollInput.Delta,
                 ScrollEventUtil.IsHorizontalScrollModifierDown(),
                 out var contentOffsetDelta,
                 out var lockedScrollDelta);
@@ -184,12 +218,26 @@ namespace Milestro.Components
                 return;
             }
 
-            var shouldTweenPointerScroll = ShouldTweenPointerScroll(eventData.scrollDelta);
+            var shouldTweenPointerScroll = ShouldTweenPointerScroll(scrollInput.Delta);
+            var elasticSettings = ElasticSettings();
+            var allowElastic = scrollInput.Metadata.Capability != HybridScrollCapability.Unsupported &&
+                               elasticSettings.Enabled &&
+                               !ScrollEventUtil.HasActiveParentScrollHandler(transform, parentScrollHandlerScratch);
+            if (!allowElastic)
+            {
+                SettleElastic(producer, rebuild: true);
+            }
+            SettleUnavailableElasticAxes(producer);
             var unusedScrollDelta = Vector2.zero;
             var consumed = false;
             if (axis == ScrollAxis.Horizontal || axis == ScrollAxis.Free)
             {
-                if (TryScrollX(producer, contentOffsetDelta.x, stepPixels, shouldTweenPointerScroll))
+                if (TryScrollX(producer,
+                        contentOffsetDelta.x,
+                        stepPixels,
+                        shouldTweenPointerScroll,
+                        allowElastic,
+                        elasticSettings))
                 {
                     consumed = true;
                 }
@@ -201,7 +249,12 @@ namespace Milestro.Components
 
             if (axis == ScrollAxis.Vertical || axis == ScrollAxis.Free)
             {
-                if (TryScrollY(producer, contentOffsetDelta.y, stepPixels, shouldTweenPointerScroll))
+                if (TryScrollY(producer,
+                        contentOffsetDelta.y,
+                        stepPixels,
+                        shouldTweenPointerScroll,
+                        allowElastic,
+                        elasticSettings))
                 {
                     consumed = true;
                 }
@@ -218,6 +271,7 @@ namespace Milestro.Components
             }
 
             ScrollEventUtil.PassScrollToParent(transform, eventData, unusedScrollDelta);
+            ObserveElasticRelease(axis, scrollInput.Metadata, elasticSettings.ReleaseDelaySeconds);
             eventData.Use();
         }
 
@@ -268,6 +322,7 @@ namespace Milestro.Components
             }
 
             var producer = ProducerComponent();
+            SettleElastic(producer, rebuild: false);
             producer.RebuildOutput(forceText: false);
             ApplyProducerOutput(producer, force: false);
 
@@ -289,6 +344,7 @@ namespace Milestro.Components
             }
 
             var producer = ProducerComponent();
+            SettleElastic(producer, rebuild: false);
             producer.RebuildOutput(forceText: false);
             ApplyProducerOutput(producer, force: false);
             if (!SetScrollPercentX(producer, percent, animated && ShouldTweenScroll()))
@@ -308,6 +364,7 @@ namespace Milestro.Components
             }
 
             var producer = ProducerComponent();
+            SettleElastic(producer, rebuild: false);
             producer.RebuildOutput(forceText: false);
             ApplyProducerOutput(producer, force: false);
             if (!SetScrollPercentY(producer, percent, animated && ShouldTweenScroll()))
@@ -363,6 +420,7 @@ namespace Milestro.Components
             }
 
             flowModeActive = active;
+            SettleElastic(producerCache, rebuild: false);
             flowVisible = false;
             flowVisibleStartY = 0f;
             flowVisibleEndY = 0f;
@@ -503,7 +561,9 @@ namespace Milestro.Components
         private bool TryScrollX(TextBoxRenderTextureProducer producer,
             float contentOffsetDelta,
             float stepPixels,
-            bool tweenScroll)
+            bool tweenScroll,
+            bool allowElastic,
+            ScrollElasticSettings elasticSettings)
         {
             if (Mathf.Approximately(contentOffsetDelta, 0f))
             {
@@ -511,6 +571,37 @@ namespace Milestro.Components
             }
 
             var deltaPixels = contentOffsetDelta * stepPixels;
+            var currentScrollX = producer.scrollX;
+            var effectiveScrollX = tweenScroll && scrollTweenX.IsActive()
+                ? currentScrollX + scrollTweenX.PendingDeltaFrom(currentScrollX)
+                : currentScrollX;
+            if (allowElastic && (scrollElasticX.IsActive ||
+                                 effectiveScrollX + deltaPixels < 0f ||
+                                 effectiveScrollX + deltaPixels > producer.maxScrollX))
+            {
+                if (!scrollElasticX.Apply(effectiveScrollX,
+                        producer.maxScrollX,
+                        deltaPixels,
+                        elasticSettings,
+                        out var nextEffectiveScrollX))
+                {
+                    return false;
+                }
+
+                ApplyElasticLogicalOffset(scrollTweenX,
+                    producer,
+                    currentScrollX,
+                    effectiveScrollX,
+                    nextEffectiveScrollX,
+                    producer.maxScrollX,
+                    tweenScroll,
+                    horizontal: true);
+                ApplyElasticOffset(producer);
+                producer.RebuildOutput(forceText: false);
+                ApplyProducerOutput(producer, force: true);
+                return true;
+            }
+
             if (tweenScroll)
             {
                 return scrollTweenX.ScrollBy(producer.scrollX, deltaPixels, producer.maxScrollX) ||
@@ -533,7 +624,9 @@ namespace Milestro.Components
         private bool TryScrollY(TextBoxRenderTextureProducer producer,
             float contentOffsetDelta,
             float stepPixels,
-            bool tweenScroll)
+            bool tweenScroll,
+            bool allowElastic,
+            ScrollElasticSettings elasticSettings)
         {
             if (Mathf.Approximately(contentOffsetDelta, 0f))
             {
@@ -541,6 +634,37 @@ namespace Milestro.Components
             }
 
             var deltaPixels = contentOffsetDelta * stepPixels;
+            var currentScrollY = producer.scrollY;
+            var effectiveScrollY = tweenScroll && scrollTweenY.IsActive()
+                ? currentScrollY + scrollTweenY.PendingDeltaFrom(currentScrollY)
+                : currentScrollY;
+            if (allowElastic && (scrollElasticY.IsActive ||
+                                 effectiveScrollY + deltaPixels < 0f ||
+                                 effectiveScrollY + deltaPixels > producer.maxScrollY))
+            {
+                if (!scrollElasticY.Apply(effectiveScrollY,
+                        producer.maxScrollY,
+                        deltaPixels,
+                        elasticSettings,
+                        out var nextEffectiveScrollY))
+                {
+                    return false;
+                }
+
+                ApplyElasticLogicalOffset(scrollTweenY,
+                    producer,
+                    currentScrollY,
+                    effectiveScrollY,
+                    nextEffectiveScrollY,
+                    producer.maxScrollY,
+                    tweenScroll,
+                    horizontal: false);
+                ApplyElasticOffset(producer);
+                producer.RebuildOutput(forceText: false);
+                ApplyProducerOutput(producer, force: true);
+                return true;
+            }
+
             if (tweenScroll)
             {
                 return scrollTweenY.ScrollBy(producer.scrollY, deltaPixels, producer.maxScrollY) ||
@@ -652,6 +776,165 @@ namespace Milestro.Components
         {
             scrollTweenX.Cancel();
             scrollTweenY.Cancel();
+        }
+
+        private static void ApplyElasticLogicalOffset(ScrollTween tween,
+            TextBoxRenderTextureProducer producer,
+            float currentOffset,
+            float effectiveOffset,
+            float nextEffectiveOffset,
+            float maxOffset,
+            bool tweenScroll,
+            bool horizontal)
+        {
+            if (tweenScroll)
+            {
+                tween.ScrollBy(currentOffset, nextEffectiveOffset - effectiveOffset, maxOffset);
+                return;
+            }
+
+            tween.Cancel();
+            if (horizontal)
+            {
+                producer.scrollX = nextEffectiveOffset;
+            }
+            else
+            {
+                producer.scrollY = nextEffectiveOffset;
+            }
+        }
+
+        private void ObserveElasticRelease(ScrollAxis axis,
+            HybridScrollMetadata metadata,
+            float releaseDelaySeconds)
+        {
+            if (axis == ScrollAxis.Horizontal || axis == ScrollAxis.Free)
+            {
+                ObserveElasticRelease(scrollElasticX,
+                    scrollElasticReleaseX,
+                    metadata,
+                    releaseDelaySeconds,
+                    Time.unscaledTimeAsDouble);
+            }
+            if (axis == ScrollAxis.Vertical || axis == ScrollAxis.Free)
+            {
+                ObserveElasticRelease(scrollElasticY,
+                    scrollElasticReleaseY,
+                    metadata,
+                    releaseDelaySeconds,
+                    Time.unscaledTimeAsDouble);
+            }
+        }
+
+        private static void ObserveElasticRelease(ScrollElasticAxis elasticAxis,
+            ScrollElasticReleasePolicy releasePolicy,
+            HybridScrollMetadata metadata,
+            float releaseDelaySeconds,
+            double eventTime)
+        {
+            if (elasticAxis.IsActive)
+            {
+                releasePolicy.Observe(metadata, eventTime, releaseDelaySeconds);
+            }
+            else
+            {
+                releasePolicy.Cancel();
+            }
+        }
+
+        private void TickElastic(TextBoxRenderTextureProducer producer)
+        {
+            if (!HasElasticState())
+            {
+                return;
+            }
+
+            var settings = ElasticSettings();
+            if (HybridInputRuntime.Diagnostics.ScrollCapability == HybridScrollCapability.Unsupported ||
+                !settings.Enabled ||
+                ScrollEventUtil.HasActiveParentScrollHandler(transform, parentScrollHandlerScratch))
+            {
+                SettleElastic(producer, rebuild: true);
+                return;
+            }
+
+            SettleUnavailableElasticAxes(producer);
+
+            if (scrollElasticReleaseX.TryBeginReturn(Time.unscaledTimeAsDouble))
+            {
+                scrollElasticX.BeginReturn(settings);
+            }
+            if (scrollElasticReleaseY.TryBeginReturn(Time.unscaledTimeAsDouble))
+            {
+                scrollElasticY.BeginReturn(settings);
+            }
+
+            var changed = scrollElasticX.TickReturn(Time.unscaledDeltaTime, settings);
+            changed |= scrollElasticY.TickReturn(Time.unscaledDeltaTime, settings);
+            var nextVisualOffset = new Vector2(scrollElasticX.Offset, scrollElasticY.Offset);
+            if (!changed && producer.visualScrollOffset == nextVisualOffset)
+            {
+                return;
+            }
+
+            producer.visualScrollOffset = nextVisualOffset;
+            producer.RebuildOutput(forceText: false);
+        }
+
+        private ScrollElasticSettings ElasticSettings()
+        {
+            return scrollElastic;
+        }
+
+        private void SettleElastic(TextBoxRenderTextureProducer? producer, bool rebuild)
+        {
+            scrollElasticReleaseX.Cancel();
+            scrollElasticReleaseY.Cancel();
+            var changed = scrollElasticX.Settle();
+            changed |= scrollElasticY.Settle();
+            if (producer == null || (!changed && producer.visualScrollOffset == Vector2.zero))
+            {
+                return;
+            }
+
+            producer.visualScrollOffset = Vector2.zero;
+            if (rebuild && producer.isActiveAndEnabled)
+            {
+                producer.RebuildOutput(forceText: false);
+                ApplyProducerOutput(producer, force: true);
+            }
+        }
+
+        private void ApplyElasticOffset(TextBoxRenderTextureProducer producer)
+        {
+            producer.visualScrollOffset = new Vector2(scrollElasticX.Offset, scrollElasticY.Offset);
+        }
+
+        private bool HasElasticState()
+        {
+            return scrollElasticX.IsActive ||
+                   scrollElasticY.IsActive ||
+                   scrollElasticReleaseX.IsPending ||
+                   scrollElasticReleaseY.IsPending;
+        }
+
+        private void SettleUnavailableElasticAxes(TextBoxRenderTextureProducer producer)
+        {
+            if (!SettleElasticAxesForRange(producer.maxScrollX, producer.maxScrollY))
+            {
+                return;
+            }
+
+            ApplyElasticOffset(producer);
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: true);
+        }
+
+        internal bool SettleElasticAxesForRange(float maxScrollX, float maxScrollY)
+        {
+            var changed = scrollElasticX.SettleIfUnavailable(maxScrollX, scrollElasticReleaseX);
+            changed |= scrollElasticY.SettleIfUnavailable(maxScrollY, scrollElasticReleaseY);
+            return changed;
         }
 
         private TextBoxRenderTextureProducer ProducerComponent()

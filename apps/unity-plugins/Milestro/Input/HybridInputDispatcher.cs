@@ -59,6 +59,53 @@ namespace Milestro.Input
             return handle;
         }
 
+        internal HybridScrollInput ResolveScrollInput(PointerEventData eventData)
+        {
+            var provider = activeProvider;
+            if (provider == null ||
+                provider.ScrollCapability == HybridScrollCapability.Unsupported ||
+                (provider.Capabilities & HybridInputCapabilities.ScrollDelta) == 0)
+            {
+                return UnsupportedScroll(eventData.scrollDelta);
+            }
+
+            if (!(provider is IHybridScrollInputProvider scrollProvider) ||
+                !scrollProvider.TryResolveScrollInput(eventData, out var resolved))
+            {
+                return DeltaOnlyScroll(eventData.scrollDelta);
+            }
+
+            if (!SameDelta(eventData.scrollDelta, resolved.Delta))
+            {
+                return UnsupportedScroll(eventData.scrollDelta);
+            }
+
+            var metadata = resolved.Metadata;
+            if (metadata.Capability == HybridScrollCapability.Unsupported)
+            {
+                return UnsupportedScroll(eventData.scrollDelta);
+            }
+            if (metadata.Capability == HybridScrollCapability.DeltaOnly)
+            {
+                return provider.ScrollCapability == HybridScrollCapability.Unsupported
+                    ? UnsupportedScroll(eventData.scrollDelta)
+                    : resolved;
+            }
+
+            if (metadata.Capability != HybridScrollCapability.Phased ||
+                provider.ScrollCapability != HybridScrollCapability.Phased ||
+                (provider.Capabilities & HybridInputCapabilities.ScrollPhase) == 0 ||
+                (provider.Capabilities & HybridInputCapabilities.ScrollDevice) == 0 ||
+                metadata.DeviceKind == HybridInputDeviceKind.Unknown ||
+                metadata.GestureId <= 0L ||
+                !HasReliablePhase(metadata))
+            {
+                return DeltaOnlyScroll(eventData.scrollDelta);
+            }
+
+            return resolved;
+        }
+
         internal void UnregisterProvider(HybridInputProviderHandle handle)
         {
             if (!providers.Unregister(handle))
@@ -416,6 +463,49 @@ namespace Milestro.Input
         private static double NormalizeTime(double value)
         {
             return double.IsNaN(value) || double.IsInfinity(value) ? 0d : Math.Max(0d, value);
+        }
+
+        private static HybridScrollInput UnsupportedScroll(Vector2 delta)
+        {
+            return new HybridScrollInput(delta,
+                new HybridScrollMetadata(HybridScrollCapability.Unsupported,
+                    HybridInputDeviceKind.Unknown,
+                    HybridInputPhase.Unknown,
+                    HybridInputPhase.Unknown,
+                    0d,
+                    0L));
+        }
+
+        private static HybridScrollInput DeltaOnlyScroll(Vector2 delta)
+        {
+            return new HybridScrollInput(delta,
+                new HybridScrollMetadata(HybridScrollCapability.DeltaOnly,
+                    HybridInputDeviceKind.Unknown,
+                    HybridInputPhase.Unknown,
+                    HybridInputPhase.Unknown,
+                    Time.unscaledTimeAsDouble,
+                    0L));
+        }
+
+        private static bool SameDelta(Vector2 expected, Vector2 actual)
+        {
+            return expected.x.Equals(actual.x) && expected.y.Equals(actual.y);
+        }
+
+        private static bool HasReliablePhase(HybridScrollMetadata metadata)
+        {
+            if (!IsDefinedPhase(metadata.GesturePhase) || !IsDefinedPhase(metadata.MomentumPhase))
+            {
+                return false;
+            }
+
+            return metadata.GesturePhase != HybridInputPhase.None ||
+                   metadata.MomentumPhase != HybridInputPhase.None;
+        }
+
+        private static bool IsDefinedPhase(HybridInputPhase phase)
+        {
+            return phase >= HybridInputPhase.None && phase <= HybridInputPhase.Canceled;
         }
 
         private static bool IsModuleAlive(BaseInputModule? module)

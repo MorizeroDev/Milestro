@@ -2,12 +2,13 @@ using System.Collections.Generic;
 using Milestro.Input;
 using Milestro.InputSystem.Model;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 
 namespace Milestro.InputSystem.Service
 {
     /// <summary>Provides keyboard, text, IME, and delta-only scroll capability through Input System.</summary>
-    internal sealed class HybridInputSystemProvider : IHybridInputProvider
+    internal sealed class HybridInputSystemProvider : IHybridInputProvider, IHybridScrollInputProvider
     {
         internal const string ProviderId = "input-system";
 
@@ -73,6 +74,24 @@ namespace Milestro.InputSystem.Service
                    environment.ActiveModule.GetType() == typeof(InputSystemUIInputModule)
                 ? HybridInputProviderMatch.Exact
                 : HybridInputProviderMatch.None;
+        }
+
+        public bool TryResolveScrollInput(PointerEventData eventData, out HybridScrollInput scrollInput)
+        {
+            if (eventData == null)
+            {
+                scrollInput = default;
+                return false;
+            }
+
+            scrollInput = new HybridScrollInput(eventData.scrollDelta,
+                new HybridScrollMetadata(HybridScrollCapability.DeltaOnly,
+                    HybridInputDeviceKind.Unknown,
+                    HybridInputPhase.Unknown,
+                    HybridInputPhase.Unknown,
+                    Time.unscaledTimeAsDouble,
+                    0L));
+            return true;
         }
 
         public void Start(IHybridInputEventSink eventSink)

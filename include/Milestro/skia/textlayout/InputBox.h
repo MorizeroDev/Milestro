@@ -417,6 +417,13 @@ public:
                          bool clipToViewport);
 
     void paint(SkCanvas* canvas, SkScalar x, SkScalar y, SkScalar width, SkScalar height) const;
+    void paint(SkCanvas* canvas,
+               SkScalar x,
+               SkScalar y,
+               SkScalar width,
+               SkScalar height,
+               SkScalar presentationOffsetX,
+               SkScalar presentationOffsetY) const;
 
 private:
     std::shared_ptr<::skia::textlayout::Paragraph> paragraph_;

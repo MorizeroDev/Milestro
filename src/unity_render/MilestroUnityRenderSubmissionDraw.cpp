@@ -58,7 +58,13 @@ void DrawInputBoxSnapshotCommand(SkCanvas* canvas, const MilestroUnityDrawComman
         return;
     }
 
-    snapshot->paint(canvas, command.x, command.y, command.width, command.height);
+    snapshot->paint(canvas,
+                    command.x,
+                    command.y,
+                    command.width,
+                    command.height,
+                    command.visualOffsetX,
+                    command.visualOffsetY);
 }
 
 void DrawSlimTextCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& command) {

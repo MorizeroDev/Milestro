@@ -38,6 +38,8 @@ struct MilestroUnityDrawCommand {
     float clipY = 0.0f;
     float clipWidth = 0.0f;
     float clipHeight = 0.0f;
+    float visualOffsetX = 0.0f;
+    float visualOffsetY = 0.0f;
     int32_t resourceOwnership = 0;
 };
 

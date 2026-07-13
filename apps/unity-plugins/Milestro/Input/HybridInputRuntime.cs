@@ -18,6 +18,17 @@ namespace Milestro.Input
             return Dispatcher.IsKeyPressed(key);
         }
 
+        /// <summary>Resolves metadata for the delta already carried by this uGUI event.</summary>
+        public static HybridScrollInput ResolveScrollInput(PointerEventData eventData)
+        {
+            if (eventData == null)
+            {
+                throw new ArgumentNullException(nameof(eventData));
+            }
+
+            return Dispatcher.ResolveScrollInput(eventData);
+        }
+
         public static IDisposable RegisterProvider(IHybridInputProvider provider)
         {
             return new ProviderRegistration(Dispatcher.RegisterProvider(provider));

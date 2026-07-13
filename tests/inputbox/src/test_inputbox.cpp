@@ -96,7 +96,11 @@ PaintedInputBox PaintSnapshot(milestro_text::InputBox& inputBox,
                               int width = 320,
                               int height = 96,
                               float paintWidth = -1.0f,
-                              float paintHeight = -1.0f) {
+                              float paintHeight = -1.0f,
+                              float paintX = 0.0f,
+                              float paintY = 0.0f,
+                              float presentationOffsetX = 0.0f,
+                              float presentationOffsetY = 0.0f) {
     PaintedInputBox result{
             width,
             height,
@@ -105,10 +109,12 @@ PaintedInputBox PaintSnapshot(milestro_text::InputBox& inputBox,
     milestro::skia::Canvas canvas(width, height, result.pixels.data());
     auto snapshot = inputBox.createDrawSnapshot();
     snapshot->paint(canvas.unwrap(),
-                    0.0f,
-                    0.0f,
+                    paintX,
+                    paintY,
                     paintWidth > 0.0f ? paintWidth : static_cast<float>(width),
-                    paintHeight > 0.0f ? paintHeight : static_cast<float>(height));
+                    paintHeight > 0.0f ? paintHeight : static_cast<float>(height),
+                    presentationOffsetX,
+                    presentationOffsetY);
     return result;
 }
 
@@ -152,6 +158,26 @@ void ExpectSingleLineInkInsideViewport(::skia::textlayout::TextAlign textAlign,
 
 bool ImagesEqual(const PaintedInputBox& left, const PaintedInputBox& right) {
     return left.width == right.width && left.height == right.height && left.pixels == right.pixels;
+}
+
+void ExpectImageTranslated(const PaintedInputBox& source, const PaintedInputBox& translated, int deltaX, int deltaY) {
+    ASSERT_EQ(source.width, translated.width);
+    ASSERT_EQ(source.height, translated.height);
+    for (int y = 0; y < source.height; ++y) {
+        for (int x = 0; x < source.width; ++x) {
+            const int sourceX = x - deltaX;
+            const int sourceY = y - deltaY;
+            for (int channel = 0; channel < 4; ++channel) {
+                const auto translatedIndex = static_cast<size_t>((y * source.width + x) * 4 + channel);
+                const uint8_t expected =
+                        sourceX >= 0 && sourceX < source.width && sourceY >= 0 && sourceY < source.height
+                                ? source.pixels[static_cast<size_t>((sourceY * source.width + sourceX) * 4 + channel)]
+                                : 0;
+                ASSERT_EQ(translated.pixels[translatedIndex], expected)
+                        << "pixel=" << x << "," << y << " channel=" << channel;
+            }
+        }
+    }
 }
 
 size_t GraphemeClusterCount(const std::string& text) {
@@ -593,6 +619,48 @@ TEST_F(InputBoxTest, CompositionSuppressesUnfocusedEllipsisDisplay) {
     EXPECT_EQ(CountInkPixels(withCompositionPaint, 96, 180), 0U);
     EXPECT_EQ(withComposition->getText(), text);
     EXPECT_TRUE(withComposition->hasComposition());
+}
+
+TEST_F(InputBoxTest, PresentationOffsetMovesTextSelectionAndCaretTogetherWithoutChangingMetrics) {
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, false);
+    inputBox->setViewport(200, 80);
+    inputBox->setText("abc", 3);
+    inputBox->setFocused(true);
+    inputBox->setCaretVisible(true);
+    ASSERT_TRUE(inputBox->selectAll());
+    const auto metricsBefore = inputBox->getMetrics();
+    const auto selectionBefore = inputBox->getSelection();
+
+    const auto baseline = PaintSnapshot(*inputBox, 320, 120, 200.0f, 80.0f, 20.0f, 10.0f);
+    const auto translated = PaintSnapshot(*inputBox, 320, 120, 200.0f, 80.0f, 20.0f, 10.0f, 7.0f, 5.0f);
+
+    ASSERT_GT(CountInkPixels(baseline), 0U);
+    ExpectImageTranslated(baseline, translated, 7, 5);
+    const auto metricsAfter = inputBox->getMetrics();
+    const auto selectionAfter = inputBox->getSelection();
+    EXPECT_FLOAT_EQ(metricsAfter.scrollX, metricsBefore.scrollX);
+    EXPECT_FLOAT_EQ(metricsAfter.scrollY, metricsBefore.scrollY);
+    EXPECT_EQ(selectionAfter.anchorUtf8, selectionBefore.anchorUtf8);
+    EXPECT_EQ(selectionAfter.focusUtf8, selectionBefore.focusUtf8);
+}
+
+TEST_F(InputBoxTest, PresentationOffsetMovesCompositionUnderlineWithSnapshot) {
+    const std::string composition = "xy";
+    auto inputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, false);
+    inputBox->setViewport(200, 80);
+    inputBox->setText("abc", 3);
+    inputBox->setCursorUtf8(3, skia::textlayout::Affinity::kDownstream);
+    inputBox->setFocused(true);
+    inputBox->setCaretVisible(true);
+    ASSERT_TRUE(inputBox->setComposition(composition.c_str(), composition.size()));
+
+    const auto baseline = PaintSnapshot(*inputBox, 320, 120, 200.0f, 80.0f, 20.0f, 10.0f);
+    const auto translated = PaintSnapshot(*inputBox, 320, 120, 200.0f, 80.0f, 20.0f, 10.0f, 7.0f, 5.0f);
+
+    ASSERT_GT(CountInkPixels(baseline), 0U);
+    ExpectImageTranslated(baseline, translated, 7, 5);
+    EXPECT_TRUE(inputBox->hasComposition());
+    EXPECT_EQ(inputBox->getText(), "abc");
 }
 
 TEST_F(InputBoxTest, NoWrapModeOnlyBreaksAtHardNewlines) {

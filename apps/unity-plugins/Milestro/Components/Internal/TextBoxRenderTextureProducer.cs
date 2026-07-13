@@ -60,6 +60,7 @@ namespace Milestro.Components.Internal
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
         [NonSerialized] private float m_scrollX;
         [NonSerialized] private float m_scrollY;
+        [NonSerialized] private Vector2 m_visualScrollOffset;
         [NonSerialized] private bool m_flowMode;
         [NonSerialized] private bool m_hasVisibleRange;
         [NonSerialized] private float m_visibleStartY;
@@ -249,6 +250,23 @@ namespace Milestro.Components.Internal
             set => SetScrollY(value);
         }
 
+        internal Vector2 visualScrollOffset
+        {
+            get => m_visualScrollOffset;
+            set
+            {
+                var next = new Vector2(FloatUtil.IsFinite(value.x) ? value.x : 0f,
+                    FloatUtil.IsFinite(value.y) ? value.y : 0f);
+                if (m_visualScrollOffset == next)
+                {
+                    return;
+                }
+
+                m_visualScrollOffset = next;
+                MarkPaintChanged();
+            }
+        }
+
         public void ScrollByX(float delta)
         {
             if (Mathf.Approximately(delta, 0f))
@@ -342,6 +360,7 @@ namespace Milestro.Components.Internal
 
         protected virtual void OnDisable()
         {
+            m_visualScrollOffset = Vector2.zero;
             DisposeRenderTarget();
         }
 
@@ -688,7 +707,8 @@ namespace Milestro.Components.Internal
         {
             if (!m_flowMode)
             {
-                return TextBoxRenderViewport.Fixed(layoutSizePixels, new Vector2(m_scrollX, m_scrollY));
+                return TextBoxRenderViewport.Fixed(layoutSizePixels,
+                    new Vector2(m_scrollX, m_scrollY) + m_visualScrollOffset);
             }
 
             if (!m_hasVisibleRange)

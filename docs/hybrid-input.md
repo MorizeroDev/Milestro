@@ -58,6 +58,15 @@ delivery. Code must inspect `HybridInputCapabilities` and
 `HybridScrollCapability` instead of inferring richer behavior from the provider
 kind.
 
+Scroll owners continue to receive one uGUI `PointerEventData`. An optional
+`IHybridScrollInputProvider` may enrich that same event with capability and
+phase metadata; it is not a second delta source. A mismatched delta or unusable
+phased metadata is rejected instead of being merged or guessed. Delta-only
+Elastic uses the owner-local unscaled release delay, while phased providers
+hold until the last real gesture and momentum phase ends. `Unsupported`
+disables and settles presentation-only Elastic without disabling normal clamped
+scrolling.
+
 ## Optional Input System Assembly
 
 The base `Milestro` assembly does not reference `Unity.InputSystem`. The

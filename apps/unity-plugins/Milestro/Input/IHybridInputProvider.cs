@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace Milestro.Input
 {
@@ -24,6 +25,15 @@ namespace Milestro.Input
         void Collect(HybridInputCollectContext context);
         void SetImeEnabled(bool enabled);
         void SetImeCursorPosition(Vector2 position);
+    }
+
+    /// <summary>
+    /// Optionally enriches the scroll delta already delivered by uGUI for the same pointer event.
+    /// Implementations must not read or introduce a second scroll delta source.
+    /// </summary>
+    public interface IHybridScrollInputProvider
+    {
+        bool TryResolveScrollInput(PointerEventData eventData, out HybridScrollInput scrollInput);
     }
 
     internal interface IHybridInputFrameSink

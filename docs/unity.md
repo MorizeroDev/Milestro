@@ -149,6 +149,9 @@ Primary runtime components:
   overflow. Use the `ScrollPercent*` properties to link its normalized `0..1`
   scroll position to other scrollbars. Keyboard, committed text, composition,
   and IME ownership are supplied by the process-wide HybridInput dispatcher.
+- `Milestro.Components.MilestroScrollRect`: Unity `ScrollRect` extension with
+  Milestro wheel tweening and optional presentation-only Elastic scrolling. The
+  stock `ScrollRect` component does not receive Milestro Elastic behavior.
 
 Internal component building blocks:
 
@@ -168,6 +171,34 @@ values first check keyword mappings; quoted rich-text values such as `"serif"`
 are treated as literal named families. The TextLayout `FontCollection` expands
 these declarations when a paragraph is built, then delegates concrete family
 matching to SkParagraph's registered and system font managers.
+
+## Elastic Scrolling
+
+`TextBox`, `TextInput`, and `MilestroScrollRect` each own a serialized
+`scrollElastic` setting group. Elastic is enabled by default, but only takes
+effect when the selected HybridInput provider reports at least delta-only
+scroll capability. The legacy provider reports `Unsupported`, so scrolling
+remains clamped and the Elastic settings have no visual effect in that mode.
+
+Overscroll is presentation-only. Logical offsets, normalized positions,
+scrollbars, selection, composition, caret geometry, and hit testing remain
+clamped. Return motion uses a monotonic exponential curve; the default
+coefficient brings the maximum 96-pixel offset to the 0.1-pixel visual epsilon
+in about 0.24 seconds, while smaller offsets settle earlier. An active parent
+scroll handler disables child Elastic; nested edge handoff is not part of this
+phase.
+
+For `MilestroScrollRect`, use `SetLogicalNormalizedPosition` and the matching
+logical get/set helpers for programmatic movement while Elastic may be active.
+The component applies its visual offset only during the Canvas render window
+and removes the exact tracked delta before normal lifecycle work. Unity's
+`ScrollRect.normalizedPosition`, `horizontalNormalizedPosition`,
+`verticalNormalizedPosition`, and `content` members are not virtual. Code that
+holds the component as a base `ScrollRect` can therefore read or write during
+that narrow render-applied window; an already-performed base write cannot be
+made fully transparent and is settled on the next guard pass. Use the
+Milestro-specific logical helpers and `MilestroScrollRect.content` when this
+distinction matters.
 
 ## Hybrid Input
 

@@ -36,6 +36,8 @@ namespace Milestro.Skia
             public float ClipY;
             public float ClipWidth;
             public float ClipHeight;
+            public float VisualOffsetX;
+            public float VisualOffsetY;
             public object KeepAlive;
             public bool SnapshotInputBox;
             public Func<Paragraph> ParagraphSnapshotFactory;
@@ -147,7 +149,7 @@ namespace Milestro.Skia
             });
         }
 
-        public void DrawInputBox(TextLayout.InputBox inputBox, Rect viewport)
+        public void DrawInputBox(TextLayout.InputBox inputBox, Rect viewport, Vector2 visualOffset)
         {
             if (inputBox == null)
             {
@@ -161,9 +163,16 @@ namespace Milestro.Skia
                 Y = viewport.y,
                 Width = viewport.width,
                 Height = viewport.height,
+                VisualOffsetX = visualOffset.x,
+                VisualOffsetY = visualOffset.y,
                 KeepAlive = inputBox,
                 SnapshotInputBox = true
             });
+        }
+
+        public void DrawInputBox(TextLayout.InputBox inputBox, Rect viewport)
+        {
+            DrawInputBox(inputBox, viewport, Vector2.zero);
         }
 
         public void DrawString(string text, SkFont font, Vector2 baselinePosition, Color32 color)
