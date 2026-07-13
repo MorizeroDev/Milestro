@@ -3,6 +3,7 @@
 
 #include "ScrollPhaseGestureTracker.h"
 #include "ScrollPhaseLease.h"
+#include "ScrollPhaseMinimalQueueAdmission.h"
 
 #if MILESTRO_PLATFORM_MAC
 
@@ -15,6 +16,7 @@ namespace milestro::input {
 namespace {
 
 constexpr size_t kMaximumQueuedSamples = 256;
+static_assert(kMaximumQueuedSamples == ScrollPhaseMinimalQueueAdmission::MaximumQueuedSamples);
 
 id monitorToken = nil;
 std::atomic<bool> monitorPublished{false};
@@ -22,7 +24,10 @@ std::deque<ScrollPhaseSample> samples;
 int64_t nextSequence = 1;
 ScrollPhaseLease lease;
 ScrollPhaseGestureTracker gestureTracker;
+ScrollPhaseMinimalQueueAdmission minimalQueueAdmission;
 bool queueOverflowed = false;
+ScrollPhaseMonitorMode activeMonitorMode = ScrollPhaseMonitorMode::PassThrough;
+bool hasActiveMonitorMode = false;
 
 ScrollPhase ConvertPhase(NSEventPhase phase) {
     if (phase == NSEventPhaseNone) {
@@ -197,6 +202,7 @@ void Enqueue(NSEvent* event) {
     const ScrollPhase gesturePhase = ConvertPhase(event.phase);
     const ScrollPhase momentumPhase = ConvertPhase(event.momentumPhase);
     ScrollPhaseSample sample;
+    sample.validFields = kLegacyCaptureScrollPhaseSampleFields;
     sample.sequence = nextSequence++;
     sample.gestureId = gestureTracker.Resolve(gesturePhase, momentumPhase);
     sample.timestamp = event.timestamp;
@@ -219,11 +225,33 @@ void Enqueue(NSEvent* event) {
     samples.push_back(sample);
 }
 
+void EnqueueMinimal(NSEvent* event) {
+    ScrollPhaseSample sample;
+    if (!minimalQueueAdmission.TryAccept(samples.size(), sample.sequence)) {
+        return;
+    }
+
+    sample.validFields = kMinimalQueueScrollPhaseSampleFields;
+    sample.gesturePhase = ConvertPhase(event.phase);
+    sample.momentumPhase = ConvertPhase(event.momentumPhase);
+    sample.timestamp = event.timestamp;
+    sample.windowNumber = event.windowNumber;
+    sample.scrollingDeltaX = event.scrollingDeltaX;
+    sample.scrollingDeltaY = event.scrollingDeltaY;
+    samples.push_back(sample);
+}
+
 void ResetState() {
     samples.clear();
     nextSequence = 1;
     gestureTracker.Reset();
+    minimalQueueAdmission.Reset();
     queueOverflowed = false;
+}
+
+void ClearActiveMonitorMode() {
+    activeMonitorMode = ScrollPhaseMonitorMode::PassThrough;
+    hasActiveMonitorMode = false;
 }
 
 ScrollPhaseMonitorResult RemoveMonitor(int64_t leaseId, bool forceRelease) {
@@ -246,6 +274,7 @@ ScrollPhaseMonitorResult RemoveMonitor(int64_t leaseId, bool forceRelease) {
             return releaseResult;
         }
     }
+    ClearActiveMonitorMode();
     ResetState();
     return ScrollPhaseMonitorResult::Succeeded;
 }
@@ -287,6 +316,7 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
         const bool writePhasesTimestampWindowPod = ShouldWriteScrollPhasesTimestampWindowPod(mode);
         const bool readPhasesTimestampWindow = ShouldReadScrollPhasesTimestampWindow(mode);
         const bool readPhasesTimestampWindowScrollingDelta = ShouldReadScrollPhasesTimestampWindowScrollingDelta(mode);
+        const bool queueMinimalSamples = ShouldQueueMinimalScrollPhaseSamples(mode);
         if (![NSThread isMainThread]) {
             return ScrollPhaseMonitorResult::WrongThread;
         }
@@ -324,6 +354,8 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
                                                                    ReadPhasesTimestampWindow(event);
                                                                } else if (readPhasesTimestampWindowScrollingDelta) {
                                                                    ReadPhasesTimestampWindowScrollingDelta(event);
+                                                               } else if (queueMinimalSamples) {
+                                                                   EnqueueMinimal(event);
                                                                }
                                                                return event;
                                                              }];
@@ -331,12 +363,16 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
                 (void) ReleaseStartLease(leaseId);
                 return ScrollPhaseMonitorResult::Failed;
             }
+            activeMonitorMode = mode;
+            hasActiveMonitorMode = true;
             monitorToken = newToken;
             monitorPublished.store(true, std::memory_order_release);
             return ScrollPhaseMonitorResult::Succeeded;
         } @catch (NSException* exception) {
             (void) exception;
             if (newToken != nil && !RemoveUnpublishedMonitor(newToken)) {
+                activeMonitorMode = mode;
+                hasActiveMonitorMode = true;
                 monitorToken = newToken;
                 monitorPublished.store(true, std::memory_order_release);
                 return ScrollPhaseMonitorResult::Failed;
@@ -371,6 +407,13 @@ ScrollPhaseMonitorResult PollScrollPhaseMonitor(int64_t leaseId, ScrollPhaseSamp
         if (leaseResult != ScrollPhaseMonitorResult::Succeeded) {
             return leaseResult;
         }
+        if (!hasActiveMonitorMode) {
+            return ScrollPhaseMonitorResult::ModeContractMismatch;
+        }
+        const ScrollPhaseMonitorResult modeResult = ValidateLegacyScrollPhasePollMode(activeMonitorMode);
+        if (modeResult != ScrollPhaseMonitorResult::Succeeded) {
+            return modeResult;
+        }
         if (samples.empty()) {
             return ScrollPhaseMonitorResult::Succeeded;
         }
@@ -389,7 +432,7 @@ bool HasActiveScrollPhaseMonitorLease() noexcept {
 }
 
 bool HasActiveScrollPhaseMonitorState() noexcept {
-    return monitorPublished.load(std::memory_order_acquire) || lease.HasActiveLease();
+    return monitorPublished.load(std::memory_order_acquire) || lease.HasActiveLease() || hasActiveMonitorMode;
 }
 
 bool IsScrollPhaseMonitorMainThread() noexcept {

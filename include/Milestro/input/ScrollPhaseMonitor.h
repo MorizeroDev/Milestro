@@ -12,6 +12,7 @@ enum class ScrollPhaseMonitorResult : int32_t {
     Failed = 3,
     AlreadyStarted = 4,
     InvalidLease = 5,
+    ModeContractMismatch = 6,
 };
 
 enum class ScrollPhaseMonitorMode : int32_t {
@@ -26,6 +27,7 @@ enum class ScrollPhaseMonitorMode : int32_t {
     WritePhasesTimestampWindowPod = 8,
     ReadPhasesTimestampWindow = 9,
     ReadPhasesTimestampWindowScrollingDelta = 10,
+    QueueMinimalSamples = 11,
 };
 
 constexpr bool IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode mode) noexcept {
@@ -35,7 +37,8 @@ constexpr bool IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode mode) noexce
            mode == ScrollPhaseMonitorMode::ReadPhasesOnly || mode == ScrollPhaseMonitorMode::ReadPhasesTimestamp ||
            mode == ScrollPhaseMonitorMode::WritePhasesTimestampWindowPod ||
            mode == ScrollPhaseMonitorMode::ReadPhasesTimestampWindow ||
-           mode == ScrollPhaseMonitorMode::ReadPhasesTimestampWindowScrollingDelta;
+           mode == ScrollPhaseMonitorMode::ReadPhasesTimestampWindowScrollingDelta ||
+           mode == ScrollPhaseMonitorMode::QueueMinimalSamples;
 }
 
 constexpr bool ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode mode) noexcept {
@@ -78,6 +81,19 @@ constexpr bool ShouldReadScrollPhasesTimestampWindowScrollingDelta(ScrollPhaseMo
     return mode == ScrollPhaseMonitorMode::ReadPhasesTimestampWindowScrollingDelta;
 }
 
+constexpr bool ShouldQueueMinimalScrollPhaseSamples(ScrollPhaseMonitorMode mode) noexcept {
+    return mode == ScrollPhaseMonitorMode::QueueMinimalSamples;
+}
+
+constexpr bool CanUseLegacyScrollPhasePoll(ScrollPhaseMonitorMode mode) noexcept {
+    return mode == ScrollPhaseMonitorMode::CaptureSamples;
+}
+
+constexpr ScrollPhaseMonitorResult ValidateLegacyScrollPhasePollMode(ScrollPhaseMonitorMode mode) noexcept {
+    return CanUseLegacyScrollPhasePoll(mode) ? ScrollPhaseMonitorResult::Succeeded
+                                             : ScrollPhaseMonitorResult::ModeContractMismatch;
+}
+
 enum class ScrollPhase : int32_t {
     Unknown = 0,
     None = 1,
@@ -94,7 +110,51 @@ enum class ScrollPhasePluginUnloadDecision : int32_t {
     Abort = 2,
 };
 
+enum class ScrollPhaseSampleField : uint32_t {
+    Sequence = 1U << 0U,
+    GestureId = 1U << 1U,
+    Timestamp = 1U << 2U,
+    WindowNumber = 1U << 3U,
+    KeyWindowNumber = 1U << 4U,
+    EventNumber = 1U << 5U,
+    RawDelta = 1U << 6U,
+    ScrollingDelta = 1U << 7U,
+    GesturePhase = 1U << 8U,
+    MomentumPhase = 1U << 9U,
+    Precise = 1U << 10U,
+    NaturalDirection = 1U << 11U,
+};
+
+constexpr uint32_t ScrollPhaseSampleFieldBit(ScrollPhaseSampleField field) noexcept {
+    return static_cast<uint32_t>(field);
+}
+
+constexpr uint32_t kMinimalQueueScrollPhaseSampleFields =
+        ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::Sequence) |
+        ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::Timestamp) |
+        ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::WindowNumber) |
+        ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::ScrollingDelta) |
+        ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::GesturePhase) |
+        ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::MomentumPhase);
+
+constexpr uint32_t kLegacyCaptureScrollPhaseSampleFields =
+        kMinimalQueueScrollPhaseSampleFields | ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::GestureId) |
+        ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::KeyWindowNumber) |
+        ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::EventNumber) |
+        ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::RawDelta) |
+        ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::Precise) |
+        ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::NaturalDirection);
+
+constexpr bool HasScrollPhaseSampleFields(uint32_t validFields, uint32_t requiredFields) noexcept {
+    return (validFields & requiredFields) == requiredFields;
+}
+
+constexpr bool HasScrollPhaseSampleField(uint32_t validFields, ScrollPhaseSampleField field) noexcept {
+    return HasScrollPhaseSampleFields(validFields, ScrollPhaseSampleFieldBit(field));
+}
+
 struct ScrollPhaseSample {
+    uint32_t validFields = 0;
     int64_t sequence = 0;
     int64_t gestureId = 0;
     double timestamp = 0.0;

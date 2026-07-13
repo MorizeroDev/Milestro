@@ -1,13 +1,18 @@
 #include "ScrollPhaseGestureTracker.h"
 #include "ScrollPhaseLease.h"
+#include "ScrollPhaseMinimalQueueAdmission.h"
 
 #include <gtest/gtest.h>
+
+#include <limits>
 
 namespace {
 
 using milestro::input::ScrollPhase;
 using milestro::input::ScrollPhaseGestureTracker;
 using milestro::input::ScrollPhaseLease;
+using milestro::input::ScrollPhaseMinimalQueueAdmission;
+using milestro::input::ScrollPhaseMinimalQueueFailure;
 using milestro::input::ScrollPhaseMonitorMode;
 using milestro::input::ScrollPhaseMonitorResult;
 using milestro::input::ScrollPhasePluginUnloadDecision;
@@ -24,6 +29,7 @@ TEST(ScrollPhaseMonitorModeTest, AcceptsOnlyDefinedModes) {
     EXPECT_EQ(8, static_cast<int32_t>(ScrollPhaseMonitorMode::WritePhasesTimestampWindowPod));
     EXPECT_EQ(9, static_cast<int32_t>(ScrollPhaseMonitorMode::ReadPhasesTimestampWindow));
     EXPECT_EQ(10, static_cast<int32_t>(ScrollPhaseMonitorMode::ReadPhasesTimestampWindowScrollingDelta));
+    EXPECT_EQ(11, static_cast<int32_t>(ScrollPhaseMonitorMode::QueueMinimalSamples));
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::PassThrough));
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::CaptureSamples));
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::ReadProperties));
@@ -36,8 +42,16 @@ TEST(ScrollPhaseMonitorModeTest, AcceptsOnlyDefinedModes) {
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::ReadPhasesTimestampWindow));
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(
             ScrollPhaseMonitorMode::ReadPhasesTimestampWindowScrollingDelta));
+    EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::QueueMinimalSamples));
     EXPECT_FALSE(milestro::input::IsValidScrollPhaseMonitorMode(static_cast<ScrollPhaseMonitorMode>(-1)));
-    EXPECT_FALSE(milestro::input::IsValidScrollPhaseMonitorMode(static_cast<ScrollPhaseMonitorMode>(11)));
+    EXPECT_FALSE(milestro::input::IsValidScrollPhaseMonitorMode(static_cast<ScrollPhaseMonitorMode>(12)));
+    EXPECT_EQ(6, static_cast<int32_t>(ScrollPhaseMonitorResult::ModeContractMismatch));
+    EXPECT_TRUE(milestro::input::CanUseLegacyScrollPhasePoll(ScrollPhaseMonitorMode::CaptureSamples));
+    EXPECT_FALSE(milestro::input::CanUseLegacyScrollPhasePoll(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_EQ(ScrollPhaseMonitorResult::Succeeded,
+              milestro::input::ValidateLegacyScrollPhasePollMode(ScrollPhaseMonitorMode::CaptureSamples));
+    EXPECT_EQ(ScrollPhaseMonitorResult::ModeContractMismatch,
+              milestro::input::ValidateLegacyScrollPhasePollMode(ScrollPhaseMonitorMode::QueueMinimalSamples));
 }
 
 TEST(ScrollPhaseMonitorModeTest, ModesHaveMutuallyExclusiveCallbackSideEffects) {
@@ -51,6 +65,7 @@ TEST(ScrollPhaseMonitorModeTest, ModesHaveMutuallyExclusiveCallbackSideEffects) 
     int phaseTimestampWindowPodWriteCount = 0;
     int phaseTimestampWindowReadCount = 0;
     int phaseTimestampWindowScrollingDeltaReadCount = 0;
+    int minimalQueueCount = 0;
     if (milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::PassThrough)) {
         ++sampleCount;
     }
@@ -81,6 +96,9 @@ TEST(ScrollPhaseMonitorModeTest, ModesHaveMutuallyExclusiveCallbackSideEffects) 
     if (milestro::input::ShouldReadScrollPhasesTimestampWindowScrollingDelta(ScrollPhaseMonitorMode::PassThrough)) {
         ++phaseTimestampWindowScrollingDeltaReadCount;
     }
+    if (milestro::input::ShouldQueueMinimalScrollPhaseSamples(ScrollPhaseMonitorMode::PassThrough)) {
+        ++minimalQueueCount;
+    }
 
     EXPECT_EQ(0, sampleCount);
     EXPECT_EQ(0, propertyReadCount);
@@ -92,6 +110,7 @@ TEST(ScrollPhaseMonitorModeTest, ModesHaveMutuallyExclusiveCallbackSideEffects) 
     EXPECT_EQ(0, phaseTimestampWindowPodWriteCount);
     EXPECT_EQ(0, phaseTimestampWindowReadCount);
     EXPECT_EQ(0, phaseTimestampWindowScrollingDeltaReadCount);
+    EXPECT_EQ(0, minimalQueueCount);
     EXPECT_TRUE(milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::CaptureSamples));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseProperties(ScrollPhaseMonitorMode::CaptureSamples));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseEventProperties(ScrollPhaseMonitorMode::CaptureSamples));
@@ -224,6 +243,97 @@ TEST(ScrollPhaseMonitorModeTest, ModesHaveMutuallyExclusiveCallbackSideEffects) 
             ScrollPhaseMonitorMode::ReadPhasesTimestampWindowScrollingDelta));
     EXPECT_TRUE(milestro::input::ShouldReadScrollPhasesTimestampWindowScrollingDelta(
             ScrollPhaseMonitorMode::ReadPhasesTimestampWindowScrollingDelta));
+    EXPECT_FALSE(milestro::input::ShouldQueueMinimalScrollPhaseSamples(ScrollPhaseMonitorMode::CaptureSamples));
+    EXPECT_FALSE(milestro::input::ShouldQueueMinimalScrollPhaseSamples(ScrollPhaseMonitorMode::ReadProperties));
+    EXPECT_FALSE(milestro::input::ShouldQueueMinimalScrollPhaseSamples(ScrollPhaseMonitorMode::ReadEventProperties));
+    EXPECT_FALSE(milestro::input::ShouldQueueMinimalScrollPhaseSamples(ScrollPhaseMonitorMode::ReadEventScalars));
+    EXPECT_FALSE(milestro::input::ShouldQueueMinimalScrollPhaseSamples(ScrollPhaseMonitorMode::WriteLocalPod));
+    EXPECT_FALSE(milestro::input::ShouldQueueMinimalScrollPhaseSamples(ScrollPhaseMonitorMode::ReadPhasesOnly));
+    EXPECT_FALSE(milestro::input::ShouldQueueMinimalScrollPhaseSamples(ScrollPhaseMonitorMode::ReadPhasesTimestamp));
+    EXPECT_FALSE(milestro::input::ShouldQueueMinimalScrollPhaseSamples(
+            ScrollPhaseMonitorMode::WritePhasesTimestampWindowPod));
+    EXPECT_FALSE(
+            milestro::input::ShouldQueueMinimalScrollPhaseSamples(ScrollPhaseMonitorMode::ReadPhasesTimestampWindow));
+    EXPECT_FALSE(milestro::input::ShouldQueueMinimalScrollPhaseSamples(
+            ScrollPhaseMonitorMode::ReadPhasesTimestampWindowScrollingDelta));
+    EXPECT_FALSE(milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseProperties(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseEventProperties(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseEventScalars(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_FALSE(milestro::input::ShouldWriteScrollPhaseLocalPod(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesOnly(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesTimestamp(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_FALSE(
+            milestro::input::ShouldWriteScrollPhasesTimestampWindowPod(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesTimestampWindow(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesTimestampWindowScrollingDelta(
+            ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_TRUE(milestro::input::ShouldQueueMinimalScrollPhaseSamples(ScrollPhaseMonitorMode::QueueMinimalSamples));
+}
+
+TEST(ScrollPhaseSampleValidityTest, MinimalMaskSeparatesAvailabilityFromZeroValues) {
+    milestro::input::ScrollPhaseSample sample;
+    sample.validFields = milestro::input::kMinimalQueueScrollPhaseSampleFields;
+    sample.windowNumber = 0;
+    sample.scrollingDeltaX = 0.0;
+    sample.scrollingDeltaY = 0.0;
+
+    EXPECT_TRUE(milestro::input::HasScrollPhaseSampleFields(sample.validFields,
+                                                            milestro::input::kMinimalQueueScrollPhaseSampleFields));
+    EXPECT_TRUE(milestro::input::HasScrollPhaseSampleField(sample.validFields,
+                                                           milestro::input::ScrollPhaseSampleField::WindowNumber));
+    EXPECT_TRUE(milestro::input::HasScrollPhaseSampleField(sample.validFields,
+                                                           milestro::input::ScrollPhaseSampleField::ScrollingDelta));
+    EXPECT_FALSE(milestro::input::HasScrollPhaseSampleField(sample.validFields,
+                                                            milestro::input::ScrollPhaseSampleField::GestureId));
+    EXPECT_FALSE(milestro::input::HasScrollPhaseSampleField(sample.validFields,
+                                                            milestro::input::ScrollPhaseSampleField::EventNumber));
+    EXPECT_FALSE(milestro::input::HasScrollPhaseSampleField(sample.validFields,
+                                                            milestro::input::ScrollPhaseSampleField::RawDelta));
+    EXPECT_FALSE(milestro::input::HasScrollPhaseSampleField(sample.validFields,
+                                                            milestro::input::ScrollPhaseSampleField::Precise));
+    EXPECT_FALSE(milestro::input::HasScrollPhaseSampleField(sample.validFields,
+                                                            milestro::input::ScrollPhaseSampleField::NaturalDirection));
+    EXPECT_EQ(0, sample.windowNumber);
+    EXPECT_DOUBLE_EQ(0.0, sample.scrollingDeltaX);
+    EXPECT_DOUBLE_EQ(0.0, sample.scrollingDeltaY);
+}
+
+TEST(ScrollPhaseMinimalQueueAdmissionTest, FailsStopAtCapacityUntilReset) {
+    ScrollPhaseMinimalQueueAdmission admission;
+    int64_t sequence = 0;
+    for (size_t index = 0; index < ScrollPhaseMinimalQueueAdmission::MaximumQueuedSamples; ++index) {
+        ASSERT_TRUE(admission.TryAccept(index, sequence));
+        EXPECT_EQ(static_cast<int64_t>(index + 1), sequence);
+    }
+
+    EXPECT_FALSE(admission.TryAccept(ScrollPhaseMinimalQueueAdmission::MaximumQueuedSamples, sequence));
+    EXPECT_EQ(0, sequence);
+    EXPECT_EQ(ScrollPhaseMinimalQueueFailure::CapacityExceeded, admission.Failure());
+    EXPECT_EQ(257, admission.NextSequence());
+    EXPECT_FALSE(admission.TryAccept(0, sequence));
+    EXPECT_EQ(0, sequence);
+    EXPECT_EQ(257, admission.NextSequence());
+
+    admission.Reset();
+    EXPECT_EQ(ScrollPhaseMinimalQueueFailure::None, admission.Failure());
+    ASSERT_TRUE(admission.TryAccept(0, sequence));
+    EXPECT_EQ(1, sequence);
+}
+
+TEST(ScrollPhaseMinimalQueueAdmissionTest, FailsStopBeforeSequenceWrap) {
+    ScrollPhaseMinimalQueueAdmission admission(std::numeric_limits<int64_t>::max() - 1);
+    int64_t sequence = 0;
+    ASSERT_TRUE(admission.TryAccept(0, sequence));
+    EXPECT_EQ(std::numeric_limits<int64_t>::max() - 1, sequence);
+    EXPECT_EQ(std::numeric_limits<int64_t>::max(), admission.NextSequence());
+
+    EXPECT_FALSE(admission.TryAccept(1, sequence));
+    EXPECT_EQ(0, sequence);
+    EXPECT_EQ(ScrollPhaseMinimalQueueFailure::SequenceExhausted, admission.Failure());
+    EXPECT_EQ(std::numeric_limits<int64_t>::max(), admission.NextSequence());
+    EXPECT_FALSE(admission.TryAccept(1, sequence));
+    EXPECT_EQ(0, sequence);
 }
 
 TEST(ScrollPhaseGestureTrackerTest, KeepsOneIdThroughDelayedMomentum) {
