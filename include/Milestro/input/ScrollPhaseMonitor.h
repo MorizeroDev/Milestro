@@ -18,11 +18,12 @@ enum class ScrollPhaseMonitorMode : int32_t {
     PassThrough = 0,
     CaptureSamples = 1,
     ReadProperties = 2,
+    ReadEventProperties = 3,
 };
 
 constexpr bool IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode mode) noexcept {
     return mode == ScrollPhaseMonitorMode::PassThrough || mode == ScrollPhaseMonitorMode::CaptureSamples ||
-           mode == ScrollPhaseMonitorMode::ReadProperties;
+           mode == ScrollPhaseMonitorMode::ReadProperties || mode == ScrollPhaseMonitorMode::ReadEventProperties;
 }
 
 constexpr bool ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode mode) noexcept {
@@ -31,6 +32,10 @@ constexpr bool ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode mode) noex
 
 constexpr bool ShouldReadScrollPhaseProperties(ScrollPhaseMonitorMode mode) noexcept {
     return mode == ScrollPhaseMonitorMode::ReadProperties;
+}
+
+constexpr bool ShouldReadScrollPhaseEventProperties(ScrollPhaseMonitorMode mode) noexcept {
+    return mode == ScrollPhaseMonitorMode::ReadEventProperties;
 }
 
 enum class ScrollPhase : int32_t {

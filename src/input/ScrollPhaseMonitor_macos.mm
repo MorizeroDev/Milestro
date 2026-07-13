@@ -77,6 +77,21 @@ void ReadProperties(NSEvent* event) {
     properties.directionInvertedFromDevice = event.isDirectionInvertedFromDevice ? 1 : 0;
 }
 
+void ReadEventProperties(NSEvent* event) {
+    volatile ScrollPhaseEventProperties properties;
+    properties.gesturePhase = ConvertPhase(event.phase);
+    properties.momentumPhase = ConvertPhase(event.momentumPhase);
+    properties.timestamp = event.timestamp;
+    properties.windowNumber = event.windowNumber;
+    properties.eventNumber = event.eventNumber;
+    properties.deltaX = event.deltaX;
+    properties.deltaY = event.deltaY;
+    properties.scrollingDeltaX = event.scrollingDeltaX;
+    properties.scrollingDeltaY = event.scrollingDeltaY;
+    properties.precise = event.hasPreciseScrollingDeltas ? 1 : 0;
+    properties.directionInvertedFromDevice = event.isDirectionInvertedFromDevice ? 1 : 0;
+}
+
 void Enqueue(NSEvent* event) {
     const ScrollPhase gesturePhase = ConvertPhase(event.phase);
     const ScrollPhase momentumPhase = ConvertPhase(event.momentumPhase);
@@ -163,6 +178,7 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
         }
         const bool captureSamples = ShouldCaptureScrollPhaseSamples(mode);
         const bool readProperties = ShouldReadScrollPhaseProperties(mode);
+        const bool readEventProperties = ShouldReadScrollPhaseEventProperties(mode);
         if (![NSThread isMainThread]) {
             return ScrollPhaseMonitorResult::WrongThread;
         }
@@ -184,6 +200,8 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
                                                                    Enqueue(event);
                                                                } else if (readProperties) {
                                                                    ReadProperties(event);
+                                                               } else if (readEventProperties) {
+                                                                   ReadEventProperties(event);
                                                                }
                                                                return event;
                                                              }];
