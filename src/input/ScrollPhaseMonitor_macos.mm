@@ -4,6 +4,7 @@
 #include "ScrollPhaseGestureTracker.h"
 #include "ScrollPhaseLease.h"
 #include "ScrollPhaseMinimalQueueAdmission.h"
+#include "ScrollPhaseMonitorModePublication.h"
 
 #if MILESTRO_PLATFORM_MAC
 
@@ -26,8 +27,7 @@ ScrollPhaseLease lease;
 ScrollPhaseGestureTracker gestureTracker;
 ScrollPhaseMinimalQueueAdmission minimalQueueAdmission;
 bool queueOverflowed = false;
-ScrollPhaseMonitorMode activeMonitorMode = ScrollPhaseMonitorMode::PassThrough;
-bool hasActiveMonitorMode = false;
+ScrollPhaseMonitorModePublication activeMonitorMode;
 
 ScrollPhase ConvertPhase(NSEventPhase phase) {
     if (phase == NSEventPhaseNone) {
@@ -249,11 +249,6 @@ void ResetState() {
     queueOverflowed = false;
 }
 
-void ClearActiveMonitorMode() {
-    activeMonitorMode = ScrollPhaseMonitorMode::PassThrough;
-    hasActiveMonitorMode = false;
-}
-
 ScrollPhaseMonitorResult RemoveMonitor(int64_t leaseId, bool forceRelease) {
     @try {
         if (monitorToken != nil) {
@@ -261,6 +256,7 @@ ScrollPhaseMonitorResult RemoveMonitor(int64_t leaseId, bool forceRelease) {
         }
     } @catch (NSException* exception) {
         (void) exception;
+        activeMonitorMode.FinishCleanup(false);
         return ScrollPhaseMonitorResult::Failed;
     }
 
@@ -271,10 +267,11 @@ ScrollPhaseMonitorResult RemoveMonitor(int64_t leaseId, bool forceRelease) {
     } else {
         const ScrollPhaseMonitorResult releaseResult = lease.Release(leaseId);
         if (releaseResult != ScrollPhaseMonitorResult::Succeeded) {
+            activeMonitorMode.FinishCleanup(false);
             return releaseResult;
         }
     }
-    ClearActiveMonitorMode();
+    activeMonitorMode.FinishCleanup(true);
     ResetState();
     return ScrollPhaseMonitorResult::Succeeded;
 }
@@ -363,16 +360,14 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
                 (void) ReleaseStartLease(leaseId);
                 return ScrollPhaseMonitorResult::Failed;
             }
-            activeMonitorMode = mode;
-            hasActiveMonitorMode = true;
+            activeMonitorMode.Publish(mode);
             monitorToken = newToken;
             monitorPublished.store(true, std::memory_order_release);
             return ScrollPhaseMonitorResult::Succeeded;
         } @catch (NSException* exception) {
             (void) exception;
             if (newToken != nil && !RemoveUnpublishedMonitor(newToken)) {
-                activeMonitorMode = mode;
-                hasActiveMonitorMode = true;
+                activeMonitorMode.Publish(mode);
                 monitorToken = newToken;
                 monitorPublished.store(true, std::memory_order_release);
                 return ScrollPhaseMonitorResult::Failed;
@@ -407,10 +402,11 @@ ScrollPhaseMonitorResult PollScrollPhaseMonitor(int64_t leaseId, ScrollPhaseSamp
         if (leaseResult != ScrollPhaseMonitorResult::Succeeded) {
             return leaseResult;
         }
-        if (!hasActiveMonitorMode) {
+        ScrollPhaseMonitorMode publishedMode = ScrollPhaseMonitorMode::PassThrough;
+        if (!activeMonitorMode.TryLoad(publishedMode)) {
             return ScrollPhaseMonitorResult::ModeContractMismatch;
         }
-        const ScrollPhaseMonitorResult modeResult = ValidateLegacyScrollPhasePollMode(activeMonitorMode);
+        const ScrollPhaseMonitorResult modeResult = ValidateLegacyScrollPhasePollMode(publishedMode);
         if (modeResult != ScrollPhaseMonitorResult::Succeeded) {
             return modeResult;
         }
@@ -432,7 +428,7 @@ bool HasActiveScrollPhaseMonitorLease() noexcept {
 }
 
 bool HasActiveScrollPhaseMonitorState() noexcept {
-    return monitorPublished.load(std::memory_order_acquire) || lease.HasActiveLease() || hasActiveMonitorMode;
+    return monitorPublished.load(std::memory_order_acquire) || lease.HasActiveLease() || activeMonitorMode.IsActive();
 }
 
 bool IsScrollPhaseMonitorMainThread() noexcept {

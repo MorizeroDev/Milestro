@@ -1,6 +1,7 @@
 #include "ScrollPhaseGestureTracker.h"
 #include "ScrollPhaseLease.h"
 #include "ScrollPhaseMinimalQueueAdmission.h"
+#include "ScrollPhaseMonitorModePublication.h"
 
 #include <gtest/gtest.h>
 
@@ -14,6 +15,7 @@ using milestro::input::ScrollPhaseLease;
 using milestro::input::ScrollPhaseMinimalQueueAdmission;
 using milestro::input::ScrollPhaseMinimalQueueFailure;
 using milestro::input::ScrollPhaseMonitorMode;
+using milestro::input::ScrollPhaseMonitorModePublication;
 using milestro::input::ScrollPhaseMonitorResult;
 using milestro::input::ScrollPhasePluginUnloadDecision;
 
@@ -334,6 +336,27 @@ TEST(ScrollPhaseMinimalQueueAdmissionTest, FailsStopBeforeSequenceWrap) {
     EXPECT_EQ(std::numeric_limits<int64_t>::max(), admission.NextSequence());
     EXPECT_FALSE(admission.TryAccept(1, sequence));
     EXPECT_EQ(0, sequence);
+}
+
+TEST(ScrollPhaseMonitorModePublicationTest, OnlySuccessfulCleanupClearsPublishedMode) {
+    ScrollPhaseMonitorModePublication publication;
+    ScrollPhaseMonitorMode mode = ScrollPhaseMonitorMode::PassThrough;
+    EXPECT_FALSE(publication.IsActive());
+    EXPECT_FALSE(publication.TryLoad(mode));
+
+    publication.Publish(ScrollPhaseMonitorMode::QueueMinimalSamples);
+    EXPECT_TRUE(publication.IsActive());
+    ASSERT_TRUE(publication.TryLoad(mode));
+    EXPECT_EQ(ScrollPhaseMonitorMode::QueueMinimalSamples, mode);
+
+    publication.FinishCleanup(false);
+    EXPECT_TRUE(publication.IsActive());
+    ASSERT_TRUE(publication.TryLoad(mode));
+    EXPECT_EQ(ScrollPhaseMonitorMode::QueueMinimalSamples, mode);
+
+    publication.FinishCleanup(true);
+    EXPECT_FALSE(publication.IsActive());
+    EXPECT_FALSE(publication.TryLoad(mode));
 }
 
 TEST(ScrollPhaseGestureTrackerTest, KeepsOneIdThroughDelayedMomentum) {
