@@ -20,6 +20,7 @@ TEST(ScrollPhaseMonitorModeTest, AcceptsOnlyDefinedModes) {
     EXPECT_EQ(4, static_cast<int32_t>(ScrollPhaseMonitorMode::ReadEventScalars));
     EXPECT_EQ(5, static_cast<int32_t>(ScrollPhaseMonitorMode::WriteLocalPod));
     EXPECT_EQ(6, static_cast<int32_t>(ScrollPhaseMonitorMode::ReadPhasesOnly));
+    EXPECT_EQ(7, static_cast<int32_t>(ScrollPhaseMonitorMode::ReadPhasesTimestamp));
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::PassThrough));
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::CaptureSamples));
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::ReadProperties));
@@ -27,8 +28,9 @@ TEST(ScrollPhaseMonitorModeTest, AcceptsOnlyDefinedModes) {
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::ReadEventScalars));
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::WriteLocalPod));
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::ReadPhasesOnly));
+    EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::ReadPhasesTimestamp));
     EXPECT_FALSE(milestro::input::IsValidScrollPhaseMonitorMode(static_cast<ScrollPhaseMonitorMode>(-1)));
-    EXPECT_FALSE(milestro::input::IsValidScrollPhaseMonitorMode(static_cast<ScrollPhaseMonitorMode>(7)));
+    EXPECT_FALSE(milestro::input::IsValidScrollPhaseMonitorMode(static_cast<ScrollPhaseMonitorMode>(8)));
 }
 
 TEST(ScrollPhaseMonitorModeTest, ModesHaveMutuallyExclusiveCallbackSideEffects) {
@@ -38,6 +40,7 @@ TEST(ScrollPhaseMonitorModeTest, ModesHaveMutuallyExclusiveCallbackSideEffects) 
     int eventScalarReadCount = 0;
     int localPodWriteCount = 0;
     int phaseReadCount = 0;
+    int phaseTimestampReadCount = 0;
     if (milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::PassThrough)) {
         ++sampleCount;
     }
@@ -56,6 +59,9 @@ TEST(ScrollPhaseMonitorModeTest, ModesHaveMutuallyExclusiveCallbackSideEffects) 
     if (milestro::input::ShouldReadScrollPhasesOnly(ScrollPhaseMonitorMode::PassThrough)) {
         ++phaseReadCount;
     }
+    if (milestro::input::ShouldReadScrollPhasesTimestamp(ScrollPhaseMonitorMode::PassThrough)) {
+        ++phaseTimestampReadCount;
+    }
 
     EXPECT_EQ(0, sampleCount);
     EXPECT_EQ(0, propertyReadCount);
@@ -63,42 +69,56 @@ TEST(ScrollPhaseMonitorModeTest, ModesHaveMutuallyExclusiveCallbackSideEffects) 
     EXPECT_EQ(0, eventScalarReadCount);
     EXPECT_EQ(0, localPodWriteCount);
     EXPECT_EQ(0, phaseReadCount);
+    EXPECT_EQ(0, phaseTimestampReadCount);
     EXPECT_TRUE(milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::CaptureSamples));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseProperties(ScrollPhaseMonitorMode::CaptureSamples));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseEventProperties(ScrollPhaseMonitorMode::CaptureSamples));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseEventScalars(ScrollPhaseMonitorMode::CaptureSamples));
     EXPECT_FALSE(milestro::input::ShouldWriteScrollPhaseLocalPod(ScrollPhaseMonitorMode::CaptureSamples));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesOnly(ScrollPhaseMonitorMode::CaptureSamples));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesTimestamp(ScrollPhaseMonitorMode::CaptureSamples));
     EXPECT_FALSE(milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::ReadProperties));
     EXPECT_TRUE(milestro::input::ShouldReadScrollPhaseProperties(ScrollPhaseMonitorMode::ReadProperties));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseEventProperties(ScrollPhaseMonitorMode::ReadProperties));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseEventScalars(ScrollPhaseMonitorMode::ReadProperties));
     EXPECT_FALSE(milestro::input::ShouldWriteScrollPhaseLocalPod(ScrollPhaseMonitorMode::ReadProperties));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesOnly(ScrollPhaseMonitorMode::ReadProperties));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesTimestamp(ScrollPhaseMonitorMode::ReadProperties));
     EXPECT_FALSE(milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::ReadEventProperties));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseProperties(ScrollPhaseMonitorMode::ReadEventProperties));
     EXPECT_TRUE(milestro::input::ShouldReadScrollPhaseEventProperties(ScrollPhaseMonitorMode::ReadEventProperties));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseEventScalars(ScrollPhaseMonitorMode::ReadEventProperties));
     EXPECT_FALSE(milestro::input::ShouldWriteScrollPhaseLocalPod(ScrollPhaseMonitorMode::ReadEventProperties));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesOnly(ScrollPhaseMonitorMode::ReadEventProperties));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesTimestamp(ScrollPhaseMonitorMode::ReadEventProperties));
     EXPECT_FALSE(milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::ReadEventScalars));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseProperties(ScrollPhaseMonitorMode::ReadEventScalars));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseEventProperties(ScrollPhaseMonitorMode::ReadEventScalars));
     EXPECT_TRUE(milestro::input::ShouldReadScrollPhaseEventScalars(ScrollPhaseMonitorMode::ReadEventScalars));
     EXPECT_FALSE(milestro::input::ShouldWriteScrollPhaseLocalPod(ScrollPhaseMonitorMode::ReadEventScalars));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesOnly(ScrollPhaseMonitorMode::ReadEventScalars));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesTimestamp(ScrollPhaseMonitorMode::ReadEventScalars));
     EXPECT_FALSE(milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::WriteLocalPod));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseProperties(ScrollPhaseMonitorMode::WriteLocalPod));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseEventProperties(ScrollPhaseMonitorMode::WriteLocalPod));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseEventScalars(ScrollPhaseMonitorMode::WriteLocalPod));
     EXPECT_TRUE(milestro::input::ShouldWriteScrollPhaseLocalPod(ScrollPhaseMonitorMode::WriteLocalPod));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesOnly(ScrollPhaseMonitorMode::WriteLocalPod));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesTimestamp(ScrollPhaseMonitorMode::WriteLocalPod));
     EXPECT_FALSE(milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::ReadPhasesOnly));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseProperties(ScrollPhaseMonitorMode::ReadPhasesOnly));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseEventProperties(ScrollPhaseMonitorMode::ReadPhasesOnly));
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseEventScalars(ScrollPhaseMonitorMode::ReadPhasesOnly));
     EXPECT_FALSE(milestro::input::ShouldWriteScrollPhaseLocalPod(ScrollPhaseMonitorMode::ReadPhasesOnly));
     EXPECT_TRUE(milestro::input::ShouldReadScrollPhasesOnly(ScrollPhaseMonitorMode::ReadPhasesOnly));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesTimestamp(ScrollPhaseMonitorMode::ReadPhasesOnly));
+    EXPECT_FALSE(milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::ReadPhasesTimestamp));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseProperties(ScrollPhaseMonitorMode::ReadPhasesTimestamp));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseEventProperties(ScrollPhaseMonitorMode::ReadPhasesTimestamp));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseEventScalars(ScrollPhaseMonitorMode::ReadPhasesTimestamp));
+    EXPECT_FALSE(milestro::input::ShouldWriteScrollPhaseLocalPod(ScrollPhaseMonitorMode::ReadPhasesTimestamp));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesOnly(ScrollPhaseMonitorMode::ReadPhasesTimestamp));
+    EXPECT_TRUE(milestro::input::ShouldReadScrollPhasesTimestamp(ScrollPhaseMonitorMode::ReadPhasesTimestamp));
 }
 
 TEST(ScrollPhaseGestureTrackerTest, KeepsOneIdThroughDelayedMomentum) {
