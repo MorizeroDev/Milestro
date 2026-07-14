@@ -25,6 +25,7 @@ namespace Milestro.InputSystem.Service
         private InputAction? scrollAction;
         private ActionTraceSubscription? actionTraceSubscription;
         private MacScrollPhaseProbeSession? session;
+        private bool actionTracePreparationPending;
         private bool actionTracePreflightPending;
         private double actionTraceReadinessDeadline;
 #endif
@@ -51,16 +52,8 @@ namespace Milestro.InputSystem.Service
                 actionTraceSubscription);
             if (session.TracesInputActionCandidates)
             {
-                actionTracePreflightPending = actionTraceSubscription?.TryPrepare() == true;
-                if (actionTracePreflightPending)
-                {
-                    actionTraceReadinessDeadline = Time.realtimeSinceStartupAsDouble +
-                                                   ActionTraceReadinessTimeoutSeconds;
-                }
-                else
-                {
-                    session.ReportActionTracePreflightFault("action-preflight-owner-invalid");
-                }
+                actionTracePreparationPending = true;
+                actionTracePreflightPending = false;
                 return;
             }
 
@@ -74,6 +67,13 @@ namespace Milestro.InputSystem.Service
 #endif
         }
 
+        private void Start()
+        {
+#if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+            PrepareActionTracePreflight(Time.realtimeSinceStartupAsDouble);
+#endif
+        }
+
         private void Update()
         {
 #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
@@ -81,6 +81,7 @@ namespace Milestro.InputSystem.Service
             {
                 return;
             }
+            PrepareActionTracePreflight(Time.realtimeSinceStartupAsDouble);
             AdvanceActionTracePreflight(Time.realtimeSinceStartupAsDouble);
             if (actionTracePreflightPending)
             {
@@ -112,6 +113,7 @@ namespace Milestro.InputSystem.Service
             {
                 return;
             }
+            PrepareActionTracePreflight(Time.realtimeSinceStartupAsDouble);
             AdvanceActionTracePreflight(Time.realtimeSinceStartupAsDouble);
             if (actionTracePreflightPending)
             {
@@ -133,6 +135,7 @@ namespace Milestro.InputSystem.Service
         private void OnDisable()
         {
 #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+            actionTracePreparationPending = false;
             actionTracePreflightPending = false;
             if (session?.TracesInputActionCandidates != true)
             {
@@ -158,6 +161,23 @@ namespace Milestro.InputSystem.Service
         }
 
 #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+        private void PrepareActionTracePreflight(double now)
+        {
+            if (!actionTracePreparationPending || session == null || actionTraceSubscription == null)
+            {
+                return;
+            }
+
+            actionTracePreparationPending = false;
+            actionTracePreflightPending = actionTraceSubscription.TryPrepare();
+            if (actionTracePreflightPending)
+            {
+                actionTraceReadinessDeadline = now + ActionTraceReadinessTimeoutSeconds;
+                return;
+            }
+            session.ReportActionTracePreflightFault("action-preflight-owner-invalid");
+        }
+
         private void AdvanceActionTracePreflight(double now)
         {
             if (!actionTracePreflightPending || session == null || actionTraceSubscription == null)
