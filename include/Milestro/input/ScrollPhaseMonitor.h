@@ -222,10 +222,27 @@ struct ScrollPhaseMinimalPollOutput {
     ScrollPhaseMinimalSample sample;
 };
 
+struct ScrollPhaseMinimalInvalidDetail {
+    int32_t failure = 0;
+    int32_t priorTrackerState = 0;
+    int64_t priorGestureId = 0;
+    int64_t sequence = 0;
+    uint64_t gesturePhaseBits = 0;
+    uint64_t momentumPhaseBits = 0;
+    int64_t windowNumber = 0;
+};
+
+struct ScrollPhaseMinimalInvalidDetailOutput {
+    bool hasDetail = false;
+    ScrollPhaseMinimalInvalidDetail detail;
+};
+
 ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, int64_t& leaseId) noexcept;
 ScrollPhaseMonitorResult StopScrollPhaseMonitor(int64_t leaseId) noexcept;
 ScrollPhaseMonitorResult PollScrollPhaseMonitor(int64_t leaseId, ScrollPhaseSample& sample, bool& hasSample) noexcept;
 ScrollPhaseMonitorResult PollMinimalScrollPhaseMonitor(int64_t leaseId, ScrollPhaseMinimalPollOutput& output) noexcept;
+ScrollPhaseMonitorResult GetMinimalScrollPhaseInvalidDetail(int64_t leaseId,
+                                                            ScrollPhaseMinimalInvalidDetailOutput& output) noexcept;
 bool HasActiveScrollPhaseMonitorLease() noexcept;
 bool HasActiveScrollPhaseMonitorState() noexcept;
 bool IsScrollPhaseMonitorMainThread() noexcept;

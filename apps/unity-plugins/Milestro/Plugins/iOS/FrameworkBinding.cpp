@@ -93,6 +93,28 @@ int64_t FrameworkBindingMilestroScrollPhaseMonitorPollMinimal(int32_t& result,
                                                  momentumPhase);
 }
 
+int64_t FrameworkBindingMilestroScrollPhaseMonitorGetMinimalInvalidDetail(int32_t& result,
+                                                                          int64_t leaseId,
+                                                                          int32_t& hasDetail,
+                                                                          int32_t& failure,
+                                                                          int32_t& priorTrackerState,
+                                                                          int64_t& priorGestureId,
+                                                                          int64_t& sequence,
+                                                                          uint64_t& gesturePhaseBits,
+                                                                          uint64_t& momentumPhaseBits,
+                                                                          int64_t& windowNumber) {
+    return MilestroScrollPhaseMonitorGetMinimalInvalidDetail(result,
+                                                             leaseId,
+                                                             hasDetail,
+                                                             failure,
+                                                             priorTrackerState,
+                                                             priorGestureId,
+                                                             sequence,
+                                                             gesturePhaseBits,
+                                                             momentumPhaseBits,
+                                                             windowNumber);
+}
+
 void* FrameworkBindingMilestroUnityRenderGetRenderEventAndDataFunc() {
     return MilestroUnityRenderGetRenderEventAndDataFunc();
 }

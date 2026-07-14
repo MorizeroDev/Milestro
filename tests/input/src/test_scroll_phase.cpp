@@ -1,6 +1,7 @@
 #include "ScrollPhaseGestureTracker.h"
 #include "ScrollPhaseLease.h"
 #include "ScrollPhaseMinimalGestureTracker.h"
+#include "ScrollPhaseMinimalInvalidDetailLatch.h"
 #include "ScrollPhaseMinimalPollQueue.h"
 #include "ScrollPhaseMinimalQueueAdmission.h"
 #include "ScrollPhaseMonitorModePublication.h"
@@ -19,6 +20,8 @@ using milestro::input::ScrollPhaseMinimalGestureFailure;
 using milestro::input::ScrollPhaseMinimalGestureResultKind;
 using milestro::input::ScrollPhaseMinimalGestureTracker;
 using milestro::input::ScrollPhaseMinimalGestureTrackerState;
+using milestro::input::ScrollPhaseMinimalInvalidDetail;
+using milestro::input::ScrollPhaseMinimalInvalidDetailLatch;
 using milestro::input::ScrollPhaseMinimalPollOutput;
 using milestro::input::ScrollPhaseMinimalQueueAdmission;
 using milestro::input::ScrollPhaseMinimalQueueFailure;
@@ -469,6 +472,81 @@ TEST(ScrollPhaseMinimalPollQueueTest, DequeuesOneMinimalSampleAndReportsExactRem
     EXPECT_TRUE(output.hasSample);
     EXPECT_FALSE(output.hasMore);
     EXPECT_EQ(0, output.remaining);
+}
+
+TEST(ScrollPhaseMinimalInvalidDetailLatchTest, FirstWriteWinsAndReadNeverMutatesQueue) {
+    std::deque<milestro::input::ScrollPhaseSample> samples(2);
+    samples.front().sequence = 40;
+    samples.back().sequence = 41;
+    ScrollPhaseMinimalInvalidDetailLatch latch;
+    const auto empty = latch.Read();
+    EXPECT_FALSE(empty.hasDetail);
+    EXPECT_EQ(0, empty.detail.failure);
+    EXPECT_EQ(0, empty.detail.sequence);
+
+    const ScrollPhaseMinimalInvalidDetail detail{
+            3,
+            static_cast<int32_t>(ScrollPhaseMinimalGestureTrackerState::GestureActive),
+            7,
+            samples.back().sequence,
+            milestro::input::kNativeScrollPhaseChanged,
+            milestro::input::kNativeScrollPhaseBegan,
+            99};
+    EXPECT_TRUE(latch.TryLatch(detail));
+    const auto first = latch.Read();
+    EXPECT_TRUE(first.hasDetail);
+    EXPECT_EQ(3, first.detail.failure);
+    EXPECT_EQ(static_cast<int32_t>(ScrollPhaseMinimalGestureTrackerState::GestureActive),
+              first.detail.priorTrackerState);
+    EXPECT_EQ(7, first.detail.priorGestureId);
+    EXPECT_EQ(samples.back().sequence, first.detail.sequence);
+    EXPECT_EQ(milestro::input::kNativeScrollPhaseChanged, first.detail.gesturePhaseBits);
+    EXPECT_EQ(milestro::input::kNativeScrollPhaseBegan, first.detail.momentumPhaseBits);
+    EXPECT_EQ(99, first.detail.windowNumber);
+    EXPECT_EQ(2U, samples.size());
+    EXPECT_EQ(40, samples.front().sequence);
+    EXPECT_EQ(41, samples.back().sequence);
+
+    ScrollPhaseMinimalInvalidDetail replacement = detail;
+    replacement.sequence = 100;
+    EXPECT_FALSE(latch.TryLatch(replacement));
+    EXPECT_EQ(41, latch.Read().detail.sequence);
+    EXPECT_EQ(2U, samples.size());
+}
+
+TEST(ScrollPhaseMinimalInvalidDetailLatchTest, CleanupRetainsOnFailureAndClearsOnlyOnSuccess) {
+    for (int32_t failure = 1; failure <= 4; ++failure) {
+        for (int32_t state = 0; state <= 3; ++state) {
+            ScrollPhaseMinimalInvalidDetailLatch latch;
+            const int64_t currentGestureId = state == 0 ? 0 : 5;
+            ASSERT_TRUE(latch.TryLatch({failure,
+                                        state,
+                                        currentGestureId,
+                                        8,
+                                        UINT64_C(0x8000000000000000),
+                                        UINT64_C(0x4000000000000000),
+                                        0}));
+            latch.FinishCleanup(false);
+            const auto retained = latch.Read();
+            ASSERT_TRUE(retained.hasDetail);
+            EXPECT_EQ(failure, retained.detail.failure);
+            EXPECT_EQ(state, retained.detail.priorTrackerState);
+            EXPECT_EQ(currentGestureId, retained.detail.priorGestureId);
+            EXPECT_EQ(UINT64_C(0x8000000000000000), retained.detail.gesturePhaseBits);
+            EXPECT_EQ(UINT64_C(0x4000000000000000), retained.detail.momentumPhaseBits);
+
+            latch.FinishCleanup(true);
+            const auto cleared = latch.Read();
+            EXPECT_FALSE(cleared.hasDetail);
+            EXPECT_EQ(0, cleared.detail.failure);
+            EXPECT_EQ(0, cleared.detail.priorTrackerState);
+            EXPECT_EQ(0, cleared.detail.priorGestureId);
+            EXPECT_EQ(0, cleared.detail.sequence);
+            EXPECT_EQ(0U, cleared.detail.gesturePhaseBits);
+            EXPECT_EQ(0U, cleared.detail.momentumPhaseBits);
+            EXPECT_EQ(0, cleared.detail.windowNumber);
+        }
+    }
 }
 
 TEST(ScrollPhaseMonitorModePublicationTest, OnlySuccessfulCleanupClearsPublishedMode) {

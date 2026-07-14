@@ -112,6 +112,41 @@ namespace Milestro.InputSystem.Service
         internal bool HasSamplePayload => HasSample || HasMore || Remaining != 0 || !Sample.IsZero;
     }
 
+    internal readonly struct MacScrollPhaseMinimalInvalidDetail
+    {
+        internal MacScrollPhaseMinimalInvalidDetail(int hasDetail,
+            int failure,
+            int priorTrackerState,
+            long priorGestureId,
+            long sequence,
+            ulong gesturePhaseBits,
+            ulong momentumPhaseBits,
+            long windowNumber)
+        {
+            HasDetail = hasDetail;
+            Failure = failure;
+            PriorTrackerState = priorTrackerState;
+            PriorGestureId = priorGestureId;
+            Sequence = sequence;
+            GesturePhaseBits = gesturePhaseBits;
+            MomentumPhaseBits = momentumPhaseBits;
+            WindowNumber = windowNumber;
+        }
+
+        internal int HasDetail { get; }
+        internal int Failure { get; }
+        internal int PriorTrackerState { get; }
+        internal long PriorGestureId { get; }
+        internal long Sequence { get; }
+        internal ulong GesturePhaseBits { get; }
+        internal ulong MomentumPhaseBits { get; }
+        internal long WindowNumber { get; }
+
+        internal bool HasZeroPayload => Failure == 0 && PriorTrackerState == 0 && PriorGestureId == 0 &&
+                                        Sequence == 0 && GesturePhaseBits == 0 && MomentumPhaseBits == 0 &&
+                                        WindowNumber == 0;
+    }
+
     internal enum MacScrollPhaseMonitorMode
     {
         PassThrough = 0,
@@ -203,6 +238,9 @@ namespace Milestro.InputSystem.Service
         long Start(MacScrollPhaseMonitorMode mode, out int result, out long leaseId);
         long Poll(out int result, long leaseId, out MacScrollPhaseNativeSample sample);
         long PollMinimal(out int result, long leaseId, out MacScrollPhaseMinimalPoll poll);
+        long GetMinimalInvalidDetail(out int result,
+            long leaseId,
+            out MacScrollPhaseMinimalInvalidDetail detail);
         long Stop(out int result, long leaseId);
     }
 
@@ -220,9 +258,10 @@ namespace Milestro.InputSystem.Service
 
         private const string LogPrefix = "[MILESTRO_SCROLL_PHASE_POC]";
         private const int MaxBufferedTraceLines = MaxConsoleTraceLines - 2;
-        // Stage15 capacity FAIL plus a full-width fail-closed Stop is at most 199 UTF-8 bytes (CRLF).
-        private const int MaxTerminalTraceUtf8Bytes = 512;
-        private const int MaxBufferedTraceUtf8Bytes = MaxTraceUtf8Bytes - MaxTerminalTraceUtf8Bytes;
+        private const int MaxMinimalBufferedTraceLines = MaxConsoleTraceLines - 3;
+        // Worst-case detail-contract + reason3 FAIL + full-width Stop is 499 UTF-8 bytes with CRLF.
+        private const int MaxMinimalTerminalTraceUtf8Bytes = 1024;
+        private const int MaxMinimalBufferedTraceUtf8Bytes = MaxTraceUtf8Bytes - MaxMinimalTerminalTraceUtf8Bytes;
         private const uint MinimalBaseSampleFields =
             (uint)(MacScrollPhaseSampleFields.Sequence |
                    MacScrollPhaseSampleFields.Timestamp |
@@ -306,6 +345,8 @@ namespace Milestro.InputSystem.Service
 
         private bool PollsNativeSamples => stage == MacScrollPhaseProbeStage.NativePolling || RequiresInputAction;
         private bool PollsMinimalSamples => stage == MacScrollPhaseProbeStage.NativeMinimalPolling;
+        private bool CanReadMinimalInvalidDetail => PollsMinimalSamples &&
+                                                    monitorMode == MacScrollPhaseMonitorMode.QueueMinimalTrackedSamples;
         private bool RequiresUguiAssociation => stage == MacScrollPhaseProbeStage.UguiAssociation;
 
         internal void Start(double now)
@@ -601,6 +642,11 @@ namespace Milestro.InputSystem.Service
                     FailCapture("minimal-poll-invalid-result-contract");
                     return false;
                 }
+                if (poll.CaptureInvalidReason ==
+                    (int)MacScrollPhaseCaptureInvalidReason.InvalidGestureTransition)
+                {
+                    AppendMinimalInvalidDetailTerminal();
+                }
                 FailCapture($"native-capture-invalid reason={poll.CaptureInvalidReason}");
                 return false;
             }
@@ -717,6 +763,65 @@ namespace Milestro.InputSystem.Service
             return true;
         }
 
+        private void AppendMinimalInvalidDetailTerminal()
+        {
+            if (!CanReadMinimalInvalidDetail)
+            {
+                AppendTerminalTrace("invalid-detail-contract-failed capability=0");
+                return;
+            }
+
+            var apiResult = transport.GetMinimalInvalidDetail(out var monitorResult,
+                monitorLeaseId,
+                out var detail);
+            if (apiResult != 0)
+            {
+                AppendTerminalTrace($"invalid-detail-query-failed api={apiResult} result={monitorResult} " +
+                                    $"has={detail.HasDetail}");
+                return;
+            }
+
+            if (!HasValidMinimalInvalidDetailContract(monitorResult, detail) ||
+                detail.HasDetail == 0)
+            {
+                AppendTerminalTrace($"invalid-detail-contract-failed api={apiResult} result={monitorResult} " +
+                                    $"has={detail.HasDetail} failure={detail.Failure} " +
+                                    $"state={detail.PriorTrackerState} prior={detail.PriorGestureId} " +
+                                    $"seq={detail.Sequence} gestureBits=0x{detail.GesturePhaseBits:X} " +
+                                    $"momentumBits=0x{detail.MomentumPhaseBits:X} window={detail.WindowNumber}");
+                return;
+            }
+
+            AppendTerminalTrace($"invalid-detail failure={detail.Failure} state={detail.PriorTrackerState} " +
+                                $"prior={detail.PriorGestureId} seq={detail.Sequence} " +
+                                $"gestureBits=0x{detail.GesturePhaseBits:X} " +
+                                $"momentumBits=0x{detail.MomentumPhaseBits:X} window={detail.WindowNumber}");
+        }
+
+        private static bool HasValidMinimalInvalidDetailContract(int monitorResult,
+            MacScrollPhaseMinimalInvalidDetail detail)
+        {
+            if (detail.HasDetail != 0 && detail.HasDetail != 1)
+            {
+                return false;
+            }
+            if (monitorResult != (int)MacScrollPhaseMonitorResult.Succeeded)
+            {
+                return detail.HasDetail == 0 && detail.HasZeroPayload;
+            }
+            if (detail.HasDetail == 0)
+            {
+                return detail.HasZeroPayload;
+            }
+
+            var validFailure = detail.Failure >= 1 && detail.Failure <= 4;
+            var validState = detail.PriorTrackerState >= 0 && detail.PriorTrackerState <= 3;
+            var validPriorId = validState && (detail.PriorTrackerState == 0
+                ? detail.PriorGestureId == 0
+                : detail.PriorGestureId > 0);
+            return validFailure && validState && validPriorId && detail.Sequence > 0;
+        }
+
         private static bool IsNoGesturePhasePair(int gesturePhase, int momentumPhase)
         {
             return gesturePhase == 1 && momentumPhase == 1 ||
@@ -745,8 +850,9 @@ namespace Milestro.InputSystem.Service
             }
             var line = $"{LogPrefix} {message}{Environment.NewLine}";
             var lineBytes = Encoding.UTF8.GetByteCount(line);
-            var maxBufferedBytes = PollsMinimalSamples ? MaxBufferedTraceUtf8Bytes : MaxTraceUtf8Bytes;
-            if (traceLines >= MaxBufferedTraceLines || traceUtf8Bytes + lineBytes > maxBufferedBytes)
+            var maxBufferedLines = PollsMinimalSamples ? MaxMinimalBufferedTraceLines : MaxBufferedTraceLines;
+            var maxBufferedBytes = PollsMinimalSamples ? MaxMinimalBufferedTraceUtf8Bytes : MaxTraceUtf8Bytes;
+            if (traceLines >= maxBufferedLines || traceUtf8Bytes + lineBytes > maxBufferedBytes)
             {
                 FailCapture("managed-trace-capacity-exhausted");
                 return;

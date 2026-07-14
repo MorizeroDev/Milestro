@@ -29,6 +29,13 @@ ScrollPhaseMonitorResult PollMinimalScrollPhaseMonitor(int64_t leaseId, ScrollPh
     return ScrollPhaseMonitorResult::Unsupported;
 }
 
+ScrollPhaseMonitorResult GetMinimalScrollPhaseInvalidDetail(int64_t leaseId,
+                                                            ScrollPhaseMinimalInvalidDetailOutput& output) noexcept {
+    (void) leaseId;
+    output = {};
+    return ScrollPhaseMonitorResult::Unsupported;
+}
+
 bool HasActiveScrollPhaseMonitorLease() noexcept {
     return false;
 }

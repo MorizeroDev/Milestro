@@ -380,6 +380,7 @@ namespace Milestro.InputSystemTests
             Assert.That(transport.LastStartMode, Is.EqualTo(MacScrollPhaseMonitorMode.QueueMinimalTrackedSamples));
             Assert.That(transport.PollCount, Is.Zero);
             Assert.That(transport.MinimalPollCount, Is.EqualTo(2));
+            Assert.That(transport.MinimalInvalidDetailCount, Is.Zero);
             Assert.That(transport.StopCount, Is.Zero);
             Assert.That(sink.FlushCount, Is.Zero);
             session.Disable();
@@ -486,6 +487,9 @@ namespace Milestro.InputSystemTests
                     false,
                     0,
                     default)));
+            transport.MinimalInvalidDetails.Enqueue(new FakeMinimalInvalidDetailResponse(0,
+                0,
+                MinimalInvalidDetail()));
             var sink = new FakeSink();
             var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling);
             session.Start(0d);
@@ -493,9 +497,135 @@ namespace Milestro.InputSystemTests
             session.Update(1, 0d);
 
             Assert.That(transport.MinimalPollCount, Is.EqualTo(1));
+            Assert.That(transport.MinimalInvalidDetailCount, Is.EqualTo(1));
             Assert.That(transport.StopCount, Is.EqualTo(1));
             Assert.That(sink.LastFailed, Is.True);
+            Assert.That(transport.Calls[0], Is.EqualTo("minimal-poll"));
+            Assert.That(transport.Calls[1], Is.EqualTo("minimal-invalid-detail"));
+            Assert.That(transport.Calls[2], Is.EqualTo("stop"));
+            Assert.That(sink.LastTrace.Contains("invalid-detail failure=3 state=1 prior=7 seq=41"), Is.True);
             Assert.That(sink.LastTrace.Contains("native-capture-invalid reason=3"), Is.True);
+            Assert.That(sink.LastTrace.Contains("monitor-stop reason=fail-closed"), Is.True);
+            Assert.That(sink.LastTrace.Contains("trace-truncated"), Is.False);
+            AssertTerminalOrder(sink.LastTrace, "invalid-detail failure=3");
+        }
+
+        [Test]
+        public void NativeMinimalPollingNeverQueriesDetailForCapacityOrSequenceFailure()
+        {
+            foreach (var reason in new[]
+                     {
+                         MacScrollPhaseCaptureInvalidReason.CapacityExceeded,
+                         MacScrollPhaseCaptureInvalidReason.SequenceExhausted
+                     })
+            {
+                var transport = new FakeTransport();
+                transport.MinimalPolls.Enqueue(new FakeMinimalPollResponse(0,
+                    (int)MacScrollPhaseMonitorResult.CaptureInvalid,
+                    new MacScrollPhaseMinimalPoll((int)reason, false, false, 0, default)));
+                var sink = new FakeSink();
+                var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling);
+                session.Start(0d);
+
+                session.Update(1, 0d);
+
+                Assert.That(transport.MinimalInvalidDetailCount, Is.Zero);
+                Assert.That(transport.StopCount, Is.EqualTo(1));
+                Assert.That(sink.LastTrace.Contains($"native-capture-invalid reason={(int)reason}"), Is.True);
+            }
+        }
+
+        [Test]
+        public void NativeMinimalPollingPreservesReason3WhenDetailQueryOrContractFails()
+        {
+            var invalidDetails = new[]
+            {
+                new FakeMinimalInvalidDetailResponse(9, 0, default),
+                new FakeMinimalInvalidDetailResponse(0, 5, default),
+                new FakeMinimalInvalidDetailResponse(0, 0, default),
+                new FakeMinimalInvalidDetailResponse(0, 0, MinimalInvalidDetail(hasDetail: 0)),
+                new FakeMinimalInvalidDetailResponse(0, 0, MinimalInvalidDetail(hasDetail: 2)),
+                new FakeMinimalInvalidDetailResponse(0, 0, MinimalInvalidDetail(failure: 0)),
+                new FakeMinimalInvalidDetailResponse(0, 0, MinimalInvalidDetail(priorTrackerState: 4)),
+                new FakeMinimalInvalidDetailResponse(0, 0, MinimalInvalidDetail(sequence: 0)),
+                new FakeMinimalInvalidDetailResponse(0, 0, MinimalInvalidDetail(priorTrackerState: 0,
+                    priorGestureId: 7)),
+                new FakeMinimalInvalidDetailResponse(0, 0, MinimalInvalidDetail(priorTrackerState: 1,
+                    priorGestureId: 0)),
+                new FakeMinimalInvalidDetailResponse(0, 5, MinimalInvalidDetail())
+            };
+
+            foreach (var invalidDetail in invalidDetails)
+            {
+                var transport = new FakeTransport();
+                transport.MinimalPolls.Enqueue(new FakeMinimalPollResponse(0,
+                    (int)MacScrollPhaseMonitorResult.CaptureInvalid,
+                    new MacScrollPhaseMinimalPoll((int)MacScrollPhaseCaptureInvalidReason.InvalidGestureTransition,
+                        false,
+                        false,
+                        0,
+                        default)));
+                transport.MinimalInvalidDetails.Enqueue(invalidDetail);
+                var sink = new FakeSink();
+                var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling);
+                session.Start(0d);
+
+                session.Update(1, 0d);
+
+                Assert.That(transport.MinimalInvalidDetailCount, Is.EqualTo(1));
+                Assert.That(transport.StopCount, Is.EqualTo(1));
+                Assert.That(sink.LastTrace.Contains("invalid-detail-query-failed") ||
+                            sink.LastTrace.Contains("invalid-detail-contract-failed"), Is.True);
+                Assert.That(sink.LastTrace.Contains("FAIL native-capture-invalid reason=3"), Is.True);
+                Assert.That(sink.LastTrace.Contains("monitor-stop reason=fail-closed"), Is.True);
+                Assert.That(sink.LastTrace.Contains("trace-truncated"), Is.False);
+                AssertTerminalOrder(sink.LastTrace, "invalid-detail-");
+            }
+        }
+
+        [Test]
+        public void NativeMinimalPollingReservesThreeReason3TerminalLinesNearTraceLimit()
+        {
+            var transport = new FakeTransport();
+            var sink = new FakeSink();
+            var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling, 100f);
+            session.Start(0d);
+            for (var sequence = 1; sequence <= 34; ++sequence)
+            {
+                transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(sequence,
+                    gesturePhase: sequence == 1 ? 2 : 3)));
+                session.Update(sequence, 0d);
+            }
+            transport.MinimalPolls.Enqueue(new FakeMinimalPollResponse(0,
+                (int)MacScrollPhaseMonitorResult.CaptureInvalid,
+                new MacScrollPhaseMinimalPoll((int)MacScrollPhaseCaptureInvalidReason.InvalidGestureTransition,
+                    false,
+                    false,
+                    0,
+                    default)));
+            transport.MinimalInvalidDetails.Enqueue(new FakeMinimalInvalidDetailResponse(0,
+                int.MinValue,
+                new MacScrollPhaseMinimalInvalidDetail(int.MinValue,
+                    int.MinValue,
+                    int.MinValue,
+                    long.MinValue,
+                    long.MinValue,
+                    ulong.MaxValue,
+                    ulong.MaxValue,
+                    long.MinValue)));
+
+            session.Update(35, 0d);
+
+            Assert.That(sink.FlushCount, Is.EqualTo(1));
+            Assert.That(Encoding.UTF8.GetByteCount(sink.LastTrace) <= MacScrollPhaseProbeSession.MaxTraceUtf8Bytes,
+                Is.True);
+            Assert.That(LineCount(sink.LastTrace) <= MacScrollPhaseProbeSession.MaxConsoleTraceLines, Is.True);
+            Assert.That(sink.LastTrace.Contains("seq=34"), Is.True);
+            Assert.That(sink.LastTrace.Contains("invalid-detail-contract-failed"), Is.True);
+            Assert.That(sink.LastTrace.Contains("FAIL native-capture-invalid reason=3"), Is.True);
+            Assert.That(sink.LastTrace.Contains("monitor-stop reason=fail-closed"), Is.True);
+            Assert.That(sink.LastTrace.Contains("trace-truncated"), Is.False);
+            AssertTerminalOrder(sink.LastTrace, "invalid-detail-contract-failed");
         }
 
         [Test]
@@ -989,6 +1119,25 @@ namespace Milestro.InputSystemTests
                     sample));
         }
 
+        private static MacScrollPhaseMinimalInvalidDetail MinimalInvalidDetail(int hasDetail = 1,
+            int failure = 3,
+            int priorTrackerState = 1,
+            long priorGestureId = 7,
+            long sequence = 41,
+            ulong gesturePhaseBits = 4,
+            ulong momentumPhaseBits = 1,
+            long windowNumber = 99)
+        {
+            return new MacScrollPhaseMinimalInvalidDetail(hasDetail,
+                failure,
+                priorTrackerState,
+                priorGestureId,
+                sequence,
+                gesturePhaseBits,
+                momentumPhaseBits,
+                windowNumber);
+        }
+
         private static MacScrollPhaseNativeSample Sample(long sequence,
             long windowNumber = 4,
             long keyWindowNumber = 4,
@@ -1020,10 +1169,20 @@ namespace Milestro.InputSystemTests
             return value.Split('\n').Length - 1;
         }
 
+        private static void AssertTerminalOrder(string trace, string detailMarker)
+        {
+            var detailIndex = trace.IndexOf(detailMarker, System.StringComparison.Ordinal);
+            var failIndex = trace.IndexOf("FAIL native-capture-invalid reason=3", System.StringComparison.Ordinal);
+            var stopIndex = trace.IndexOf("monitor-stop reason=fail-closed", System.StringComparison.Ordinal);
+            Assert.That(detailIndex >= 0 && detailIndex < failIndex && failIndex < stopIndex, Is.True);
+        }
+
         private sealed class FakeTransport : IMacScrollPhaseMonitorTransport
         {
             internal readonly Queue<MacScrollPhaseNativeSample> Samples = new Queue<MacScrollPhaseNativeSample>();
             internal readonly Queue<FakeMinimalPollResponse> MinimalPolls = new Queue<FakeMinimalPollResponse>();
+            internal readonly Queue<FakeMinimalInvalidDetailResponse> MinimalInvalidDetails =
+                new Queue<FakeMinimalInvalidDetailResponse>();
             internal readonly Queue<int> StopResults = new Queue<int>();
             internal readonly List<string> Calls = new List<string>();
 
@@ -1031,6 +1190,7 @@ namespace Milestro.InputSystemTests
             internal int StartResult { get; set; }
             internal int PollCount { get; private set; }
             internal int MinimalPollCount { get; private set; }
+            internal int MinimalInvalidDetailCount { get; private set; }
             internal int StopCount { get; private set; }
             internal long LastStopLease { get; private set; }
             internal MacScrollPhaseMonitorMode LastStartMode { get; private set; }
@@ -1067,6 +1227,24 @@ namespace Milestro.InputSystemTests
                 return response.ApiResult;
             }
 
+            public long GetMinimalInvalidDetail(out int result,
+                long leaseId,
+                out MacScrollPhaseMinimalInvalidDetail detail)
+            {
+                ++MinimalInvalidDetailCount;
+                Calls.Add("minimal-invalid-detail");
+                if (MinimalInvalidDetails.Count == 0)
+                {
+                    result = 0;
+                    detail = default;
+                    return 0;
+                }
+                var response = MinimalInvalidDetails.Dequeue();
+                result = response.MonitorResult;
+                detail = response.Detail;
+                return response.ApiResult;
+            }
+
             public long Stop(out int result, long leaseId)
             {
                 ++StopCount;
@@ -1092,6 +1270,22 @@ namespace Milestro.InputSystemTests
             internal long ApiResult { get; }
             internal int MonitorResult { get; }
             internal MacScrollPhaseMinimalPoll Poll { get; }
+        }
+
+        private readonly struct FakeMinimalInvalidDetailResponse
+        {
+            internal FakeMinimalInvalidDetailResponse(long apiResult,
+                int monitorResult,
+                MacScrollPhaseMinimalInvalidDetail detail)
+            {
+                ApiResult = apiResult;
+                MonitorResult = monitorResult;
+                Detail = detail;
+            }
+
+            internal long ApiResult { get; }
+            internal int MonitorResult { get; }
+            internal MacScrollPhaseMinimalInvalidDetail Detail { get; }
         }
 
         private sealed class FakeSink : IMacScrollPhaseProbeSink

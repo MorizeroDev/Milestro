@@ -69,6 +69,19 @@ namespace Milestro.Binding
                                                                          out int momentumPhase);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroScrollPhaseMonitorGetMinimalInvalidDetail")]
+        internal static extern unsafe long ScrollPhaseMonitorGetMinimalInvalidDetail(out int result,
+                                                                                     long leaseId,
+                                                                                     out int hasDetail,
+                                                                                     out int failure,
+                                                                                     out int priorTrackerState,
+                                                                                     out long priorGestureId,
+                                                                                     out long sequence,
+                                                                                     out ulong gesturePhaseBits,
+                                                                                     out ulong momentumPhaseBits,
+                                                                                     out long windowNumber);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetRenderEventAndDataFunc")]
         internal static extern unsafe IntPtr UnityRenderGetRenderEventAndDataFunc();
 

@@ -4,6 +4,7 @@
 #include "ScrollPhaseGestureTracker.h"
 #include "ScrollPhaseLease.h"
 #include "ScrollPhaseMinimalGestureTracker.h"
+#include "ScrollPhaseMinimalInvalidDetailLatch.h"
 #include "ScrollPhaseMinimalPollQueue.h"
 #include "ScrollPhaseMinimalQueueAdmission.h"
 #include "ScrollPhaseMonitorModePublication.h"
@@ -37,6 +38,7 @@ ScrollPhaseLease lease;
 ScrollPhaseGestureTracker gestureTracker;
 ScrollPhaseMinimalQueueAdmission minimalQueueAdmission;
 ScrollPhaseMinimalGestureTracker minimalGestureTracker;
+ScrollPhaseMinimalInvalidDetailLatch minimalInvalidDetailLatch;
 bool queueOverflowed = false;
 ScrollPhaseMonitorModePublication activeMonitorMode;
 
@@ -259,16 +261,18 @@ void EnqueueMinimalTracked(NSEvent* event) {
     }
 
     sample.validFields = kMinimalQueueScrollPhaseSampleFields;
-    const ScrollPhaseMinimalDecodedPhase gesturePhase = DecodeMinimalScrollPhase(static_cast<uint64_t>(event.phase));
+    const uint64_t gesturePhaseBits = static_cast<uint64_t>(event.phase);
+    const ScrollPhaseMinimalDecodedPhase gesturePhase = DecodeMinimalScrollPhase(gesturePhaseBits);
     sample.gesturePhase = gesturePhase.phase;
-    const ScrollPhaseMinimalDecodedPhase momentumPhase =
-            DecodeMinimalScrollPhase(static_cast<uint64_t>(event.momentumPhase));
+    const uint64_t momentumPhaseBits = static_cast<uint64_t>(event.momentumPhase);
+    const ScrollPhaseMinimalDecodedPhase momentumPhase = DecodeMinimalScrollPhase(momentumPhaseBits);
     sample.momentumPhase = momentumPhase.phase;
     sample.timestamp = event.timestamp;
     sample.windowNumber = event.windowNumber;
     sample.scrollingDeltaX = event.scrollingDeltaX;
     sample.scrollingDeltaY = event.scrollingDeltaY;
 
+    const ScrollPhaseMinimalGestureTrackerSnapshot priorTracker = minimalGestureTracker.Snapshot();
     const ScrollPhaseMinimalGestureResult gesture = minimalGestureTracker.Resolve(gesturePhase, momentumPhase);
     sample.validFields =
             MinimalTrackedScrollPhaseSampleFields(gesture.kind == ScrollPhaseMinimalGestureResultKind::Resolved);
@@ -276,6 +280,13 @@ void EnqueueMinimalTracked(NSEvent* event) {
     samples.push_back(sample);
 
     if (gesture.kind == ScrollPhaseMinimalGestureResultKind::InvalidTransition) {
+        (void) minimalInvalidDetailLatch.TryLatch({static_cast<int32_t>(gesture.failure),
+                                                   static_cast<int32_t>(priorTracker.state),
+                                                   priorTracker.currentGestureId,
+                                                   sample.sequence,
+                                                   gesturePhaseBits,
+                                                   momentumPhaseBits,
+                                                   sample.windowNumber});
         (void) minimalQueueAdmission.Fail(ScrollPhaseMinimalQueueFailure::InvalidGestureTransition);
     }
 }
@@ -286,6 +297,7 @@ void ResetState() {
     gestureTracker.Reset();
     minimalQueueAdmission.FinishCleanup(true);
     minimalGestureTracker.FinishCleanup(true);
+    minimalInvalidDetailLatch.FinishCleanup(true);
     queueOverflowed = false;
 }
 
@@ -298,6 +310,7 @@ ScrollPhaseMonitorResult RemoveMonitor(int64_t leaseId, bool forceRelease) {
         (void) exception;
         minimalQueueAdmission.FinishCleanup(false);
         minimalGestureTracker.FinishCleanup(false);
+        minimalInvalidDetailLatch.FinishCleanup(false);
         activeMonitorMode.FinishCleanup(false);
         return ScrollPhaseMonitorResult::Failed;
     }
@@ -311,6 +324,7 @@ ScrollPhaseMonitorResult RemoveMonitor(int64_t leaseId, bool forceRelease) {
         if (releaseResult != ScrollPhaseMonitorResult::Succeeded) {
             minimalQueueAdmission.FinishCleanup(false);
             minimalGestureTracker.FinishCleanup(false);
+            minimalInvalidDetailLatch.FinishCleanup(false);
             activeMonitorMode.FinishCleanup(false);
             return releaseResult;
         }
@@ -489,6 +503,30 @@ ScrollPhaseMonitorResult PollMinimalScrollPhaseMonitor(int64_t leaseId, ScrollPh
             return modeResult;
         }
         return PollMinimalScrollPhaseQueue(samples, minimalQueueAdmission.Failure(), output);
+    }
+}
+
+ScrollPhaseMonitorResult GetMinimalScrollPhaseInvalidDetail(int64_t leaseId,
+                                                            ScrollPhaseMinimalInvalidDetailOutput& output) noexcept {
+    @autoreleasepool {
+        output = {};
+        if (![NSThread isMainThread]) {
+            return ScrollPhaseMonitorResult::WrongThread;
+        }
+        const ScrollPhaseMonitorResult leaseResult = lease.Validate(leaseId);
+        if (leaseResult != ScrollPhaseMonitorResult::Succeeded) {
+            return leaseResult;
+        }
+        ScrollPhaseMonitorMode publishedMode = ScrollPhaseMonitorMode::PassThrough;
+        if (!activeMonitorMode.TryLoad(publishedMode)) {
+            return ScrollPhaseMonitorResult::ModeContractMismatch;
+        }
+        const ScrollPhaseMonitorResult modeResult = ValidateMinimalScrollPhasePollMode(publishedMode);
+        if (modeResult != ScrollPhaseMonitorResult::Succeeded) {
+            return modeResult;
+        }
+        output = minimalInvalidDetailLatch.Read();
+        return ScrollPhaseMonitorResult::Succeeded;
     }
 }
 

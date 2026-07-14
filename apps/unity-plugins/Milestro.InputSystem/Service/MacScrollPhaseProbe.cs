@@ -225,6 +225,31 @@ namespace Milestro.InputSystem.Service
                 return apiResult;
             }
 
+            public long GetMinimalInvalidDetail(out int result,
+                long leaseId,
+                out MacScrollPhaseMinimalInvalidDetail detail)
+            {
+                var apiResult = BindingC.ScrollPhaseMonitorGetMinimalInvalidDetail(out result,
+                    leaseId,
+                    out var hasDetail,
+                    out var failure,
+                    out var priorTrackerState,
+                    out var priorGestureId,
+                    out var sequence,
+                    out var gesturePhaseBits,
+                    out var momentumPhaseBits,
+                    out var windowNumber);
+                detail = new MacScrollPhaseMinimalInvalidDetail(hasDetail,
+                    failure,
+                    priorTrackerState,
+                    priorGestureId,
+                    sequence,
+                    gesturePhaseBits,
+                    momentumPhaseBits,
+                    windowNumber);
+                return apiResult;
+            }
+
             public long Stop(out int result, long leaseId)
             {
                 return BindingC.ScrollPhaseMonitorStop(out result, leaseId);

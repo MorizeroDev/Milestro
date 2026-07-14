@@ -88,4 +88,27 @@ MILESTRO_API int64_t MilestroScrollPhaseMonitorPollMinimal(int32_t& result,
     momentumPhase = static_cast<int32_t>(output.sample.momentumPhase);
     return MILESTRO_API_RET_OK;
 }
+
+MILESTRO_API int64_t MilestroScrollPhaseMonitorGetMinimalInvalidDetail(int32_t& result,
+                                                                       int64_t leaseId,
+                                                                       int32_t& hasDetail,
+                                                                       int32_t& failure,
+                                                                       int32_t& priorTrackerState,
+                                                                       int64_t& priorGestureId,
+                                                                       int64_t& sequence,
+                                                                       uint64_t& gesturePhaseBits,
+                                                                       uint64_t& momentumPhaseBits,
+                                                                       int64_t& windowNumber) {
+    milestro::input::ScrollPhaseMinimalInvalidDetailOutput output;
+    result = static_cast<int32_t>(milestro::input::GetMinimalScrollPhaseInvalidDetail(leaseId, output));
+    hasDetail = output.hasDetail ? 1 : 0;
+    failure = output.detail.failure;
+    priorTrackerState = output.detail.priorTrackerState;
+    priorGestureId = output.detail.priorGestureId;
+    sequence = output.detail.sequence;
+    gesturePhaseBits = output.detail.gesturePhaseBits;
+    momentumPhaseBits = output.detail.momentumPhaseBits;
+    windowNumber = output.detail.windowNumber;
+    return MILESTRO_API_RET_OK;
+}
 }
