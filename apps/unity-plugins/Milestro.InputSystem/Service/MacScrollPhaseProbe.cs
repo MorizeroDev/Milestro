@@ -15,6 +15,7 @@ namespace Milestro.InputSystem.Service
     public sealed class MacScrollPhaseProbe : MonoBehaviour, IScrollHandler
     {
         private const string LogPrefix = "[MILESTRO_SCROLL_PHASE_POC]";
+        private const double ActionTraceReadinessTimeoutSeconds = 1d;
 
         [SerializeField] private MacScrollPhaseProbeStage stage = MacScrollPhaseProbeSession.DefaultStage;
         [SerializeField][Min(0.25f)] private float captureDurationSeconds = 3f;
@@ -24,15 +25,17 @@ namespace Milestro.InputSystem.Service
         private InputAction? scrollAction;
         private ActionTraceSubscription? actionTraceSubscription;
         private MacScrollPhaseProbeSession? session;
+        private bool actionTracePreflightPending;
+        private double actionTraceReadinessDeadline;
 #endif
 
         private void OnEnable()
         {
 #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
-            if (session?.HasLease == true)
+            if (session?.RequiresCleanup == true)
             {
                 session.Disable();
-                if (session.HasLease)
+                if (session.RequiresCleanup)
                 {
                     return;
                 }
@@ -46,19 +49,23 @@ namespace Milestro.InputSystem.Service
                 captureDurationSeconds,
                 GetInstanceID(),
                 actionTraceSubscription);
-            session.Start(Time.realtimeSinceStartupAsDouble);
-            if (!session.IsFinished && session.TracesInputActionCandidates)
+            if (session.TracesInputActionCandidates)
             {
-                if (actionTraceSubscription?.TryAttach() == true)
+                actionTracePreflightPending = actionTraceSubscription?.TryPrepare() == true;
+                if (actionTracePreflightPending)
                 {
-                    session.RecordActionTraceAttachment();
+                    actionTraceReadinessDeadline = Time.realtimeSinceStartupAsDouble +
+                                                   ActionTraceReadinessTimeoutSeconds;
                 }
                 else
                 {
-                    session.ReportActionTraceFault(MacScrollActionTraceFault.AttachmentFailed);
+                    session.ReportActionTracePreflightFault("action-preflight-owner-invalid");
                 }
+                return;
             }
-            else if (!session.IsFinished && session.RequiresInputAction)
+
+            session.Start(Time.realtimeSinceStartupAsDouble);
+            if (!session.IsFinished && session.RequiresInputAction)
             {
                 TryAttachScrollAction();
             }
@@ -71,6 +78,11 @@ namespace Milestro.InputSystem.Service
         {
 #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
             if (session == null)
+            {
+                return;
+            }
+            AdvanceActionTracePreflight(Time.realtimeSinceStartupAsDouble);
+            if (actionTracePreflightPending)
             {
                 return;
             }
@@ -100,6 +112,11 @@ namespace Milestro.InputSystem.Service
             {
                 return;
             }
+            AdvanceActionTracePreflight(Time.realtimeSinceStartupAsDouble);
+            if (actionTracePreflightPending)
+            {
+                return;
+            }
             if (!session.IsFinished && session.TracesInputActionCandidates &&
                 actionTraceSubscription?.ValidateOwner() != true)
             {
@@ -116,12 +133,13 @@ namespace Milestro.InputSystem.Service
         private void OnDisable()
         {
 #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+            actionTracePreflightPending = false;
             if (session?.TracesInputActionCandidates != true)
             {
                 DetachScrollAction();
             }
             session?.Disable();
-            if (session?.HasLease == false)
+            if (session?.RequiresCleanup == false)
             {
                 session = null;
                 actionTraceSubscription = null;
@@ -140,6 +158,46 @@ namespace Milestro.InputSystem.Service
         }
 
 #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+        private void AdvanceActionTracePreflight(double now)
+        {
+            if (!actionTracePreflightPending || session == null || actionTraceSubscription == null)
+            {
+                return;
+            }
+
+            var readiness = actionTraceSubscription.GetReadiness();
+            if (readiness == ActionTraceReadiness.SceneChanged)
+            {
+                actionTracePreflightPending = false;
+                session.ReportActionTracePreflightFault("action-scene-changed-before-ready");
+                return;
+            }
+            if (readiness == ActionTraceReadiness.Invalid)
+            {
+                actionTracePreflightPending = false;
+                session.ReportActionTracePreflightFault("action-owner-changed-before-ready");
+                return;
+            }
+            if (now >= actionTraceReadinessDeadline)
+            {
+                actionTracePreflightPending = false;
+                session.ReportActionTracePreflightFault("action-readiness-timeout");
+                return;
+            }
+            if (readiness == ActionTraceReadiness.Waiting)
+            {
+                return;
+            }
+
+            actionTracePreflightPending = false;
+            if (!actionTraceSubscription.TryAttachPrepared())
+            {
+                session.ReportActionTracePreflightFault("action-attach-failed");
+                return;
+            }
+            session.StartActionTrace(now);
+        }
+
         private void TryAttachScrollAction()
         {
             var currentModule = EventSystem.current?.currentInputModule as InputSystemUIInputModule;
@@ -240,12 +298,65 @@ namespace Milestro.InputSystem.Service
                 this.owner = owner;
             }
 
-            internal bool TryAttach()
+            internal bool TryPrepare()
             {
                 try
                 {
                     SubscribeSceneEvents();
-                    if (!TryResolveUniqueOwner(out eventSystem, out inputModule, out action))
+                    return TryResolveUniqueCandidate(out eventSystem, out inputModule, out action);
+                }
+                catch (Exception)
+                {
+                    return false;
+                }
+            }
+
+            internal ActionTraceReadiness GetReadiness()
+            {
+                try
+                {
+                    if (Interlocked.Exchange(ref sceneValidationRequired, 0) != 0)
+                    {
+                        return ActionTraceReadiness.SceneChanged;
+                    }
+                    if (eventSystem == null || !eventSystem.isActiveAndEnabled ||
+                        inputModule == null || !inputModule.isActiveAndEnabled ||
+                        action == null ||
+                        !ReferenceEquals(inputModule.scrollWheel?.action, action))
+                    {
+                        return ActionTraceReadiness.Invalid;
+                    }
+
+                    var currentEventSystem = EventSystem.current;
+                    if (currentEventSystem == null)
+                    {
+                        return ActionTraceReadiness.Waiting;
+                    }
+                    if (!ReferenceEquals(currentEventSystem, eventSystem))
+                    {
+                        return ActionTraceReadiness.Invalid;
+                    }
+
+                    var currentInputModule = eventSystem.currentInputModule;
+                    if (currentInputModule != null && !ReferenceEquals(currentInputModule, inputModule))
+                    {
+                        return ActionTraceReadiness.Invalid;
+                    }
+                    return currentInputModule == null || !action.enabled
+                        ? ActionTraceReadiness.Waiting
+                        : ActionTraceReadiness.Ready;
+                }
+                catch (Exception)
+                {
+                    return ActionTraceReadiness.Invalid;
+                }
+            }
+
+            internal bool TryAttachPrepared()
+            {
+                try
+                {
+                    if (GetReadiness() != ActionTraceReadiness.Ready)
                     {
                         return false;
                     }
@@ -266,7 +377,7 @@ namespace Milestro.InputSystem.Service
                 {
                     if (Interlocked.Exchange(ref sceneValidationRequired, 0) != 0)
                     {
-                        return TryResolveUniqueOwner(out var currentEventSystem,
+                        return TryResolveUniqueReadyOwner(out var currentEventSystem,
                                    out var currentInputModule,
                                    out var currentAction) &&
                                ReferenceEquals(currentEventSystem, eventSystem) &&
@@ -311,7 +422,7 @@ namespace Milestro.InputSystem.Service
                 return true;
             }
 
-            private static bool TryResolveUniqueOwner(out EventSystem? resolvedEventSystem,
+            private static bool TryResolveUniqueCandidate(out EventSystem? resolvedEventSystem,
                 out InputSystemUIInputModule? resolvedInputModule,
                 out InputAction? resolvedAction)
             {
@@ -333,15 +444,27 @@ namespace Milestro.InputSystem.Service
                     resolvedEventSystem = candidate;
                 }
 
-                if (resolvedEventSystem == null || !ReferenceEquals(EventSystem.current, resolvedEventSystem) ||
-                    resolvedEventSystem.currentInputModule is not InputSystemUIInputModule candidateModule ||
-                    !candidateModule.isActiveAndEnabled)
+                if (resolvedEventSystem == null)
                 {
                     return false;
                 }
 
-                var candidateAction = candidateModule.scrollWheel?.action;
-                if (candidateAction?.enabled != true)
+                InputSystemUIInputModule? candidateModule = null;
+                foreach (var module in resolvedEventSystem.GetComponents<InputSystemUIInputModule>())
+                {
+                    if (!module.isActiveAndEnabled)
+                    {
+                        continue;
+                    }
+                    if (candidateModule != null)
+                    {
+                        return false;
+                    }
+                    candidateModule = module;
+                }
+
+                var candidateAction = candidateModule?.scrollWheel?.action;
+                if (candidateModule == null || candidateAction == null)
                 {
                     return false;
                 }
@@ -349,6 +472,21 @@ namespace Milestro.InputSystem.Service
                 resolvedInputModule = candidateModule;
                 resolvedAction = candidateAction;
                 return true;
+            }
+
+            private static bool TryResolveUniqueReadyOwner(out EventSystem? resolvedEventSystem,
+                out InputSystemUIInputModule? resolvedInputModule,
+                out InputAction? resolvedAction)
+            {
+                if (!TryResolveUniqueCandidate(out resolvedEventSystem, out resolvedInputModule,
+                        out resolvedAction) || resolvedEventSystem == null || resolvedInputModule == null ||
+                    resolvedAction == null)
+                {
+                    return false;
+                }
+                return ReferenceEquals(EventSystem.current, resolvedEventSystem) &&
+                       ReferenceEquals(resolvedEventSystem.currentInputModule, resolvedInputModule) &&
+                       resolvedAction.enabled;
             }
 
             private void SubscribeSceneEvents()
@@ -389,6 +527,14 @@ namespace Milestro.InputSystem.Service
             {
                 Interlocked.Exchange(ref sceneValidationRequired, 1);
             }
+        }
+
+        private enum ActionTraceReadiness
+        {
+            Waiting,
+            Ready,
+            Invalid,
+            SceneChanged
         }
 
         private sealed class BindingTransport : IMacScrollPhaseMonitorTransport

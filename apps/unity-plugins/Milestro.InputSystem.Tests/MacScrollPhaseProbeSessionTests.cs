@@ -425,8 +425,7 @@ namespace Milestro.InputSystemTests
                 MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
                 actionTraceOwner: owner);
 
-            session.Start(0d);
-            session.RecordActionTraceAttachment();
+            session.StartActionTrace(0d);
             session.ObserveAction(1, 1d, Vector2.down, "/must/not/read");
             session.ObserveUgui(1, 7, Vector2.down);
             session.Disable();
@@ -445,6 +444,123 @@ namespace Milestro.InputSystemTests
         }
 
         [Test]
+        public void NativeMinimalInputActionTracePreflightFailureHasNoNativeLifecycle()
+        {
+            var transport = new FakeTransport();
+            var owner = new FakeActionTraceOwner(transport.Calls);
+            var sink = new FakeSink();
+            var session = CreateSession(transport,
+                sink,
+                MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                actionTraceOwner: owner);
+
+            session.ReportActionTracePreflightFault("action-readiness-timeout");
+            session.Disable();
+
+            Assert.That(transport.StartCount, Is.Zero);
+            Assert.That(transport.StopCount, Is.Zero);
+            Assert.That(owner.DetachCount, Is.EqualTo(1));
+            Assert.That(session.RequiresCleanup, Is.False);
+            Assert.That(transport.Calls, Is.EqualTo(new[] { "detach" }));
+            Assert.That(sink.FlushCount, Is.EqualTo(1));
+            Assert.That(sink.LastFailed, Is.True);
+            Assert.That(sink.LastTrace.Contains("FAIL action-readiness-timeout"), Is.True);
+            Assert.That(sink.LastTrace.Contains("monitor-start stage="), Is.False);
+            Assert.That(sink.LastTrace.Contains("monitor-stop"), Is.False);
+        }
+
+        [Test]
+        public void NativeMinimalInputActionTraceNativeStartFailureDetachesWithoutFakeStop()
+        {
+            var transport = new FakeTransport { StartResult = 5, StartLease = 0 };
+            var owner = new FakeActionTraceOwner(transport.Calls);
+            var sink = new FakeSink();
+            var session = CreateSession(transport,
+                sink,
+                MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                actionTraceOwner: owner);
+
+            session.StartActionTrace(2d);
+
+            Assert.That(transport.StartCount, Is.EqualTo(1));
+            Assert.That(transport.StopCount, Is.Zero);
+            Assert.That(owner.DetachCount, Is.EqualTo(1));
+            Assert.That(session.HasLease, Is.False);
+            Assert.That(session.RequiresCleanup, Is.False);
+            Assert.That(transport.Calls, Is.EqualTo(new[] { "detach" }));
+            Assert.That(sink.FlushCount, Is.EqualTo(1));
+            Assert.That(sink.LastTrace.Contains("FAIL monitor-start-failed api=0 result=5 lease=0"), Is.True);
+            Assert.That(sink.LastTrace.Contains("monitor-start stage="), Is.False);
+            Assert.That(sink.LastTrace.Contains("monitor-stop"), Is.False);
+            Assert.That(session.TryBeginActionRecord(Environment.CurrentManagedThreadId), Is.False);
+        }
+
+        [Test]
+        public void NativeMinimalInputActionTracePublishedFailedStartRetriesDetachBeforeStop()
+        {
+            var transport = new FakeTransport { StartResult = 5, StartLease = 7 };
+            var owner = new FakeActionTraceOwner(transport.Calls);
+            owner.DetachResults.Enqueue(false);
+            owner.DetachResults.Enqueue(true);
+            var sink = new FakeSink();
+            var session = CreateSession(transport,
+                sink,
+                MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                actionTraceOwner: owner);
+
+            session.StartActionTrace(2d);
+
+            Assert.That(session.RequiresCleanup, Is.True);
+            Assert.That(session.HasLease, Is.True);
+            Assert.That(transport.StopCount, Is.Zero);
+            Assert.That(sink.FlushCount, Is.Zero);
+            Assert.That(transport.Calls, Is.EqualTo(new[] { "detach" }));
+            session.Disable();
+
+            Assert.That(session.RequiresCleanup, Is.False);
+            Assert.That(session.HasLease, Is.False);
+            Assert.That(owner.DetachCount, Is.EqualTo(2));
+            Assert.That(transport.StopCount, Is.EqualTo(1));
+            Assert.That(transport.LastStopLease, Is.EqualTo(7));
+            Assert.That(transport.Calls, Is.EqualTo(new[] { "detach", "detach", "stop" }));
+            Assert.That(sink.FlushCount, Is.EqualTo(1));
+            Assert.That(sink.LastTrace.Contains("FAIL monitor-start-failed api=0 result=5 lease=7"), Is.True);
+            Assert.That(sink.LastTrace.Contains("FAIL action-detach-failed"), Is.True);
+            Assert.That(sink.LastTrace.Contains("monitor-start stage="), Is.False);
+            Assert.That(sink.LastTrace.Contains("monitor-stop reason=component-disabled-retry"), Is.True);
+        }
+
+        [Test]
+        public void NativeMinimalInputActionTracePreflightDetachFailureRetriesWithoutLease()
+        {
+            var transport = new FakeTransport();
+            var owner = new FakeActionTraceOwner(transport.Calls);
+            owner.DetachResults.Enqueue(false);
+            owner.DetachResults.Enqueue(true);
+            var sink = new FakeSink();
+            var session = CreateSession(transport,
+                sink,
+                MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                actionTraceOwner: owner);
+
+            session.ReportActionTracePreflightFault("action-owner-changed-before-ready");
+
+            Assert.That(session.RequiresCleanup, Is.True);
+            Assert.That(sink.FlushCount, Is.Zero);
+            Assert.That(transport.StopCount, Is.Zero);
+            session.Disable();
+
+            Assert.That(session.RequiresCleanup, Is.False);
+            Assert.That(owner.DetachCount, Is.EqualTo(2));
+            Assert.That(transport.StopCount, Is.Zero);
+            Assert.That(transport.Calls, Is.EqualTo(new[] { "detach", "detach" }));
+            Assert.That(sink.FlushCount, Is.EqualTo(1));
+            Assert.That(sink.LastTrace.Contains("FAIL action-owner-changed-before-ready"), Is.True);
+            Assert.That(sink.LastTrace.Contains("FAIL action-detach-failed"), Is.True);
+            Assert.That(sink.LastTrace.Contains("monitor-stop"), Is.False);
+        }
+
+        [Test]
         public void NativeMinimalInputActionTraceKeepsZeroAndSameFrameRecordsOnIndependentTimeline()
         {
             var transport = new FakeTransport();
@@ -455,8 +571,7 @@ namespace Milestro.InputSystemTests
                 sink,
                 MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
                 actionTraceOwner: owner);
-            session.Start(0d);
-            session.RecordActionTraceAttachment();
+            session.StartActionTrace(0d);
             CommitActionRecord(session, 7, 1d, Vector2.zero, 3, 0, 0, 64);
             CommitActionRecord(session, 7, 2d, new Vector2(1f, -2f), 9, 4, 2, 32);
 
@@ -492,8 +607,7 @@ namespace Milestro.InputSystemTests
                     sink,
                     MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
                     actionTraceOwner: owner);
-                session.Start(0d);
-                session.RecordActionTraceAttachment();
+                session.StartActionTrace(0d);
                 if (addZeroRecord)
                 {
                     CommitActionRecord(session, 1, 1d, Vector2.zero);
@@ -520,8 +634,7 @@ namespace Milestro.InputSystemTests
                 MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
                 100f,
                 owner);
-            session.Start(0d);
-            session.RecordActionTraceAttachment();
+            session.StartActionTrace(0d);
             for (var index = 0; index < MacScrollPhaseProbeSession.MaxActionRecords; ++index)
             {
                 CommitActionRecord(session,
@@ -571,8 +684,7 @@ namespace Milestro.InputSystemTests
                 sink,
                 MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
                 actionTraceOwner: owner);
-            session.Start(0d);
-            session.RecordActionTraceAttachment();
+            session.StartActionTrace(0d);
             for (var index = 0; index < MacScrollPhaseProbeSession.MaxActionRecords; ++index)
             {
                 CommitActionRecord(session, 1, index + 1d, Vector2.down);
@@ -600,8 +712,7 @@ namespace Milestro.InputSystemTests
                 sink,
                 MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
                 actionTraceOwner: owner);
-            session.Start(0d);
-            session.RecordActionTraceAttachment();
+            session.StartActionTrace(0d);
 
             Assert.That(session.TryBeginActionRecord(Environment.CurrentManagedThreadId + 1), Is.False);
             session.Update(1, 0d);
@@ -624,8 +735,7 @@ namespace Milestro.InputSystemTests
                 sink,
                 MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
                 actionTraceOwner: owner);
-            session.Start(0d);
-            session.RecordActionTraceAttachment();
+            session.StartActionTrace(0d);
             CommitActionRecord(session, 1, 1d, Vector2.down);
 
             session.Update(1, 4d);
@@ -660,8 +770,7 @@ namespace Milestro.InputSystemTests
                 sink,
                 MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
                 actionTraceOwner: owner);
-            session.Start(0d);
-            session.RecordActionTraceAttachment();
+            session.StartActionTrace(0d);
             CommitActionRecord(session, 1, 1d, Vector2.down);
 
             session.Update(1, 4d);
@@ -714,8 +823,7 @@ namespace Milestro.InputSystemTests
                 sink,
                 MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
                 actionTraceOwner: owner);
-            session.Start(0d);
-            session.RecordActionTraceAttachment();
+            session.StartActionTrace(0d);
             CommitActionRecord(session, 1, 1d, Vector2.down);
 
             session.Update(1, 0d);
@@ -768,8 +876,7 @@ namespace Milestro.InputSystemTests
                     sink,
                     MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
                     actionTraceOwner: owner);
-                session.Start(0d);
-                session.RecordActionTraceAttachment();
+                session.StartActionTrace(0d);
                 commitInvalidRecord(session);
 
                 session.Update(1, 0d);
@@ -787,8 +894,7 @@ namespace Milestro.InputSystemTests
                 orderSink,
                 MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
                 actionTraceOwner: orderOwner);
-            orderSession.Start(0d);
-            orderSession.RecordActionTraceAttachment();
+            orderSession.StartActionTrace(0d);
             CommitActionRecord(orderSession, 2, 2d, Vector2.down);
             orderSession.Update(2, 0d);
             CommitActionRecord(orderSession, 1, 1d, Vector2.down);
@@ -804,8 +910,7 @@ namespace Milestro.InputSystemTests
                 tickSink,
                 MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
                 actionTraceOwner: tickOwner);
-            tickSession.Start(0d);
-            tickSession.RecordActionTraceAttachment();
+            tickSession.StartActionTrace(0d);
             CommitActionRecord(tickSession, 1, 1d, Vector2.down, timestampTicks: long.MaxValue);
             tickSession.Update(1, 0d);
             CommitActionRecord(tickSession, 1, 2d, Vector2.down, timestampTicks: long.MaxValue - 1);
@@ -1678,12 +1783,14 @@ namespace Milestro.InputSystemTests
             internal int PollCount { get; private set; }
             internal int MinimalPollCount { get; private set; }
             internal int MinimalInvalidDetailCount { get; private set; }
+            internal int StartCount { get; private set; }
             internal int StopCount { get; private set; }
             internal long LastStopLease { get; private set; }
             internal MacScrollPhaseMonitorMode LastStartMode { get; private set; }
 
             public long Start(MacScrollPhaseMonitorMode mode, out int result, out long leaseId)
             {
+                ++StartCount;
                 LastStartMode = mode;
                 result = StartResult;
                 leaseId = StartLease;

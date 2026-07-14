@@ -264,8 +264,7 @@ namespace Milestro.InputSystem.Service
         RecordOverflow = 1,
         WrongThread = 2,
         CallbackReadFailed = 3,
-        OwnerChanged = 4,
-        AttachmentFailed = 5
+        OwnerChanged = 4
     }
 
     internal readonly struct MacScrollActionRecord
@@ -437,6 +436,8 @@ namespace Milestro.InputSystem.Service
                                                             : MacScrollPhaseMonitorMode.CaptureSamples;
             this.captureDurationSeconds = Math.Max(0.25f, captureDurationSeconds);
             this.ownerId = ownerId;
+            actionTraceDetached = stage != MacScrollPhaseProbeStage.NativeMinimalInputActionTrace ||
+                                  actionTraceOwner == null;
         }
 
         internal bool RequiresInputAction => stage == MacScrollPhaseProbeStage.InputAction ||
@@ -445,6 +446,7 @@ namespace Milestro.InputSystem.Service
             stage == MacScrollPhaseProbeStage.NativeMinimalInputActionTrace;
         internal bool IsFinished => captureFailed || captureComplete;
         internal bool HasLease => monitorLeaseId != 0;
+        internal bool RequiresCleanup => HasLease || (TracesInputActionCandidates && !actionTraceDetached);
 
         private bool PollsNativeSamples => stage == MacScrollPhaseProbeStage.NativePolling || RequiresInputAction;
         private bool PollsMinimalSamples => stage == MacScrollPhaseProbeStage.NativeMinimalPolling ||
@@ -455,12 +457,82 @@ namespace Milestro.InputSystem.Service
 
         internal void Start(double now)
         {
-            if (started)
+            if (TracesInputActionCandidates)
+            {
+                throw new InvalidOperationException("Action trace requires attach-before-start.");
+            }
+            if (!BeginStartAttempt())
             {
                 return;
             }
 
+            InitializeCapture(now);
+            var apiResult = transport.Start(monitorMode, out var monitorResult, out monitorLeaseId);
+            AppendTrace($"monitor-start stage={stage} api={apiResult} result={monitorResult} lease={monitorLeaseId}");
+            if (apiResult != 0 || monitorResult != 0 || monitorLeaseId == 0)
+            {
+                FailCapture("monitor-start-failed");
+            }
+        }
+
+        internal void StartActionTrace(double now)
+        {
+            if (!TracesInputActionCandidates)
+            {
+                throw new InvalidOperationException("Only the Action trace stage supports attach-before-start.");
+            }
+            if (actionTraceOwner == null)
+            {
+                ReportActionTracePreflightFault("action-owner-missing");
+                return;
+            }
+            if (!BeginStartAttempt())
+            {
+                return;
+            }
+
+            var apiResult = transport.Start(monitorMode, out var monitorResult, out monitorLeaseId);
+            if (apiResult != 0 || monitorResult != 0 || monitorLeaseId == 0)
+            {
+                FailCapture($"monitor-start-failed api={apiResult} result={monitorResult} lease={monitorLeaseId}");
+                return;
+            }
+
+            InitializeCapture(now);
+            Volatile.Write(ref actionCaptureGate, 1);
+            AppendTrace($"monitor-start stage={stage} api={apiResult} result={monitorResult} lease={monitorLeaseId}");
+            AppendTrace("action-trace-attached callback=performed");
+        }
+
+        internal void ReportActionTracePreflightFault(string reason)
+        {
+            if (started || IsFinished || !TracesInputActionCandidates)
+            {
+                return;
+            }
+
+            captureFailed = true;
+            AppendTerminalTrace($"FAIL {reason}");
+            StopMonitor("preflight-failed");
+            if (!TracesInputActionCandidates || !RequiresCleanup)
+            {
+                FlushTrace();
+            }
+        }
+
+        private bool BeginStartAttempt()
+        {
+            if (started || IsFinished)
+            {
+                return false;
+            }
+
             started = true;
+            return true;
+        }
+
+        private void InitializeCapture(double now)
+        {
             captureStartedAt = now;
             pollBudget.Reset();
             associationTracker.Reset();
@@ -485,12 +557,6 @@ namespace Milestro.InputSystem.Service
             actionTraceDetached = !TracesInputActionCandidates;
             actionDetachFailureReported = false;
             actionStopFailureReported = false;
-            var apiResult = transport.Start(monitorMode, out var monitorResult, out monitorLeaseId);
-            AppendTrace($"monitor-start stage={stage} api={apiResult} result={monitorResult} lease={monitorLeaseId}");
-            if (apiResult != 0 || monitorResult != 0 || monitorLeaseId == 0)
-            {
-                FailCapture("monitor-start-failed");
-            }
         }
 
         internal void Update(int frame, double now)
@@ -571,25 +637,6 @@ namespace Milestro.InputSystem.Service
             if (!IsFinished && RequiresInputAction)
             {
                 AppendTrace($"action-attached name={name}");
-            }
-        }
-
-        internal void RecordActionTraceAttachment()
-        {
-            if (IsFinished || !TracesInputActionCandidates)
-            {
-                return;
-            }
-            if (actionTraceOwner == null)
-            {
-                ReportActionTraceFault(MacScrollActionTraceFault.AttachmentFailed);
-                return;
-            }
-
-            AppendTrace("action-trace-attached callback=performed");
-            if (!captureFailed)
-            {
-                Volatile.Write(ref actionCaptureGate, 1);
             }
         }
 
@@ -719,7 +766,7 @@ namespace Milestro.InputSystem.Service
             if (IsFinished)
             {
                 StopMonitor("component-disabled-retry");
-                if (!TracesInputActionCandidates || !HasLease)
+                if (!TracesInputActionCandidates || !RequiresCleanup)
                 {
                     FlushTrace();
                 }
@@ -744,7 +791,7 @@ namespace Milestro.InputSystem.Service
                     AppendTerminalTrace("FAIL monitor-stop-failed");
                 }
             }
-            if (!TracesInputActionCandidates || !HasLease)
+            if (!TracesInputActionCandidates || !RequiresCleanup)
             {
                 FlushTrace();
             }
@@ -861,7 +908,6 @@ namespace Milestro.InputSystem.Service
                 MacScrollActionTraceFault.WrongThread => "action-callback-wrong-thread",
                 MacScrollActionTraceFault.CallbackReadFailed => "action-callback-read-failed",
                 MacScrollActionTraceFault.OwnerChanged => "action-owner-changed",
-                MacScrollActionTraceFault.AttachmentFailed => "action-attach-failed",
                 _ => "action-fault-invalid"
             };
         }
@@ -1322,7 +1368,7 @@ namespace Milestro.InputSystem.Service
                 ? $"FAIL {reason}"
                 : $"FAIL {reason} secondary={secondaryReason}");
             StopMonitor("fail-closed");
-            if (!TracesInputActionCandidates || !HasLease)
+            if (!TracesInputActionCandidates || !RequiresCleanup)
             {
                 FlushTrace();
             }
@@ -1381,7 +1427,7 @@ namespace Milestro.InputSystem.Service
                     AppendTerminalTrace("FAIL monitor-stop-failed");
                 }
             }
-            if (!TracesInputActionCandidates || !HasLease)
+            if (!TracesInputActionCandidates || !RequiresCleanup)
             {
                 FlushTrace();
             }
@@ -1400,11 +1446,6 @@ namespace Milestro.InputSystem.Service
 
         private bool StopMonitor(string reason)
         {
-            if (!HasLease)
-            {
-                return true;
-            }
-
             if (TracesInputActionCandidates && !actionTraceDetached)
             {
                 var detached = false;
@@ -1426,6 +1467,11 @@ namespace Milestro.InputSystem.Service
                     return false;
                 }
                 actionTraceDetached = true;
+            }
+
+            if (!HasLease)
+            {
+                return true;
             }
 
             var apiResult = transport.Stop(out var monitorResult, monitorLeaseId);
