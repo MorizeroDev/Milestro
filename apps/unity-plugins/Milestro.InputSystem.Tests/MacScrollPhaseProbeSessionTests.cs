@@ -725,6 +725,10 @@ namespace Milestro.InputSystemTests
             Assert.That(Encoding.UTF8.GetByteCount(sink.LastTrace) <= MacScrollPhaseProbeSession.MaxTraceUtf8Bytes,
                 Is.True);
             Assert.That(LineCount(sink.LastTrace) <= MacScrollPhaseProbeSession.MaxConsoleTraceLines, Is.True);
+            Assert.That(sink.LastTrace.Contains("minimal source=update"), Is.True);
+            Assert.That(sink.LastTrace.Contains("FAIL managed-trace-capacity-exhausted"), Is.True);
+            Assert.That(sink.LastTrace.Contains("monitor-stop reason=fail-closed"), Is.True);
+            Assert.That(sink.LastTrace.Contains("trace-truncated"), Is.False);
             session.Disable();
             Assert.That(session.HasLease, Is.False);
             Assert.That(transport.StopCount, Is.EqualTo(2));

@@ -220,6 +220,9 @@ namespace Milestro.InputSystem.Service
 
         private const string LogPrefix = "[MILESTRO_SCROLL_PHASE_POC]";
         private const int MaxBufferedTraceLines = MaxConsoleTraceLines - 2;
+        // Stage15 capacity FAIL plus a full-width fail-closed Stop is at most 199 UTF-8 bytes (CRLF).
+        private const int MaxTerminalTraceUtf8Bytes = 512;
+        private const int MaxBufferedTraceUtf8Bytes = MaxTraceUtf8Bytes - MaxTerminalTraceUtf8Bytes;
         private const uint MinimalBaseSampleFields =
             (uint)(MacScrollPhaseSampleFields.Sequence |
                    MacScrollPhaseSampleFields.Timestamp |
@@ -742,7 +745,8 @@ namespace Milestro.InputSystem.Service
             }
             var line = $"{LogPrefix} {message}{Environment.NewLine}";
             var lineBytes = Encoding.UTF8.GetByteCount(line);
-            if (traceLines >= MaxBufferedTraceLines || traceUtf8Bytes + lineBytes > MaxTraceUtf8Bytes)
+            var maxBufferedBytes = PollsMinimalSamples ? MaxBufferedTraceUtf8Bytes : MaxTraceUtf8Bytes;
+            if (traceLines >= MaxBufferedTraceLines || traceUtf8Bytes + lineBytes > maxBufferedBytes)
             {
                 FailCapture("managed-trace-capacity-exhausted");
                 return;
