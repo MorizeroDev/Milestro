@@ -178,6 +178,76 @@ namespace Milestro.Components
             }
         }
 
+        public Margin margin
+        {
+            get => m_margin;
+            set => m_margin = value;
+        }
+
+        public List<string> fontFamilies
+        {
+            get => m_fontFamilies;
+            set => m_fontFamilies = value;
+        }
+
+        public float size
+        {
+            get => m_size;
+            set => m_size = value;
+        }
+
+        public Color textColor
+        {
+            get => m_textColor;
+            set => m_textColor = value;
+        }
+
+        public Color caretColor
+        {
+            get => m_caretColor;
+            set => m_caretColor = value;
+        }
+
+        public Color selectionColor
+        {
+            get => m_selectionColor;
+            set
+            {
+                if (m_selectionColor == value)
+                {
+                    return;
+                }
+
+                m_selectionColor = value;
+                inputBox?.SetSelectionColor(m_selectionColor);
+                paintDirty = true;
+            }
+        }
+
+        public float caretWidth
+        {
+            get => m_caretWidth;
+            set => m_caretWidth = value;
+        }
+
+        public TextInputAlignment textAlignment
+        {
+            get => m_textAlignment;
+            set
+            {
+                if (m_textAlignment == value)
+                {
+                    return;
+                }
+
+                m_textAlignment = value;
+                CancelScrollTweens();
+                styleDirty = true;
+                layoutDirty = true;
+                paintDirty = true;
+            }
+        }
+
         public TextInputLineMode lineMode
         {
             get => m_lineMode;
@@ -224,6 +294,41 @@ namespace Milestro.Components
                 m_wrapMode = m_lineMode == TextInputLineMode.SingleLine ? TextInputWrapMode.NoWrap : value;
                 CancelScrollTweens();
                 inputBox?.SetSoftWrap(EffectiveSoftWrap());
+                layoutDirty = true;
+                paintDirty = true;
+            }
+        }
+        
+        public TextOverflow textOverflow
+        {
+            get => m_textOverflow;
+            set
+            {
+                if (m_textOverflow == value)
+                {
+                    return;
+                }
+
+                m_textOverflow = value;
+                inputBox?.SetTextOverflow(m_textOverflow);
+                layoutDirty = true;
+                paintDirty = true;
+            }
+        }
+
+        public string ellipsisString
+        {
+            get => m_ellipsisString;
+            set
+            {
+                var next = value ?? "";
+                if (m_ellipsisString == next)
+                {
+                    return;
+                }
+
+                m_ellipsisString = next;
+                inputBox?.SetEllipsis(m_ellipsisString);
                 layoutDirty = true;
                 paintDirty = true;
             }
@@ -293,41 +398,6 @@ namespace Milestro.Components
             }
         }
 
-        public TextOverflow textOverflow
-        {
-            get => m_textOverflow;
-            set
-            {
-                if (m_textOverflow == value)
-                {
-                    return;
-                }
-
-                m_textOverflow = value;
-                inputBox?.SetTextOverflow(m_textOverflow);
-                layoutDirty = true;
-                paintDirty = true;
-            }
-        }
-
-        public string ellipsisString
-        {
-            get => m_ellipsisString;
-            set
-            {
-                var next = value ?? "";
-                if (m_ellipsisString == next)
-                {
-                    return;
-                }
-
-                m_ellipsisString = next;
-                inputBox?.SetEllipsis(m_ellipsisString);
-                layoutDirty = true;
-                paintDirty = true;
-            }
-        }
-
         public bool allowCopy
         {
             get => m_allowCopy;
@@ -350,46 +420,36 @@ namespace Milestro.Components
             }
         }
 
+        public bool smoothScroll
+        {
+            get => m_smoothScroll;
+            set => m_smoothScroll = value;
+        }
+
+        public float scrollTweenDurationSeconds
+        {
+            get => m_scrollTweenDurationSeconds;
+            set => m_scrollTweenDurationSeconds = value;
+        }
+
+        public float blinkInterval
+        {
+            get => m_blinkInterval;
+            set => m_blinkInterval = value;
+        }
+
+        public string locale
+        {
+            get => m_locale;
+            set => m_locale = value;
+        }
+
         public bool srgb
         {
             get => SurfaceColorSpace() == ColorSpace.Linear;
             set
             {
                 m_colorSpaceOverride = value ? ColorSpace.Linear : ColorSpace.Gamma;
-                paintDirty = true;
-            }
-        }
-
-        public TextInputAlignment textAlignment
-        {
-            get => m_textAlignment;
-            set
-            {
-                if (m_textAlignment == value)
-                {
-                    return;
-                }
-
-                m_textAlignment = value;
-                CancelScrollTweens();
-                styleDirty = true;
-                layoutDirty = true;
-                paintDirty = true;
-            }
-        }
-
-        public Color selectionColor
-        {
-            get => m_selectionColor;
-            set
-            {
-                if (m_selectionColor == value)
-                {
-                    return;
-                }
-
-                m_selectionColor = value;
-                inputBox?.SetSelectionColor(m_selectionColor);
                 paintDirty = true;
             }
         }
