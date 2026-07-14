@@ -11,6 +11,7 @@ enum class ScrollPhaseMinimalQueueFailure : int32_t {
     None = 0,
     CapacityExceeded = 1,
     SequenceExhausted = 2,
+    InvalidGestureTransition = 3,
 };
 
 class ScrollPhaseMinimalQueueAdmission {
@@ -44,6 +45,20 @@ public:
     void Reset() noexcept {
         nextSequence_ = 1;
         failure_ = ScrollPhaseMinimalQueueFailure::None;
+    }
+
+    void FinishCleanup(bool cleanupSucceeded) noexcept {
+        if (cleanupSucceeded) {
+            Reset();
+        }
+    }
+
+    bool Fail(ScrollPhaseMinimalQueueFailure failure) noexcept {
+        if (failure == ScrollPhaseMinimalQueueFailure::None || failure_ != ScrollPhaseMinimalQueueFailure::None) {
+            return false;
+        }
+        failure_ = failure;
+        return true;
     }
 
     ScrollPhaseMinimalQueueFailure Failure() const noexcept {

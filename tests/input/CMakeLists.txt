@@ -3,6 +3,7 @@ set(MILESTRO_TEST_NAME MilestroScrollPhaseTest)
 add_executable(${MILESTRO_TEST_NAME}
         src/test_scroll_phase.cpp
         ${PROJECT_SOURCE_DIR}/src/input/ScrollPhaseGestureTracker.cpp
+        ${PROJECT_SOURCE_DIR}/src/input/ScrollPhaseMinimalGestureTracker.cpp
         ${PROJECT_SOURCE_DIR}/src/input/ScrollPhaseLease.cpp
         ${PROJECT_SOURCE_DIR}/src/input/ScrollPhaseUnloadPolicy.cpp)
 target_include_directories(${MILESTRO_TEST_NAME}

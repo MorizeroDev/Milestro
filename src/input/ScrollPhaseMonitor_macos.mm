@@ -3,6 +3,7 @@
 
 #include "ScrollPhaseGestureTracker.h"
 #include "ScrollPhaseLease.h"
+#include "ScrollPhaseMinimalGestureTracker.h"
 #include "ScrollPhaseMinimalQueueAdmission.h"
 #include "ScrollPhaseMonitorModePublication.h"
 
@@ -12,6 +13,14 @@
 
 #include <atomic>
 #include <deque>
+
+static_assert(milestro::input::kNativeScrollPhaseNone == static_cast<uint64_t>(NSEventPhaseNone));
+static_assert(milestro::input::kNativeScrollPhaseBegan == static_cast<uint64_t>(NSEventPhaseBegan));
+static_assert(milestro::input::kNativeScrollPhaseStationary == static_cast<uint64_t>(NSEventPhaseStationary));
+static_assert(milestro::input::kNativeScrollPhaseChanged == static_cast<uint64_t>(NSEventPhaseChanged));
+static_assert(milestro::input::kNativeScrollPhaseEnded == static_cast<uint64_t>(NSEventPhaseEnded));
+static_assert(milestro::input::kNativeScrollPhaseCanceled == static_cast<uint64_t>(NSEventPhaseCancelled));
+static_assert(milestro::input::kNativeScrollPhaseMayBegin == static_cast<uint64_t>(NSEventPhaseMayBegin));
 
 namespace milestro::input {
 namespace {
@@ -26,6 +35,7 @@ int64_t nextSequence = 1;
 ScrollPhaseLease lease;
 ScrollPhaseGestureTracker gestureTracker;
 ScrollPhaseMinimalQueueAdmission minimalQueueAdmission;
+ScrollPhaseMinimalGestureTracker minimalGestureTracker;
 bool queueOverflowed = false;
 ScrollPhaseMonitorModePublication activeMonitorMode;
 
@@ -241,11 +251,40 @@ void EnqueueMinimal(NSEvent* event) {
     samples.push_back(sample);
 }
 
+void EnqueueMinimalTracked(NSEvent* event) {
+    ScrollPhaseSample sample;
+    if (!minimalQueueAdmission.TryAccept(samples.size(), sample.sequence)) {
+        return;
+    }
+
+    sample.validFields = kMinimalQueueScrollPhaseSampleFields;
+    const ScrollPhaseMinimalDecodedPhase gesturePhase = DecodeMinimalScrollPhase(static_cast<uint64_t>(event.phase));
+    sample.gesturePhase = gesturePhase.phase;
+    const ScrollPhaseMinimalDecodedPhase momentumPhase =
+            DecodeMinimalScrollPhase(static_cast<uint64_t>(event.momentumPhase));
+    sample.momentumPhase = momentumPhase.phase;
+    sample.timestamp = event.timestamp;
+    sample.windowNumber = event.windowNumber;
+    sample.scrollingDeltaX = event.scrollingDeltaX;
+    sample.scrollingDeltaY = event.scrollingDeltaY;
+
+    const ScrollPhaseMinimalGestureResult gesture = minimalGestureTracker.Resolve(gesturePhase, momentumPhase);
+    sample.validFields =
+            MinimalTrackedScrollPhaseSampleFields(gesture.kind == ScrollPhaseMinimalGestureResultKind::Resolved);
+    sample.gestureId = gesture.gestureId;
+    samples.push_back(sample);
+
+    if (gesture.kind == ScrollPhaseMinimalGestureResultKind::InvalidTransition) {
+        (void) minimalQueueAdmission.Fail(ScrollPhaseMinimalQueueFailure::InvalidGestureTransition);
+    }
+}
+
 void ResetState() {
     samples.clear();
     nextSequence = 1;
     gestureTracker.Reset();
-    minimalQueueAdmission.Reset();
+    minimalQueueAdmission.FinishCleanup(true);
+    minimalGestureTracker.FinishCleanup(true);
     queueOverflowed = false;
 }
 
@@ -256,6 +295,8 @@ ScrollPhaseMonitorResult RemoveMonitor(int64_t leaseId, bool forceRelease) {
         }
     } @catch (NSException* exception) {
         (void) exception;
+        minimalQueueAdmission.FinishCleanup(false);
+        minimalGestureTracker.FinishCleanup(false);
         activeMonitorMode.FinishCleanup(false);
         return ScrollPhaseMonitorResult::Failed;
     }
@@ -267,6 +308,8 @@ ScrollPhaseMonitorResult RemoveMonitor(int64_t leaseId, bool forceRelease) {
     } else {
         const ScrollPhaseMonitorResult releaseResult = lease.Release(leaseId);
         if (releaseResult != ScrollPhaseMonitorResult::Succeeded) {
+            minimalQueueAdmission.FinishCleanup(false);
+            minimalGestureTracker.FinishCleanup(false);
             activeMonitorMode.FinishCleanup(false);
             return releaseResult;
         }
@@ -314,6 +357,7 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
         const bool readPhasesTimestampWindow = ShouldReadScrollPhasesTimestampWindow(mode);
         const bool readPhasesTimestampWindowScrollingDelta = ShouldReadScrollPhasesTimestampWindowScrollingDelta(mode);
         const bool queueMinimalSamples = ShouldQueueMinimalScrollPhaseSamples(mode);
+        const bool queueMinimalTrackedSamples = ShouldQueueMinimalTrackedScrollPhaseSamples(mode);
         if (![NSThread isMainThread]) {
             return ScrollPhaseMonitorResult::WrongThread;
         }
@@ -353,6 +397,8 @@ ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, in
                                                                    ReadPhasesTimestampWindowScrollingDelta(event);
                                                                } else if (queueMinimalSamples) {
                                                                    EnqueueMinimal(event);
+                                                               } else if (queueMinimalTrackedSamples) {
+                                                                   EnqueueMinimalTracked(event);
                                                                }
                                                                return event;
                                                              }];

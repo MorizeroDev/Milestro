@@ -28,6 +28,7 @@ enum class ScrollPhaseMonitorMode : int32_t {
     ReadPhasesTimestampWindow = 9,
     ReadPhasesTimestampWindowScrollingDelta = 10,
     QueueMinimalSamples = 11,
+    QueueMinimalTrackedSamples = 12,
 };
 
 constexpr bool IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode mode) noexcept {
@@ -38,7 +39,8 @@ constexpr bool IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode mode) noexce
            mode == ScrollPhaseMonitorMode::WritePhasesTimestampWindowPod ||
            mode == ScrollPhaseMonitorMode::ReadPhasesTimestampWindow ||
            mode == ScrollPhaseMonitorMode::ReadPhasesTimestampWindowScrollingDelta ||
-           mode == ScrollPhaseMonitorMode::QueueMinimalSamples;
+           mode == ScrollPhaseMonitorMode::QueueMinimalSamples ||
+           mode == ScrollPhaseMonitorMode::QueueMinimalTrackedSamples;
 }
 
 constexpr bool ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode mode) noexcept {
@@ -85,6 +87,10 @@ constexpr bool ShouldQueueMinimalScrollPhaseSamples(ScrollPhaseMonitorMode mode)
     return mode == ScrollPhaseMonitorMode::QueueMinimalSamples;
 }
 
+constexpr bool ShouldQueueMinimalTrackedScrollPhaseSamples(ScrollPhaseMonitorMode mode) noexcept {
+    return mode == ScrollPhaseMonitorMode::QueueMinimalTrackedSamples;
+}
+
 constexpr bool CanUseLegacyScrollPhasePoll(ScrollPhaseMonitorMode mode) noexcept {
     return mode == ScrollPhaseMonitorMode::CaptureSamples;
 }
@@ -102,6 +108,7 @@ enum class ScrollPhase : int32_t {
     Stationary = 4,
     Ended = 5,
     Canceled = 6,
+    MayBegin = 7,
 };
 
 enum class ScrollPhasePluginUnloadDecision : int32_t {
@@ -144,6 +151,12 @@ constexpr uint32_t kLegacyCaptureScrollPhaseSampleFields =
         ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::RawDelta) |
         ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::Precise) |
         ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::NaturalDirection);
+
+constexpr uint32_t MinimalTrackedScrollPhaseSampleFields(bool gestureIdValid) noexcept {
+    return gestureIdValid
+                   ? kMinimalQueueScrollPhaseSampleFields | ScrollPhaseSampleFieldBit(ScrollPhaseSampleField::GestureId)
+                   : kMinimalQueueScrollPhaseSampleFields;
+}
 
 constexpr bool HasScrollPhaseSampleFields(uint32_t validFields, uint32_t requiredFields) noexcept {
     return (validFields & requiredFields) == requiredFields;

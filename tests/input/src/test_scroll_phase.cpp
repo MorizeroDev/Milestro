@@ -1,5 +1,6 @@
 #include "ScrollPhaseGestureTracker.h"
 #include "ScrollPhaseLease.h"
+#include "ScrollPhaseMinimalGestureTracker.h"
 #include "ScrollPhaseMinimalQueueAdmission.h"
 #include "ScrollPhaseMonitorModePublication.h"
 
@@ -12,6 +13,10 @@ namespace {
 using milestro::input::ScrollPhase;
 using milestro::input::ScrollPhaseGestureTracker;
 using milestro::input::ScrollPhaseLease;
+using milestro::input::ScrollPhaseMinimalGestureFailure;
+using milestro::input::ScrollPhaseMinimalGestureResultKind;
+using milestro::input::ScrollPhaseMinimalGestureTracker;
+using milestro::input::ScrollPhaseMinimalGestureTrackerState;
 using milestro::input::ScrollPhaseMinimalQueueAdmission;
 using milestro::input::ScrollPhaseMinimalQueueFailure;
 using milestro::input::ScrollPhaseMonitorMode;
@@ -32,6 +37,8 @@ TEST(ScrollPhaseMonitorModeTest, AcceptsOnlyDefinedModes) {
     EXPECT_EQ(9, static_cast<int32_t>(ScrollPhaseMonitorMode::ReadPhasesTimestampWindow));
     EXPECT_EQ(10, static_cast<int32_t>(ScrollPhaseMonitorMode::ReadPhasesTimestampWindowScrollingDelta));
     EXPECT_EQ(11, static_cast<int32_t>(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_EQ(12, static_cast<int32_t>(ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
+    EXPECT_EQ(7, static_cast<int32_t>(ScrollPhase::MayBegin));
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::PassThrough));
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::CaptureSamples));
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::ReadProperties));
@@ -45,15 +52,19 @@ TEST(ScrollPhaseMonitorModeTest, AcceptsOnlyDefinedModes) {
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(
             ScrollPhaseMonitorMode::ReadPhasesTimestampWindowScrollingDelta));
     EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_TRUE(milestro::input::IsValidScrollPhaseMonitorMode(ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
     EXPECT_FALSE(milestro::input::IsValidScrollPhaseMonitorMode(static_cast<ScrollPhaseMonitorMode>(-1)));
-    EXPECT_FALSE(milestro::input::IsValidScrollPhaseMonitorMode(static_cast<ScrollPhaseMonitorMode>(12)));
+    EXPECT_FALSE(milestro::input::IsValidScrollPhaseMonitorMode(static_cast<ScrollPhaseMonitorMode>(13)));
     EXPECT_EQ(6, static_cast<int32_t>(ScrollPhaseMonitorResult::ModeContractMismatch));
     EXPECT_TRUE(milestro::input::CanUseLegacyScrollPhasePoll(ScrollPhaseMonitorMode::CaptureSamples));
     EXPECT_FALSE(milestro::input::CanUseLegacyScrollPhasePoll(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_FALSE(milestro::input::CanUseLegacyScrollPhasePoll(ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
     EXPECT_EQ(ScrollPhaseMonitorResult::Succeeded,
               milestro::input::ValidateLegacyScrollPhasePollMode(ScrollPhaseMonitorMode::CaptureSamples));
     EXPECT_EQ(ScrollPhaseMonitorResult::ModeContractMismatch,
               milestro::input::ValidateLegacyScrollPhasePollMode(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_EQ(ScrollPhaseMonitorResult::ModeContractMismatch,
+              milestro::input::ValidateLegacyScrollPhasePollMode(ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
 }
 
 TEST(ScrollPhaseMonitorModeTest, ModesHaveMutuallyExclusiveCallbackSideEffects) {
@@ -271,6 +282,27 @@ TEST(ScrollPhaseMonitorModeTest, ModesHaveMutuallyExclusiveCallbackSideEffects) 
     EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesTimestampWindowScrollingDelta(
             ScrollPhaseMonitorMode::QueueMinimalSamples));
     EXPECT_TRUE(milestro::input::ShouldQueueMinimalScrollPhaseSamples(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_FALSE(
+            milestro::input::ShouldQueueMinimalTrackedScrollPhaseSamples(ScrollPhaseMonitorMode::QueueMinimalSamples));
+    EXPECT_FALSE(milestro::input::ShouldCaptureScrollPhaseSamples(ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhaseProperties(ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
+    EXPECT_FALSE(
+            milestro::input::ShouldReadScrollPhaseEventProperties(ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
+    EXPECT_FALSE(
+            milestro::input::ShouldReadScrollPhaseEventScalars(ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
+    EXPECT_FALSE(milestro::input::ShouldWriteScrollPhaseLocalPod(ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesOnly(ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesTimestamp(ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
+    EXPECT_FALSE(milestro::input::ShouldWriteScrollPhasesTimestampWindowPod(
+            ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
+    EXPECT_FALSE(
+            milestro::input::ShouldReadScrollPhasesTimestampWindow(ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
+    EXPECT_FALSE(milestro::input::ShouldReadScrollPhasesTimestampWindowScrollingDelta(
+            ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
+    EXPECT_FALSE(
+            milestro::input::ShouldQueueMinimalScrollPhaseSamples(ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
+    EXPECT_TRUE(milestro::input::ShouldQueueMinimalTrackedScrollPhaseSamples(
+            ScrollPhaseMonitorMode::QueueMinimalTrackedSamples));
 }
 
 TEST(ScrollPhaseSampleValidityTest, MinimalMaskSeparatesAvailabilityFromZeroValues) {
@@ -338,6 +370,16 @@ TEST(ScrollPhaseMinimalQueueAdmissionTest, FailsStopBeforeSequenceWrap) {
     EXPECT_EQ(0, sequence);
 }
 
+TEST(ScrollPhaseMinimalQueueAdmissionTest, LocksExplicitGestureFailureReason) {
+    ScrollPhaseMinimalQueueAdmission admission;
+    int64_t sequence = 0;
+    ASSERT_TRUE(admission.TryAccept(0, sequence));
+    EXPECT_TRUE(admission.Fail(ScrollPhaseMinimalQueueFailure::InvalidGestureTransition));
+    EXPECT_EQ(ScrollPhaseMinimalQueueFailure::InvalidGestureTransition, admission.Failure());
+    EXPECT_FALSE(admission.TryAccept(0, sequence));
+    EXPECT_EQ(0, sequence);
+}
+
 TEST(ScrollPhaseMonitorModePublicationTest, OnlySuccessfulCleanupClearsPublishedMode) {
     ScrollPhaseMonitorModePublication publication;
     ScrollPhaseMonitorMode mode = ScrollPhaseMonitorMode::PassThrough;
@@ -384,6 +426,310 @@ TEST(ScrollPhaseGestureTrackerTest, ResetRestartsSequenceForANewMonitorLease) {
     EXPECT_EQ(tracker.Resolve(ScrollPhase::Began, ScrollPhase::None), 1);
     tracker.Reset();
     EXPECT_EQ(tracker.Resolve(ScrollPhase::Began, ScrollPhase::None), 1);
+}
+
+TEST(ScrollPhaseMinimalGestureTrackerTest, HandlesMayBeginAndRejectsInvalidPhaseBitmasks) {
+    ScrollPhaseMinimalGestureTracker tracker;
+
+    auto result = tracker.Resolve(milestro::input::kNativeScrollPhaseMayBegin, milestro::input::kNativeScrollPhaseNone);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::NoGesture, result.kind);
+    EXPECT_EQ(ScrollPhase::MayBegin, result.gesturePhase);
+    EXPECT_EQ(ScrollPhaseMinimalGestureTrackerState::Idle, tracker.Snapshot().state);
+
+    result = tracker.Resolve(milestro::input::kNativeScrollPhaseNone, milestro::input::kNativeScrollPhaseMayBegin);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::NoGesture, result.kind);
+    EXPECT_EQ(ScrollPhase::MayBegin, result.momentumPhase);
+    EXPECT_EQ(ScrollPhaseMinimalGestureTrackerState::Idle, tracker.Snapshot().state);
+
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    result = tracker.Resolve(milestro::input::kNativeScrollPhaseMayBegin, milestro::input::kNativeScrollPhaseNone);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::InvalidTransition, result.kind);
+    EXPECT_EQ(ScrollPhaseMinimalGestureFailure::InvalidTransition, result.failure);
+
+    tracker.Reset();
+    result = tracker.Resolve(milestro::input::kNativeScrollPhaseBegan | milestro::input::kNativeScrollPhaseChanged,
+                             milestro::input::kNativeScrollPhaseNone);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::InvalidTransition, result.kind);
+    EXPECT_EQ(ScrollPhaseMinimalGestureFailure::InvalidGesturePhaseBits, result.failure);
+
+    tracker.Reset();
+    result = tracker.Resolve(UINT64_C(1) << 6U, milestro::input::kNativeScrollPhaseNone);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::InvalidTransition, result.kind);
+    EXPECT_EQ(ScrollPhaseMinimalGestureFailure::InvalidGesturePhaseBits, result.failure);
+
+    tracker.Reset();
+    result = tracker.Resolve(milestro::input::kNativeScrollPhaseNone,
+                             milestro::input::kNativeScrollPhaseBegan | milestro::input::kNativeScrollPhaseChanged);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::InvalidTransition, result.kind);
+    EXPECT_EQ(ScrollPhaseMinimalGestureFailure::InvalidMomentumPhaseBits, result.failure);
+
+    tracker.Reset();
+    result = tracker.Resolve(milestro::input::kNativeScrollPhaseNone, UINT64_C(1) << 6U);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::InvalidTransition, result.kind);
+    EXPECT_EQ(ScrollPhaseMinimalGestureFailure::InvalidMomentumPhaseBits, result.failure);
+}
+
+TEST(ScrollPhaseMinimalGestureTrackerTest, RejectsMayBeginOutsideIdle) {
+    ScrollPhaseMinimalGestureTracker tracker;
+
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    auto result = tracker.Resolve(milestro::input::kNativeScrollPhaseMayBegin, milestro::input::kNativeScrollPhaseNone);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::InvalidTransition, result.kind);
+
+    tracker.Reset();
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseEnded, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    result = tracker.Resolve(milestro::input::kNativeScrollPhaseMayBegin, milestro::input::kNativeScrollPhaseNone);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::InvalidTransition, result.kind);
+
+    tracker.Reset();
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseEnded, milestro::input::kNativeScrollPhaseBegan)
+                      .gestureId);
+    result = tracker.Resolve(milestro::input::kNativeScrollPhaseMayBegin, milestro::input::kNativeScrollPhaseNone);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::InvalidTransition, result.kind);
+}
+
+TEST(ScrollPhaseMinimalGestureTrackerTest, NoneNonePreservesEveryLifecycleState) {
+    ScrollPhaseMinimalGestureTracker tracker;
+    const auto expectNoGesturePreservesSnapshot = [&tracker]() {
+        const auto before = tracker.Snapshot();
+        const auto result =
+                tracker.Resolve(milestro::input::kNativeScrollPhaseNone, milestro::input::kNativeScrollPhaseNone);
+        const auto after = tracker.Snapshot();
+        EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::NoGesture, result.kind);
+        EXPECT_EQ(before.state, after.state);
+        EXPECT_EQ(before.currentGestureId, after.currentGestureId);
+        EXPECT_EQ(before.nextGestureId, after.nextGestureId);
+        EXPECT_EQ(before.failure, after.failure);
+    };
+
+    expectNoGesturePreservesSnapshot();
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    ASSERT_EQ(ScrollPhaseMinimalGestureTrackerState::GestureActive, tracker.Snapshot().state);
+    expectNoGesturePreservesSnapshot();
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseEnded, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    ASSERT_EQ(ScrollPhaseMinimalGestureTrackerState::PendingMomentum, tracker.Snapshot().state);
+    expectNoGesturePreservesSnapshot();
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseNone, milestro::input::kNativeScrollPhaseBegan)
+                      .gestureId);
+    ASSERT_EQ(ScrollPhaseMinimalGestureTrackerState::MomentumActive, tracker.Snapshot().state);
+    expectNoGesturePreservesSnapshot();
+}
+
+TEST(ScrollPhaseMinimalGestureTrackerTest, ResolvesGestureEndCancelAndCleanSuccessorWithoutDeltaInput) {
+    ScrollPhaseMinimalGestureTracker tracker;
+
+    EXPECT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    EXPECT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseChanged, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    EXPECT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseStationary, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    EXPECT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseEnded, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    EXPECT_EQ(ScrollPhaseMinimalGestureTrackerState::PendingMomentum, tracker.Snapshot().state);
+
+    const auto pendingSnapshot = tracker.Snapshot();
+    const auto noGesture =
+            tracker.Resolve(milestro::input::kNativeScrollPhaseNone, milestro::input::kNativeScrollPhaseNone);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::NoGesture, noGesture.kind);
+    EXPECT_EQ(pendingSnapshot.state, tracker.Snapshot().state);
+    EXPECT_EQ(pendingSnapshot.currentGestureId, tracker.Snapshot().currentGestureId);
+
+    EXPECT_EQ(2,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    EXPECT_EQ(2,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseCanceled, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    EXPECT_EQ(ScrollPhaseMinimalGestureTrackerState::Idle, tracker.Snapshot().state);
+}
+
+TEST(ScrollPhaseMinimalGestureTrackerTest, ResolvesSameEventAndDelayedMomentumWithOneId) {
+    ScrollPhaseMinimalGestureTracker tracker;
+
+    EXPECT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    EXPECT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseEnded, milestro::input::kNativeScrollPhaseBegan)
+                      .gestureId);
+    EXPECT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseNone, milestro::input::kNativeScrollPhaseChanged)
+                      .gestureId);
+    EXPECT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseNone, milestro::input::kNativeScrollPhaseStationary)
+                      .gestureId);
+    EXPECT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseNone, milestro::input::kNativeScrollPhaseEnded)
+                      .gestureId);
+
+    tracker.Reset();
+    EXPECT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    EXPECT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseEnded, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    EXPECT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseNone, milestro::input::kNativeScrollPhaseBegan)
+                      .gestureId);
+    EXPECT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseNone, milestro::input::kNativeScrollPhaseCanceled)
+                      .gestureId);
+}
+
+TEST(ScrollPhaseMinimalGestureTrackerTest, LocksAmbiguousOwnerlessAndExhaustedTransitions) {
+    ScrollPhaseMinimalGestureTracker tracker;
+    auto result = tracker.Resolve(milestro::input::kNativeScrollPhaseChanged, milestro::input::kNativeScrollPhaseNone);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::InvalidTransition, result.kind);
+    EXPECT_EQ(ScrollPhaseMinimalGestureFailure::InvalidTransition, result.failure);
+    const auto failedSnapshot = tracker.Snapshot();
+    result = tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::InvalidTransition, result.kind);
+    EXPECT_EQ(failedSnapshot.failure, tracker.Snapshot().failure);
+
+    tracker.Reset();
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    result = tracker.Resolve(milestro::input::kNativeScrollPhaseChanged, milestro::input::kNativeScrollPhaseBegan);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::InvalidTransition, result.kind);
+
+    tracker.Reset();
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseEnded, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    result = tracker.Resolve(milestro::input::kNativeScrollPhaseNone, milestro::input::kNativeScrollPhaseChanged);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::InvalidTransition, result.kind);
+
+    tracker.Reset();
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseEnded, milestro::input::kNativeScrollPhaseBegan)
+                      .gestureId);
+    result = tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseEnded);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::InvalidTransition, result.kind);
+
+    ScrollPhaseMinimalGestureTracker exhausted(std::numeric_limits<int64_t>::max() - 1);
+    EXPECT_EQ(std::numeric_limits<int64_t>::max() - 1,
+              exhausted.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    EXPECT_EQ(std::numeric_limits<int64_t>::max() - 1,
+              exhausted.Resolve(milestro::input::kNativeScrollPhaseCanceled, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    result = exhausted.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone);
+    EXPECT_EQ(ScrollPhaseMinimalGestureResultKind::InvalidTransition, result.kind);
+    EXPECT_EQ(ScrollPhaseMinimalGestureFailure::GestureIdExhausted, result.failure);
+}
+
+TEST(ScrollPhaseMinimalGestureTrackerTest, RejectedAdmissionLeavesDirectTrackerSnapshotUnchanged) {
+    ScrollPhaseMinimalQueueAdmission admission;
+    ScrollPhaseMinimalGestureTracker tracker;
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    const auto before = tracker.Snapshot();
+
+    int64_t sequence = 0;
+    EXPECT_FALSE(admission.TryAccept(ScrollPhaseMinimalQueueAdmission::MaximumQueuedSamples, sequence));
+
+    const auto after = tracker.Snapshot();
+    EXPECT_EQ(before.state, after.state);
+    EXPECT_EQ(before.currentGestureId, after.currentGestureId);
+    EXPECT_EQ(before.nextGestureId, after.nextGestureId);
+    EXPECT_EQ(before.failure, after.failure);
+
+    admission = ScrollPhaseMinimalQueueAdmission(std::numeric_limits<int64_t>::max());
+    const auto beforeSequenceRejection = tracker.Snapshot();
+    EXPECT_FALSE(admission.TryAccept(0, sequence));
+    const auto afterSequenceRejection = tracker.Snapshot();
+    EXPECT_EQ(beforeSequenceRejection.state, afterSequenceRejection.state);
+    EXPECT_EQ(beforeSequenceRejection.currentGestureId, afterSequenceRejection.currentGestureId);
+    EXPECT_EQ(beforeSequenceRejection.nextGestureId, afterSequenceRejection.nextGestureId);
+    EXPECT_EQ(beforeSequenceRejection.failure, afterSequenceRejection.failure);
+}
+
+TEST(ScrollPhaseMinimalGestureTrackerTest, GestureValidityExistsOnlyForResolvedIds) {
+    ScrollPhaseMinimalGestureTracker tracker;
+    const auto noGesture =
+            tracker.Resolve(milestro::input::kNativeScrollPhaseNone, milestro::input::kNativeScrollPhaseNone);
+    EXPECT_EQ(milestro::input::kMinimalQueueScrollPhaseSampleFields,
+              milestro::input::MinimalTrackedScrollPhaseSampleFields(noGesture.kind ==
+                                                                     ScrollPhaseMinimalGestureResultKind::Resolved));
+
+    const auto resolved =
+            tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone);
+    const uint32_t resolvedFields = milestro::input::MinimalTrackedScrollPhaseSampleFields(
+            resolved.kind == ScrollPhaseMinimalGestureResultKind::Resolved);
+    EXPECT_TRUE(milestro::input::HasScrollPhaseSampleField(resolvedFields,
+                                                           milestro::input::ScrollPhaseSampleField::GestureId));
+
+    tracker.Reset();
+    const auto invalid =
+            tracker.Resolve(milestro::input::kNativeScrollPhaseChanged, milestro::input::kNativeScrollPhaseNone);
+    EXPECT_EQ(milestro::input::kMinimalQueueScrollPhaseSampleFields,
+              milestro::input::MinimalTrackedScrollPhaseSampleFields(invalid.kind ==
+                                                                     ScrollPhaseMinimalGestureResultKind::Resolved));
+}
+
+TEST(ScrollPhaseMinimalGestureTrackerTest, FailedCleanupRetainsTrackerAdmissionAndModeUntilSuccess) {
+    ScrollPhaseMinimalQueueAdmission admission;
+    ScrollPhaseMinimalGestureTracker tracker;
+    ScrollPhaseMonitorModePublication publication;
+    int64_t sequence = 0;
+    ASSERT_TRUE(admission.TryAccept(0, sequence));
+    ASSERT_EQ(1,
+              tracker.Resolve(milestro::input::kNativeScrollPhaseBegan, milestro::input::kNativeScrollPhaseNone)
+                      .gestureId);
+    publication.Publish(ScrollPhaseMonitorMode::QueueMinimalTrackedSamples);
+    const auto before = tracker.Snapshot();
+
+    admission.FinishCleanup(false);
+    tracker.FinishCleanup(false);
+    publication.FinishCleanup(false);
+
+    EXPECT_EQ(2, admission.NextSequence());
+    EXPECT_EQ(before.state, tracker.Snapshot().state);
+    EXPECT_EQ(before.currentGestureId, tracker.Snapshot().currentGestureId);
+    EXPECT_EQ(before.nextGestureId, tracker.Snapshot().nextGestureId);
+    EXPECT_TRUE(publication.IsActive());
+
+    admission.FinishCleanup(true);
+    tracker.FinishCleanup(true);
+    publication.FinishCleanup(true);
+
+    EXPECT_EQ(1, admission.NextSequence());
+    EXPECT_EQ(ScrollPhaseMinimalGestureTrackerState::Idle, tracker.Snapshot().state);
+    EXPECT_EQ(0, tracker.Snapshot().currentGestureId);
+    EXPECT_EQ(1, tracker.Snapshot().nextGestureId);
+    EXPECT_FALSE(publication.IsActive());
 }
 
 TEST(ScrollPhaseLeaseTest, RejectsSecondOwnerAndNonOwnerRelease) {
