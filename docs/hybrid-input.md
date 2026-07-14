@@ -58,6 +58,9 @@ delivery. Code must inspect `HybridInputCapabilities` and
 `HybridScrollCapability` instead of inferring richer behavior from the provider
 kind.
 
+See [limitations.md](limitations.md#hybridinput-scroll-deltaonly) for the
+user-visible release-timing and axis-lock limitations of delta-only scroll.
+
 Scroll owners continue to receive one uGUI `PointerEventData`. An optional
 `IHybridScrollInputProvider` may enrich that same event with capability and
 phase metadata; it is not a second delta source. A mismatched delta or unusable
@@ -92,19 +95,16 @@ composition callback.
 
 ## Platform IME Cancellation
 
-Losing text focus cancels an unconfirmed platform composition. Milestro
-invalidates the old ownership token before requesting native cancellation, so
-callbacks from that session cannot enter the old or new owner. When native
-cancellation fails or is unavailable, the result is visible through diagnostics
-and boundary completion remains fail-closed until a real empty-composition
-acknowledgement arrives.
+Losing text focus ends the managed composition ownership session. Milestro
+invalidates the old ownership token before any required native cancellation
+request, so callbacks from that session cannot enter the old or new owner. On
+platforms that require strict native cancellation, a failed or unavailable
+request is visible through diagnostics and boundary completion remains
+fail-closed until a real empty-composition acknowledgement arrives.
 
-On macOS, cancellation prevents the old composition from being flushed into
-either text owner, but the candidate window may remain visible. Dismissing that
-candidate UI through Unity's actual `NSTextInputClient` owner context is a known
-limitation tracked by task #112. Windows supports native cancellation of the
-focused composition during handoff. iOS currently reports `Unsupported` because
-Unity's actual `UITextInput` owner is not integrated.
+Windows supports native cancellation of the focused composition during
+handoff. See [limitations.md](limitations.md#hybridinput-ime-composition-and-session-control)
+for platform-specific IME composition and session-control limitations.
 
 ## Breaking Migration
 
