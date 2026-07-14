@@ -192,6 +192,39 @@ namespace Milestro.InputSystem.Service
                 return apiResult;
             }
 
+            public long PollMinimal(out int result, long leaseId, out MacScrollPhaseMinimalPoll poll)
+            {
+                var apiResult = BindingC.ScrollPhaseMonitorPollMinimal(out result,
+                    leaseId,
+                    out var captureInvalidReason,
+                    out var hasSample,
+                    out var hasMore,
+                    out var remaining,
+                    out var validFields,
+                    out var sequence,
+                    out var gestureId,
+                    out var timestamp,
+                    out var windowNumber,
+                    out var scrollingDeltaX,
+                    out var scrollingDeltaY,
+                    out var gesturePhase,
+                    out var momentumPhase);
+                poll = new MacScrollPhaseMinimalPoll(captureInvalidReason,
+                    hasSample != 0,
+                    hasMore != 0,
+                    remaining,
+                    new MacScrollPhaseMinimalSample(validFields,
+                        sequence,
+                        gestureId,
+                        timestamp,
+                        windowNumber,
+                        scrollingDeltaX,
+                        scrollingDeltaY,
+                        gesturePhase,
+                        momentumPhase));
+                return apiResult;
+            }
+
             public long Stop(out int result, long leaseId)
             {
                 return BindingC.ScrollPhaseMonitorStop(out result, leaseId);

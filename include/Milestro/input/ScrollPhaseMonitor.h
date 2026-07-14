@@ -13,6 +13,7 @@ enum class ScrollPhaseMonitorResult : int32_t {
     AlreadyStarted = 4,
     InvalidLease = 5,
     ModeContractMismatch = 6,
+    CaptureInvalid = 7,
 };
 
 enum class ScrollPhaseMonitorMode : int32_t {
@@ -100,6 +101,22 @@ constexpr ScrollPhaseMonitorResult ValidateLegacyScrollPhasePollMode(ScrollPhase
                                              : ScrollPhaseMonitorResult::ModeContractMismatch;
 }
 
+constexpr bool CanUseMinimalScrollPhasePoll(ScrollPhaseMonitorMode mode) noexcept {
+    return mode == ScrollPhaseMonitorMode::QueueMinimalTrackedSamples;
+}
+
+constexpr ScrollPhaseMonitorResult ValidateMinimalScrollPhasePollMode(ScrollPhaseMonitorMode mode) noexcept {
+    return CanUseMinimalScrollPhasePoll(mode) ? ScrollPhaseMonitorResult::Succeeded
+                                              : ScrollPhaseMonitorResult::ModeContractMismatch;
+}
+
+enum class ScrollPhaseMinimalQueueFailure : int32_t {
+    None = 0,
+    CapacityExceeded = 1,
+    SequenceExhausted = 2,
+    InvalidGestureTransition = 3,
+};
+
 enum class ScrollPhase : int32_t {
     Unknown = 0,
     None = 1,
@@ -185,9 +202,30 @@ struct ScrollPhaseSample {
     int32_t queueOverflowed = 0;
 };
 
+struct ScrollPhaseMinimalSample {
+    uint32_t validFields = 0;
+    int64_t sequence = 0;
+    int64_t gestureId = 0;
+    double timestamp = 0.0;
+    int64_t windowNumber = 0;
+    double scrollingDeltaX = 0.0;
+    double scrollingDeltaY = 0.0;
+    ScrollPhase gesturePhase = ScrollPhase::Unknown;
+    ScrollPhase momentumPhase = ScrollPhase::Unknown;
+};
+
+struct ScrollPhaseMinimalPollOutput {
+    ScrollPhaseMinimalQueueFailure captureInvalidReason = ScrollPhaseMinimalQueueFailure::None;
+    bool hasSample = false;
+    bool hasMore = false;
+    int32_t remaining = 0;
+    ScrollPhaseMinimalSample sample;
+};
+
 ScrollPhaseMonitorResult StartScrollPhaseMonitor(ScrollPhaseMonitorMode mode, int64_t& leaseId) noexcept;
 ScrollPhaseMonitorResult StopScrollPhaseMonitor(int64_t leaseId) noexcept;
 ScrollPhaseMonitorResult PollScrollPhaseMonitor(int64_t leaseId, ScrollPhaseSample& sample, bool& hasSample) noexcept;
+ScrollPhaseMonitorResult PollMinimalScrollPhaseMonitor(int64_t leaseId, ScrollPhaseMinimalPollOutput& output) noexcept;
 bool HasActiveScrollPhaseMonitorLease() noexcept;
 bool HasActiveScrollPhaseMonitorState() noexcept;
 bool IsScrollPhaseMonitorMainThread() noexcept;

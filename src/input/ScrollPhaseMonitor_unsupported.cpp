@@ -23,6 +23,12 @@ ScrollPhaseMonitorResult PollScrollPhaseMonitor(int64_t leaseId, ScrollPhaseSamp
     return ScrollPhaseMonitorResult::Unsupported;
 }
 
+ScrollPhaseMonitorResult PollMinimalScrollPhaseMonitor(int64_t leaseId, ScrollPhaseMinimalPollOutput& output) noexcept {
+    (void) leaseId;
+    output = {};
+    return ScrollPhaseMonitorResult::Unsupported;
+}
+
 bool HasActiveScrollPhaseMonitorLease() noexcept {
     return false;
 }

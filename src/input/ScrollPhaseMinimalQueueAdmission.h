@@ -1,18 +1,12 @@
 #ifndef MILESTRO_SCROLL_PHASE_MINIMAL_QUEUE_ADMISSION_H
 #define MILESTRO_SCROLL_PHASE_MINIMAL_QUEUE_ADMISSION_H
 
+#include <Milestro/input/ScrollPhaseMonitor.h>
+
 #include <cstddef>
-#include <cstdint>
 #include <limits>
 
 namespace milestro::input {
-
-enum class ScrollPhaseMinimalQueueFailure : int32_t {
-    None = 0,
-    CapacityExceeded = 1,
-    SequenceExhausted = 2,
-    InvalidGestureTransition = 3,
-};
 
 class ScrollPhaseMinimalQueueAdmission {
 public:

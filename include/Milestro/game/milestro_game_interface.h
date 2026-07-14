@@ -48,6 +48,21 @@ MILESTRO_API int64_t MilestroScrollPhaseMonitorPoll(int32_t& result,
                                                     int32_t& precise,
                                                     int32_t& directionInvertedFromDevice,
                                                     int32_t& queueOverflowed);
+MILESTRO_API int64_t MilestroScrollPhaseMonitorPollMinimal(int32_t& result,
+                                                           int64_t leaseId,
+                                                           int32_t& captureInvalidReason,
+                                                           int32_t& hasSample,
+                                                           int32_t& hasMore,
+                                                           int32_t& remaining,
+                                                           uint32_t& validFields,
+                                                           int64_t& sequence,
+                                                           int64_t& gestureId,
+                                                           double& timestamp,
+                                                           int64_t& windowNumber,
+                                                           double& scrollingDeltaX,
+                                                           double& scrollingDeltaY,
+                                                           int32_t& gesturePhase,
+                                                           int32_t& momentumPhase);
 
 [[milize::CSharpType("IntPtr")]] MILESTRO_API void* MilestroUnityRenderGetRenderEventAndDataFunc();
 MILESTRO_API int64_t MilestroUnityRenderGetMetalRenderEventId(int32_t& eventId);

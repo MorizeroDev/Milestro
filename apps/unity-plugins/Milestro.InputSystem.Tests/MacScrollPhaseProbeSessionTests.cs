@@ -8,6 +8,15 @@ namespace Milestro.InputSystemTests
 {
     public class MacScrollPhaseProbeSessionTests
     {
+        private const uint MinimalBaseFields =
+            (uint)(MacScrollPhaseSampleFields.Sequence |
+                   MacScrollPhaseSampleFields.Timestamp |
+                   MacScrollPhaseSampleFields.WindowNumber |
+                   MacScrollPhaseSampleFields.ScrollingDelta |
+                   MacScrollPhaseSampleFields.GesturePhase |
+                   MacScrollPhaseSampleFields.MomentumPhase);
+        private const uint MinimalResolvedFields = MinimalBaseFields | (uint)MacScrollPhaseSampleFields.GestureId;
+
         [Test]
         public void DefaultStageStartsAndAutoStopsWithoutPolling()
         {
@@ -71,6 +80,7 @@ namespace Milestro.InputSystemTests
             Assert.That((int)MacScrollPhaseProbeStage.NativePhasesTimestampWindowScrollingDelta, Is.EqualTo(12));
             Assert.That((int)MacScrollPhaseProbeStage.NativeMinimalQueue, Is.EqualTo(13));
             Assert.That((int)MacScrollPhaseProbeStage.NativeMinimalQueueTracker, Is.EqualTo(14));
+            Assert.That((int)MacScrollPhaseProbeStage.NativeMinimalPolling, Is.EqualTo(15));
 
             var transport = new FakeTransport();
             var sink = new FakeSink();
@@ -347,6 +357,381 @@ namespace Milestro.InputSystemTests
         }
 
         [Test]
+        public void NativeMinimalPollingUsesTrackedModeAndPollsUpdateAndLateUpdateWithoutManagedInput()
+        {
+            var transport = new FakeTransport();
+            transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(1, gesturePhase: 2)));
+            var sink = new FakeSink();
+            var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling);
+
+            session.Start(0d);
+            session.RecordActionAttachment("must-not-attach");
+            session.ObserveAction(1, 1d, new Vector2(1f, -1f), "/Mouse/scroll");
+            session.ObserveUgui(1, 7, new Vector2(1f, -1f));
+            session.Update(1, 0d);
+            transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(2,
+                gestureId: 0,
+                windowNumber: 99,
+                gesturePhase: 1,
+                validFields: MinimalBaseFields)));
+            session.LateUpdate(1);
+
+            Assert.That(session.RequiresInputAction, Is.False);
+            Assert.That(transport.LastStartMode, Is.EqualTo(MacScrollPhaseMonitorMode.QueueMinimalTrackedSamples));
+            Assert.That(transport.PollCount, Is.Zero);
+            Assert.That(transport.MinimalPollCount, Is.EqualTo(2));
+            Assert.That(transport.StopCount, Is.Zero);
+            Assert.That(sink.FlushCount, Is.Zero);
+            session.Disable();
+            Assert.That(transport.StopCount, Is.EqualTo(1));
+            Assert.That(sink.LastFailed, Is.False);
+            Assert.That(sink.LastTrace.Contains("action"), Is.False);
+            Assert.That(sink.LastTrace.Contains("ugui"), Is.False);
+        }
+
+        [Test]
+        public void NativeMinimalPollingFinalDrainsBeforeDurationStop()
+        {
+            var transport = new FakeTransport();
+            transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(1, gesturePhase: 2)));
+            var sink = new FakeSink();
+            var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling);
+            session.Start(0d);
+
+            session.Update(1, 4d);
+
+            Assert.That(transport.Calls.Count, Is.EqualTo(2));
+            Assert.That(transport.Calls[0], Is.EqualTo("minimal-poll"));
+            Assert.That(transport.Calls[1], Is.EqualTo("stop"));
+            Assert.That(transport.StopCount, Is.EqualTo(1));
+            Assert.That(sink.FlushCount, Is.EqualTo(1));
+            Assert.That(sink.LastFailed, Is.False);
+            Assert.That(sink.LastTrace.IndexOf("minimal source=final", System.StringComparison.Ordinal) <
+                        sink.LastTrace.IndexOf("monitor-stop", System.StringComparison.Ordinal), Is.True);
+        }
+
+        [Test]
+        public void NativeMinimalPollingRequiresValidatedCleanBeganAtDeadline()
+        {
+            var transport = new FakeTransport();
+            transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(1,
+                gestureId: 0,
+                gesturePhase: 7,
+                validFields: MinimalBaseFields)));
+            var sink = new FakeSink();
+            var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling);
+            session.Start(0d);
+
+            session.Update(1, 4d);
+
+            Assert.That(transport.StopCount, Is.EqualTo(1));
+            Assert.That(sink.LastFailed, Is.True);
+            Assert.That(sink.LastTrace.Contains("no-resolved-minimal-gesture"), Is.True);
+        }
+
+        [Test]
+        public void NativeMinimalPollingAcceptsExactly32DrainedSamplesWithoutInventingLateBacklog()
+        {
+            var transport = new FakeTransport();
+            for (var sequence = 1; sequence <= MacScrollPhaseProbeSession.MaxPollsPerFrame; ++sequence)
+            {
+                var remaining = MacScrollPhaseProbeSession.MaxPollsPerFrame - sequence;
+                transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(sequence,
+                    gesturePhase: sequence == 1 ? 2 : 3), remaining));
+            }
+            var sink = new FakeSink();
+            var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling);
+            session.Start(0d);
+
+            session.Update(1, 0d);
+            session.LateUpdate(1);
+
+            Assert.That(transport.MinimalPollCount, Is.EqualTo(MacScrollPhaseProbeSession.MaxPollsPerFrame));
+            Assert.That(transport.StopCount, Is.Zero);
+            Assert.That(sink.FlushCount, Is.Zero);
+            session.Disable();
+            Assert.That(sink.LastFailed, Is.False);
+        }
+
+        [Test]
+        public void NativeMinimalPollingFailsOnlyWhenActual32ndPollReportsRemaining()
+        {
+            var transport = new FakeTransport();
+            for (var sequence = 1; sequence <= MacScrollPhaseProbeSession.MaxPollsPerFrame; ++sequence)
+            {
+                var remaining = MacScrollPhaseProbeSession.MaxPollsPerFrame - sequence + 1;
+                transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(sequence,
+                    gesturePhase: sequence == 1 ? 2 : 3), remaining));
+            }
+            var sink = new FakeSink();
+            var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling);
+            session.Start(0d);
+
+            session.Update(1, 0d);
+
+            Assert.That(transport.MinimalPollCount, Is.EqualTo(MacScrollPhaseProbeSession.MaxPollsPerFrame));
+            Assert.That(transport.StopCount, Is.EqualTo(1));
+            Assert.That(sink.LastFailed, Is.True);
+            Assert.That(sink.LastTrace.Contains("minimal-poll-budget-exhausted"), Is.True);
+        }
+
+        [Test]
+        public void NativeMinimalPollingStopsOnCaptureInvalidWithoutConsumingPayload()
+        {
+            var transport = new FakeTransport();
+            transport.MinimalPolls.Enqueue(new FakeMinimalPollResponse(0,
+                (int)MacScrollPhaseMonitorResult.CaptureInvalid,
+                new MacScrollPhaseMinimalPoll((int)MacScrollPhaseCaptureInvalidReason.InvalidGestureTransition,
+                    false,
+                    false,
+                    0,
+                    default)));
+            var sink = new FakeSink();
+            var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling);
+            session.Start(0d);
+
+            session.Update(1, 0d);
+
+            Assert.That(transport.MinimalPollCount, Is.EqualTo(1));
+            Assert.That(transport.StopCount, Is.EqualTo(1));
+            Assert.That(sink.LastFailed, Is.True);
+            Assert.That(sink.LastTrace.Contains("native-capture-invalid reason=3"), Is.True);
+        }
+
+        [Test]
+        public void NativeMinimalPollingRejectsInvalidResultCombinations()
+        {
+            var responses = new[]
+            {
+                new FakeMinimalPollResponse(0,
+                    (int)MacScrollPhaseMonitorResult.Succeeded,
+                    new MacScrollPhaseMinimalPoll((int)MacScrollPhaseCaptureInvalidReason.CapacityExceeded,
+                        false,
+                        false,
+                        0,
+                        default)),
+                new FakeMinimalPollResponse(0,
+                    (int)MacScrollPhaseMonitorResult.CaptureInvalid,
+                    new MacScrollPhaseMinimalPoll((int)MacScrollPhaseCaptureInvalidReason.None,
+                        false,
+                        false,
+                        0,
+                        default)),
+                new FakeMinimalPollResponse(0,
+                    (int)MacScrollPhaseMonitorResult.CaptureInvalid,
+                    new MacScrollPhaseMinimalPoll((int)MacScrollPhaseCaptureInvalidReason.CapacityExceeded,
+                        true,
+                        false,
+                        0,
+                        MinimalSample(1, gesturePhase: 2))),
+                new FakeMinimalPollResponse(0,
+                    5,
+                    new MacScrollPhaseMinimalPoll(0, true, false, 0, MinimalSample(1, gesturePhase: 2)))
+            };
+
+            foreach (var response in responses)
+            {
+                var transport = new FakeTransport();
+                transport.MinimalPolls.Enqueue(response);
+                var sink = new FakeSink();
+                var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling);
+                session.Start(0d);
+
+                session.Update(1, 0d);
+
+                Assert.That(transport.StopCount, Is.EqualTo(1));
+                Assert.That(sink.LastFailed, Is.True);
+            }
+        }
+
+        [Test]
+        public void NativeMinimalPollingRejectsEmptyAndRemainingContractMismatches()
+        {
+            var polls = new[]
+            {
+                new MacScrollPhaseMinimalPoll(0, false, true, 1, default),
+                new MacScrollPhaseMinimalPoll(0, true, false, 1, MinimalSample(1, gesturePhase: 2)),
+                new MacScrollPhaseMinimalPoll(0, true, true, 0, MinimalSample(1, gesturePhase: 2)),
+                new MacScrollPhaseMinimalPoll(0, true, true, 256, MinimalSample(1, gesturePhase: 2))
+            };
+
+            foreach (var poll in polls)
+            {
+                var transport = new FakeTransport();
+                transport.MinimalPolls.Enqueue(new FakeMinimalPollResponse(0, 0, poll));
+                var sink = new FakeSink();
+                var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling);
+                session.Start(0d);
+
+                session.Update(1, 0d);
+
+                Assert.That(transport.StopCount, Is.EqualTo(1));
+                Assert.That(sink.LastFailed, Is.True);
+            }
+        }
+
+        [Test]
+        public void NativeMinimalPollingRejectsSequenceValidityPhaseAndFiniteContractViolations()
+        {
+            var invalidSamples = new[]
+            {
+                MinimalSample(2, gesturePhase: 2),
+                MinimalSample(1, gesturePhase: 2, validFields: MinimalBaseFields),
+                MinimalSample(1,
+                    gesturePhase: 2,
+                    validFields: MinimalResolvedFields | (1U << 5)),
+                MinimalSample(1,
+                    gestureId: 0,
+                    gesturePhase: 1,
+                    validFields: MinimalResolvedFields),
+                MinimalSample(1,
+                    gestureId: 0,
+                    gesturePhase: 2,
+                    validFields: MinimalBaseFields),
+                MinimalSample(1, gesturePhase: 0),
+                MinimalSample(1, gesturePhase: 2, timestamp: double.NaN),
+                MinimalSample(1, gesturePhase: 2, scrollingDeltaX: double.PositiveInfinity)
+            };
+
+            foreach (var sample in invalidSamples)
+            {
+                var transport = new FakeTransport();
+                transport.MinimalPolls.Enqueue(MinimalResponse(sample));
+                var sink = new FakeSink();
+                var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling);
+                session.Start(0d);
+
+                session.Update(1, 0d);
+
+                Assert.That(transport.StopCount, Is.EqualTo(1));
+                Assert.That(sink.LastFailed, Is.True);
+            }
+        }
+
+        [Test]
+        public void NativeMinimalPollingAcceptsZeroDeltaAndWindowPerCleanGestureWhileIgnoringNoGestureWindow()
+        {
+            var transport = new FakeTransport();
+            transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(1,
+                windowNumber: 0,
+                scrollingDeltaY: 0d,
+                gesturePhase: 2), 3));
+            transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(2,
+                windowNumber: 0,
+                scrollingDeltaY: 0d,
+                gesturePhase: 5), 2));
+            transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(3,
+                gestureId: 0,
+                windowNumber: 999,
+                scrollingDeltaY: 0d,
+                gesturePhase: 1,
+                validFields: MinimalBaseFields), 1));
+            transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(4,
+                gestureId: 2,
+                windowNumber: 5,
+                scrollingDeltaY: 0d,
+                gesturePhase: 2)));
+            var sink = new FakeSink();
+            var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling);
+            session.Start(0d);
+
+            session.Update(1, 0d);
+            session.Disable();
+
+            Assert.That(transport.MinimalPollCount, Is.EqualTo(4));
+            Assert.That(sink.LastFailed, Is.False);
+            Assert.That(sink.LastTrace.Contains("gesture=unavailable"), Is.True);
+        }
+
+        [Test]
+        public void NativeMinimalPollingRejectsSameGestureWindowChangeAndGestureIdJump()
+        {
+            var invalidSequences = new[]
+            {
+                new[]
+                {
+                    MinimalResponse(MinimalSample(1, windowNumber: 4, gesturePhase: 2), 1),
+                    MinimalResponse(MinimalSample(2, windowNumber: 5, gesturePhase: 3))
+                },
+                new[]
+                {
+                    MinimalResponse(MinimalSample(1, gesturePhase: 2), 1),
+                    MinimalResponse(MinimalSample(2, gestureId: 3, gesturePhase: 2))
+                },
+                new[]
+                {
+                    MinimalResponse(MinimalSample(1, gesturePhase: 2), 2),
+                    MinimalResponse(MinimalSample(2, gestureId: 2, gesturePhase: 2), 1),
+                    MinimalResponse(MinimalSample(3, gestureId: 1, gesturePhase: 3))
+                }
+            };
+
+            foreach (var responses in invalidSequences)
+            {
+                var transport = new FakeTransport();
+                foreach (var response in responses)
+                {
+                    transport.MinimalPolls.Enqueue(response);
+                }
+                var sink = new FakeSink();
+                var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling);
+                session.Start(0d);
+
+                session.Update(1, 0d);
+
+                Assert.That(transport.StopCount, Is.EqualTo(1));
+                Assert.That(sink.LastFailed, Is.True);
+            }
+        }
+
+        [Test]
+        public void NativeMinimalPollingRejectsSequenceGapAfterValidatedFirstSample()
+        {
+            var transport = new FakeTransport();
+            transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(1, gesturePhase: 2), 1));
+            transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(3, gesturePhase: 3)));
+            var sink = new FakeSink();
+            var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling);
+            session.Start(0d);
+
+            session.Update(1, 0d);
+
+            Assert.That(transport.StopCount, Is.EqualTo(1));
+            Assert.That(sink.LastFailed, Is.True);
+            Assert.That(sink.LastTrace.Contains("minimal-sequence expected=2 actual=3"), Is.True);
+        }
+
+        [Test]
+        public void NativeMinimalPollingTraceCapacityFailsClosedAndKeepsLeaseForStopRetry()
+        {
+            var transport = new FakeTransport();
+            transport.StopResults.Enqueue(5);
+            transport.StopResults.Enqueue(0);
+            var sink = new FakeSink();
+            var session = CreateSession(transport, sink, MacScrollPhaseProbeStage.NativeMinimalPolling, 100f);
+            session.Start(0d);
+            var sequence = 1;
+            for (var frame = 1; frame < 100 && !session.IsFinished; ++frame)
+            {
+                transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(sequence,
+                    gesturePhase: sequence == 1 ? 2 : 3)));
+                session.Update(frame, 0d);
+                ++sequence;
+            }
+
+            Assert.That(sink.FlushCount, Is.EqualTo(1));
+            Assert.That(sink.LastFailed, Is.True);
+            Assert.That(session.HasLease, Is.True);
+            Assert.That(Encoding.UTF8.GetByteCount(sink.LastTrace) <= MacScrollPhaseProbeSession.MaxTraceUtf8Bytes,
+                Is.True);
+            Assert.That(LineCount(sink.LastTrace) <= MacScrollPhaseProbeSession.MaxConsoleTraceLines, Is.True);
+            session.Disable();
+            Assert.That(session.HasLease, Is.False);
+            Assert.That(transport.StopCount, Is.EqualTo(2));
+            Assert.That(sink.FlushCount, Is.EqualTo(1));
+        }
+
+        [Test]
         public void NativePollingStopsAtSharedFrameBudgetAndFlushesOneCappedBatch()
         {
             var transport = new FakeTransport();
@@ -564,6 +949,42 @@ namespace Milestro.InputSystemTests
             return new MacScrollPhaseProbeSession(transport, sink, stage, duration, 42);
         }
 
+        private static MacScrollPhaseMinimalSample MinimalSample(long sequence,
+            long gestureId = 1,
+            long windowNumber = 4,
+            double timestamp = 1d,
+            double scrollingDeltaX = 0d,
+            double scrollingDeltaY = -1d,
+            int gesturePhase = 3,
+            int momentumPhase = 1,
+            uint validFields = MinimalResolvedFields)
+        {
+            return new MacScrollPhaseMinimalSample(validFields,
+                sequence,
+                gestureId,
+                timestamp,
+                windowNumber,
+                scrollingDeltaX,
+                scrollingDeltaY,
+                gesturePhase,
+                momentumPhase);
+        }
+
+        private static FakeMinimalPollResponse MinimalResponse(MacScrollPhaseMinimalSample sample,
+            int remaining = 0,
+            int monitorResult = 0,
+            int invalidReason = 0,
+            long apiResult = 0)
+        {
+            return new FakeMinimalPollResponse(apiResult,
+                monitorResult,
+                new MacScrollPhaseMinimalPoll(invalidReason,
+                    monitorResult == 0,
+                    remaining > 0,
+                    remaining,
+                    sample));
+        }
+
         private static MacScrollPhaseNativeSample Sample(long sequence,
             long windowNumber = 4,
             long keyWindowNumber = 4,
@@ -598,11 +1019,14 @@ namespace Milestro.InputSystemTests
         private sealed class FakeTransport : IMacScrollPhaseMonitorTransport
         {
             internal readonly Queue<MacScrollPhaseNativeSample> Samples = new Queue<MacScrollPhaseNativeSample>();
+            internal readonly Queue<FakeMinimalPollResponse> MinimalPolls = new Queue<FakeMinimalPollResponse>();
             internal readonly Queue<int> StopResults = new Queue<int>();
+            internal readonly List<string> Calls = new List<string>();
 
             internal int PollResult { get; set; }
             internal int StartResult { get; set; }
             internal int PollCount { get; private set; }
+            internal int MinimalPollCount { get; private set; }
             internal int StopCount { get; private set; }
             internal long LastStopLease { get; private set; }
             internal MacScrollPhaseMonitorMode LastStartMode { get; private set; }
@@ -623,13 +1047,47 @@ namespace Milestro.InputSystemTests
                 return 0;
             }
 
+            public long PollMinimal(out int result, long leaseId, out MacScrollPhaseMinimalPoll poll)
+            {
+                ++MinimalPollCount;
+                Calls.Add("minimal-poll");
+                if (MinimalPolls.Count == 0)
+                {
+                    result = 0;
+                    poll = default;
+                    return 0;
+                }
+                var response = MinimalPolls.Dequeue();
+                result = response.MonitorResult;
+                poll = response.Poll;
+                return response.ApiResult;
+            }
+
             public long Stop(out int result, long leaseId)
             {
                 ++StopCount;
+                Calls.Add("stop");
                 LastStopLease = leaseId;
                 result = StopResults.Count == 0 ? 0 : StopResults.Dequeue();
                 return 0;
             }
+        }
+
+
+        private readonly struct FakeMinimalPollResponse
+        {
+            internal FakeMinimalPollResponse(long apiResult,
+                int monitorResult,
+                MacScrollPhaseMinimalPoll poll)
+            {
+                ApiResult = apiResult;
+                MonitorResult = monitorResult;
+                Poll = poll;
+            }
+
+            internal long ApiResult { get; }
+            internal int MonitorResult { get; }
+            internal MacScrollPhaseMinimalPoll Poll { get; }
         }
 
         private sealed class FakeSink : IMacScrollPhaseProbeSink

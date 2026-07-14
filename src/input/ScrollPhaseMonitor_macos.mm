@@ -4,6 +4,7 @@
 #include "ScrollPhaseGestureTracker.h"
 #include "ScrollPhaseLease.h"
 #include "ScrollPhaseMinimalGestureTracker.h"
+#include "ScrollPhaseMinimalPollQueue.h"
 #include "ScrollPhaseMinimalQueueAdmission.h"
 #include "ScrollPhaseMonitorModePublication.h"
 
@@ -466,6 +467,28 @@ ScrollPhaseMonitorResult PollScrollPhaseMonitor(int64_t leaseId, ScrollPhaseSamp
         queueOverflowed = false;
         hasSample = true;
         return ScrollPhaseMonitorResult::Succeeded;
+    }
+}
+
+ScrollPhaseMonitorResult PollMinimalScrollPhaseMonitor(int64_t leaseId, ScrollPhaseMinimalPollOutput& output) noexcept {
+    @autoreleasepool {
+        output = {};
+        if (![NSThread isMainThread]) {
+            return ScrollPhaseMonitorResult::WrongThread;
+        }
+        const ScrollPhaseMonitorResult leaseResult = lease.Validate(leaseId);
+        if (leaseResult != ScrollPhaseMonitorResult::Succeeded) {
+            return leaseResult;
+        }
+        ScrollPhaseMonitorMode publishedMode = ScrollPhaseMonitorMode::PassThrough;
+        if (!activeMonitorMode.TryLoad(publishedMode)) {
+            return ScrollPhaseMonitorResult::ModeContractMismatch;
+        }
+        const ScrollPhaseMonitorResult modeResult = ValidateMinimalScrollPhasePollMode(publishedMode);
+        if (modeResult != ScrollPhaseMonitorResult::Succeeded) {
+            return modeResult;
+        }
+        return PollMinimalScrollPhaseQueue(samples, minimalQueueAdmission.Failure(), output);
     }
 }
 

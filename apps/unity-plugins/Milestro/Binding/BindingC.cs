@@ -51,6 +51,24 @@ namespace Milestro.Binding
                                                                   out int queueOverflowed);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroScrollPhaseMonitorPollMinimal")]
+        internal static extern unsafe long ScrollPhaseMonitorPollMinimal(out int result,
+                                                                         long leaseId,
+                                                                         out int captureInvalidReason,
+                                                                         out int hasSample,
+                                                                         out int hasMore,
+                                                                         out int remaining,
+                                                                         out uint validFields,
+                                                                         out long sequence,
+                                                                         out long gestureId,
+                                                                         out double timestamp,
+                                                                         out long windowNumber,
+                                                                         out double scrollingDeltaX,
+                                                                         out double scrollingDeltaY,
+                                                                         out int gesturePhase,
+                                                                         out int momentumPhase);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetRenderEventAndDataFunc")]
         internal static extern unsafe IntPtr UnityRenderGetRenderEventAndDataFunc();
 

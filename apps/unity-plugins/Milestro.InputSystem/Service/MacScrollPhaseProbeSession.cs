@@ -20,7 +20,96 @@ namespace Milestro.InputSystem.Service
         NativePhasesTimestampWindow = 11,
         NativePhasesTimestampWindowScrollingDelta = 12,
         NativeMinimalQueue = 13,
-        NativeMinimalQueueTracker = 14
+        NativeMinimalQueueTracker = 14,
+        NativeMinimalPolling = 15
+    }
+
+    internal enum MacScrollPhaseMonitorResult
+    {
+        Succeeded = 0,
+        CaptureInvalid = 7
+    }
+
+    internal enum MacScrollPhaseCaptureInvalidReason
+    {
+        None = 0,
+        CapacityExceeded = 1,
+        SequenceExhausted = 2,
+        InvalidGestureTransition = 3
+    }
+
+    [Flags]
+    internal enum MacScrollPhaseSampleFields : uint
+    {
+        Sequence = 1U << 0,
+        GestureId = 1U << 1,
+        Timestamp = 1U << 2,
+        WindowNumber = 1U << 3,
+        ScrollingDelta = 1U << 7,
+        GesturePhase = 1U << 8,
+        MomentumPhase = 1U << 9
+    }
+
+    internal readonly struct MacScrollPhaseMinimalSample
+    {
+        internal MacScrollPhaseMinimalSample(uint validFields,
+            long sequence,
+            long gestureId,
+            double timestamp,
+            long windowNumber,
+            double scrollingDeltaX,
+            double scrollingDeltaY,
+            int gesturePhase,
+            int momentumPhase)
+        {
+            ValidFields = validFields;
+            Sequence = sequence;
+            GestureId = gestureId;
+            Timestamp = timestamp;
+            WindowNumber = windowNumber;
+            ScrollingDeltaX = scrollingDeltaX;
+            ScrollingDeltaY = scrollingDeltaY;
+            GesturePhase = gesturePhase;
+            MomentumPhase = momentumPhase;
+        }
+
+        internal uint ValidFields { get; }
+        internal long Sequence { get; }
+        internal long GestureId { get; }
+        internal double Timestamp { get; }
+        internal long WindowNumber { get; }
+        internal double ScrollingDeltaX { get; }
+        internal double ScrollingDeltaY { get; }
+        internal int GesturePhase { get; }
+        internal int MomentumPhase { get; }
+
+        internal bool IsZero => ValidFields == 0 && Sequence == 0 && GestureId == 0 && Timestamp == 0d &&
+                                WindowNumber == 0 && ScrollingDeltaX == 0d && ScrollingDeltaY == 0d &&
+                                GesturePhase == 0 && MomentumPhase == 0;
+    }
+
+    internal readonly struct MacScrollPhaseMinimalPoll
+    {
+        internal MacScrollPhaseMinimalPoll(int captureInvalidReason,
+            bool hasSample,
+            bool hasMore,
+            int remaining,
+            MacScrollPhaseMinimalSample sample)
+        {
+            CaptureInvalidReason = captureInvalidReason;
+            HasSample = hasSample;
+            HasMore = hasMore;
+            Remaining = remaining;
+            Sample = sample;
+        }
+
+        internal int CaptureInvalidReason { get; }
+        internal bool HasSample { get; }
+        internal bool HasMore { get; }
+        internal int Remaining { get; }
+        internal MacScrollPhaseMinimalSample Sample { get; }
+
+        internal bool HasSamplePayload => HasSample || HasMore || Remaining != 0 || !Sample.IsZero;
     }
 
     internal enum MacScrollPhaseMonitorMode
@@ -113,6 +202,7 @@ namespace Milestro.InputSystem.Service
     {
         long Start(MacScrollPhaseMonitorMode mode, out int result, out long leaseId);
         long Poll(out int result, long leaseId, out MacScrollPhaseNativeSample sample);
+        long PollMinimal(out int result, long leaseId, out MacScrollPhaseMinimalPoll poll);
         long Stop(out int result, long leaseId);
     }
 
@@ -130,6 +220,15 @@ namespace Milestro.InputSystem.Service
 
         private const string LogPrefix = "[MILESTRO_SCROLL_PHASE_POC]";
         private const int MaxBufferedTraceLines = MaxConsoleTraceLines - 2;
+        private const uint MinimalBaseSampleFields =
+            (uint)(MacScrollPhaseSampleFields.Sequence |
+                   MacScrollPhaseSampleFields.Timestamp |
+                   MacScrollPhaseSampleFields.WindowNumber |
+                   MacScrollPhaseSampleFields.ScrollingDelta |
+                   MacScrollPhaseSampleFields.GesturePhase |
+                   MacScrollPhaseSampleFields.MomentumPhase);
+        private const uint MinimalResolvedSampleFields =
+            MinimalBaseSampleFields | (uint)MacScrollPhaseSampleFields.GestureId;
 
         private readonly IMacScrollPhaseMonitorTransport transport;
         private readonly IMacScrollPhaseProbeSink sink;
@@ -146,12 +245,16 @@ namespace Milestro.InputSystem.Service
         private int traceUtf8Bytes;
         private double captureStartedAt;
         private long lastNativeSequence;
+        private long lastMinimalSequence;
+        private long highestResolvedGestureId;
+        private long resolvedGestureWindow;
         private long boundGestureId;
         private long monitorLeaseId;
         private bool started;
         private bool captureFailed;
         private bool captureComplete;
         private bool traceFlushed;
+        private bool hasValidatedCleanBegan;
 
         internal MacScrollPhaseProbeSession(IMacScrollPhaseMonitorTransport transport,
             IMacScrollPhaseProbeSink sink,
@@ -185,7 +288,8 @@ namespace Milestro.InputSystem.Service
                                                     ? MacScrollPhaseMonitorMode.ReadPhasesTimestampWindowScrollingDelta
                                                     : stage == MacScrollPhaseProbeStage.NativeMinimalQueue
                                                         ? MacScrollPhaseMonitorMode.QueueMinimalSamples
-                                                        : stage == MacScrollPhaseProbeStage.NativeMinimalQueueTracker
+                                                        : stage == MacScrollPhaseProbeStage.NativeMinimalQueueTracker ||
+                                                          stage == MacScrollPhaseProbeStage.NativeMinimalPolling
                                                             ? MacScrollPhaseMonitorMode.QueueMinimalTrackedSamples
                                                             : MacScrollPhaseMonitorMode.CaptureSamples;
             this.captureDurationSeconds = Math.Max(0.25f, captureDurationSeconds);
@@ -198,6 +302,7 @@ namespace Milestro.InputSystem.Service
         internal bool HasLease => monitorLeaseId != 0;
 
         private bool PollsNativeSamples => stage == MacScrollPhaseProbeStage.NativePolling || RequiresInputAction;
+        private bool PollsMinimalSamples => stage == MacScrollPhaseProbeStage.NativeMinimalPolling;
         private bool RequiresUguiAssociation => stage == MacScrollPhaseProbeStage.UguiAssociation;
 
         internal void Start(double now)
@@ -212,6 +317,10 @@ namespace Milestro.InputSystem.Service
             pollBudget.Reset();
             associationTracker.Reset();
             lifecycleTracker.Reset();
+            lastMinimalSequence = 0;
+            highestResolvedGestureId = 0;
+            resolvedGestureWindow = 0;
+            hasValidatedCleanBegan = false;
             var apiResult = transport.Start(monitorMode, out var monitorResult, out monitorLeaseId);
             AppendTrace($"monitor-start stage={stage} api={apiResult} result={monitorResult} lease={monitorLeaseId}");
             if (apiResult != 0 || monitorResult != 0 || monitorLeaseId == 0)
@@ -228,8 +337,25 @@ namespace Milestro.InputSystem.Service
             }
             if (now - captureStartedAt >= captureDurationSeconds)
             {
+                if (PollsMinimalSamples)
+                {
+                    DrainMinimalSamples("final", frame);
+                    if (captureFailed)
+                    {
+                        return;
+                    }
+                    if (!hasValidatedCleanBegan)
+                    {
+                        FailCapture("no-resolved-minimal-gesture");
+                        return;
+                    }
+                }
                 CompleteCapture("duration-elapsed");
                 return;
+            }
+            if (PollsMinimalSamples)
+            {
+                DrainMinimalSamples("update", frame);
             }
             if (PollsNativeSamples)
             {
@@ -244,7 +370,17 @@ namespace Milestro.InputSystem.Service
 
         internal void LateUpdate(int frame)
         {
-            if (IsFinished || !RequiresUguiAssociation)
+            if (IsFinished)
+            {
+                return;
+            }
+
+            if (PollsMinimalSamples)
+            {
+                DrainMinimalSamples("late-update", frame);
+                return;
+            }
+            if (!RequiresUguiAssociation)
             {
                 return;
             }
@@ -387,6 +523,215 @@ namespace Milestro.InputSystem.Service
             }
 
             FailCapture($"poll-budget-exhausted frame={frame} budget={MaxPollsPerFrame}");
+        }
+
+        private void DrainMinimalSamples(string source, int frame)
+        {
+            if (!HasLease)
+            {
+                return;
+            }
+
+            while (pollBudget.TryConsume(frame))
+            {
+                var apiResult = transport.PollMinimal(out var monitorResult, monitorLeaseId, out var poll);
+                if (apiResult != 0)
+                {
+                    FailCapture($"minimal-poll-api-failed api={apiResult}");
+                    return;
+                }
+                if (!ValidateMinimalPollResult(monitorResult, poll))
+                {
+                    return;
+                }
+                if (!poll.HasSample)
+                {
+                    if (poll.HasSamplePayload)
+                    {
+                        FailCapture("minimal-poll-empty-payload");
+                    }
+                    return;
+                }
+                if (poll.Remaining < 0 ||
+                    poll.Remaining >= 256 ||
+                    poll.HasMore != (poll.Remaining > 0))
+                {
+                    FailCapture("minimal-poll-remaining-contract");
+                    return;
+                }
+                if (!ValidateMinimalSample(poll.Sample, source, frame, poll.Remaining))
+                {
+                    return;
+                }
+                if (!poll.HasMore)
+                {
+                    return;
+                }
+                if (pollBudget.PollsThisFrame == MaxPollsPerFrame)
+                {
+                    FailCapture($"minimal-poll-budget-exhausted frame={frame} remaining={poll.Remaining}");
+                    return;
+                }
+            }
+        }
+
+        private bool ValidateMinimalPollResult(int monitorResult, MacScrollPhaseMinimalPoll poll)
+        {
+            if (monitorResult == (int)MacScrollPhaseMonitorResult.Succeeded)
+            {
+                if (poll.CaptureInvalidReason != (int)MacScrollPhaseCaptureInvalidReason.None)
+                {
+                    FailCapture("minimal-poll-success-with-invalid-reason");
+                    return false;
+                }
+                return true;
+            }
+
+            if (monitorResult == (int)MacScrollPhaseMonitorResult.CaptureInvalid)
+            {
+                var knownReason = poll.CaptureInvalidReason >=
+                                  (int)MacScrollPhaseCaptureInvalidReason.CapacityExceeded &&
+                                  poll.CaptureInvalidReason <=
+                                  (int)MacScrollPhaseCaptureInvalidReason.InvalidGestureTransition;
+                if (!knownReason || poll.HasSamplePayload)
+                {
+                    FailCapture("minimal-poll-invalid-result-contract");
+                    return false;
+                }
+                FailCapture($"native-capture-invalid reason={poll.CaptureInvalidReason}");
+                return false;
+            }
+
+            if (poll.CaptureInvalidReason != (int)MacScrollPhaseCaptureInvalidReason.None || poll.HasSamplePayload)
+            {
+                FailCapture("minimal-poll-error-result-contract");
+                return false;
+            }
+            FailCapture($"minimal-poll-failed result={monitorResult}");
+            return false;
+        }
+
+        private bool ValidateMinimalSample(MacScrollPhaseMinimalSample sample,
+            string source,
+            int frame,
+            int remaining)
+        {
+            var noGesture = IsNoGesturePhasePair(sample.GesturePhase, sample.MomentumPhase);
+            var resolved = IsResolvedPhasePair(sample.GesturePhase, sample.MomentumPhase);
+            if (!noGesture && !resolved)
+            {
+                FailCapture("minimal-phase-combination-invalid");
+                return false;
+            }
+
+            var expectedFields = resolved ? MinimalResolvedSampleFields : MinimalBaseSampleFields;
+            if (sample.ValidFields != expectedFields)
+            {
+                FailCapture($"minimal-valid-fields expected={expectedFields:X} actual={sample.ValidFields:X}");
+                return false;
+            }
+
+            var expectedSequence = lastMinimalSequence == 0 ? 1 : lastMinimalSequence + 1;
+            if (sample.Sequence != expectedSequence)
+            {
+                FailCapture($"minimal-sequence expected={expectedSequence} actual={sample.Sequence}");
+                return false;
+            }
+            if (!IsFinite(sample.Timestamp) ||
+                !IsFinite(sample.ScrollingDeltaX) ||
+                !IsFinite(sample.ScrollingDeltaY))
+            {
+                FailCapture("minimal-non-finite-value");
+                return false;
+            }
+            if (noGesture && sample.GestureId != 0)
+            {
+                FailCapture("minimal-no-gesture-id-present");
+                return false;
+            }
+
+            var nextHighestGestureId = highestResolvedGestureId;
+            var nextGestureWindow = resolvedGestureWindow;
+            var cleanBegan = sample.GesturePhase == 2 && sample.MomentumPhase == 1;
+            if (resolved)
+            {
+                if (sample.GestureId <= 0)
+                {
+                    FailCapture("minimal-resolved-gesture-id-invalid");
+                    return false;
+                }
+                if (highestResolvedGestureId == 0)
+                {
+                    if (sample.GestureId != 1 || !cleanBegan)
+                    {
+                        FailCapture("minimal-first-gesture-not-clean-began");
+                        return false;
+                    }
+                    nextHighestGestureId = sample.GestureId;
+                    nextGestureWindow = sample.WindowNumber;
+                }
+                else if (sample.GestureId == highestResolvedGestureId)
+                {
+                    if (sample.WindowNumber != resolvedGestureWindow)
+                    {
+                        FailCapture("minimal-gesture-window-changed");
+                        return false;
+                    }
+                }
+                else
+                {
+                    if (sample.GestureId != highestResolvedGestureId + 1 || !cleanBegan)
+                    {
+                        FailCapture("minimal-gesture-id-trajectory");
+                        return false;
+                    }
+                    nextHighestGestureId = sample.GestureId;
+                    nextGestureWindow = sample.WindowNumber;
+                }
+            }
+
+            var gesture = resolved ? sample.GestureId.ToString() : "unavailable";
+            AppendTrace($"minimal source={source} frame={frame} seq={sample.Sequence} " +
+                        $"valid=0x{sample.ValidFields:X} gesture={gesture} timestamp={sample.Timestamp:F6} " +
+                        $"window={sample.WindowNumber} scrolling=({sample.ScrollingDeltaX:F4}," +
+                        $"{sample.ScrollingDeltaY:F4}) phase={sample.GesturePhase} " +
+                        $"momentum={sample.MomentumPhase} remaining={remaining}");
+            if (captureFailed)
+            {
+                return false;
+            }
+
+            lastMinimalSequence = sample.Sequence;
+            if (resolved)
+            {
+                highestResolvedGestureId = nextHighestGestureId;
+                resolvedGestureWindow = nextGestureWindow;
+                if (cleanBegan)
+                {
+                    hasValidatedCleanBegan = true;
+                }
+            }
+            return true;
+        }
+
+        private static bool IsNoGesturePhasePair(int gesturePhase, int momentumPhase)
+        {
+            return gesturePhase == 1 && momentumPhase == 1 ||
+                   gesturePhase == 7 && momentumPhase == 1 ||
+                   gesturePhase == 1 && momentumPhase == 7;
+        }
+
+        private static bool IsResolvedPhasePair(int gesturePhase, int momentumPhase)
+        {
+            var gestureLifecycle = gesturePhase >= 2 && gesturePhase <= 6 && momentumPhase == 1;
+            var sameEventMomentum = gesturePhase == 5 && momentumPhase == 2;
+            var momentumLifecycle = gesturePhase == 1 && momentumPhase >= 2 && momentumPhase <= 6;
+            return gestureLifecycle || sameEventMomentum || momentumLifecycle;
+        }
+
+        private static bool IsFinite(double value)
+        {
+            return !double.IsNaN(value) && !double.IsInfinity(value);
         }
 
         private void AppendTrace(string message)

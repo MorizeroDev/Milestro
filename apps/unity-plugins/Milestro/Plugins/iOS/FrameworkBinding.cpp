@@ -61,6 +61,38 @@ int64_t FrameworkBindingMilestroScrollPhaseMonitorPoll(int32_t& result,
                                           queueOverflowed);
 }
 
+int64_t FrameworkBindingMilestroScrollPhaseMonitorPollMinimal(int32_t& result,
+                                                              int64_t leaseId,
+                                                              int32_t& captureInvalidReason,
+                                                              int32_t& hasSample,
+                                                              int32_t& hasMore,
+                                                              int32_t& remaining,
+                                                              uint32_t& validFields,
+                                                              int64_t& sequence,
+                                                              int64_t& gestureId,
+                                                              double& timestamp,
+                                                              int64_t& windowNumber,
+                                                              double& scrollingDeltaX,
+                                                              double& scrollingDeltaY,
+                                                              int32_t& gesturePhase,
+                                                              int32_t& momentumPhase) {
+    return MilestroScrollPhaseMonitorPollMinimal(result,
+                                                 leaseId,
+                                                 captureInvalidReason,
+                                                 hasSample,
+                                                 hasMore,
+                                                 remaining,
+                                                 validFields,
+                                                 sequence,
+                                                 gestureId,
+                                                 timestamp,
+                                                 windowNumber,
+                                                 scrollingDeltaX,
+                                                 scrollingDeltaY,
+                                                 gesturePhase,
+                                                 momentumPhase);
+}
+
 void* FrameworkBindingMilestroUnityRenderGetRenderEventAndDataFunc() {
     return MilestroUnityRenderGetRenderEventAndDataFunc();
 }

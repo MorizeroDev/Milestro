@@ -55,4 +55,37 @@ MILESTRO_API int64_t MilestroScrollPhaseMonitorPoll(int32_t& result,
     queueOverflowed = sample.queueOverflowed;
     return MILESTRO_API_RET_OK;
 }
+
+MILESTRO_API int64_t MilestroScrollPhaseMonitorPollMinimal(int32_t& result,
+                                                           int64_t leaseId,
+                                                           int32_t& captureInvalidReason,
+                                                           int32_t& hasSample,
+                                                           int32_t& hasMore,
+                                                           int32_t& remaining,
+                                                           uint32_t& validFields,
+                                                           int64_t& sequence,
+                                                           int64_t& gestureId,
+                                                           double& timestamp,
+                                                           int64_t& windowNumber,
+                                                           double& scrollingDeltaX,
+                                                           double& scrollingDeltaY,
+                                                           int32_t& gesturePhase,
+                                                           int32_t& momentumPhase) {
+    milestro::input::ScrollPhaseMinimalPollOutput output;
+    result = static_cast<int32_t>(milestro::input::PollMinimalScrollPhaseMonitor(leaseId, output));
+    captureInvalidReason = static_cast<int32_t>(output.captureInvalidReason);
+    hasSample = output.hasSample ? 1 : 0;
+    hasMore = output.hasMore ? 1 : 0;
+    remaining = output.remaining;
+    validFields = output.sample.validFields;
+    sequence = output.sample.sequence;
+    gestureId = output.sample.gestureId;
+    timestamp = output.sample.timestamp;
+    windowNumber = output.sample.windowNumber;
+    scrollingDeltaX = output.sample.scrollingDeltaX;
+    scrollingDeltaY = output.sample.scrollingDeltaY;
+    gesturePhase = static_cast<int32_t>(output.sample.gesturePhase);
+    momentumPhase = static_cast<int32_t>(output.sample.momentumPhase);
+    return MILESTRO_API_RET_OK;
+}
 }
