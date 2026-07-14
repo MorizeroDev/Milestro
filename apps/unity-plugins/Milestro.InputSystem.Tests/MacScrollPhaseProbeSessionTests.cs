@@ -858,6 +858,7 @@ namespace Milestro.InputSystemTests
             var invalidRecords = new Action<MacScrollPhaseProbeSession>[]
             {
                 session => CommitActionRecord(session, 1, double.NaN, Vector2.down),
+                session => CommitActionRecord(session, 1, -1d, Vector2.down),
                 session => CommitActionRecord(session, 1, 1d, new Vector2(float.NaN, 0f)),
                 session => CommitActionRecord(session, 1, 1d, Vector2.down, phase: 4),
                 session => CommitActionRecord(session, 1, 1d, Vector2.down, deviceId: 0),
@@ -918,6 +919,37 @@ namespace Milestro.InputSystemTests
             tickSession.Update(1, 0d);
 
             Assert.That(tickSink.LastTrace.Contains("FAIL action-record-order-invalid"), Is.True);
+
+            var contextTransport = new FakeTransport();
+            var contextOwner = new FakeActionTraceOwner(contextTransport.Calls);
+            var contextSink = new FakeSink();
+            var contextSession = CreateSession(contextTransport,
+                contextSink,
+                MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                actionTraceOwner: contextOwner);
+            contextSession.StartActionTrace(0d);
+            var contextTicks = Stopwatch.GetTimestamp();
+            CommitActionRecord(contextSession,
+                1,
+                2d,
+                Vector2.down,
+                timestampTicks: contextTicks + 1);
+            CommitActionRecord(contextSession,
+                1,
+                1d,
+                Vector2.down,
+                timestampTicks: contextTicks + 2);
+
+            contextSession.Update(1, 0d);
+            contextSession.Disable();
+
+            Assert.That(contextSink.LastFailed, Is.False);
+            Assert.That(contextSink.LastTrace.Contains("action seq=1 frame=1"), Is.True);
+            Assert.That(contextSink.LastTrace.Contains("contextTime=2"), Is.True);
+            Assert.That(contextSink.LastTrace.Contains("action seq=2 frame=1"), Is.True);
+            Assert.That(contextSink.LastTrace.Contains("contextTime=1"), Is.True);
+            Assert.That(contextSink.LastTrace.Contains("action-record-order-invalid"), Is.False);
+            Assert.That(string.Join(",", contextTransport.Calls), Is.EqualTo("minimal-poll,detach,stop"));
         }
 
         [Test]

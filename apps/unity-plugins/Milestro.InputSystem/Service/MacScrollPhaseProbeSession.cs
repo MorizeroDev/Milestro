@@ -384,7 +384,6 @@ namespace Milestro.InputSystem.Service
         private long actionTraceStartedAtTicks;
         private int lastActionFrame;
         private long lastActionElapsedTicks;
-        private double lastActionContextTime;
         private bool hasActionRecord;
         private bool hasNonZeroActionDelta;
         private bool hasPendingMinimalInvalidDetail;
@@ -550,7 +549,6 @@ namespace Milestro.InputSystem.Service
             drainedActionRecordCount = 0;
             lastActionFrame = 0;
             lastActionElapsedTicks = 0;
-            lastActionContextTime = 0d;
             hasActionRecord = false;
             hasNonZeroActionDelta = false;
             hasPendingMinimalInvalidDetail = false;
@@ -842,15 +840,13 @@ namespace Milestro.InputSystem.Service
                 }
                 if (hasActionRecord &&
                     (record.Frame < lastActionFrame ||
-                     record.ElapsedTicks < lastActionElapsedTicks ||
-                     record.ContextTime < lastActionContextTime))
+                     record.ElapsedTicks < lastActionElapsedTicks))
                 {
                     failureReason = "action-record-order-invalid";
                     return false;
                 }
                 lastActionFrame = record.Frame;
                 lastActionElapsedTicks = record.ElapsedTicks;
-                lastActionContextTime = record.ContextTime;
                 hasActionRecord = true;
                 if (record.DeltaX != 0f || record.DeltaY != 0f)
                 {
