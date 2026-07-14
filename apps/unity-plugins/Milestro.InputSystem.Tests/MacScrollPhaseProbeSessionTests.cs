@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using Milestro.InputSystem.Service;
 using NUnit.Framework;
@@ -81,6 +83,7 @@ namespace Milestro.InputSystemTests
             Assert.That((int)MacScrollPhaseProbeStage.NativeMinimalQueue, Is.EqualTo(13));
             Assert.That((int)MacScrollPhaseProbeStage.NativeMinimalQueueTracker, Is.EqualTo(14));
             Assert.That((int)MacScrollPhaseProbeStage.NativeMinimalPolling, Is.EqualTo(15));
+            Assert.That((int)MacScrollPhaseProbeStage.NativeMinimalInputActionTrace, Is.EqualTo(16));
 
             var transport = new FakeTransport();
             var sink = new FakeSink();
@@ -409,6 +412,438 @@ namespace Milestro.InputSystemTests
             Assert.That(sink.LastFailed, Is.False);
             Assert.That(sink.LastTrace.IndexOf("minimal source=final", System.StringComparison.Ordinal) <
                         sink.LastTrace.IndexOf("monitor-stop", System.StringComparison.Ordinal), Is.True);
+        }
+
+        [Test]
+        public void NativeMinimalInputActionTraceUsesMode12WithoutLegacyInputOrAssociation()
+        {
+            var transport = new FakeTransport();
+            var owner = new FakeActionTraceOwner(transport.Calls);
+            var sink = new FakeSink();
+            var session = CreateSession(transport,
+                sink,
+                MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                actionTraceOwner: owner);
+
+            session.Start(0d);
+            session.RecordActionTraceAttachment();
+            session.ObserveAction(1, 1d, Vector2.down, "/must/not/read");
+            session.ObserveUgui(1, 7, Vector2.down);
+            session.Disable();
+
+            Assert.That(session.TracesInputActionCandidates, Is.True);
+            Assert.That(session.RequiresInputAction, Is.False);
+            Assert.That(transport.LastStartMode, Is.EqualTo(MacScrollPhaseMonitorMode.QueueMinimalTrackedSamples));
+            Assert.That(transport.PollCount, Is.Zero);
+            Assert.That(transport.MinimalPollCount, Is.Zero);
+            Assert.That(transport.Calls, Is.EqualTo(new[] { "detach", "stop" }));
+            Assert.That(sink.LastTrace.Contains("action-trace-attached callback=performed"), Is.True);
+            Assert.That(sink.LastTrace.Contains("action frame="), Is.False);
+            Assert.That(sink.LastTrace.Contains("ugui frame="), Is.False);
+            Assert.That(sink.LastTrace.Contains("associated"), Is.False);
+            Assert.That(sink.LastFailed, Is.False);
+        }
+
+        [Test]
+        public void NativeMinimalInputActionTraceKeepsZeroAndSameFrameRecordsOnIndependentTimeline()
+        {
+            var transport = new FakeTransport();
+            transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(1, gesturePhase: 2)));
+            var owner = new FakeActionTraceOwner(transport.Calls);
+            var sink = new FakeSink();
+            var session = CreateSession(transport,
+                sink,
+                MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                actionTraceOwner: owner);
+            session.Start(0d);
+            session.RecordActionTraceAttachment();
+            CommitActionRecord(session, 7, 1d, Vector2.zero, 3, 0, 0, 64);
+            CommitActionRecord(session, 7, 2d, new Vector2(1f, -2f), 9, 4, 2, 32);
+
+            session.Update(7, 4d);
+
+            Assert.That(transport.Calls, Is.EqualTo(new[] { "minimal-poll", "detach", "stop" }));
+            Assert.That(transport.PollCount, Is.Zero);
+            Assert.That(transport.MinimalInvalidDetailCount, Is.Zero);
+            Assert.That(sink.LastFailed, Is.False);
+            Assert.That(sink.LastTrace.Contains("action seq=1 frame=7"), Is.True);
+            Assert.That(sink.LastTrace.Contains("phase=3 delta=(0,0) device=3"), Is.True);
+            Assert.That(sink.LastTrace.Contains("action seq=2 frame=7"), Is.True);
+            Assert.That(sink.LastTrace.Contains("device=9 controlByte=00000004 controlBit=2 controlSize=00000020"),
+                Is.True);
+            Assert.That(sink.LastTrace.IndexOf("minimal source=final", StringComparison.Ordinal) <
+                        sink.LastTrace.IndexOf("action seq=1", StringComparison.Ordinal), Is.True);
+            Assert.That(sink.LastTrace.IndexOf("action seq=2", StringComparison.Ordinal) <
+                        sink.LastTrace.IndexOf("monitor-stop", StringComparison.Ordinal), Is.True);
+            Assert.That(sink.LastTrace.Contains("observedClockOffset"), Is.False);
+            Assert.That(sink.LastTrace.Contains("associated"), Is.False);
+        }
+
+        [Test]
+        public void NativeMinimalInputActionTraceRequiresARecordAndANonZeroCandidateAtDeadline()
+        {
+            foreach (var addZeroRecord in new[] { false, true })
+            {
+                var transport = new FakeTransport();
+                transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(1, gesturePhase: 2)));
+                var owner = new FakeActionTraceOwner(transport.Calls);
+                var sink = new FakeSink();
+                var session = CreateSession(transport,
+                    sink,
+                    MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                    actionTraceOwner: owner);
+                session.Start(0d);
+                session.RecordActionTraceAttachment();
+                if (addZeroRecord)
+                {
+                    CommitActionRecord(session, 1, 1d, Vector2.zero);
+                }
+
+                session.Update(1, 4d);
+
+                Assert.That(sink.LastFailed, Is.True);
+                Assert.That(sink.LastTrace.Contains(addZeroRecord
+                    ? "FAIL no-nonzero-action-record"
+                    : "FAIL no-action-record"), Is.True);
+                Assert.That(transport.Calls, Is.EqualTo(new[] { "minimal-poll", "detach", "stop" }));
+            }
+        }
+
+        [Test]
+        public void NativeMinimalInputActionTracePrintsEveryAcceptedSlotBeforeOverflowFailure()
+        {
+            var transport = new FakeTransport();
+            var owner = new FakeActionTraceOwner(transport.Calls);
+            var sink = new FakeSink();
+            var session = CreateSession(transport,
+                sink,
+                MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                100f,
+                owner);
+            session.Start(0d);
+            session.RecordActionTraceAttachment();
+            for (var index = 0; index < MacScrollPhaseProbeSession.MaxActionRecords; ++index)
+            {
+                CommitActionRecord(session,
+                    1,
+                    index + 1d,
+                    index == 0 ? Vector2.down : Vector2.zero,
+                    index + 1,
+                    (uint)index,
+                    (uint)(index % 8),
+                    32);
+            }
+
+            Assert.That(session.TryBeginActionRecord(Environment.CurrentManagedThreadId), Is.False);
+            session.Update(1, 0d);
+
+            for (var sequence = 1; sequence <= MacScrollPhaseProbeSession.MaxActionRecords; ++sequence)
+            {
+                Assert.That(sink.LastTrace.Contains($"action seq={sequence} "), Is.True);
+            }
+            Assert.That(sink.LastTrace.Contains("FAIL action-record-overflow"), Is.True);
+            Assert.That(sink.LastTrace.Contains("monitor-stop reason=fail-closed"), Is.True);
+            Assert.That(sink.LastTrace.Contains("trace-truncated"), Is.False);
+            Assert.That(transport.Calls, Is.EqualTo(new[] { "detach", "stop" }));
+            Assert.That(Encoding.UTF8.GetByteCount(sink.LastTrace) <= MacScrollPhaseProbeSession.MaxTraceUtf8Bytes,
+                Is.True);
+            Assert.That(Utf8CrLfBytes(sink.LastTrace) <= MacScrollPhaseProbeSession.MaxTraceUtf8Bytes, Is.True);
+            Assert.That(LineCount(sink.LastTrace) <= MacScrollPhaseProbeSession.MaxConsoleTraceLines, Is.True);
+        }
+
+        [Test]
+        public void NativeMinimalInputActionTracePreservesReason3WhenActionOverflowIsSecondary()
+        {
+            var transport = new FakeTransport();
+            transport.MinimalPolls.Enqueue(new FakeMinimalPollResponse(0,
+                (int)MacScrollPhaseMonitorResult.CaptureInvalid,
+                new MacScrollPhaseMinimalPoll((int)MacScrollPhaseCaptureInvalidReason.InvalidGestureTransition,
+                    false,
+                    false,
+                    0,
+                    default)));
+            transport.MinimalInvalidDetails.Enqueue(new FakeMinimalInvalidDetailResponse(0,
+                0,
+                MinimalInvalidDetail()));
+            var owner = new FakeActionTraceOwner(transport.Calls);
+            var sink = new FakeSink();
+            var session = CreateSession(transport,
+                sink,
+                MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                actionTraceOwner: owner);
+            session.Start(0d);
+            session.RecordActionTraceAttachment();
+            for (var index = 0; index < MacScrollPhaseProbeSession.MaxActionRecords; ++index)
+            {
+                CommitActionRecord(session, 1, index + 1d, Vector2.down);
+            }
+            Assert.That(session.TryBeginActionRecord(Environment.CurrentManagedThreadId), Is.False);
+
+            session.Update(1, 4d);
+
+            Assert.That(transport.Calls,
+                Is.EqualTo(new[] { "minimal-poll", "minimal-invalid-detail", "detach", "stop" }));
+            Assert.That(sink.LastTrace.Contains("invalid-detail failure=3"), Is.True);
+            Assert.That(sink.LastTrace.Contains(
+                "FAIL native-capture-invalid reason=3 secondary=action-record-overflow"), Is.True);
+            Assert.That(sink.LastTrace.Contains("trace-truncated"), Is.False);
+            AssertTerminalOrder(sink.LastTrace, "invalid-detail failure=3");
+        }
+
+        [Test]
+        public void NativeMinimalInputActionTraceRejectsWrongThreadBeforeWritingAnySlot()
+        {
+            var transport = new FakeTransport();
+            var owner = new FakeActionTraceOwner(transport.Calls);
+            var sink = new FakeSink();
+            var session = CreateSession(transport,
+                sink,
+                MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                actionTraceOwner: owner);
+            session.Start(0d);
+            session.RecordActionTraceAttachment();
+
+            Assert.That(session.TryBeginActionRecord(Environment.CurrentManagedThreadId + 1), Is.False);
+            session.Update(1, 0d);
+
+            Assert.That(sink.LastTrace.Contains("FAIL action-callback-wrong-thread"), Is.True);
+            Assert.That(sink.LastTrace.Contains("action seq="), Is.False);
+            Assert.That(transport.Calls, Is.EqualTo(new[] { "detach", "stop" }));
+        }
+
+        [Test]
+        public void NativeMinimalInputActionTraceRetriesDetachBeforeFirstNativeStopAndFlush()
+        {
+            var transport = new FakeTransport();
+            transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(1, gesturePhase: 2)));
+            var owner = new FakeActionTraceOwner(transport.Calls);
+            owner.DetachResults.Enqueue(false);
+            owner.DetachResults.Enqueue(true);
+            var sink = new FakeSink();
+            var session = CreateSession(transport,
+                sink,
+                MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                actionTraceOwner: owner);
+            session.Start(0d);
+            session.RecordActionTraceAttachment();
+            CommitActionRecord(session, 1, 1d, Vector2.down);
+
+            session.Update(1, 4d);
+
+            Assert.That(session.HasLease, Is.True);
+            Assert.That(transport.StopCount, Is.Zero);
+            Assert.That(sink.FlushCount, Is.Zero);
+            Assert.That(session.TryBeginActionRecord(Environment.CurrentManagedThreadId), Is.False);
+            Assert.That(transport.Calls, Is.EqualTo(new[] { "minimal-poll", "detach" }));
+
+            session.Disable();
+
+            Assert.That(session.HasLease, Is.False);
+            Assert.That(transport.Calls, Is.EqualTo(new[] { "minimal-poll", "detach", "detach", "stop" }));
+            Assert.That(sink.FlushCount, Is.EqualTo(1));
+            Assert.That(sink.LastFailed, Is.True);
+            Assert.That(sink.LastTrace.Contains("FAIL action-detach-failed"), Is.True);
+            Assert.That(sink.LastTrace.IndexOf("FAIL action-detach-failed", StringComparison.Ordinal) <
+                        sink.LastTrace.IndexOf("monitor-stop", StringComparison.Ordinal), Is.True);
+        }
+
+        [Test]
+        public void NativeMinimalInputActionTraceRetainsLeaseAcrossNativeStopRetryAfterDetach()
+        {
+            var transport = new FakeTransport();
+            transport.MinimalPolls.Enqueue(MinimalResponse(MinimalSample(1, gesturePhase: 2)));
+            transport.StopResults.Enqueue(5);
+            transport.StopResults.Enqueue(0);
+            var owner = new FakeActionTraceOwner(transport.Calls);
+            var sink = new FakeSink();
+            var session = CreateSession(transport,
+                sink,
+                MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                actionTraceOwner: owner);
+            session.Start(0d);
+            session.RecordActionTraceAttachment();
+            CommitActionRecord(session, 1, 1d, Vector2.down);
+
+            session.Update(1, 4d);
+
+            Assert.That(session.HasLease, Is.True);
+            Assert.That(sink.FlushCount, Is.Zero);
+            Assert.That(transport.Calls, Is.EqualTo(new[] { "minimal-poll", "detach", "stop" }));
+
+            session.Disable();
+
+            Assert.That(session.HasLease, Is.False);
+            Assert.That(owner.DetachCount, Is.EqualTo(1));
+            Assert.That(transport.Calls, Is.EqualTo(new[] { "minimal-poll", "detach", "stop", "stop" }));
+            Assert.That(sink.FlushCount, Is.EqualTo(1));
+            Assert.That(sink.LastFailed, Is.True);
+            Assert.That(sink.LastTrace.Contains("FAIL monitor-stop-failed"), Is.True);
+        }
+
+        [Test]
+        public void NativeMinimalInputActionTraceFiveLineTerminalPartitionSurvivesAllRetryClasses()
+        {
+            var transport = new FakeTransport();
+            transport.MinimalPolls.Enqueue(new FakeMinimalPollResponse(0,
+                (int)MacScrollPhaseMonitorResult.CaptureInvalid,
+                new MacScrollPhaseMinimalPoll((int)MacScrollPhaseCaptureInvalidReason.InvalidGestureTransition,
+                    false,
+                    false,
+                    0,
+                    default)));
+            transport.MinimalInvalidDetails.Enqueue(new FakeMinimalInvalidDetailResponse(0,
+                int.MinValue,
+                new MacScrollPhaseMinimalInvalidDetail(int.MinValue,
+                    int.MinValue,
+                    int.MinValue,
+                    long.MinValue,
+                    long.MinValue,
+                    ulong.MaxValue,
+                    ulong.MaxValue,
+                    long.MinValue)));
+            transport.StartLease = long.MaxValue;
+            transport.StopApiResults.Enqueue(long.MinValue);
+            transport.StopApiResults.Enqueue(0);
+            transport.StopResults.Enqueue(int.MinValue);
+            transport.StopResults.Enqueue(0);
+            var owner = new FakeActionTraceOwner(transport.Calls);
+            owner.DetachResults.Enqueue(false);
+            owner.DetachResults.Enqueue(true);
+            var sink = new FakeSink();
+            var session = CreateSession(transport,
+                sink,
+                MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                actionTraceOwner: owner);
+            session.Start(0d);
+            session.RecordActionTraceAttachment();
+            CommitActionRecord(session, 1, 1d, Vector2.down);
+
+            session.Update(1, 0d);
+            session.Disable();
+            Assert.That(sink.FlushCount, Is.Zero);
+            session.Disable();
+
+            Assert.That(session.HasLease, Is.False);
+            Assert.That(sink.FlushCount, Is.EqualTo(1));
+            Assert.That(sink.LastTrace.Contains("trace-truncated"), Is.False);
+            var terminalStart = sink.LastTrace.IndexOf("[MILESTRO_SCROLL_PHASE_POC] invalid-detail",
+                StringComparison.Ordinal);
+            var terminal = sink.LastTrace.Substring(terminalStart);
+            Assert.That(LineCount(terminal), Is.EqualTo(MacScrollPhaseProbeSession.MaxActionTerminalTraceLines));
+            Assert.That(Utf8CrLfBytes(terminal),
+                Is.LessThanOrEqualTo(MacScrollPhaseProbeSession.MaxActionTerminalTraceUtf8Bytes));
+            Assert.That(transport.Calls,
+                Is.EqualTo(new[]
+                {
+                    "minimal-poll",
+                    "minimal-invalid-detail",
+                    "detach",
+                    "detach",
+                    "stop",
+                    "stop"
+                }));
+        }
+
+        [Test]
+        public void NativeMinimalInputActionTraceValidatesNumericRecordContractAndOrder()
+        {
+            var invalidRecords = new Action<MacScrollPhaseProbeSession>[]
+            {
+                session => CommitActionRecord(session, 1, double.NaN, Vector2.down),
+                session => CommitActionRecord(session, 1, 1d, new Vector2(float.NaN, 0f)),
+                session => CommitActionRecord(session, 1, 1d, Vector2.down, phase: 4),
+                session => CommitActionRecord(session, 1, 1d, Vector2.down, deviceId: 0),
+                session => CommitActionRecord(session, 1, 1d, Vector2.down, byteOffset: uint.MaxValue),
+                session => CommitActionRecord(session, 1, 1d, Vector2.down, bitOffset: 8),
+                session => CommitActionRecord(session, 1, 1d, Vector2.down, sizeInBits: 0),
+                session => CommitActionRecord(session, 1, 1d, Vector2.down, timestampTicks: 0)
+            };
+
+            foreach (var commitInvalidRecord in invalidRecords)
+            {
+                var transport = new FakeTransport();
+                var owner = new FakeActionTraceOwner(transport.Calls);
+                var sink = new FakeSink();
+                var session = CreateSession(transport,
+                    sink,
+                    MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                    actionTraceOwner: owner);
+                session.Start(0d);
+                session.RecordActionTraceAttachment();
+                commitInvalidRecord(session);
+
+                session.Update(1, 0d);
+
+                Assert.That(sink.LastFailed, Is.True);
+                Assert.That(sink.LastTrace.Contains("FAIL action-record-contract-invalid"), Is.True);
+                Assert.That(sink.LastTrace.Contains("action seq=1 "), Is.True);
+                Assert.That(transport.Calls, Is.EqualTo(new[] { "detach", "stop" }));
+            }
+
+            var orderTransport = new FakeTransport();
+            var orderOwner = new FakeActionTraceOwner(orderTransport.Calls);
+            var orderSink = new FakeSink();
+            var orderSession = CreateSession(orderTransport,
+                orderSink,
+                MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                actionTraceOwner: orderOwner);
+            orderSession.Start(0d);
+            orderSession.RecordActionTraceAttachment();
+            CommitActionRecord(orderSession, 2, 2d, Vector2.down);
+            orderSession.Update(2, 0d);
+            CommitActionRecord(orderSession, 1, 1d, Vector2.down);
+
+            orderSession.Update(2, 0d);
+
+            Assert.That(orderSink.LastTrace.Contains("FAIL action-record-order-invalid"), Is.True);
+
+            var tickTransport = new FakeTransport();
+            var tickOwner = new FakeActionTraceOwner(tickTransport.Calls);
+            var tickSink = new FakeSink();
+            var tickSession = CreateSession(tickTransport,
+                tickSink,
+                MacScrollPhaseProbeStage.NativeMinimalInputActionTrace,
+                actionTraceOwner: tickOwner);
+            tickSession.Start(0d);
+            tickSession.RecordActionTraceAttachment();
+            CommitActionRecord(tickSession, 1, 1d, Vector2.down, timestampTicks: long.MaxValue);
+            tickSession.Update(1, 0d);
+            CommitActionRecord(tickSession, 1, 2d, Vector2.down, timestampTicks: long.MaxValue - 1);
+
+            tickSession.Update(1, 0d);
+
+            Assert.That(tickSink.LastTrace.Contains("FAIL action-record-order-invalid"), Is.True);
+        }
+
+        [Test]
+        public void NativeMinimalInputActionTraceActionLineHasProvenCrLfUpperBound()
+        {
+            var record = new MacScrollActionRecord(MacScrollPhaseProbeSession.MaxActionRecords,
+                int.MinValue,
+                long.MinValue,
+                double.MinValue,
+                int.MinValue,
+                float.MinValue,
+                float.MinValue,
+                int.MinValue,
+                uint.MaxValue,
+                uint.MaxValue,
+                uint.MaxValue);
+
+            var line = "[MILESTRO_SCROLL_PHASE_POC] " +
+                       MacScrollPhaseProbeSession.FormatActionRecord(record, 1) + "\r\n";
+
+            Assert.That(Encoding.UTF8.GetByteCount(line),
+                Is.LessThanOrEqualTo(MacScrollPhaseProbeSession.MaxActionRecordTraceUtf8Bytes));
+            Assert.That(MacScrollPhaseProbeSession.MaxActionGeneralTraceUtf8Bytes +
+                        MacScrollPhaseProbeSession.MaxActionRecords *
+                        MacScrollPhaseProbeSession.MaxActionRecordTraceUtf8Bytes +
+                        MacScrollPhaseProbeSession.MaxActionTerminalTraceUtf8Bytes,
+                Is.EqualTo(MacScrollPhaseProbeSession.MaxTraceUtf8Bytes));
+            Assert.That(MacScrollPhaseProbeSession.MaxActionGeneralTraceLines +
+                        MacScrollPhaseProbeSession.MaxActionRecords +
+                        MacScrollPhaseProbeSession.MaxActionTerminalTraceLines,
+                Is.EqualTo(MacScrollPhaseProbeSession.MaxConsoleTraceLines));
         }
 
         [Test]
@@ -1078,9 +1513,33 @@ namespace Milestro.InputSystemTests
         private static MacScrollPhaseProbeSession CreateSession(FakeTransport transport,
             FakeSink sink,
             MacScrollPhaseProbeStage stage,
-            float duration = 3f)
+            float duration = 3f,
+            IMacScrollActionTraceOwner? actionTraceOwner = null)
         {
-            return new MacScrollPhaseProbeSession(transport, sink, stage, duration, 42);
+            return new MacScrollPhaseProbeSession(transport, sink, stage, duration, 42, actionTraceOwner);
+        }
+
+        private static void CommitActionRecord(MacScrollPhaseProbeSession session,
+            int frame,
+            double contextTime,
+            Vector2 delta,
+            int deviceId = 1,
+            uint byteOffset = 0,
+            uint bitOffset = 0,
+            uint sizeInBits = 32,
+            int phase = 3,
+            long? timestampTicks = null)
+        {
+            Assert.That(session.TryBeginActionRecord(Environment.CurrentManagedThreadId), Is.True);
+            session.CommitActionRecord(frame,
+                timestampTicks ?? Stopwatch.GetTimestamp(),
+                contextTime,
+                phase,
+                delta,
+                deviceId,
+                byteOffset,
+                bitOffset,
+                sizeInBits);
         }
 
         private static MacScrollPhaseMinimalSample MinimalSample(long sequence,
@@ -1169,12 +1628,38 @@ namespace Milestro.InputSystemTests
             return value.Split('\n').Length - 1;
         }
 
+        private static int Utf8CrLfBytes(string value)
+        {
+            var normalized = value.Replace("\r\n", "\n").Replace("\n", "\r\n");
+            return Encoding.UTF8.GetByteCount(normalized);
+        }
+
         private static void AssertTerminalOrder(string trace, string detailMarker)
         {
             var detailIndex = trace.IndexOf(detailMarker, System.StringComparison.Ordinal);
             var failIndex = trace.IndexOf("FAIL native-capture-invalid reason=3", System.StringComparison.Ordinal);
             var stopIndex = trace.IndexOf("monitor-stop reason=fail-closed", System.StringComparison.Ordinal);
             Assert.That(detailIndex >= 0 && detailIndex < failIndex && failIndex < stopIndex, Is.True);
+        }
+
+        private sealed class FakeActionTraceOwner : IMacScrollActionTraceOwner
+        {
+            private readonly List<string> calls;
+
+            internal FakeActionTraceOwner(List<string> calls)
+            {
+                this.calls = calls;
+            }
+
+            internal readonly Queue<bool> DetachResults = new Queue<bool>();
+            internal int DetachCount { get; private set; }
+
+            public bool TryDetachActionTrace()
+            {
+                ++DetachCount;
+                calls.Add("detach");
+                return DetachResults.Count == 0 || DetachResults.Dequeue();
+            }
         }
 
         private sealed class FakeTransport : IMacScrollPhaseMonitorTransport
@@ -1184,10 +1669,12 @@ namespace Milestro.InputSystemTests
             internal readonly Queue<FakeMinimalInvalidDetailResponse> MinimalInvalidDetails =
                 new Queue<FakeMinimalInvalidDetailResponse>();
             internal readonly Queue<int> StopResults = new Queue<int>();
+            internal readonly Queue<long> StopApiResults = new Queue<long>();
             internal readonly List<string> Calls = new List<string>();
 
             internal int PollResult { get; set; }
             internal int StartResult { get; set; }
+            internal long StartLease { get; set; } = 1;
             internal int PollCount { get; private set; }
             internal int MinimalPollCount { get; private set; }
             internal int MinimalInvalidDetailCount { get; private set; }
@@ -1199,7 +1686,7 @@ namespace Milestro.InputSystemTests
             {
                 LastStartMode = mode;
                 result = StartResult;
-                leaseId = 1;
+                leaseId = StartLease;
                 return 0;
             }
 
@@ -1251,7 +1738,7 @@ namespace Milestro.InputSystemTests
                 Calls.Add("stop");
                 LastStopLease = leaseId;
                 result = StopResults.Count == 0 ? 0 : StopResults.Dequeue();
-                return 0;
+                return StopApiResults.Count == 0 ? 0 : StopApiResults.Dequeue();
             }
         }
 
