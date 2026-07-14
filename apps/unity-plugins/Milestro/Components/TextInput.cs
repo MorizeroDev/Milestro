@@ -321,7 +321,7 @@ namespace Milestro.Components
                 paintDirty = true;
             }
         }
-        
+
         public TextOverflow textOverflow
         {
             get => m_textOverflow;
