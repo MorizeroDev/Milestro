@@ -880,7 +880,13 @@ namespace Milestro.InputSystemTests
 
             public void OnInputFrame(HybridInputFrame frame)
             {
-                Frames.Add(frame);
+                Frames.Add(new HybridInputFrame(frame.FrameIndex,
+                    frame.UnscaledTime,
+                    frame.ProviderId,
+                    frame.ProviderGeneration,
+                    frame.FocusEpoch,
+                    frame.Events.ToArray(),
+                    frame.PressedKeys.ToArray()));
             }
 
             public void OnInputReset(HybridInputResetReason reason)

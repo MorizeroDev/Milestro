@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -86,7 +87,8 @@ namespace Milestro.Input
         ApplicationFocusLost = 3,
         DispatcherReset = 4,
         DeviceChanged = 5,
-        InputEventBufferOverflow = 6
+        InputEventBufferOverflow = 6,
+        FocusSessionFailure = 7
     }
 
     public enum HybridInputDiagnosticCode
@@ -97,7 +99,9 @@ namespace Milestro.Input
         NotificationBufferOverflow = 3,
         WorkLimitExceeded = 4,
         ListenerException = 5,
-        FocusSessionStartFailed = 6
+        FocusSessionStartFailed = 6,
+        FocusSessionEndFailed = 7,
+        FocusSessionRestartFailed = 8
     }
 
     public enum HybridInputSelectionStatus
@@ -266,8 +270,17 @@ namespace Milestro.Input
         public HybridScrollAxes Axes { get; }
     }
 
+    /// <summary>
+    /// A callback-scoped immutable view of one input frame. The dispatcher may reuse the backing
+    /// storage after <c>OnInputFrame</c> returns; consumers that retain data must copy it.
+    /// </summary>
     public sealed class HybridInputFrame
     {
+        private readonly HybridInputEvent[] eventBuffer;
+        private readonly KeyCode[] pressedKeyBuffer;
+        private readonly FixedBufferReadOnlyList<HybridInputEvent> eventView;
+        private readonly FixedBufferReadOnlyList<KeyCode> pressedKeyView;
+
         internal HybridInputFrame(int frameIndex,
             double unscaledTime,
             string providerId,
@@ -275,21 +288,62 @@ namespace Milestro.Input
             int focusEpoch,
             HybridInputEvent[] events,
             KeyCode[] pressedKeys)
+            : this(events.Length, pressedKeys.Length)
+        {
+            Array.Copy(events, eventBuffer, events.Length);
+            Array.Copy(pressedKeys, pressedKeyBuffer, pressedKeys.Length);
+            Set(frameIndex,
+                unscaledTime,
+                providerId,
+                providerGeneration,
+                focusEpoch,
+                events.Length,
+                pressedKeys.Length);
+        }
+
+        internal HybridInputFrame(int eventCapacity, int pressedKeyCapacity)
+        {
+            eventBuffer = new HybridInputEvent[eventCapacity];
+            pressedKeyBuffer = new KeyCode[pressedKeyCapacity];
+            eventView = new FixedBufferReadOnlyList<HybridInputEvent>(eventBuffer);
+            pressedKeyView = new FixedBufferReadOnlyList<KeyCode>(pressedKeyBuffer);
+            Events = eventView;
+            PressedKeys = pressedKeyView;
+            ProviderId = string.Empty;
+        }
+
+        internal HybridInputEvent[] EventBuffer => eventBuffer;
+        internal KeyCode[] PressedKeyBuffer => pressedKeyBuffer;
+
+        internal void Set(int frameIndex,
+            double unscaledTime,
+            string providerId,
+            int providerGeneration,
+            int focusEpoch,
+            int eventCount,
+            int pressedKeyCount)
         {
             FrameIndex = frameIndex;
             UnscaledTime = unscaledTime;
             ProviderId = providerId;
             ProviderGeneration = providerGeneration;
             FocusEpoch = focusEpoch;
-            Events = Array.AsReadOnly(events);
-            PressedKeys = Array.AsReadOnly(pressedKeys);
+            eventView.SetCount(eventCount);
+            pressedKeyView.SetCount(pressedKeyCount);
         }
 
-        public int FrameIndex { get; }
-        public double UnscaledTime { get; }
-        public string ProviderId { get; }
-        public int ProviderGeneration { get; }
-        public int FocusEpoch { get; }
+        internal void Release()
+        {
+            Array.Clear(eventBuffer, 0, eventView.Count);
+            eventView.SetCount(0);
+            pressedKeyView.SetCount(0);
+        }
+
+        public int FrameIndex { get; private set; }
+        public double UnscaledTime { get; private set; }
+        public string ProviderId { get; private set; }
+        public int ProviderGeneration { get; private set; }
+        public int FocusEpoch { get; private set; }
         public IReadOnlyList<HybridInputEvent> Events { get; }
         public IReadOnlyList<KeyCode> PressedKeys { get; }
 
@@ -329,6 +383,52 @@ namespace Milestro.Input
             }
 
             return false;
+        }
+
+        private sealed class FixedBufferReadOnlyList<T> : IReadOnlyList<T>
+        {
+            private readonly T[] buffer;
+
+            internal FixedBufferReadOnlyList(T[] buffer)
+            {
+                this.buffer = buffer;
+            }
+
+            public int Count { get; private set; }
+
+            public T this[int index]
+            {
+                get
+                {
+                    if ((uint)index >= (uint)Count)
+                    {
+                        throw new ArgumentOutOfRangeException(nameof(index));
+                    }
+                    return buffer[index];
+                }
+            }
+
+            internal void SetCount(int count)
+            {
+                if ((uint)count > (uint)buffer.Length)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(count));
+                }
+                Count = count;
+            }
+
+            public IEnumerator<T> GetEnumerator()
+            {
+                for (var i = 0; i < Count; ++i)
+                {
+                    yield return buffer[i];
+                }
+            }
+
+            IEnumerator IEnumerable.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
         }
     }
 

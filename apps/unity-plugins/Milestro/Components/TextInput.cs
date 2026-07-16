@@ -1484,6 +1484,13 @@ namespace Milestro.Components
 
         private bool CanReadInput()
         {
+            var eventSystem = EventSystem.current;
+            if (eventSystem == null || !eventSystem.isActiveAndEnabled ||
+                eventSystem.currentSelectedGameObject != gameObject)
+            {
+                return false;
+            }
+
 #if UNITY_EDITOR
             if (Application.isPlaying)
             {
@@ -2516,14 +2523,15 @@ namespace Milestro.Components
 
             inputBox = new InputBox(paragraphStyle, textStyle);
             CoerceWrapModeForLineMode();
-            m_text = CanonicalizeTextForLineMode(m_text, m_lineMode);
+            var managedCanonical = CanonicalizeTextForLineMode(m_text, m_lineMode);
             inputBox.SetSoftWrap(EffectiveSoftWrap());
             inputBox.SetFocused(IsDispatcherFocused);
             inputBox.SetTextOverflow(m_textOverflow);
             inputBox.SetEllipsis(m_ellipsisString);
             inputBox.SetMaskInput(m_maskInput);
             inputBox.SetMaskChar(m_maskChar);
-            inputBox.Text = m_text;
+            inputBox.Text = managedCanonical;
+            CommitCanonicalText(inputBox.Text, notify: false, sessionBound: false);
             compositionActive = false;
             lastCompositionText = "";
             inputBox.SetCaretColor(m_caretColor);

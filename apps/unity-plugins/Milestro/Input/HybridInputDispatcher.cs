@@ -15,6 +15,8 @@ namespace Milestro.Input
         internal const int MaxPendingInputEventsPerFocusSession = 128;
         internal const int MaxPendingNotifications = 64;
         internal const int MaxOuterDrainWorkSteps = 256;
+        internal const int MaxPressedKeysPerFrame = 128;
+        private const int MaxSealedFrameSlots = MaxPendingNotifications + 1;
 
         private static readonly HybridInputCapabilities FocusedEventCapabilities =
             HybridInputCapabilities.KeyState |
@@ -27,12 +29,15 @@ namespace Milestro.Input
             new FixedRing<HybridInputEvent>(MaxPendingInputEventsPerFocusSession);
         private readonly FixedRing<Notification> notifications =
             new FixedRing<Notification>(MaxPendingNotifications);
+        private readonly HybridInputFrame[] frameSlots = new HybridInputFrame[MaxSealedFrameSlots];
+        private readonly int[] freeFrameSlots = new int[MaxSealedFrameSlots];
         private readonly HashSet<KeyCode> pressedKeys = new HashSet<KeyCode>();
         private readonly HashSet<KeyCode> stagedPressedKeys = new HashSet<KeyCode>();
         private readonly int mainThreadId = Thread.CurrentThread.ManagedThreadId;
 
         private IHybridInputProvider? activeProvider;
         private SessionEventSink? activeSession;
+        private IHybridInputLifecycleSink? terminalSink;
         private HybridInputEnvironment environment;
         private HybridInputEnvironment pendingEnvironment;
         private HybridInputProviderSelection pendingProviderSelection;
@@ -50,7 +55,9 @@ namespace Milestro.Input
         private int pendingFocusSinkId;
         private int providerTransitionReacquireSinkId;
         private int releasingSinkId;
+        private int terminalSinkId;
         private int diagnosticCount;
+        private int freeFrameSlotCount;
         private bool imeEnabled;
         private bool environmentInitialized;
         private bool activeModuleWasAlive;
@@ -65,11 +72,24 @@ namespace Milestro.Input
         private bool stagedPressedKeysValid;
         private bool inputOverflowLocked;
         private bool deliveringSealedReleaseFrame;
+        private TerminalStage terminalStage;
+        private string terminalText = string.Empty;
         private Vector2 imeCursorPosition;
         private long focusIntentVersion;
         private long sessionBoundaryVersion;
         private long nextEventSequence = 1L;
         private double lastEventTimestamp;
+
+        internal HybridInputDispatcher()
+        {
+            for (var i = 0; i < frameSlots.Length; ++i)
+            {
+                frameSlots[i] = new HybridInputFrame(MaxPendingInputEventsPerFocusSession,
+                    MaxPressedKeysPerFrame);
+                freeFrameSlots[i] = i;
+            }
+            freeFrameSlotCount = freeFrameSlots.Length;
+        }
 
         internal HybridInputDiagnostics Diagnostics
         {
@@ -195,6 +215,8 @@ namespace Milestro.Input
             }
 
             Pump();
+            ReconcileSelectionMismatch();
+            Pump();
             var provider = activeProvider;
             if (provider == null || !environment.ApplicationFocused)
             {
@@ -204,6 +226,7 @@ namespace Milestro.Input
             }
 
             provider.Collect(new HybridInputCollectContext(frameIndex, unscaledTime));
+            ReconcileSelectionMismatch();
             if (inputOverflowLocked)
             {
                 Pump();
@@ -219,6 +242,22 @@ namespace Milestro.Input
                 ClearPendingInput();
             }
             Pump();
+            ReconcileSelectionMismatch();
+            Pump();
+        }
+
+        private void ReconcileSelectionMismatch()
+        {
+            if (!environment.ApplicationFocused || focusedSinkId == 0 || releaseInProgress ||
+                !sinks.TryGetValue(focusedSinkId, out var entry) ||
+                !(entry.Sink is IHybridInputLifecycleSink lifecycleSink) || HasSelectedOwner(lifecycleSink))
+            {
+                return;
+            }
+
+            activeSession?.Seal();
+            sessionBoundaryPending = true;
+            pendingReleaseReason = HybridInputResetReason.FocusChanged;
         }
 
         internal void Reset()
@@ -322,7 +361,11 @@ namespace Milestro.Input
             }
             else if (!wasApplicationFocused && environment.ApplicationFocused)
             {
-                ApplyImeState();
+                ReconcileSelectionMismatch();
+                if (!sessionBoundaryPending)
+                {
+                    ApplyImeState();
+                }
             }
         }
 
@@ -390,8 +433,17 @@ namespace Milestro.Input
             var workSteps = 0;
             try
             {
-                while (!transactionAborted)
+                while (true)
                 {
+                    if (terminalStage != TerminalStage.None)
+                    {
+                        DeliverTerminalNotification();
+                        continue;
+                    }
+                    if (transactionAborted)
+                    {
+                        break;
+                    }
                     if (++workSteps > MaxOuterDrainWorkSteps)
                     {
                         AbortTransaction(HybridInputDiagnosticCode.WorkLimitExceeded);
@@ -573,16 +625,10 @@ namespace Milestro.Input
                     focusSessionToken,
                     sinkId);
                 activeSession = session;
-                try
+                if (!TryBeginFocusSession(sessionProvider,
+                        session,
+                        HybridInputDiagnosticCode.FocusSessionStartFailed))
                 {
-                    sessionProvider.BeginFocusSession(session);
-                }
-                catch
-                {
-                    session.Seal();
-                    activeSession = null;
-                    focusedSinkId = 0;
-                    RecordDiagnostic(HybridInputDiagnosticCode.FocusSessionStartFailed);
                     return;
                 }
             }
@@ -592,6 +638,43 @@ namespace Milestro.Input
             if (entry.Sink is IHybridInputLifecycleSink lifecycleSink)
             {
                 TryQueueNotification(Notification.FocusGained(lifecycleSink, sinkId, focusSessionToken));
+            }
+        }
+
+        private bool TryBeginFocusSession(IHybridInputFocusSessionProvider sessionProvider,
+            SessionEventSink session,
+            HybridInputDiagnosticCode diagnostic)
+        {
+            try
+            {
+                sessionProvider.BeginFocusSession(session);
+                return true;
+            }
+            catch
+            {
+                session.Seal();
+                activeSession = null;
+                if (focusedSinkId == session.SinkId)
+                {
+                    focusedSinkId = 0;
+                    imeEnabled = false;
+                    unchecked
+                    {
+                        ++focusEpoch;
+                    }
+                    ClearPendingInput();
+                    pressedKeys.Clear();
+                }
+                try
+                {
+                    sessionProvider.EndFocusSession();
+                }
+                catch
+                {
+                    // The dispatcher state is already fail-closed; provider cleanup is best-effort.
+                }
+                RecordDiagnostic(diagnostic);
+                return false;
             }
         }
 
@@ -613,27 +696,71 @@ namespace Milestro.Input
 
         private void CompleteRelease()
         {
-            releaseInProgress = false;
             var sinkId = releasingSinkId;
-            releasingSinkId = 0;
             if (sinkId == 0 || focusedSinkId != sinkId)
+            {
+                releaseInProgress = false;
+                releasingSinkId = 0;
+                return;
+            }
+
+            var endFailed = false;
+            activeSession?.Seal();
+            try
+            {
+                if (activeProvider is IHybridInputFocusSessionProvider sessionProvider)
+                {
+                    sessionProvider.EndFocusSession();
+                }
+            }
+            catch
+            {
+                endFailed = true;
+            }
+            finally
+            {
+                releaseInProgress = false;
+                releasingSinkId = 0;
+                activeSession = null;
+                endFailed |= !TryDisableIme();
+                CommitUnfocusedState();
+            }
+
+            if (endFailed)
+            {
+                RecordDiagnostic(HybridInputDiagnosticCode.FocusSessionEndFailed);
+            }
+
+            if (!sinks.TryGetValue(sinkId, out var entry))
             {
                 return;
             }
 
-            var provider = activeProvider;
-            if (provider is IHybridInputFocusSessionProvider sessionProvider)
+            try
             {
-                sessionProvider.EndFocusSession();
+                entry.Sink.OnInputReset(releasingReason);
             }
+            catch
+            {
+                AbortTransaction(HybridInputDiagnosticCode.ListenerException);
+            }
+            if (entry.Sink is IHybridInputLifecycleSink lifecycleSink)
+            {
+                FreezeTerminalBundle(lifecycleSink, sinkId, lifecycleSink.CommittedText ?? string.Empty);
+            }
+            else if (!entry.Registered)
+            {
+                sinks.Remove(sinkId);
+            }
+        }
+
+        private void CommitUnfocusedState()
+        {
+            activeSession?.Seal();
             activeSession = null;
-            DisableIme();
             focusedSinkId = 0;
             sessionBoundaryPending = false;
-            if (sessionBoundaryVersion != 0)
-            {
-                sessionBoundaryVersion = 0;
-            }
+            sessionBoundaryVersion = 0;
             imeEnabled = false;
             unchecked
             {
@@ -641,22 +768,18 @@ namespace Milestro.Input
             }
             ClearPendingInput();
             pressedKeys.Clear();
+        }
 
-            if (!sinks.TryGetValue(sinkId, out var entry))
+        private bool TryDisableIme()
+        {
+            try
             {
-                return;
+                DisableIme();
+                return true;
             }
-
-            entry.Sink.OnInputReset(releasingReason);
-            if (entry.Sink is IHybridInputLifecycleSink lifecycleSink)
+            catch
             {
-                var finalText = lifecycleSink.CommittedText ?? string.Empty;
-                TryQueueNotification(Notification.EndEdit(lifecycleSink, sinkId, finalText));
-                TryQueueNotification(Notification.FocusLost(lifecycleSink, sinkId));
-            }
-            else if (!entry.Registered)
-            {
-                sinks.Remove(sinkId);
+                return false;
             }
         }
 
@@ -691,10 +814,28 @@ namespace Milestro.Input
             }
 
             activeSession?.Seal();
-            if (provider is IHybridInputFocusSessionProvider sessionProvider)
+            var endFailed = false;
+            try
             {
-                sessionProvider.EndFocusSession();
+                if (provider is IHybridInputFocusSessionProvider sessionProvider)
+                {
+                    sessionProvider.EndFocusSession();
+                }
             }
+            catch
+            {
+                endFailed = true;
+            }
+            if (endFailed)
+            {
+                CommitUnfocusedState();
+                TryDisableIme();
+                RecordDiagnostic(HybridInputDiagnosticCode.FocusSessionEndFailed);
+                FreezeFailedSessionTerminal(sinkId);
+                Pump();
+                return;
+            }
+            activeSession = null;
             ClearPendingInput();
             pressedKeys.Clear();
             if (sinks.TryGetValue(sinkId, out var entry))
@@ -716,9 +857,42 @@ namespace Milestro.Input
                     focusSessionToken,
                     sinkId);
                 activeSession = session;
-                nextSessionProvider.BeginFocusSession(session);
+                if (!TryBeginFocusSession(nextSessionProvider,
+                        session,
+                        HybridInputDiagnosticCode.FocusSessionRestartFailed))
+                {
+                    TryDisableIme();
+                    FreezeFailedSessionTerminal(sinkId);
+                    Pump();
+                    return;
+                }
             }
             ApplyImeState();
+        }
+
+        private void FreezeFailedSessionTerminal(int sinkId)
+        {
+            if (!sinks.TryGetValue(sinkId, out var entry))
+            {
+                return;
+            }
+
+            try
+            {
+                entry.Sink.OnInputReset(HybridInputResetReason.FocusSessionFailure);
+            }
+            catch
+            {
+                AbortTransaction(HybridInputDiagnosticCode.ListenerException);
+            }
+            if (entry.Sink is IHybridInputLifecycleSink lifecycleSink)
+            {
+                FreezeTerminalBundle(lifecycleSink, sinkId, lifecycleSink.CommittedText ?? string.Empty);
+            }
+            else if (!entry.Registered)
+            {
+                sinks.Remove(sinkId);
+            }
         }
 
         private void RestartSessionForDeviceChange(SessionEventSink scope)
@@ -750,31 +924,47 @@ namespace Milestro.Input
                 return;
             }
 
-            var frameEvents = new HybridInputEvent[pendingEvents.Count];
-            pendingEvents.CopyTo(frameEvents);
-            var pressedKeySnapshot = new KeyCode[stagedPressedKeysValid ? stagedPressedKeys.Count : pressedKeys.Count];
+            if (!TryAcquireFrameSlot(out var frameSlot))
+            {
+                ClearPendingInput();
+                AbortTransaction(HybridInputDiagnosticCode.NotificationBufferOverflow);
+                return;
+            }
+
+            var frame = frameSlots[frameSlot];
+            pendingEvents.CopyTo(frame.EventBuffer);
+            var pressedKeyCount = stagedPressedKeysValid ? stagedPressedKeys.Count : pressedKeys.Count;
+            if (pressedKeyCount > MaxPressedKeysPerFrame)
+            {
+                ReleaseFrameSlot(frameSlot);
+                HandleInputOverflow();
+                return;
+            }
             if (stagedPressedKeysValid)
             {
-                stagedPressedKeys.CopyTo(pressedKeySnapshot);
+                stagedPressedKeys.CopyTo(frame.PressedKeyBuffer);
             }
             else
             {
-                pressedKeys.CopyTo(pressedKeySnapshot);
+                pressedKeys.CopyTo(frame.PressedKeyBuffer);
             }
-            Array.Sort(pressedKeySnapshot);
-            var frame = new HybridInputFrame(frameIndex,
+            Array.Sort(frame.PressedKeyBuffer, 0, pressedKeyCount);
+            frame.Set(frameIndex,
                 NormalizeTime(unscaledTime),
                 activeProvider?.Id ?? string.Empty,
                 providerGeneration,
                 focusEpoch,
-                frameEvents,
-                pressedKeySnapshot);
+                pendingEvents.Count,
+                pressedKeyCount);
             ClearPendingInput();
-            TryQueueNotification(Notification.ForFrame(entry.Sink,
-                focusedSinkId,
-                focusSessionToken,
-                frame,
-                releaseInProgress));
+            if (!TryQueueNotification(Notification.ForFrame(entry.Sink,
+                    focusedSinkId,
+                    focusSessionToken,
+                    frameSlot,
+                    releaseInProgress)))
+            {
+                ReleaseFrameSlot(frameSlot);
+            }
         }
 
         private void DeliverNotification(Notification notification)
@@ -788,12 +978,13 @@ namespace Milestro.Input
                         {
                             return;
                         }
-                        ReplaceCommittedPressedKeys(notification.Frame!.PressedKeys);
+                        var frame = frameSlots[notification.FrameSlot];
+                        ReplaceCommittedPressedKeys(frame.PressedKeys);
                         var wasDeliveringSealedReleaseFrame = deliveringSealedReleaseFrame;
                         deliveringSealedReleaseFrame = notification.AllowSealedSession;
                         try
                         {
-                            notification.FrameSink!.OnInputFrame(notification.Frame);
+                            notification.FrameSink!.OnInputFrame(frame);
                         }
                         finally
                         {
@@ -806,13 +997,6 @@ namespace Milestro.Input
                             return;
                         }
                         notification.LifecycleSink!.OnFocusGained();
-                        break;
-                    case NotificationKind.EndEdit:
-                        notification.LifecycleSink!.OnEndEdit(notification.Text);
-                        break;
-                    case NotificationKind.FocusLost:
-                        notification.LifecycleSink!.OnFocusLost();
-                        RemoveSinkAfterTerminalNotification(notification.SinkId);
                         break;
                     case NotificationKind.ValueChanged:
                         if (notification.SessionBound && !CanDeliverSessionNotification(notification))
@@ -827,6 +1011,64 @@ namespace Milestro.Input
             {
                 AbortTransaction(HybridInputDiagnosticCode.ListenerException);
             }
+            finally
+            {
+                if (notification.FrameSlot >= 0)
+                {
+                    ReleaseFrameSlot(notification.FrameSlot);
+                }
+                if (!transactionAborted)
+                {
+                    ReconcileSelectionMismatch();
+                }
+            }
+        }
+
+        private void FreezeTerminalBundle(IHybridInputLifecycleSink sink, int sinkId, string finalText)
+        {
+            terminalSink = sink;
+            terminalSinkId = sinkId;
+            terminalText = finalText;
+            terminalStage = TerminalStage.EndEdit;
+        }
+
+        private void DeliverTerminalNotification()
+        {
+            var sink = terminalSink;
+            if (sink == null)
+            {
+                ClearTerminalBundle();
+                return;
+            }
+
+            var sinkId = terminalSinkId;
+            try
+            {
+                if (terminalStage == TerminalStage.EndEdit)
+                {
+                    terminalStage = TerminalStage.FocusLost;
+                    sink.OnEndEdit(terminalText);
+                    return;
+                }
+
+                ClearTerminalBundle();
+                sink.OnFocusLost();
+                RemoveSinkAfterTerminalNotification(sinkId);
+            }
+            catch
+            {
+                ClearTerminalBundle();
+                RemoveSinkAfterTerminalNotification(sinkId);
+                AbortTransaction(HybridInputDiagnosticCode.ListenerException);
+            }
+        }
+
+        private void ClearTerminalBundle()
+        {
+            terminalSink = null;
+            terminalSinkId = 0;
+            terminalText = string.Empty;
+            terminalStage = TerminalStage.None;
         }
 
         private bool CanDeliverSessionNotification(Notification notification)
@@ -842,8 +1084,16 @@ namespace Milestro.Input
             {
                 return activeSession == null || activeSession.AdmissionOpen || notification.AllowSealedSession;
             }
-            return (activeSession == null || activeSession.AdmissionOpen || notification.AllowSealedSession) &&
-                   lifecycleSink.IsActiveAndEnabled && lifecycleSink.CanConsumeInputNow;
+            var canDeliver = (activeSession == null || activeSession.AdmissionOpen || notification.AllowSealedSession) &&
+                             lifecycleSink.IsActiveAndEnabled && lifecycleSink.CanConsumeInputNow &&
+                             HasSelectedOwner(lifecycleSink);
+            if (!canDeliver && focusedSinkId == notification.SinkId)
+            {
+                activeSession?.Seal();
+                sessionBoundaryPending = true;
+                pendingReleaseReason = HybridInputResetReason.FocusChanged;
+            }
+            return canDeliver;
         }
 
         private void EnqueueSessionEvent(SessionEventSink scope, HybridInputEvent inputEvent)
@@ -874,6 +1124,12 @@ namespace Milestro.Input
                 !environment.ApplicationFocused ||
                 inputOverflowLocked)
             {
+                return;
+            }
+            if (nextPressedKeys.Count > MaxPressedKeysPerFrame)
+            {
+                HandleInputOverflow();
+                Pump();
                 return;
             }
 
@@ -924,7 +1180,7 @@ namespace Milestro.Input
             inputOverflowLocked = true;
             activeSession?.Seal();
             ClearPendingInput();
-            notifications.Clear();
+            ClearNotifications();
             hasPendingFocusIntent = false;
             RecordDiagnostic(HybridInputDiagnosticCode.InputEventBufferOverflow);
             if (focusedSinkId != 0)
@@ -938,7 +1194,7 @@ namespace Milestro.Input
         {
             RecordDiagnostic(diagnostic);
             transactionAborted = true;
-            notifications.Clear();
+            ClearNotifications();
             ClearPendingInput();
             hasPendingFocusIntent = false;
         }
@@ -966,7 +1222,8 @@ namespace Milestro.Input
             sinks.Clear();
             pressedKeys.Clear();
             ClearPendingInput();
-            notifications.Clear();
+            ClearNotifications();
+            ClearTerminalBundle();
             hasPendingEnvironment = false;
             hasPendingProviderTransition = false;
             hasPendingFocusIntent = false;
@@ -1067,9 +1324,14 @@ namespace Milestro.Input
             {
                 return false;
             }
+            return HasSelectedOwner(lifecycleSink);
+        }
 
+        private static bool HasSelectedOwner(IHybridInputLifecycleSink lifecycleSink)
+        {
             var eventSystem = EventSystem.current;
-            return eventSystem == null || eventSystem.currentSelectedGameObject == lifecycleSink.Owner;
+            return eventSystem != null && eventSystem.isActiveAndEnabled &&
+                   eventSystem.currentSelectedGameObject == lifecycleSink.Owner;
         }
 
         private static bool CanOwnStrictFocus(IHybridInputProvider? provider)
@@ -1119,6 +1381,35 @@ namespace Milestro.Input
             pendingEvents.Clear();
             stagedPressedKeys.Clear();
             stagedPressedKeysValid = false;
+        }
+
+        private bool TryAcquireFrameSlot(out int frameSlot)
+        {
+            if (freeFrameSlotCount == 0)
+            {
+                frameSlot = -1;
+                return false;
+            }
+
+            frameSlot = freeFrameSlots[--freeFrameSlotCount];
+            return true;
+        }
+
+        private void ReleaseFrameSlot(int frameSlot)
+        {
+            frameSlots[frameSlot].Release();
+            freeFrameSlots[freeFrameSlotCount++] = frameSlot;
+        }
+
+        private void ClearNotifications()
+        {
+            while (notifications.TryDequeue(out var notification))
+            {
+                if (notification.FrameSlot >= 0)
+                {
+                    ReleaseFrameSlot(notification.FrameSlot);
+                }
+            }
         }
 
         private int FindSinkId(IHybridInputLifecycleSink sink)
@@ -1323,9 +1614,14 @@ namespace Milestro.Input
         {
             Frame,
             FocusGained,
-            EndEdit,
-            FocusLost,
             ValueChanged
+        }
+
+        private enum TerminalStage
+        {
+            None,
+            EndEdit,
+            FocusLost
         }
 
         private readonly struct Notification
@@ -1335,7 +1631,7 @@ namespace Milestro.Input
                 IHybridInputLifecycleSink? lifecycleSink,
                 int sinkId,
                 int sessionToken,
-                HybridInputFrame? frame,
+                int frameSlot,
                 string text,
                 bool sessionBound,
                 bool allowSealedSession)
@@ -1345,7 +1641,7 @@ namespace Milestro.Input
                 LifecycleSink = lifecycleSink;
                 SinkId = sinkId;
                 SessionToken = sessionToken;
-                Frame = frame;
+                FrameSlot = frameSlot;
                 Text = text;
                 SessionBound = sessionBound;
                 AllowSealedSession = allowSealedSession;
@@ -1356,7 +1652,7 @@ namespace Milestro.Input
             internal IHybridInputLifecycleSink? LifecycleSink { get; }
             internal int SinkId { get; }
             internal int SessionToken { get; }
-            internal HybridInputFrame? Frame { get; }
+            internal int FrameSlot { get; }
             internal string Text { get; }
             internal bool SessionBound { get; }
             internal bool AllowSealedSession { get; }
@@ -1364,7 +1660,7 @@ namespace Milestro.Input
             internal static Notification ForFrame(IHybridInputFrameSink sink,
                 int sinkId,
                 int sessionToken,
-                HybridInputFrame frame,
+                int frameSlot,
                 bool allowSealedSession)
             {
                 return new Notification(NotificationKind.Frame,
@@ -1372,7 +1668,7 @@ namespace Milestro.Input
                     sink as IHybridInputLifecycleSink,
                     sinkId,
                     sessionToken,
-                    frame,
+                    frameSlot,
                     string.Empty,
                     true,
                     allowSealedSession);
@@ -1387,35 +1683,9 @@ namespace Milestro.Input
                     sink,
                     sinkId,
                     sessionToken,
-                    null,
+                    -1,
                     string.Empty,
                     true,
-                    false);
-            }
-
-            internal static Notification EndEdit(IHybridInputLifecycleSink sink, int sinkId, string text)
-            {
-                return new Notification(NotificationKind.EndEdit,
-                    sink,
-                    sink,
-                    sinkId,
-                    0,
-                    null,
-                    text,
-                    false,
-                    false);
-            }
-
-            internal static Notification FocusLost(IHybridInputLifecycleSink sink, int sinkId)
-            {
-                return new Notification(NotificationKind.FocusLost,
-                    sink,
-                    sink,
-                    sinkId,
-                    0,
-                    null,
-                    string.Empty,
-                    false,
                     false);
             }
 
@@ -1431,7 +1701,7 @@ namespace Milestro.Input
                     sink,
                     sinkId,
                     sessionToken,
-                    null,
+                    -1,
                     text,
                     sessionBound,
                     allowSealedSession);
