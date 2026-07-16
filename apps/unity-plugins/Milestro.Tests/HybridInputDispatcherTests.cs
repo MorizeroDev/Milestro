@@ -1023,6 +1023,19 @@ namespace Milestro.Tests
                 using var registration = dispatcher.RegisterSink(sink);
                 selection.Select(owner);
                 var diagnosticCount = dispatcher.Diagnostics.DiagnosticCount;
+                var ownerResetCommitted = false;
+                var resetSawUnfocused = false;
+                var endSawCommittedReset = false;
+                var lostSawCommittedReset = false;
+                HybridInputResetReason? observedResetReason = null;
+                sink.OnResetCallback = reason =>
+                {
+                    observedResetReason = reason;
+                    resetSawUnfocused = !registration.IsFocused;
+                    ownerResetCommitted = true;
+                };
+                sink.OnEndEditCallback = _ => endSawCommittedReset = ownerResetCommitted;
+                sink.OnFocusLostCallback = () => lostSawCommittedReset = ownerResetCommitted;
                 sink.OnFocusGainedCallback = () =>
                 {
                     registration.ReleaseFocus();
@@ -1037,7 +1050,11 @@ namespace Milestro.Tests
                 var oldScope = provider.CaptureSession(0);
                 Assert.That(registration.IsFocused, Is.False);
                 Assert.That(sink.Calls, Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost" }));
-                Assert.That(sink.Resets, Is.Empty);
+                Assert.That(sink.Resets, Is.EqualTo(new[] { HybridInputResetReason.FocusChanged }));
+                Assert.That(observedResetReason, Is.EqualTo(HybridInputResetReason.FocusChanged));
+                Assert.That(resetSawUnfocused, Is.True);
+                Assert.That(endSawCommittedReset, Is.True);
+                Assert.That(lostSawCommittedReset, Is.True);
                 Assert.That(dispatcher.Diagnostics.LastDiagnostic,
                     Is.EqualTo(HybridInputDiagnosticCode.NotificationBufferOverflow));
                 Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
@@ -1046,6 +1063,9 @@ namespace Milestro.Tests
                 Assert.That(sink.Frames, Is.Empty);
 
                 sink.OnFocusGainedCallback = null;
+                sink.OnResetCallback = null;
+                sink.OnEndEditCallback = null;
+                sink.OnFocusLostCallback = null;
                 Assert.That(registration.AcquireFocus(), Is.True);
                 Assert.That(sink.Calls,
                     Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost", "owner:Gained" }));
@@ -1071,6 +1091,20 @@ namespace Milestro.Tests
                 using var registration = dispatcher.RegisterSink(sink);
                 selection.Select(owner);
                 var diagnosticCount = dispatcher.Diagnostics.DiagnosticCount;
+                var ownerResetCommitted = false;
+                var resetSawUnfocused = false;
+                var endSawCommittedReset = false;
+                var lostSawCommittedReset = false;
+                HybridInputResetReason? observedResetReason = null;
+                sink.OnResetCallback = reason =>
+                {
+                    observedResetReason = reason;
+                    resetSawUnfocused = !registration.IsFocused;
+                    ownerResetCommitted = true;
+                    throw new InvalidOperationException("owner reset");
+                };
+                sink.OnEndEditCallback = _ => endSawCommittedReset = ownerResetCommitted;
+                sink.OnFocusLostCallback = () => lostSawCommittedReset = ownerResetCommitted;
                 sink.OnFocusGainedCallback = () =>
                 {
                     registration.ReleaseFocus();
@@ -1082,7 +1116,11 @@ namespace Milestro.Tests
                 var oldScope = provider.CaptureSession(0);
                 Assert.That(registration.IsFocused, Is.False);
                 Assert.That(sink.Calls, Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost" }));
-                Assert.That(sink.Resets, Is.Empty);
+                Assert.That(sink.Resets, Is.EqualTo(new[] { HybridInputResetReason.FocusChanged }));
+                Assert.That(observedResetReason, Is.EqualTo(HybridInputResetReason.FocusChanged));
+                Assert.That(resetSawUnfocused, Is.True);
+                Assert.That(endSawCommittedReset, Is.True);
+                Assert.That(lostSawCommittedReset, Is.True);
                 Assert.That(dispatcher.Diagnostics.LastDiagnostic,
                     Is.EqualTo(HybridInputDiagnosticCode.ListenerException));
                 Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
@@ -1091,6 +1129,9 @@ namespace Milestro.Tests
                 Assert.That(sink.Frames, Is.Empty);
 
                 sink.OnFocusGainedCallback = null;
+                sink.OnResetCallback = null;
+                sink.OnEndEditCallback = null;
+                sink.OnFocusLostCallback = null;
                 Assert.That(registration.AcquireFocus(), Is.True);
                 Assert.That(sink.Calls,
                     Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost", "owner:Gained" }));
@@ -1116,6 +1157,19 @@ namespace Milestro.Tests
                 using var registration = dispatcher.RegisterSink(sink);
                 selection.Select(owner);
                 var diagnosticCount = dispatcher.Diagnostics.DiagnosticCount;
+                var ownerResetCommitted = false;
+                var resetSawUnfocused = false;
+                var endSawCommittedReset = false;
+                var lostSawCommittedReset = false;
+                HybridInputResetReason? observedResetReason = null;
+                sink.OnResetCallback = reason =>
+                {
+                    observedResetReason = reason;
+                    resetSawUnfocused = !registration.IsFocused;
+                    ownerResetCommitted = true;
+                };
+                sink.OnEndEditCallback = _ => endSawCommittedReset = ownerResetCommitted;
+                sink.OnFocusLostCallback = () => lostSawCommittedReset = ownerResetCommitted;
                 sink.OnFocusGainedCallback = () =>
                 {
                     registration.ReleaseFocus();
@@ -1133,7 +1187,11 @@ namespace Milestro.Tests
                 Assert.That(sink.Calls.Count(call => call == "owner:Lost"), Is.EqualTo(1));
                 Assert.That(sink.Calls[^2], Is.EqualTo("owner:End"));
                 Assert.That(sink.Calls[^1], Is.EqualTo("owner:Lost"));
-                Assert.That(sink.Resets, Is.Empty);
+                Assert.That(sink.Resets, Is.EqualTo(new[] { HybridInputResetReason.FocusChanged }));
+                Assert.That(observedResetReason, Is.EqualTo(HybridInputResetReason.FocusChanged));
+                Assert.That(resetSawUnfocused, Is.True);
+                Assert.That(endSawCommittedReset, Is.True);
+                Assert.That(lostSawCommittedReset, Is.True);
                 Assert.That(dispatcher.Diagnostics.LastDiagnostic,
                     Is.EqualTo(HybridInputDiagnosticCode.WorkLimitExceeded));
                 Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
@@ -1143,6 +1201,9 @@ namespace Milestro.Tests
 
                 sink.OnFocusGainedCallback = null;
                 sink.OnValueChangedCallback = null;
+                sink.OnResetCallback = null;
+                sink.OnEndEditCallback = null;
+                sink.OnFocusLostCallback = null;
                 Assert.That(registration.AcquireFocus(), Is.True);
                 Assert.That(sink.Calls[^1], Is.EqualTo("owner:Gained"));
                 Assert.That(provider.BeginCount, Is.EqualTo(2));
@@ -1151,6 +1212,87 @@ namespace Milestro.Tests
             finally
             {
                 UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void AbortEmergencyResetsTextInputNativeStateBeforeTerminal()
+        {
+            var owner = new GameObject("owner");
+            var inputObject = new GameObject("text-input", typeof(RectTransform));
+            inputObject.SetActive(false);
+            try
+            {
+                using var selection = new SelectionFixture();
+                var input = inputObject.AddComponent<TextInput>();
+                InvokeRecreateInputBox(input);
+                input.SetTextWithoutNotify("committed");
+                var inputBox = GetNativeInputBox(input);
+                inputBox.SetFocused(true);
+                inputBox.SetCaretVisible(true);
+                Assert.That(inputBox.SetComposition("preedit"), Is.True);
+                SetTextInputPrivateField(input, "compositionActive", true);
+                SetTextInputPrivateField(input, "lastCompositionText", "preedit");
+                SetTextInputPrivateField(input, "caretVisible", true);
+
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(owner, "owner");
+                using var registration = dispatcher.RegisterSink(sink);
+                selection.Select(owner);
+                var diagnosticCount = dispatcher.Diagnostics.DiagnosticCount;
+                var resetCommitted = false;
+                var resetSawUnfocused = false;
+                var resetStateCleared = false;
+                var endSawCommittedReset = false;
+                var endStateCleared = false;
+                var lostSawCommittedReset = false;
+                var lostStateCleared = false;
+                HybridInputResetReason? observedResetReason = null;
+                sink.OnResetCallback = reason =>
+                {
+                    observedResetReason = reason;
+                    resetSawUnfocused = !registration.IsFocused;
+                    InvokeTextInputReset(input, reason);
+                    resetCommitted = true;
+                    resetStateCleared = IsTextInputResetStateCleared(input, inputBox);
+                };
+                sink.OnEndEditCallback = _ =>
+                {
+                    endSawCommittedReset = resetCommitted;
+                    endStateCleared = IsTextInputResetStateCleared(input, inputBox);
+                };
+                sink.OnFocusLostCallback = () =>
+                {
+                    lostSawCommittedReset = resetCommitted;
+                    lostStateCleared = IsTextInputResetStateCleared(input, inputBox);
+                };
+                sink.OnFocusGainedCallback = () =>
+                {
+                    registration.ReleaseFocus();
+                    throw new InvalidOperationException("focus gained");
+                };
+
+                Assert.That(registration.AcquireFocus(), Is.False);
+
+                Assert.That(resetCommitted, Is.True);
+                Assert.That(sink.Resets, Is.EqualTo(new[] { HybridInputResetReason.FocusChanged }));
+                Assert.That(sink.Calls, Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost" }));
+                Assert.That(observedResetReason, Is.EqualTo(HybridInputResetReason.FocusChanged));
+                Assert.That(resetSawUnfocused, Is.True);
+                Assert.That(resetStateCleared, Is.True);
+                Assert.That(endSawCommittedReset, Is.True);
+                Assert.That(endStateCleared, Is.True);
+                Assert.That(lostSawCommittedReset, Is.True);
+                Assert.That(lostStateCleared, Is.True);
+                Assert.That(dispatcher.Diagnostics.LastDiagnostic,
+                    Is.EqualTo(HybridInputDiagnosticCode.ListenerException));
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+                UnityEngine.Object.DestroyImmediate(inputObject);
             }
         }
 
@@ -2181,6 +2323,34 @@ namespace Milestro.Tests
             return (InputBox)typeof(TextInput)
                 .GetField("inputBox", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .GetValue(input)!;
+        }
+
+        private static void InvokeTextInputReset(TextInput input, HybridInputResetReason reason)
+        {
+            typeof(TextInput).GetMethod("OnInputReset", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(input, new object[] { reason });
+        }
+
+        private static void SetTextInputPrivateField(TextInput input, string fieldName, object value)
+        {
+            typeof(TextInput).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(input, value);
+        }
+
+        private static T GetTextInputPrivateField<T>(TextInput input, string fieldName)
+        {
+            return (T)typeof(TextInput).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(input)!;
+        }
+
+        private static bool IsTextInputResetStateCleared(TextInput input, InputBox inputBox)
+        {
+            return !GetTextInputPrivateField<bool>(input, "compositionActive") &&
+                   GetTextInputPrivateField<string>(input, "lastCompositionText").Length == 0 &&
+                   !GetTextInputPrivateField<bool>(input, "caretVisible") &&
+                   !inputBox.Focused &&
+                   !inputBox.Selection.HasSelection &&
+                   !inputBox.ClearComposition();
         }
 
         private static void SetSerializedText(TextInput input, string value)

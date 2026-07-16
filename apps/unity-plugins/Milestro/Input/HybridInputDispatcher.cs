@@ -720,16 +720,9 @@ namespace Milestro.Input
                 RecordDiagnostic(HybridInputDiagnosticCode.FocusSessionEndFailed);
             }
 
-            if (sinks.TryGetValue(sinkId, out var entry))
+            if (!TryResetSink(sinkId, releasingReason))
             {
-                try
-                {
-                    entry.Sink.OnInputReset(releasingReason);
-                }
-                catch
-                {
-                    AbortTransaction(HybridInputDiagnosticCode.ListenerException);
-                }
+                AbortTransaction(HybridInputDiagnosticCode.ListenerException);
             }
             FreezeTerminalForSink(sinkId);
         }
@@ -742,6 +735,7 @@ namespace Milestro.Input
             }
 
             var sinkId = releaseInProgress ? releasingSinkId : focusedSinkId;
+            var reason = releaseInProgress ? releasingReason : pendingReleaseReason;
             if (sinkId == 0 || focusedSinkId != sinkId)
             {
                 releaseInProgress = false;
@@ -754,7 +748,26 @@ namespace Milestro.Input
             releasingSinkId = 0;
             TryDisableIme();
             CommitUnfocusedState();
+            // Preserve the abort as the transaction's single diagnostic even if owner reset fails.
+            TryResetSink(sinkId, reason);
             FreezeTerminalForSink(sinkId);
+        }
+
+        private bool TryResetSink(int sinkId, HybridInputResetReason reason)
+        {
+            if (!sinks.TryGetValue(sinkId, out var entry))
+            {
+                return true;
+            }
+            try
+            {
+                entry.Sink.OnInputReset(reason);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private bool TryEndActiveFocusSession()
