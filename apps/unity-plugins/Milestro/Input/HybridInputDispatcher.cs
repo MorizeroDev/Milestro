@@ -442,12 +442,17 @@ namespace Milestro.Input
                     }
                     if (transactionAborted)
                     {
+                        CompleteAbortedRelease();
+                        if (terminalStage != TerminalStage.None)
+                        {
+                            continue;
+                        }
                         break;
                     }
                     if (++workSteps > MaxOuterDrainWorkSteps)
                     {
                         AbortTransaction(HybridInputDiagnosticCode.WorkLimitExceeded);
-                        break;
+                        continue;
                     }
 
                     if (sessionBoundaryPending && focusedSinkId != 0 && !releaseInProgress)
@@ -704,53 +709,69 @@ namespace Milestro.Input
                 return;
             }
 
-            var endFailed = false;
-            activeSession?.Seal();
-            try
-            {
-                if (activeProvider is IHybridInputFocusSessionProvider sessionProvider)
-                {
-                    sessionProvider.EndFocusSession();
-                }
-            }
-            catch
-            {
-                endFailed = true;
-            }
-            finally
-            {
-                releaseInProgress = false;
-                releasingSinkId = 0;
-                activeSession = null;
-                endFailed |= !TryDisableIme();
-                CommitUnfocusedState();
-            }
+            var endFailed = !TryEndActiveFocusSession();
+            releaseInProgress = false;
+            releasingSinkId = 0;
+            endFailed |= !TryDisableIme();
+            CommitUnfocusedState();
 
             if (endFailed)
             {
                 RecordDiagnostic(HybridInputDiagnosticCode.FocusSessionEndFailed);
             }
 
-            if (!sinks.TryGetValue(sinkId, out var entry))
+            if (sinks.TryGetValue(sinkId, out var entry))
+            {
+                try
+                {
+                    entry.Sink.OnInputReset(releasingReason);
+                }
+                catch
+                {
+                    AbortTransaction(HybridInputDiagnosticCode.ListenerException);
+                }
+            }
+            FreezeTerminalForSink(sinkId);
+        }
+
+        private void CompleteAbortedRelease()
+        {
+            if ((!sessionBoundaryPending && !releaseInProgress) || focusedSinkId == 0)
             {
                 return;
             }
 
+            var sinkId = releaseInProgress ? releasingSinkId : focusedSinkId;
+            if (sinkId == 0 || focusedSinkId != sinkId)
+            {
+                releaseInProgress = false;
+                releasingSinkId = 0;
+                return;
+            }
+
+            TryEndActiveFocusSession();
+            releaseInProgress = false;
+            releasingSinkId = 0;
+            TryDisableIme();
+            CommitUnfocusedState();
+            FreezeTerminalForSink(sinkId);
+        }
+
+        private bool TryEndActiveFocusSession()
+        {
+            activeSession?.Seal();
+            if (activeSession == null || !(activeProvider is IHybridInputFocusSessionProvider sessionProvider))
+            {
+                return true;
+            }
             try
             {
-                entry.Sink.OnInputReset(releasingReason);
+                sessionProvider.EndFocusSession();
+                return true;
             }
             catch
             {
-                AbortTransaction(HybridInputDiagnosticCode.ListenerException);
-            }
-            if (entry.Sink is IHybridInputLifecycleSink lifecycleSink)
-            {
-                FreezeTerminalBundle(lifecycleSink, sinkId, lifecycleSink.CommittedText ?? string.Empty);
-            }
-            else if (!entry.Registered)
-            {
-                sinks.Remove(sinkId);
+                return false;
             }
         }
 
@@ -812,21 +833,9 @@ namespace Milestro.Input
                 ClearPendingInput();
                 return;
             }
+            var restartingSessionToken = focusSessionToken;
 
-            activeSession?.Seal();
-            var endFailed = false;
-            try
-            {
-                if (provider is IHybridInputFocusSessionProvider sessionProvider)
-                {
-                    sessionProvider.EndFocusSession();
-                }
-            }
-            catch
-            {
-                endFailed = true;
-            }
-            if (endFailed)
+            if (!TryEndActiveFocusSession())
             {
                 CommitUnfocusedState();
                 TryDisableIme();
@@ -838,9 +847,30 @@ namespace Milestro.Input
             activeSession = null;
             ClearPendingInput();
             pressedKeys.Clear();
-            if (sinks.TryGetValue(sinkId, out var entry))
+            try
             {
-                entry.Sink.OnInputReset(HybridInputResetReason.DeviceChanged);
+                if (sinks.TryGetValue(sinkId, out var entry))
+                {
+                    entry.Sink.OnInputReset(HybridInputResetReason.DeviceChanged);
+                }
+            }
+            catch
+            {
+                FailCloseInterruptedRestart(sinkId, restartingSessionToken);
+                AbortTransaction(HybridInputDiagnosticCode.ListenerException);
+                Pump();
+                return;
+            }
+
+            if (!CanRestartFocusedSession(provider,
+                    expectedDispatcherGeneration,
+                    expectedProviderGeneration,
+                    sinkId,
+                    restartingSessionToken))
+            {
+                ScheduleReleaseAfterInterruptedRestart(sinkId, restartingSessionToken);
+                Pump();
+                return;
             }
 
             unchecked
@@ -870,6 +900,43 @@ namespace Milestro.Input
             ApplyImeState();
         }
 
+        private bool CanRestartFocusedSession(IHybridInputProvider provider,
+            int expectedDispatcherGeneration,
+            int expectedProviderGeneration,
+            int sinkId,
+            int expectedSessionToken)
+        {
+            return focusedSinkId == sinkId && focusSessionToken == expectedSessionToken &&
+                   activeSession == null && !sessionBoundaryPending && !releaseInProgress &&
+                   environment.ApplicationFocused &&
+                   IsCurrentProvider(provider, expectedDispatcherGeneration, expectedProviderGeneration) &&
+                   TryGetRegisteredSink(sinkId, out var entry) && CanAdmitFocus(entry);
+        }
+
+        private void ScheduleReleaseAfterInterruptedRestart(int sinkId, int expectedSessionToken)
+        {
+            if (focusedSinkId != sinkId || focusSessionToken != expectedSessionToken || activeSession != null)
+            {
+                return;
+            }
+            if (!sessionBoundaryPending && !releaseInProgress)
+            {
+                sessionBoundaryPending = true;
+                pendingReleaseReason = HybridInputResetReason.FocusChanged;
+            }
+        }
+
+        private void FailCloseInterruptedRestart(int sinkId, int expectedSessionToken)
+        {
+            if (focusedSinkId != sinkId || focusSessionToken != expectedSessionToken || activeSession != null)
+            {
+                return;
+            }
+            TryDisableIme();
+            CommitUnfocusedState();
+            FreezeTerminalForSink(sinkId);
+        }
+
         private void FreezeFailedSessionTerminal(int sinkId)
         {
             if (!sinks.TryGetValue(sinkId, out var entry))
@@ -885,14 +952,7 @@ namespace Milestro.Input
             {
                 AbortTransaction(HybridInputDiagnosticCode.ListenerException);
             }
-            if (entry.Sink is IHybridInputLifecycleSink lifecycleSink)
-            {
-                FreezeTerminalBundle(lifecycleSink, sinkId, lifecycleSink.CommittedText ?? string.Empty);
-            }
-            else if (!entry.Registered)
-            {
-                sinks.Remove(sinkId);
-            }
+            FreezeTerminalForSink(sinkId);
         }
 
         private void RestartSessionForDeviceChange(SessionEventSink scope)
@@ -1032,6 +1092,22 @@ namespace Milestro.Input
             terminalStage = TerminalStage.EndEdit;
         }
 
+        private void FreezeTerminalForSink(int sinkId)
+        {
+            if (!sinks.TryGetValue(sinkId, out var entry))
+            {
+                return;
+            }
+            if (entry.Sink is IHybridInputLifecycleSink lifecycleSink)
+            {
+                FreezeTerminalBundle(lifecycleSink, sinkId, lifecycleSink.CommittedText ?? string.Empty);
+            }
+            else if (!entry.Registered)
+            {
+                sinks.Remove(sinkId);
+            }
+        }
+
         private void DeliverTerminalNotification()
         {
             var sink = terminalSink;
@@ -1084,16 +1160,18 @@ namespace Milestro.Input
             {
                 return activeSession == null || activeSession.AdmissionOpen || notification.AllowSealedSession;
             }
-            var canDeliver = (activeSession == null || activeSession.AdmissionOpen || notification.AllowSealedSession) &&
-                             lifecycleSink.IsActiveAndEnabled && lifecycleSink.CanConsumeInputNow &&
-                             HasSelectedOwner(lifecycleSink);
-            if (!canDeliver && focusedSinkId == notification.SinkId)
+            if (!HasValidLifecycleOwner(lifecycleSink))
             {
                 activeSession?.Seal();
                 sessionBoundaryPending = true;
                 pendingReleaseReason = HybridInputResetReason.FocusChanged;
+                return false;
             }
-            return canDeliver;
+            if (activeSession != null && !activeSession.AdmissionOpen && !notification.AllowSealedSession)
+            {
+                return false;
+            }
+            return notification.Kind == NotificationKind.FocusGained || lifecycleSink.CanConsumeInputNow;
         }
 
         private void EnqueueSessionEvent(SessionEventSink scope, HybridInputEvent inputEvent)
@@ -1320,11 +1398,12 @@ namespace Milestro.Input
             {
                 return true;
             }
-            if (!lifecycleSink.IsActiveAndEnabled)
-            {
-                return false;
-            }
-            return HasSelectedOwner(lifecycleSink);
+            return HasValidLifecycleOwner(lifecycleSink);
+        }
+
+        private static bool HasValidLifecycleOwner(IHybridInputLifecycleSink lifecycleSink)
+        {
+            return lifecycleSink.IsActiveAndEnabled && HasSelectedOwner(lifecycleSink);
         }
 
         private static bool HasSelectedOwner(IHybridInputLifecycleSink lifecycleSink)

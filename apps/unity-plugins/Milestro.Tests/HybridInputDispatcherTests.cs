@@ -930,6 +930,51 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void TemporarilyUnavailableConsumerKeepsAndResumesSameFocusSession()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                using var selection = new SelectionFixture();
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(owner, "owner")
+                {
+                    CanConsumeInputNow = false
+                };
+                using var registration = dispatcher.RegisterSink(sink);
+                selection.Select(owner);
+
+                Assert.That(registration.AcquireFocus(), Is.True);
+                var scope = provider.CaptureSession(0);
+                scope.Enqueue(HybridInputEvent.CommittedText("paused", 1d));
+                dispatcher.Drain(1, 1d);
+
+                Assert.That(registration.IsFocused, Is.True);
+                Assert.That(sink.Frames, Is.Empty);
+                Assert.That(sink.Calls, Is.EqualTo(new[] { "owner:Gained" }));
+                Assert.That(provider.BeginCount, Is.EqualTo(1));
+                Assert.That(provider.EndCount, Is.Zero);
+
+                sink.CanConsumeInputNow = true;
+                scope.Enqueue(HybridInputEvent.CommittedText("resumed", 2d));
+                dispatcher.Drain(2, 2d);
+
+                Assert.That(registration.IsFocused, Is.True);
+                Assert.That(sink.Frames, Has.Count.EqualTo(1));
+                Assert.That(sink.Frames[0].Events.Select(inputEvent => inputEvent.Text),
+                    Is.EqualTo(new[] { "resumed" }));
+                Assert.That(sink.Calls, Is.EqualTo(new[] { "owner:Gained" }));
+                Assert.That(provider.BeginCount, Is.EqualTo(1));
+                Assert.That(provider.EndCount, Is.Zero);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
         public void FocusReentrancyUsesStickySessionBoundaryWithoutRecursion()
         {
             var owner = new GameObject("owner");
@@ -958,6 +1003,150 @@ namespace Milestro.Tests
                 Assert.That(sink.Calls,
                     Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost", "owner:Gained" }));
                 Assert.That(registration.IsFocused, Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void ReleaseThenNotificationOverflowCompletesTerminalBeforeAcquireReturns()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                using var selection = new SelectionFixture();
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(owner, "owner");
+                using var registration = dispatcher.RegisterSink(sink);
+                selection.Select(owner);
+                var diagnosticCount = dispatcher.Diagnostics.DiagnosticCount;
+                sink.OnFocusGainedCallback = () =>
+                {
+                    registration.ReleaseFocus();
+                    for (var i = 0; i <= HybridInputDispatcher.MaxPendingNotifications; ++i)
+                    {
+                        dispatcher.NotifyValueChanged(sink, i.ToString(), sessionBound: false);
+                    }
+                };
+
+                Assert.That(registration.AcquireFocus(), Is.False);
+
+                var oldScope = provider.CaptureSession(0);
+                Assert.That(registration.IsFocused, Is.False);
+                Assert.That(sink.Calls, Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost" }));
+                Assert.That(sink.Resets, Is.Empty);
+                Assert.That(dispatcher.Diagnostics.LastDiagnostic,
+                    Is.EqualTo(HybridInputDiagnosticCode.NotificationBufferOverflow));
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
+                oldScope.Enqueue(HybridInputEvent.CommittedText("stale", 1d));
+                dispatcher.Drain(1, 1d);
+                Assert.That(sink.Frames, Is.Empty);
+
+                sink.OnFocusGainedCallback = null;
+                Assert.That(registration.AcquireFocus(), Is.True);
+                Assert.That(sink.Calls,
+                    Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost", "owner:Gained" }));
+                Assert.That(provider.BeginCount, Is.EqualTo(2));
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void ReleaseThenListenerExceptionCompletesTerminalBeforeAcquireReturns()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                using var selection = new SelectionFixture();
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(owner, "owner");
+                using var registration = dispatcher.RegisterSink(sink);
+                selection.Select(owner);
+                var diagnosticCount = dispatcher.Diagnostics.DiagnosticCount;
+                sink.OnFocusGainedCallback = () =>
+                {
+                    registration.ReleaseFocus();
+                    throw new InvalidOperationException("focus gained");
+                };
+
+                Assert.That(registration.AcquireFocus(), Is.False);
+
+                var oldScope = provider.CaptureSession(0);
+                Assert.That(registration.IsFocused, Is.False);
+                Assert.That(sink.Calls, Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost" }));
+                Assert.That(sink.Resets, Is.Empty);
+                Assert.That(dispatcher.Diagnostics.LastDiagnostic,
+                    Is.EqualTo(HybridInputDiagnosticCode.ListenerException));
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
+                oldScope.Enqueue(HybridInputEvent.CommittedText("stale", 1d));
+                dispatcher.Drain(1, 1d);
+                Assert.That(sink.Frames, Is.Empty);
+
+                sink.OnFocusGainedCallback = null;
+                Assert.That(registration.AcquireFocus(), Is.True);
+                Assert.That(sink.Calls,
+                    Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost", "owner:Gained" }));
+                Assert.That(provider.BeginCount, Is.EqualTo(2));
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void ReleaseThenWorkLimitCompletesTerminalBeforeAcquireReturns()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                using var selection = new SelectionFixture();
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(owner, "owner");
+                using var registration = dispatcher.RegisterSink(sink);
+                selection.Select(owner);
+                var diagnosticCount = dispatcher.Diagnostics.DiagnosticCount;
+                sink.OnFocusGainedCallback = () =>
+                {
+                    registration.ReleaseFocus();
+                    dispatcher.NotifyValueChanged(sink, "A", sessionBound: false);
+                };
+                sink.OnValueChangedCallback = value => dispatcher.NotifyValueChanged(sink,
+                    value == "A" ? "B" : "A",
+                    sessionBound: false);
+
+                Assert.That(registration.AcquireFocus(), Is.False);
+
+                var oldScope = provider.CaptureSession(0);
+                Assert.That(registration.IsFocused, Is.False);
+                Assert.That(sink.Calls.Count(call => call == "owner:End"), Is.EqualTo(1));
+                Assert.That(sink.Calls.Count(call => call == "owner:Lost"), Is.EqualTo(1));
+                Assert.That(sink.Calls[^2], Is.EqualTo("owner:End"));
+                Assert.That(sink.Calls[^1], Is.EqualTo("owner:Lost"));
+                Assert.That(sink.Resets, Is.Empty);
+                Assert.That(dispatcher.Diagnostics.LastDiagnostic,
+                    Is.EqualTo(HybridInputDiagnosticCode.WorkLimitExceeded));
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
+                oldScope.Enqueue(HybridInputEvent.CommittedText("stale", 1d));
+                dispatcher.Drain(1, 1d);
+                Assert.That(sink.Frames, Is.Empty);
+
+                sink.OnFocusGainedCallback = null;
+                sink.OnValueChangedCallback = null;
+                Assert.That(registration.AcquireFocus(), Is.True);
+                Assert.That(sink.Calls[^1], Is.EqualTo("owner:Gained"));
+                Assert.That(provider.BeginCount, Is.EqualTo(2));
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
             }
             finally
             {
@@ -1196,6 +1385,254 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void DeviceRestartEndFailureReleasesSessionAndCanRecover()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                using var selection = new SelectionFixture();
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(owner, "owner");
+                using var registration = dispatcher.RegisterSink(sink);
+                selection.Select(owner);
+                registration.AcquireFocus();
+                var oldScope = provider.CaptureSession(0);
+                var diagnosticCount = dispatcher.Diagnostics.DiagnosticCount;
+                provider.EndFailuresRemaining = 1;
+
+                oldScope.ResetDeviceState();
+
+                Assert.That(registration.IsFocused, Is.False);
+                Assert.That(sink.Calls, Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost" }));
+                Assert.That(sink.Resets,
+                    Is.EqualTo(new[] { HybridInputResetReason.FocusSessionFailure }));
+                Assert.That(provider.BeginCount, Is.EqualTo(1));
+                Assert.That(provider.EndCount, Is.EqualTo(1));
+                Assert.That(dispatcher.Diagnostics.LastDiagnostic,
+                    Is.EqualTo(HybridInputDiagnosticCode.FocusSessionEndFailed));
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
+                oldScope.Enqueue(HybridInputEvent.CommittedText("stale", 1d));
+                dispatcher.Drain(1, 1d);
+                Assert.That(sink.Frames, Is.Empty);
+
+                Assert.That(registration.AcquireFocus(), Is.True);
+                Assert.That(sink.Calls,
+                    Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost", "owner:Gained" }));
+                Assert.That(provider.BeginCount, Is.EqualTo(2));
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void DeviceRestartResetExceptionFailsClosedAndCanRecover()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                using var selection = new SelectionFixture();
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(owner, "owner")
+                {
+                    OnResetCallback = reason =>
+                    {
+                        if (reason == HybridInputResetReason.DeviceChanged)
+                        {
+                            throw new InvalidOperationException("device reset");
+                        }
+                    }
+                };
+                using var registration = dispatcher.RegisterSink(sink);
+                selection.Select(owner);
+                registration.AcquireFocus();
+                var oldScope = provider.CaptureSession(0);
+                var diagnosticCount = dispatcher.Diagnostics.DiagnosticCount;
+
+                oldScope.ResetDeviceState();
+
+                Assert.That(registration.IsFocused, Is.False);
+                Assert.That(sink.Calls, Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost" }));
+                Assert.That(sink.Resets, Is.EqualTo(new[] { HybridInputResetReason.DeviceChanged }));
+                Assert.That(provider.BeginCount, Is.EqualTo(1));
+                Assert.That(provider.EndCount, Is.EqualTo(1));
+                Assert.That(provider.HasBoundSession, Is.False);
+                Assert.That(dispatcher.Diagnostics.LastDiagnostic,
+                    Is.EqualTo(HybridInputDiagnosticCode.ListenerException));
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
+                oldScope.Enqueue(HybridInputEvent.CommittedText("stale", 1d));
+                dispatcher.Drain(1, 1d);
+                Assert.That(sink.Frames, Is.Empty);
+
+                sink.OnResetCallback = null;
+                Assert.That(registration.AcquireFocus(), Is.True);
+                Assert.That(sink.Calls,
+                    Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost", "owner:Gained" }));
+                Assert.That(provider.BeginCount, Is.EqualTo(2));
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void DeviceRestartResetReleaseDoesNotCreateReplacementSession()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                using var selection = new SelectionFixture();
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(owner, "owner");
+                using var registration = dispatcher.RegisterSink(sink);
+                selection.Select(owner);
+                registration.AcquireFocus();
+                var oldScope = provider.CaptureSession(0);
+                var diagnosticCount = dispatcher.Diagnostics.DiagnosticCount;
+                sink.OnResetCallback = reason =>
+                {
+                    if (reason == HybridInputResetReason.DeviceChanged)
+                    {
+                        registration.ReleaseFocus();
+                    }
+                };
+
+                oldScope.ResetDeviceState();
+
+                Assert.That(registration.IsFocused, Is.False);
+                Assert.That(sink.Calls, Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost" }));
+                Assert.That(sink.Resets,
+                    Is.EqualTo(new[]
+                    {
+                        HybridInputResetReason.DeviceChanged,
+                        HybridInputResetReason.FocusChanged
+                    }));
+                Assert.That(provider.BeginCount, Is.EqualTo(1));
+                Assert.That(provider.EndCount, Is.EqualTo(1));
+                Assert.That(provider.HasBoundSession, Is.False);
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount));
+                oldScope.Enqueue(HybridInputEvent.CommittedText("stale", 1d));
+                dispatcher.Drain(1, 1d);
+                Assert.That(sink.Frames, Is.Empty);
+
+                sink.OnResetCallback = null;
+                Assert.That(registration.AcquireFocus(), Is.True);
+                Assert.That(provider.BeginCount, Is.EqualTo(2));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void DeviceRestartResetTerminalReacquirePreservesNewSessionIdentity()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                using var selection = new SelectionFixture();
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(owner, "owner");
+                using var registration = dispatcher.RegisterSink(sink);
+                selection.Select(owner);
+                registration.AcquireFocus();
+                var oldScope = provider.CaptureSession(0);
+                var diagnosticCount = dispatcher.Diagnostics.DiagnosticCount;
+                sink.OnResetCallback = reason =>
+                {
+                    if (reason == HybridInputResetReason.DeviceChanged)
+                    {
+                        registration.ReleaseFocus();
+                    }
+                };
+                sink.OnEndEditCallback = _ => registration.AcquireFocus();
+
+                oldScope.ResetDeviceState();
+
+                Assert.That(registration.IsFocused, Is.True);
+                Assert.That(sink.Calls,
+                    Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost", "owner:Gained" }));
+                Assert.That(provider.BeginCount, Is.EqualTo(2));
+                Assert.That(provider.EndCount, Is.EqualTo(1));
+                Assert.That(provider.HasBoundSession, Is.True);
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount));
+                oldScope.Enqueue(HybridInputEvent.CommittedText("stale", 1d));
+                provider.CaptureSession(1).Enqueue(HybridInputEvent.CommittedText("current", 2d));
+                dispatcher.Drain(1, 2d);
+                Assert.That(sink.Frames, Has.Count.EqualTo(1));
+                Assert.That(sink.Frames[0].Events.Select(inputEvent => inputEvent.Text),
+                    Is.EqualTo(new[] { "current" }));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void DeviceRestartResetSelectionChangeDoesNotCreateReplacementSession()
+        {
+            var owner = new GameObject("owner");
+            var other = new GameObject("other");
+            try
+            {
+                using var selection = new SelectionFixture();
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(owner, "owner");
+                using var registration = dispatcher.RegisterSink(sink);
+                selection.Select(owner);
+                registration.AcquireFocus();
+                var oldScope = provider.CaptureSession(0);
+                var diagnosticCount = dispatcher.Diagnostics.DiagnosticCount;
+                sink.OnResetCallback = reason =>
+                {
+                    if (reason == HybridInputResetReason.DeviceChanged)
+                    {
+                        selection.Select(other);
+                    }
+                };
+
+                oldScope.ResetDeviceState();
+
+                Assert.That(registration.IsFocused, Is.False);
+                Assert.That(sink.Calls, Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost" }));
+                Assert.That(sink.Resets,
+                    Is.EqualTo(new[]
+                    {
+                        HybridInputResetReason.DeviceChanged,
+                        HybridInputResetReason.FocusChanged
+                    }));
+                Assert.That(provider.BeginCount, Is.EqualTo(1));
+                Assert.That(provider.EndCount, Is.EqualTo(1));
+                Assert.That(provider.HasBoundSession, Is.False);
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount));
+                oldScope.Enqueue(HybridInputEvent.CommittedText("stale", 1d));
+                dispatcher.Drain(1, 1d);
+                Assert.That(sink.Frames, Is.Empty);
+
+                sink.OnResetCallback = null;
+                selection.Select(owner);
+                Assert.That(registration.AcquireFocus(), Is.True);
+                Assert.That(provider.BeginCount, Is.EqualTo(2));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+                UnityEngine.Object.DestroyImmediate(other);
+            }
+        }
+
+        [Test]
         public void LifecycleFocusAdmissionRequiresActiveSelectedEventSystemOwner()
         {
             var owner = new GameObject("owner");
@@ -1208,6 +1645,10 @@ namespace Milestro.Tests
                 var sink = new LifecycleSink(owner, "owner");
                 using var registration = dispatcher.RegisterSink(sink);
 
+                selection.Select(owner);
+                sink.IsActiveAndEnabled = false;
+                Assert.That(registration.AcquireFocus(), Is.False);
+                sink.IsActiveAndEnabled = true;
                 selection.Select(other);
                 Assert.That(registration.AcquireFocus(), Is.False);
                 selection.SetActive(false);
@@ -1338,6 +1779,41 @@ namespace Milestro.Tests
             {
                 UnityEngine.Object.DestroyImmediate(owner);
                 UnityEngine.Object.DestroyImmediate(other);
+            }
+        }
+
+        [Test]
+        public void ApplicationFocusRestoreWithSameSelectionKeepsSameSessionWithoutRepeatedGained()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                using var selection = new SelectionFixture();
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(owner, "owner");
+                using var registration = dispatcher.RegisterSink(sink);
+                selection.Select(owner);
+                registration.AcquireFocus();
+                var scope = provider.CaptureSession(0);
+
+                dispatcher.RefreshEnvironment(new HybridInputEnvironment(null, 1, false));
+                Assert.That(registration.IsFocused, Is.True);
+                dispatcher.RefreshEnvironment(FocusedEnvironment());
+                scope.Enqueue(HybridInputEvent.CommittedText("resumed", 1d));
+                dispatcher.Drain(1, 1d);
+
+                Assert.That(registration.IsFocused, Is.True);
+                Assert.That(sink.Calls, Is.EqualTo(new[] { "owner:Gained" }));
+                Assert.That(provider.BeginCount, Is.EqualTo(1));
+                Assert.That(provider.EndCount, Is.Zero);
+                Assert.That(sink.Frames, Has.Count.EqualTo(1));
+                Assert.That(sink.Frames[0].Events.Select(inputEvent => inputEvent.Text),
+                    Is.EqualTo(new[] { "resumed" }));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
             }
         }
 
