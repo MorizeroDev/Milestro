@@ -99,9 +99,15 @@ namespace Milestro.Components
             ApplyProducerOutput(producer, force: false);
         }
 
-        protected override void Reset()
+        protected
+#if UNITY_EDITOR
+            override
+#endif
+            void Reset()
         {
+#if UNITY_EDITOR
             base.Reset();
+#endif
             EnsureConfigured(forceText: true, forceApply: true);
         }
 
