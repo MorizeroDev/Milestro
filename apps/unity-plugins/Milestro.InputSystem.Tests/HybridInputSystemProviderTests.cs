@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Milestro.Input;
 using Milestro.InputSystem.Model;
 using Milestro.InputSystem.Service;
@@ -39,11 +40,12 @@ namespace Milestro.InputSystemTests
         {
             var source = new FakeInputSystemSource();
             source.PressedKeys.Add(KeyCode.LeftShift);
-            source.DownKeys.Add(KeyCode.A);
-            source.UpKeys.Add(KeyCode.C);
             var eventSink = new CapturingEventSink();
             var provider = new HybridInputSystemProvider(source);
             provider.Start(eventSink);
+            provider.BeginFocusSession(eventSink);
+            source.RaiseKey(KeyCode.A, true, 4d);
+            source.RaiseKey(KeyCode.C, false, 4d);
 
             provider.Collect(new HybridInputCollectContext(3, 4d));
 
@@ -64,6 +66,7 @@ namespace Milestro.InputSystemTests
             var eventSink = new CapturingEventSink();
             var provider = new HybridInputSystemProvider(source);
             provider.Start(eventSink);
+            provider.BeginFocusSession(eventSink);
 
             source.RaiseText('x', 1d);
             source.RaiseComposition("composition", 2d);
@@ -77,6 +80,37 @@ namespace Milestro.InputSystemTests
             Assert.That(eventSink.Events[0].Text, Is.EqualTo("x"));
             Assert.That(eventSink.Events[1].Kind, Is.EqualTo(HybridInputEventKind.Composition));
             Assert.That(eventSink.Events[1].Text, Is.EqualTo("composition"));
+        }
+
+        [Test]
+        public void FocusSessionCallbacksCaptureTheSinkBoundForThatSession()
+        {
+            var source = new FakeInputSystemSource();
+            var providerSink = new CapturingEventSink();
+            var firstSession = new CapturingEventSink();
+            var secondSession = new CapturingEventSink();
+            var provider = new HybridInputSystemProvider(source);
+            provider.Start(providerSink);
+            provider.BeginFocusSession(firstSession);
+            var oldCallback = source.CaptureSubscribedTextHandlers();
+            var oldKeyCallback = source.CaptureSubscribedKeyHandlers();
+
+            provider.EndFocusSession();
+            provider.BeginFocusSession(secondSession);
+            oldCallback('a', 1d);
+            oldKeyCallback(KeyCode.A, true, 1.5d);
+            source.RaiseText('b', 2d);
+            source.RaiseKey(KeyCode.C, true, 2.5d);
+
+            Assert.That(firstSession.Events.Select(inputEvent => inputEvent.Kind),
+                Is.EqualTo(new[] { HybridInputEventKind.CommittedText, HybridInputEventKind.KeyState }));
+            Assert.That(firstSession.Events[0].Text, Is.EqualTo("a"));
+            Assert.That(firstSession.Events[1].Key, Is.EqualTo(KeyCode.A));
+            Assert.That(secondSession.Events.Select(inputEvent => inputEvent.Kind),
+                Is.EqualTo(new[] { HybridInputEventKind.CommittedText, HybridInputEventKind.KeyState }));
+            Assert.That(secondSession.Events[0].Text, Is.EqualTo("b"));
+            Assert.That(secondSession.Events[1].Key, Is.EqualTo(KeyCode.C));
+            Assert.That(providerSink.Events, Is.Empty);
         }
 
         [Test]
@@ -288,6 +322,24 @@ namespace Milestro.InputSystemTests
         }
 
         [Test]
+        public void RealSourcePublishesKeyEdgesFromAfterUpdateCallback()
+        {
+            var keyboard = new FakeUnityInputSystemKeyboard();
+            keyboard.DownKeys.Add(KeyCode.A);
+            keyboard.UpKeys.Add(KeyCode.C);
+            var backend = new FakeUnityInputSystemBackend(keyboard);
+            var source = new UnityInputSystemSource(backend);
+            var edges = new List<(KeyCode Key, bool Pressed)>();
+            source.KeyStateChanged += (key, pressed, _) => edges.Add((key, pressed));
+            source.Start();
+
+            backend.RaiseAfterUpdate();
+
+            Assert.That(edges,
+                Is.EqualTo(new[] { (KeyCode.A, true), (KeyCode.C, false) }));
+        }
+
+        [Test]
         public void RealSourceRemovalWithoutFallbackResetsOnceOnRefresh()
         {
             var keyboard = new FakeUnityInputSystemKeyboard();
@@ -332,7 +384,7 @@ namespace Milestro.InputSystemTests
         }
 
         [Test]
-        public void RealSourceEmptyCompositionAckQuarantinesOldImeSession()
+        public void RealSourceEmptyCompositionAckClosesOldImeSession()
         {
             var keyboard = new FakeUnityInputSystemKeyboard();
             var backend = new FakeUnityInputSystemBackend(keyboard);
@@ -371,7 +423,7 @@ namespace Milestro.InputSystemTests
         }
 
         [Test]
-        public void RealSourceSynchronousEmptyAckIsInternalToQuiesce()
+        public void RealSourceSynchronousEmptyAckCompletesSessionBoundary()
         {
             var keyboard = new FakeUnityInputSystemKeyboard
             {
@@ -398,7 +450,7 @@ namespace Milestro.InputSystemTests
         }
 
         [Test]
-        public void RealSourceAfterUpdateQuarantinesOldImeSessionWithoutAck()
+        public void RealSourceAfterUpdateDoesNotReplaceEmptyCompositionAcknowledgement()
         {
             var keyboard = new FakeUnityInputSystemKeyboard();
             var backend = new FakeUnityInputSystemBackend(keyboard);
@@ -422,6 +474,7 @@ namespace Milestro.InputSystemTests
             backend.RaiseAfterUpdate();
             lateComposition("later");
             lateText('z');
+            lateComposition(string.Empty);
             // Once rebound, the platform must only invoke the current delegate for the new session.
             keyboard.RaiseComposition("new");
             keyboard.RaiseText('n');
@@ -550,7 +603,7 @@ namespace Milestro.InputSystemTests
         }
 
         [Test]
-        public void RealSourceCompositionAfterCommitStillQuarantinesHandoff()
+        public void RealSourceCompositionAfterCommitWaitsForEmptyAcknowledgement()
         {
             var keyboard = new FakeUnityInputSystemKeyboard();
             var backend = new FakeUnityInputSystemBackend(keyboard);
@@ -563,6 +616,7 @@ namespace Milestro.InputSystemTests
             keyboard.RaiseText('a');
             keyboard.RaiseComposition("remaining");
             var oldText = keyboard.CaptureTextInput();
+            var oldComposition = keyboard.CaptureComposition();
 
             source.SetImeEnabled(false);
             source.SetImeEnabled(true);
@@ -573,6 +627,8 @@ namespace Milestro.InputSystemTests
             Assert.That(text, Is.EqualTo(new[] { 'a' }));
 
             backend.RaiseAfterUpdate();
+            Assert.That(keyboard.BindCount, Is.EqualTo(1));
+            oldComposition(string.Empty);
             keyboard.RaiseText('n');
 
             Assert.That(keyboard.BindCount, Is.EqualTo(2));
@@ -593,6 +649,7 @@ namespace Milestro.InputSystemTests
             source.SetImeEnabled(true);
             keyboard.RaiseComposition("old");
             var oldText = keyboard.CaptureTextInput();
+            var oldComposition = keyboard.CaptureComposition();
 
             source.SetImeEnabled(false);
             source.SetImeEnabled(true);
@@ -601,6 +658,7 @@ namespace Milestro.InputSystemTests
             source.SetImeEnabled(true);
             oldText('x');
             backend.RaiseAfterUpdate();
+            oldComposition(string.Empty);
             oldText('y');
             keyboard.RaiseText('n');
 
@@ -613,7 +671,7 @@ namespace Milestro.InputSystemTests
         }
 
         [Test]
-        public void RealSourceStopInvalidatesQuiescingSessionAndAfterUpdateSubscription()
+        public void RealSourceStopInvalidatesPendingSessionAndAfterUpdateSubscription()
         {
             var keyboard = new FakeUnityInputSystemKeyboard();
             var backend = new FakeUnityInputSystemBackend(keyboard);
@@ -638,7 +696,7 @@ namespace Milestro.InputSystemTests
         }
 
         [Test]
-        public void RealSourceDisableCompletesQuiesceWithoutReenablingIme()
+        public void RealSourceEmptyAckCompletesBoundaryWithoutReenablingIme()
         {
             var keyboard = new FakeUnityInputSystemKeyboard();
             var backend = new FakeUnityInputSystemBackend(keyboard);
@@ -649,10 +707,13 @@ namespace Milestro.InputSystemTests
             source.SetImeEnabled(true);
             keyboard.RaiseComposition("old");
             var oldText = keyboard.CaptureTextInput();
+            var oldComposition = keyboard.CaptureComposition();
 
             source.SetImeEnabled(false);
             oldText('x');
             backend.RaiseAfterUpdate();
+            Assert.That(keyboard.BindCount, Is.EqualTo(1));
+            oldComposition(string.Empty);
             oldText('y');
 
             Assert.That(text, Is.Empty);
@@ -728,6 +789,7 @@ namespace Milestro.InputSystemTests
                 backend.RaiseAfterUpdate();
                 oldComposition("later");
                 oldText('y');
+                oldComposition(string.Empty);
                 keyboard.RaiseComposition("new");
                 keyboard.RaiseText('n');
                 dispatcher.Drain(3, 3d);
@@ -747,7 +809,7 @@ namespace Milestro.InputSystemTests
         }
 
         [Test]
-        public void RealSourceApplicationFocusLossQuarantinesCompositionUntilAfterUpdate()
+        public void RealSourceApplicationFocusLossWaitsForEmptyCompositionAcknowledgement()
         {
             var inputSystemObject = new GameObject();
             try
@@ -767,10 +829,12 @@ namespace Milestro.InputSystemTests
                 keyboard.RaiseComposition("old");
                 dispatcher.Drain(1, 1d);
                 var oldText = keyboard.CaptureTextInput();
+                var oldComposition = keyboard.CaptureComposition();
 
                 dispatcher.RefreshEnvironment(new HybridInputEnvironment(module, 1, false));
                 oldText('x');
                 backend.RaiseAfterUpdate();
+                oldComposition(string.Empty);
                 dispatcher.RefreshEnvironment(new HybridInputEnvironment(module, 1, true));
                 keyboard.RaiseText('n');
                 dispatcher.Drain(2, 2d);
@@ -924,6 +988,9 @@ namespace Milestro.InputSystemTests
             internal Vector2 ImeCursorPosition { get; private set; }
             internal int ImeCursorPositionCalls { get; private set; }
             internal bool RaiseEmptyCompositionOnImeDisable { get; set; }
+            internal HashSet<KeyCode> PressedKeys { get; } = new HashSet<KeyCode>();
+            internal HashSet<KeyCode> DownKeys { get; } = new HashSet<KeyCode>();
+            internal HashSet<KeyCode> UpKeys { get; } = new HashSet<KeyCode>();
 
             public void Bind(Action<char> nextTextInput, Action<string> nextCompositionChanged)
             {
@@ -939,9 +1006,9 @@ namespace Milestro.InputSystemTests
                 compositionChanged = null;
             }
 
-            public bool GetKey(KeyCode key) => false;
-            public bool GetKeyDown(KeyCode key) => false;
-            public bool GetKeyUp(KeyCode key) => false;
+            public bool GetKey(KeyCode key) => PressedKeys.Contains(key);
+            public bool GetKeyDown(KeyCode key) => DownKeys.Contains(key);
+            public bool GetKeyUp(KeyCode key) => UpKeys.Contains(key);
 
             public void SetImeEnabled(bool enabled)
             {
@@ -1022,6 +1089,7 @@ namespace Milestro.InputSystemTests
 
             public event Action<char, double>? TextInput;
             public event Action<string, double>? CompositionChanged;
+            public event Action<KeyCode, bool, double>? KeyStateChanged;
             public event Action? DeviceChanged;
 
             public void Start() => ++StartCount;
@@ -1053,6 +1121,11 @@ namespace Milestro.InputSystemTests
                 CompositionChanged?.Invoke(composition, timestamp);
             }
 
+            internal void RaiseKey(KeyCode key, bool pressed, double timestamp)
+            {
+                KeyStateChanged?.Invoke(key, pressed, timestamp);
+            }
+
             internal Action<char, double> CaptureTextCallback()
             {
                 var capturedGeneration = deviceGeneration;
@@ -1063,6 +1136,16 @@ namespace Milestro.InputSystemTests
                         TextInput?.Invoke(character, timestamp);
                     }
                 };
+            }
+
+            internal Action<char, double> CaptureSubscribedTextHandlers()
+            {
+                return TextInput ?? throw new InvalidOperationException("No text handler is subscribed.");
+            }
+
+            internal Action<KeyCode, bool, double> CaptureSubscribedKeyHandlers()
+            {
+                return KeyStateChanged ?? throw new InvalidOperationException("No key handler is subscribed.");
             }
 
             internal void ChangeDevice(string? nextDeviceId)

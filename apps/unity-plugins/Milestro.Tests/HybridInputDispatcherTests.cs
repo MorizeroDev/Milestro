@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Milestro.Components;
 using Milestro.Components.Internal;
 using Milestro.Input;
+using Milestro.Model;
 using Milestro.Util;
 using NUnit.Framework;
 using UnityEngine;
@@ -133,7 +136,16 @@ namespace Milestro.Tests
             first.Emit(HybridInputEvent.CommittedText("stale", 1d));
             dispatcher.Drain(1, 1d);
 
-            Assert.That(calls, Is.EqualTo(new[] { "first:ime:False", "first:stop", "second:start", "second:ime:False" }));
+            Assert.That(calls,
+                Is.EqualTo(new[]
+                {
+                    "first:session:end",
+                    "first:ime:False",
+                    "first:stop",
+                    "second:start",
+                    "second:session:start",
+                    "second:ime:False"
+                }));
             Assert.That(sink.Frames, Has.Count.EqualTo(1));
             Assert.That(sink.Frames[0].Events, Is.Empty);
             Assert.That(sink.Resets, Does.Contain(HybridInputResetReason.ProviderChanged));
@@ -191,15 +203,27 @@ namespace Milestro.Tests
                 dispatcher.Drain(2, 2d);
 
                 Assert.That(calls,
-                    Is.EqualTo(new[] { "provider:ime:False", "provider:stop", "provider:start", "provider:ime:False" }));
+                    Is.EqualTo(new[]
+                    {
+                        "provider:session:end",
+                        "provider:ime:False",
+                        "provider:stop",
+                        "provider:start",
+                        "provider:session:start",
+                        "provider:ime:False"
+                    }));
                 Assert.That(provider.StartCount, Is.EqualTo(2));
                 Assert.That(sink.Resets, Does.Contain(HybridInputResetReason.ProviderChanged));
-                Assert.That(sink.Frames, Has.Count.EqualTo(2));
-                var secondFrame = sink.Frames[1];
-                Assert.That(secondFrame.ProviderGeneration > firstFrame.ProviderGeneration, Is.True);
-                Assert.That(secondFrame.FocusEpoch > firstFrame.FocusEpoch, Is.True);
-                Assert.That(secondFrame.Events, Is.Empty);
-                Assert.That(secondFrame.IsKeyPressed(KeyCode.LeftShift), Is.False);
+                Assert.That(sink.Frames, Has.Count.EqualTo(3));
+                var releasedTailFrame = sink.Frames[1];
+                Assert.That(releasedTailFrame.ProviderGeneration, Is.EqualTo(firstFrame.ProviderGeneration));
+                Assert.That(releasedTailFrame.Events.Select(inputEvent => inputEvent.Text),
+                    Is.EqualTo(new[] { "old composition" }));
+                var secondSessionFrame = sink.Frames[2];
+                Assert.That(secondSessionFrame.ProviderGeneration > firstFrame.ProviderGeneration, Is.True);
+                Assert.That(secondSessionFrame.FocusEpoch > firstFrame.FocusEpoch, Is.True);
+                Assert.That(secondSessionFrame.Events, Is.Empty);
+                Assert.That(secondSessionFrame.IsKeyPressed(KeyCode.LeftShift), Is.False);
             }
             finally
             {
@@ -223,7 +247,9 @@ namespace Milestro.Tests
             second.AcquireFocus();
             dispatcher.Drain(1, 1d);
 
-            Assert.That(firstSink.Frames, Is.Empty);
+            Assert.That(firstSink.Frames, Has.Count.EqualTo(1));
+            Assert.That(firstSink.Frames[0].Events.Select(inputEvent => inputEvent.Text),
+                Is.EqualTo(new[] { "for-first" }));
             Assert.That(secondSink.Frames, Has.Count.EqualTo(1));
             Assert.That(secondSink.Frames[0].Events, Is.Empty);
             Assert.That(firstSink.Resets, Does.Contain(HybridInputResetReason.FocusChanged));
@@ -581,6 +607,463 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void SessionScopeDropsOldTailAtEveryReleaseHook()
+        {
+            var firstObject = new GameObject("first");
+            var secondObject = new GameObject("second");
+            try
+            {
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var firstSink = new LifecycleSink(firstObject, "first");
+                var secondSink = new LifecycleSink(secondObject, "second");
+                using var first = dispatcher.RegisterSink(firstSink);
+                using var second = dispatcher.RegisterSink(secondSink);
+                first.AcquireFocus();
+                var oldScope = provider.CaptureSession(0);
+                firstSink.OnFrame = _ =>
+                {
+                    oldScope.Enqueue(HybridInputEvent.CommittedText("stale-during-flush", 2d));
+                    dispatcher.NotifyValueChanged(firstSink, "A", sessionBound: true);
+                };
+                firstSink.OnValueChangedCallback = _ =>
+                    oldScope.Enqueue(HybridInputEvent.CommittedText("stale-during-value", 2.1d));
+                firstSink.OnEndEditCallback = _ =>
+                    oldScope.Enqueue(HybridInputEvent.CommittedText("stale-during-end", 2.2d));
+                secondSink.OnFocusGainedCallback = () =>
+                {
+                    oldScope.Enqueue(HybridInputEvent.CommittedText("stale-after-B", 2.3d));
+                    oldScope.ReplacePressedKeys(new[] { KeyCode.LeftShift });
+                    oldScope.ResetDeviceState();
+                };
+                oldScope.Enqueue(HybridInputEvent.CommittedText("A1", 1d));
+                oldScope.Enqueue(HybridInputEvent.CommittedText("A2", 1.1d));
+
+                second.AcquireFocus();
+                var nextScope = provider.CaptureSession(1);
+                nextScope.Enqueue(HybridInputEvent.CommittedText("B1", 3d));
+                nextScope.ReplacePressedKeys(Array.Empty<KeyCode>());
+                dispatcher.Drain(1, 3d);
+
+                Assert.That(firstSink.Frames, Has.Count.EqualTo(1));
+                Assert.That(firstSink.Frames[0].Events.Select(inputEvent => inputEvent.Text),
+                    Is.EqualTo(new[] { "A1", "A2" }));
+                Assert.That(secondSink.Frames, Has.Count.EqualTo(1));
+                Assert.That(secondSink.Frames[0].Events.Select(inputEvent => inputEvent.Text),
+                    Is.EqualTo(new[] { "B1" }));
+                Assert.That(secondSink.Frames[0].Events[0].Sequence,
+                    Is.EqualTo(firstSink.Frames[0].Events[1].Sequence + 1));
+                Assert.That(secondSink.Resets, Is.Empty);
+                Assert.That(dispatcher.IsKeyPressed(KeyCode.LeftShift), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(firstObject);
+                UnityEngine.Object.DestroyImmediate(secondObject);
+            }
+        }
+
+        [Test]
+        public void UnsupportedFocusedProviderFailsClosed()
+        {
+            var dispatcher = new HybridInputDispatcher();
+            var provider = new UnscopedFocusedProvider();
+            dispatcher.RegisterProvider(provider);
+            dispatcher.RefreshEnvironment(FocusedEnvironment());
+            var sink = new FakeFrameSink();
+            using var registration = dispatcher.RegisterSink(sink);
+
+            var acquired = registration.AcquireFocus();
+            provider.Emit(HybridInputEvent.CommittedText("ignored", 1d));
+            dispatcher.Drain(1, 1d);
+
+            Assert.That(acquired, Is.False);
+            Assert.That(registration.IsFocused, Is.False);
+            Assert.That(sink.Frames, Is.Empty);
+            Assert.That(dispatcher.Diagnostics.LastDiagnostic,
+                Is.EqualTo(HybridInputDiagnosticCode.SessionIsolationUnsupported));
+        }
+
+        [Test]
+        public void SwitchingToUnsupportedProviderReleasesWithoutAutomaticReacquire()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                var useStrictProvider = true;
+                var strictProvider = new FakeProvider("strict",
+                    _ => useStrictProvider ? HybridInputProviderMatch.Exact : HybridInputProviderMatch.None);
+                var unsupportedProvider = new UnscopedFocusedProvider
+                {
+                    MatchResult = _ => useStrictProvider
+                        ? HybridInputProviderMatch.None
+                        : HybridInputProviderMatch.Exact
+                };
+                var dispatcher = new HybridInputDispatcher();
+                dispatcher.RegisterProvider(strictProvider);
+                dispatcher.RegisterProvider(unsupportedProvider);
+                dispatcher.RefreshEnvironment(FocusedEnvironment());
+                var sink = new LifecycleSink(owner, "owner");
+                using var registration = dispatcher.RegisterSink(sink);
+                registration.AcquireFocus();
+
+                useStrictProvider = false;
+                dispatcher.RefreshEnvironment(FocusedEnvironment());
+
+                Assert.That(registration.IsFocused, Is.False);
+                Assert.That(sink.Calls, Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost" }));
+                Assert.That(registration.AcquireFocus(), Is.False);
+                Assert.That(dispatcher.Diagnostics.LastDiagnostic,
+                    Is.EqualTo(HybridInputDiagnosticCode.SessionIsolationUnsupported));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void WrongThreadSessionCallbackCannotMutateQueueOrSequence()
+        {
+            var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+            var dispatcher = StartedDispatcher(provider);
+            var sink = new FakeFrameSink();
+            using var registration = dispatcher.RegisterSink(sink);
+            registration.AcquireFocus();
+            var scope = provider.CaptureSession(0);
+            var thread = new System.Threading.Thread(() =>
+            {
+                scope.Enqueue(HybridInputEvent.CommittedText("wrong-thread", 1d));
+                scope.ReplacePressedKeys(new[] { KeyCode.LeftShift });
+            });
+
+            thread.Start();
+            thread.Join();
+            scope.Enqueue(HybridInputEvent.CommittedText("main-thread", 2d));
+            dispatcher.Drain(1, 2d);
+
+            Assert.That(sink.Frames[0].Events, Has.Count.EqualTo(1));
+            Assert.That(sink.Frames[0].Events[0].Text, Is.EqualTo("main-thread"));
+            Assert.That(sink.Frames[0].Events[0].Sequence, Is.EqualTo(1));
+            Assert.That(sink.Frames[0].IsKeyPressed(KeyCode.LeftShift), Is.False);
+        }
+
+        [Test]
+        public void DispatcherResetPermanentlyInvalidatesCapturedSessionSink()
+        {
+            var firstProvider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+            var dispatcher = StartedDispatcher(firstProvider);
+            var firstSink = new FakeFrameSink();
+            var firstRegistration = dispatcher.RegisterSink(firstSink);
+            firstRegistration.AcquireFocus();
+            var oldScope = firstProvider.CaptureSession(0);
+
+            dispatcher.Reset();
+            oldScope.Enqueue(HybridInputEvent.CommittedText("stale", 1d));
+            oldScope.ReplacePressedKeys(new[] { KeyCode.LeftShift });
+            var replacement = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+            dispatcher.RegisterProvider(replacement);
+            dispatcher.RefreshEnvironment(FocusedEnvironment());
+            var secondSink = new FakeFrameSink();
+            using var secondRegistration = dispatcher.RegisterSink(secondSink);
+            secondRegistration.AcquireFocus();
+            replacement.Emit(HybridInputEvent.CommittedText("current", 2d));
+            dispatcher.Drain(1, 2d);
+
+            Assert.That(firstSink.Frames, Is.Empty);
+            Assert.That(secondSink.Frames[0].Events, Has.Count.EqualTo(1));
+            Assert.That(secondSink.Frames[0].Events[0].Text, Is.EqualTo("current"));
+            Assert.That(secondSink.Frames[0].Events[0].Sequence, Is.EqualTo(1));
+            Assert.That(secondSink.Frames[0].IsKeyPressed(KeyCode.LeftShift), Is.False);
+            firstRegistration.Dispose();
+        }
+
+        [Test]
+        public void InputRingOverflowDropsWholeBatchAndReleasesSession()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(owner, "owner");
+                using var registration = dispatcher.RegisterSink(sink);
+                registration.AcquireFocus();
+                var scope = provider.CaptureSession(0);
+
+                for (var i = 0; i <= HybridInputDispatcher.MaxPendingInputEventsPerFocusSession; ++i)
+                {
+                    scope.Enqueue(HybridInputEvent.CommittedText(i.ToString(), i));
+                }
+
+                Assert.That(sink.Frames, Is.Empty);
+                Assert.That(registration.IsFocused, Is.False);
+                Assert.That(sink.Calls, Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost" }));
+                Assert.That(dispatcher.Diagnostics.LastDiagnostic,
+                    Is.EqualTo(HybridInputDiagnosticCode.InputEventBufferOverflow));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void FocusReentrancyUsesStickySessionBoundaryWithoutRecursion()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(owner, "owner");
+                using var registration = dispatcher.RegisterSink(sink);
+                var firstGained = true;
+                sink.OnFocusGainedCallback = () =>
+                {
+                    if (!firstGained)
+                    {
+                        return;
+                    }
+                    firstGained = false;
+                    registration.ReleaseFocus();
+                    registration.AcquireFocus();
+                };
+
+                registration.AcquireFocus();
+
+                Assert.That(sink.Calls,
+                    Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost", "owner:Gained" }));
+                Assert.That(registration.IsFocused, Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void OrdinaryFocusSwitchCompletesTerminalBundleBeforeNextGained()
+        {
+            var firstObject = new GameObject("first");
+            var secondObject = new GameObject("second");
+            try
+            {
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var calls = new List<string>();
+                var firstSink = new LifecycleSink(firstObject, "first", calls);
+                var secondSink = new LifecycleSink(secondObject, "second", calls);
+                using var first = dispatcher.RegisterSink(firstSink);
+                using var second = dispatcher.RegisterSink(secondSink);
+
+                first.AcquireFocus();
+                second.AcquireFocus();
+
+                Assert.That(calls,
+                    Is.EqualTo(new[] { "first:Gained", "first:End", "first:Lost", "second:Gained" }));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(firstObject);
+                UnityEngine.Object.DestroyImmediate(secondObject);
+            }
+        }
+
+        [Test]
+        public void EndEditRefocusRunsAfterFrozenFocusLost()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(owner, "owner");
+                using var registration = dispatcher.RegisterSink(sink);
+                registration.AcquireFocus();
+                sink.OnEndEditCallback = _ => registration.AcquireFocus();
+
+                registration.ReleaseFocus();
+
+                Assert.That(sink.Calls,
+                    Is.EqualTo(new[] { "owner:Gained", "owner:End", "owner:Lost", "owner:Gained" }));
+                Assert.That(registration.IsFocused, Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void ValueNotificationLoopStopsAtWorkLimitAndGuardRecovers()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                var dispatcher = new HybridInputDispatcher();
+                var sink = new LifecycleSink(owner, "owner");
+                var callbackDepth = 0;
+                var maxDepth = 0;
+                sink.OnValueChangedCallback = value =>
+                {
+                    ++callbackDepth;
+                    maxDepth = Math.Max(maxDepth, callbackDepth);
+                    dispatcher.NotifyValueChanged(sink, value == "A" ? "B" : "A", sessionBound: false);
+                    --callbackDepth;
+                };
+
+                dispatcher.NotifyValueChanged(sink, "A", sessionBound: false);
+
+                Assert.That(maxDepth, Is.EqualTo(1));
+                Assert.That(dispatcher.Diagnostics.LastDiagnostic,
+                    Is.EqualTo(HybridInputDiagnosticCode.WorkLimitExceeded));
+                sink.OnValueChangedCallback = null;
+                dispatcher.NotifyValueChanged(sink, "recovered", sessionBound: false);
+                Assert.That(sink.Calls[^1], Is.EqualTo("owner:Value:recovered"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void NotificationOverflowClearsQueuedCallbacksAndGuardRecovers()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                var dispatcher = new HybridInputDispatcher();
+                var sink = new LifecycleSink(owner, "owner");
+                sink.OnValueChangedCallback = _ =>
+                {
+                    for (var i = 0; i <= HybridInputDispatcher.MaxPendingNotifications; ++i)
+                    {
+                        dispatcher.NotifyValueChanged(sink, i.ToString(), sessionBound: false);
+                    }
+                };
+
+                dispatcher.NotifyValueChanged(sink, "start", sessionBound: false);
+
+                Assert.That(sink.Calls, Is.EqualTo(new[] { "owner:Value:start" }));
+                Assert.That(dispatcher.Diagnostics.LastDiagnostic,
+                    Is.EqualTo(HybridInputDiagnosticCode.NotificationBufferOverflow));
+                sink.OnValueChangedCallback = null;
+                dispatcher.NotifyValueChanged(sink, "recovered", sessionBound: false);
+                Assert.That(sink.Calls[^1], Is.EqualTo("owner:Value:recovered"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void ListenerExceptionStopsTransactionAndGuardRecovers()
+        {
+            var owner = new GameObject("owner");
+            try
+            {
+                var dispatcher = new HybridInputDispatcher();
+                var sink = new LifecycleSink(owner, "owner");
+                sink.OnValueChangedCallback = _ => throw new InvalidOperationException("listener");
+
+                dispatcher.NotifyValueChanged(sink, "throws", sessionBound: false);
+
+                Assert.That(dispatcher.Diagnostics.LastDiagnostic,
+                    Is.EqualTo(HybridInputDiagnosticCode.ListenerException));
+                sink.OnValueChangedCallback = null;
+                dispatcher.NotifyValueChanged(sink, "recovered", sessionBound: false);
+                Assert.That(sink.Calls[^1], Is.EqualTo("owner:Value:recovered"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [TestCase(null, TextInputLineMode.SingleLine, "")]
+        [TestCase("a\r\nb\rc\nd", TextInputLineMode.SingleLine, "abcd")]
+        [TestCase("a\r\nb\rc\nd", TextInputLineMode.MultiLine, "a\nb\nc\nd")]
+        public void ManagedCanonicalizerNormalizesLineBreaks(string? input,
+            TextInputLineMode lineMode,
+            string expected)
+        {
+            Assert.That(TextInput.CanonicalizeTextForLineMode(input!, lineMode), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void ManagedCanonicalizerRemovesUnpairedSurrogates()
+        {
+            var input = new string(new[] { 'A', '\ud800', 'B', '\udc00', 'C' });
+
+            Assert.That(TextInput.CanonicalizeTextForLineMode(input, TextInputLineMode.MultiLine),
+                Is.EqualTo("ABC"));
+        }
+
+        [Test]
+        public void ManagedCanonicalizerPreservesValidSurrogatePair()
+        {
+            var input = new string(new[] { 'A', '\ud83d', '\ude00', 'B' });
+
+            Assert.That(TextInput.CanonicalizeTextForLineMode(input, TextInputLineMode.MultiLine),
+                Is.EqualTo(input));
+        }
+
+        [Test]
+        public void InactiveProgrammaticTextUsesGatewayAndSilentPath()
+        {
+            var owner = new GameObject("text-input");
+            owner.SetActive(false);
+            try
+            {
+                var input = owner.AddComponent<TextInput>();
+                var payloads = new List<string>();
+                input.InternalValueChanged += value =>
+                {
+                    Assert.That(input.Text, Is.EqualTo(value));
+                    payloads.Add(value);
+                };
+
+                input.Text = "a\r\nb\ud800";
+                input.Text = "ab";
+                input.SetTextWithoutNotify("silent");
+
+                Assert.That(payloads, Is.EqualTo(new[] { "ab" }));
+                Assert.That(input.Text, Is.EqualTo("silent"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void LineModeNormalizationUsesOneGatewayNotification()
+        {
+            var owner = new GameObject("text-input");
+            owner.SetActive(false);
+            try
+            {
+                var input = owner.AddComponent<TextInput>();
+                input.lineMode = TextInputLineMode.MultiLine;
+                input.SetTextWithoutNotify("a\nb");
+                var payloads = new List<string>();
+                input.InternalValueChanged += payloads.Add;
+
+                input.lineMode = TextInputLineMode.SingleLine;
+
+                Assert.That(payloads, Is.EqualTo(new[] { "ab" }));
+                Assert.That(input.Text, Is.EqualTo("ab"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
         public void PlayerLoopStageIsIdempotentAndRunsImmediatelyAfterScriptUpdate()
         {
             var playerLoop = new PlayerLoopSystem
@@ -691,12 +1174,122 @@ namespace Milestro.Tests
         {
         }
 
-        private sealed class FakeProvider : IHybridInputProvider
+        private sealed class LifecycleSink : IHybridInputLifecycleSink
+        {
+            private readonly string name;
+            private readonly List<string> calls;
+
+            internal LifecycleSink(GameObject owner, string name, List<string>? calls = null)
+            {
+                Owner = owner;
+                this.name = name;
+                this.calls = calls ?? new List<string>();
+            }
+
+            public GameObject Owner { get; }
+            public bool IsActiveAndEnabled { get; set; } = true;
+            public bool CanConsumeInputNow { get; set; } = true;
+            public string CommittedText { get; set; } = string.Empty;
+            internal List<HybridInputFrame> Frames { get; } = new List<HybridInputFrame>();
+            internal List<HybridInputResetReason> Resets { get; } = new List<HybridInputResetReason>();
+            internal List<string> Calls => calls;
+            internal Action<HybridInputFrame>? OnFrame { get; set; }
+            internal Action? OnFocusGainedCallback { get; set; }
+            internal Action<string>? OnEndEditCallback { get; set; }
+            internal Action? OnFocusLostCallback { get; set; }
+            internal Action<string>? OnValueChangedCallback { get; set; }
+
+            public void OnInputFrame(HybridInputFrame frame)
+            {
+                Frames.Add(frame);
+                OnFrame?.Invoke(frame);
+            }
+
+            public void OnInputReset(HybridInputResetReason reason)
+            {
+                Resets.Add(reason);
+            }
+
+            public void OnFocusGained()
+            {
+                Calls.Add($"{name}:Gained");
+                OnFocusGainedCallback?.Invoke();
+            }
+
+            public void OnEndEdit(string finalText)
+            {
+                Calls.Add($"{name}:End");
+                OnEndEditCallback?.Invoke(finalText);
+            }
+
+            public void OnFocusLost()
+            {
+                Calls.Add($"{name}:Lost");
+                OnFocusLostCallback?.Invoke();
+            }
+
+            public void OnValueChanged(string value)
+            {
+                Calls.Add($"{name}:Value:{value}");
+                OnValueChangedCallback?.Invoke(value);
+            }
+        }
+
+        private sealed class UnscopedFocusedProvider : IHybridInputProvider
+        {
+            private IHybridInputEventSink? sink;
+
+            public string Id => "unscoped";
+            public int Priority => 0;
+            public HybridInputProviderKind Kind => HybridInputProviderKind.Custom;
+            public HybridInputCapabilities Capabilities => HybridInputCapabilities.KeyState |
+                                                           HybridInputCapabilities.CommittedText |
+                                                           HybridInputCapabilities.Composition;
+            public HybridScrollCapability ScrollCapability => HybridScrollCapability.Unsupported;
+            internal Func<HybridInputEnvironment, HybridInputProviderMatch> MatchResult { get; set; } =
+                _ => HybridInputProviderMatch.Exact;
+
+            public HybridInputProviderMatch Match(HybridInputEnvironment environment)
+            {
+                return MatchResult(environment);
+            }
+
+            public void Start(IHybridInputEventSink eventSink)
+            {
+                sink = eventSink;
+            }
+
+            public void Stop()
+            {
+                sink = null;
+            }
+
+            public void Collect(HybridInputCollectContext context)
+            {
+            }
+
+            public void SetImeEnabled(bool enabled)
+            {
+            }
+
+            public void SetImeCursorPosition(Vector2 position)
+            {
+            }
+
+            internal void Emit(HybridInputEvent inputEvent)
+            {
+                sink?.Enqueue(inputEvent);
+            }
+        }
+
+        private sealed class FakeProvider : IHybridInputProvider, IHybridInputFocusSessionProvider
         {
             private readonly Func<HybridInputEnvironment, HybridInputProviderMatch> match;
             private readonly List<string>? calls;
             private IHybridInputEventSink? sink;
+            private IHybridInputEventSink? sessionSink;
             private readonly List<IHybridInputEventSink> startedSinks = new List<IHybridInputEventSink>();
+            private readonly List<IHybridInputEventSink> sessionSinks = new List<IHybridInputEventSink>();
 
             internal FakeProvider(string id,
                 HybridInputProviderMatch match,
@@ -753,13 +1346,27 @@ namespace Milestro.Tests
             public void Stop()
             {
                 calls?.Add($"{Id}:stop");
+                sessionSink = null;
+            }
+
+            public void BeginFocusSession(IHybridInputEventSink nextSessionSink)
+            {
+                sessionSink = nextSessionSink;
+                sessionSinks.Add(nextSessionSink);
+                calls?.Add($"{Id}:session:start");
+            }
+
+            public void EndFocusSession()
+            {
+                calls?.Add($"{Id}:session:end");
+                sessionSink = null;
             }
 
             public void Collect(HybridInputCollectContext context)
             {
                 if (ReplacePressedKeysOnCollect)
                 {
-                    sink?.ReplacePressedKeys(PressedKeys);
+                    (sessionSink ?? sink)?.ReplacePressedKeys(PressedKeys);
                 }
             }
 
@@ -776,12 +1383,17 @@ namespace Milestro.Tests
 
             internal void Emit(HybridInputEvent inputEvent)
             {
-                sink?.Enqueue(inputEvent);
+                (sessionSink ?? sink)?.Enqueue(inputEvent);
             }
 
             internal void EmitFromStart(int startIndex, HybridInputEvent inputEvent)
             {
                 startedSinks[startIndex].Enqueue(inputEvent);
+            }
+
+            internal IHybridInputEventSink CaptureSession(int sessionIndex)
+            {
+                return sessionSinks[sessionIndex];
             }
         }
     }

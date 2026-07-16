@@ -36,9 +36,33 @@ namespace Milestro.Input
         bool TryResolveScrollInput(PointerEventData eventData, out HybridScrollInput scrollInput);
     }
 
+    /// <summary>
+    /// Captures focused input against an immutable dispatcher-owned session sink.
+    /// Providers that publish focused text, composition, or key events must implement
+    /// this contract before they can own strict TextInput focus.
+    /// </summary>
+    public interface IHybridInputFocusSessionProvider
+    {
+        void BeginFocusSession(IHybridInputEventSink sessionSink);
+        void EndFocusSession();
+    }
+
     internal interface IHybridInputFrameSink
     {
         void OnInputFrame(HybridInputFrame frame);
         void OnInputReset(HybridInputResetReason reason);
+    }
+
+    internal interface IHybridInputLifecycleSink : IHybridInputFrameSink
+    {
+        GameObject Owner { get; }
+        bool IsActiveAndEnabled { get; }
+        bool CanConsumeInputNow { get; }
+        string CommittedText { get; }
+
+        void OnFocusGained();
+        void OnEndEdit(string finalText);
+        void OnFocusLost();
+        void OnValueChanged(string value);
     }
 }

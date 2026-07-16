@@ -8,6 +8,37 @@ namespace Milestro.InputSystem.Service
 {
     internal sealed class UnityInputSystemSource : IHybridInputSystemSource
     {
+        private static readonly KeyCode[] TrackedKeys =
+        {
+            KeyCode.A,
+            KeyCode.Backspace,
+            KeyCode.C,
+            KeyCode.Delete,
+            KeyCode.DownArrow,
+            KeyCode.End,
+            KeyCode.Home,
+            KeyCode.Insert,
+            KeyCode.KeypadEnter,
+            KeyCode.LeftAlt,
+            KeyCode.LeftArrow,
+            KeyCode.LeftCommand,
+            KeyCode.LeftControl,
+            KeyCode.LeftShift,
+            KeyCode.PageDown,
+            KeyCode.PageUp,
+            KeyCode.Return,
+            KeyCode.RightAlt,
+            KeyCode.RightArrow,
+            KeyCode.RightCommand,
+            KeyCode.RightControl,
+            KeyCode.RightShift,
+            KeyCode.UpArrow,
+            KeyCode.V,
+            KeyCode.X,
+            KeyCode.Y,
+            KeyCode.Z
+        };
+
         private readonly IUnityInputSystemBackend backend;
         private readonly IHybridInputImeSessionCanceller imeSessionCanceller;
         private IUnityInputSystemKeyboard? keyboard;
@@ -19,8 +50,7 @@ namespace Milestro.InputSystem.Service
         private bool hasAppliedImeCursor;
         private Vector2 appliedImeCursorPosition;
         private bool compositionActive;
-        private bool imeSessionQuiescing;
-        private bool imeSessionCanCompleteAfterUpdate = true;
+        private bool imeSessionAwaitingEmptyAck;
         private bool keyboardChangePending;
         private long deviceGeneration;
         private long imeSessionGeneration;
@@ -46,6 +76,7 @@ namespace Milestro.InputSystem.Service
 
         public event Action<char, double>? TextInput;
         public event Action<string, double>? CompositionChanged;
+        public event Action<KeyCode, bool, double>? KeyStateChanged;
         public event Action? DeviceChanged;
 
         public void Start()
@@ -67,8 +98,7 @@ namespace Milestro.InputSystem.Service
             hasAppliedImeCursor = false;
             appliedImeCursorPosition = default;
             compositionActive = false;
-            imeSessionQuiescing = false;
-            imeSessionCanCompleteAfterUpdate = true;
+            imeSessionAwaitingEmptyAck = false;
         }
 
         public void Refresh()
@@ -113,14 +143,14 @@ namespace Milestro.InputSystem.Service
 
             if (!enabled)
             {
-                if (hadEnabledSession || imeSessionQuiescing)
+                if (hadEnabledSession || imeSessionAwaitingEmptyAck)
                 {
                     EndImeSession();
                 }
                 return;
             }
 
-            if (!imeSessionQuiescing)
+            if (!imeSessionAwaitingEmptyAck)
             {
                 ApplyImeIntent();
             }
@@ -130,7 +160,7 @@ namespace Milestro.InputSystem.Service
         {
             hasImeCursorIntent = true;
             imeCursorPosition = position;
-            if (keyboard != null && !imeSessionQuiescing && imeAppliedEnabled &&
+            if (keyboard != null && !imeSessionAwaitingEmptyAck && imeAppliedEnabled &&
                 (!hasAppliedImeCursor || appliedImeCursorPosition != position))
             {
                 keyboard.SetImeCursorPosition(position);
@@ -174,7 +204,7 @@ namespace Milestro.InputSystem.Service
             DisableOldKeyboardIme();
             UnbindKeyboard();
             compositionActive = false;
-            imeSessionQuiescing = false;
+            imeSessionAwaitingEmptyAck = false;
             imeAppliedEnabled = false;
             hasAppliedImeCursor = false;
             keyboard = nextKeyboard;
@@ -231,22 +261,22 @@ namespace Milestro.InputSystem.Service
 
         private void EndImeSession()
         {
-            if (imeSessionQuiescing)
+            if (imeSessionAwaitingEmptyAck)
             {
                 return;
             }
 
             // Invalidate callbacks before disabling: IME-off may synchronously emit the empty-composition ack.
-            var shouldQuiesce = compositionActive;
+            var shouldAwaitEmptyAck = compositionActive;
             ++imeSessionGeneration;
             compositionActive = false;
-            imeSessionQuiescing = shouldQuiesce;
-            imeSessionCanCompleteAfterUpdate = true;
-            if (shouldQuiesce && imeSessionCanceller.IsRequired)
+            imeSessionAwaitingEmptyAck = shouldAwaitEmptyAck;
+            var cancellationSucceeded = false;
+            if (shouldAwaitEmptyAck && imeSessionCanceller.IsRequired)
             {
                 var result = imeSessionCanceller.CancelComposition();
                 HybridInputImeCancellationDiagnostics.Record(result);
-                imeSessionCanCompleteAfterUpdate = result == HybridInputImeCancellationResult.Succeeded;
+                cancellationSucceeded = result == HybridInputImeCancellationResult.Succeeded;
             }
             if (imeAppliedEnabled)
             {
@@ -255,24 +285,27 @@ namespace Milestro.InputSystem.Service
             }
             hasAppliedImeCursor = false;
 
-            if (shouldQuiesce)
+            if (shouldAwaitEmptyAck)
             {
+                if (cancellationSucceeded)
+                {
+                    CompleteImeSessionBoundary();
+                }
                 return;
             }
 
             RebindImeSession();
         }
 
-        private void CompleteImeSessionQuiesce()
+        private void CompleteImeSessionBoundary()
         {
-            if (!imeSessionQuiescing)
+            if (!imeSessionAwaitingEmptyAck)
             {
                 return;
             }
 
-            // Only an empty ack or the next Input System after-update boundary can rotate to the new session.
-            imeSessionQuiescing = false;
-            imeSessionCanCompleteAfterUpdate = true;
+            // A failed cancellation remains closed until the source reports a real empty acknowledgement.
+            imeSessionAwaitingEmptyAck = false;
             RebindImeSession();
             ApplyImeIntent();
         }
@@ -294,7 +327,7 @@ namespace Milestro.InputSystem.Service
         private void ApplyImeIntent()
         {
             var boundKeyboard = keyboard;
-            if (boundKeyboard == null || !hasImeIntent || imeSessionQuiescing)
+            if (boundKeyboard == null || !hasImeIntent || imeSessionAwaitingEmptyAck)
             {
                 return;
             }
@@ -315,9 +348,24 @@ namespace Milestro.InputSystem.Service
 
         private void OnAfterUpdate()
         {
-            if (imeSessionCanCompleteAfterUpdate)
+            var boundKeyboard = keyboard;
+            if (boundKeyboard == null || imeSessionAwaitingEmptyAck)
             {
-                CompleteImeSessionQuiesce();
+                return;
+            }
+
+            var timestamp = Time.unscaledTimeAsDouble;
+            for (var i = 0; i < TrackedKeys.Length; ++i)
+            {
+                var key = TrackedKeys[i];
+                if (boundKeyboard.GetKeyDown(key))
+                {
+                    KeyStateChanged?.Invoke(key, true, timestamp);
+                }
+                if (boundKeyboard.GetKeyUp(key))
+                {
+                    KeyStateChanged?.Invoke(key, false, timestamp);
+                }
             }
         }
 
@@ -343,9 +391,9 @@ namespace Milestro.InputSystem.Service
             {
                 return;
             }
-            if (imeSessionQuiescing && string.IsNullOrEmpty(composition))
+            if (imeSessionAwaitingEmptyAck && string.IsNullOrEmpty(composition))
             {
-                CompleteImeSessionQuiesce();
+                CompleteImeSessionBoundary();
                 return;
             }
             if (sessionGeneration == imeSessionGeneration)

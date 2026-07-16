@@ -8,7 +8,10 @@ using UnityEngine.InputSystem.UI;
 namespace Milestro.InputSystem.Service
 {
     /// <summary>Provides keyboard, text, IME, and delta-only scroll capability through Input System.</summary>
-    internal sealed class HybridInputSystemProvider : IHybridInputProvider, IHybridScrollInputProvider
+    internal sealed class HybridInputSystemProvider :
+        IHybridInputProvider,
+        IHybridInputFocusSessionProvider,
+        IHybridScrollInputProvider
     {
         internal const string ProviderId = "input-system";
 
@@ -45,7 +48,11 @@ namespace Milestro.InputSystem.Service
 
         private readonly IHybridInputSystemSource source;
         private readonly List<KeyCode> pressedKeys = new List<KeyCode>();
-        private IHybridInputEventSink? sink;
+        private IHybridInputEventSink? providerSink;
+        private IHybridInputEventSink? sessionSink;
+        private System.Action<char, double>? sessionTextInput;
+        private System.Action<string, double>? sessionCompositionChanged;
+        private System.Action<KeyCode, bool, double>? sessionKeyStateChanged;
 
         internal HybridInputSystemProvider()
             : this(new UnityInputSystemSource())
@@ -96,29 +103,79 @@ namespace Milestro.InputSystem.Service
 
         public void Start(IHybridInputEventSink eventSink)
         {
-            sink = eventSink;
+            providerSink = eventSink;
             pressedKeys.Clear();
-            source.TextInput += OnTextInput;
-            source.CompositionChanged += OnCompositionChanged;
             source.DeviceChanged += OnDeviceChanged;
             source.Start();
         }
 
         public void Stop()
         {
-            source.TextInput -= OnTextInput;
-            source.CompositionChanged -= OnCompositionChanged;
+            EndFocusSession();
             source.DeviceChanged -= OnDeviceChanged;
             source.Stop();
-            sink = null;
+            providerSink = null;
             pressedKeys.Clear();
+        }
+
+        public void BeginFocusSession(IHybridInputEventSink nextSessionSink)
+        {
+            if (nextSessionSink == null)
+            {
+                throw new System.ArgumentNullException(nameof(nextSessionSink));
+            }
+
+            EndFocusSession();
+            sessionSink = nextSessionSink;
+            sessionTextInput = (character, timestamp) =>
+                nextSessionSink.Enqueue(HybridInputEvent.CommittedText(character.ToString(), timestamp));
+            sessionCompositionChanged = (composition, timestamp) =>
+                nextSessionSink.Enqueue(HybridInputEvent.Composition(composition, timestamp));
+            sessionKeyStateChanged = (key, pressed, timestamp) =>
+                nextSessionSink.Enqueue(HybridInputEvent.KeyState(key, pressed, timestamp));
+            source.TextInput += sessionTextInput;
+            source.CompositionChanged += sessionCompositionChanged;
+            source.KeyStateChanged += sessionKeyStateChanged;
+        }
+
+        public void EndFocusSession()
+        {
+            if (sessionTextInput != null)
+            {
+                source.TextInput -= sessionTextInput;
+                sessionTextInput = null;
+            }
+            if (sessionCompositionChanged != null)
+            {
+                source.CompositionChanged -= sessionCompositionChanged;
+                sessionCompositionChanged = null;
+            }
+            if (sessionKeyStateChanged != null)
+            {
+                source.KeyStateChanged -= sessionKeyStateChanged;
+                sessionKeyStateChanged = null;
+            }
+            sessionSink = null;
         }
 
         public void Collect(HybridInputCollectContext context)
         {
-            var eventSink = sink;
+            // Key edges arrive through session-captured source callbacks. Collection
+            // only snapshots held state for the already selected session.
+            var eventSink = sessionSink;
             if (eventSink == null)
             {
+                source.Refresh();
+                pressedKeys.Clear();
+                for (var i = 0; i < TrackedKeys.Length; ++i)
+                {
+                    var key = TrackedKeys[i];
+                    if (source.GetKey(key))
+                    {
+                        pressedKeys.Add(key);
+                    }
+                }
+                providerSink?.ReplacePressedKeys(pressedKeys);
                 return;
             }
 
@@ -130,14 +187,6 @@ namespace Milestro.InputSystem.Service
                 if (source.GetKey(key))
                 {
                     pressedKeys.Add(key);
-                }
-                if (source.GetKeyDown(key))
-                {
-                    eventSink.Enqueue(HybridInputEvent.KeyState(key, true, context.UnscaledTime));
-                }
-                if (source.GetKeyUp(key))
-                {
-                    eventSink.Enqueue(HybridInputEvent.KeyState(key, false, context.UnscaledTime));
                 }
             }
             eventSink.ReplacePressedKeys(pressedKeys);
@@ -155,19 +204,9 @@ namespace Milestro.InputSystem.Service
             source.SetImeCursorPosition(position);
         }
 
-        private void OnTextInput(char character, double timestamp)
-        {
-            sink?.Enqueue(HybridInputEvent.CommittedText(character.ToString(), timestamp));
-        }
-
-        private void OnCompositionChanged(string composition, double timestamp)
-        {
-            sink?.Enqueue(HybridInputEvent.Composition(composition, timestamp));
-        }
-
         private void OnDeviceChanged()
         {
-            sink?.ResetDeviceState();
+            providerSink?.ResetDeviceState();
         }
     }
 }

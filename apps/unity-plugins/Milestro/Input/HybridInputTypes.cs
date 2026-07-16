@@ -85,7 +85,19 @@ namespace Milestro.Input
         ProviderChanged = 2,
         ApplicationFocusLost = 3,
         DispatcherReset = 4,
-        DeviceChanged = 5
+        DeviceChanged = 5,
+        InputEventBufferOverflow = 6
+    }
+
+    public enum HybridInputDiagnosticCode
+    {
+        None = 0,
+        SessionIsolationUnsupported = 1,
+        InputEventBufferOverflow = 2,
+        NotificationBufferOverflow = 3,
+        WorkLimitExceeded = 4,
+        ListenerException = 5,
+        FocusSessionStartFailed = 6
     }
 
     public enum HybridInputSelectionStatus
@@ -329,7 +341,9 @@ namespace Milestro.Input
             HybridScrollCapability scrollCapability,
             string activeModuleType,
             int eventSystemCount,
-            bool applicationFocused)
+            bool applicationFocused,
+            HybridInputDiagnosticCode lastDiagnostic,
+            int diagnosticCount)
         {
             SelectionStatus = selectionStatus;
             ProviderId = providerId;
@@ -339,6 +353,8 @@ namespace Milestro.Input
             ActiveModuleType = activeModuleType;
             EventSystemCount = eventSystemCount;
             ApplicationFocused = applicationFocused;
+            LastDiagnostic = lastDiagnostic;
+            DiagnosticCount = Math.Max(0, diagnosticCount);
             ImeCancellationResult = HybridInputImeCancellationDiagnostics.LastResult;
             ImeCancellationFailureCount = HybridInputImeCancellationDiagnostics.FailureCount;
         }
@@ -351,6 +367,8 @@ namespace Milestro.Input
         public string ActiveModuleType { get; }
         public int EventSystemCount { get; }
         public bool ApplicationFocused { get; }
+        public HybridInputDiagnosticCode LastDiagnostic { get; }
+        public int DiagnosticCount { get; }
         public HybridInputImeCancellationResult ImeCancellationResult { get; }
         public int ImeCancellationFailureCount { get; }
     }

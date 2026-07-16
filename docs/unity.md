@@ -149,6 +149,9 @@ Primary runtime components:
   overflow. Use the `ScrollPercent*` properties to link its normalized `0..1`
   scroll position to other scrollbars. Keyboard, committed text, composition,
   and IME ownership are supplied by the process-wide HybridInput dispatcher.
+  Runtime `Text` assignments canonicalize line breaks and invalid UTF-16 and
+  notify the internal lifecycle gateway once when the canonical value changes;
+  use `SetTextWithoutNotify` for an explicit silent assignment.
 - `Milestro.Components.MilestroScrollRect`: Unity `ScrollRect` extension with
   Milestro wheel tweening and optional presentation-only Elastic scrolling. The
   stock `ScrollRect` component does not receive Milestro Elastic behavior.
@@ -226,6 +229,14 @@ delta-only scroll capability; gesture phase, momentum phase, device
 classification, and scroll capture are not claimed yet. See
 [hybrid-input.md](hybrid-input.md) for the provider contract, diagnostics,
 package-optional behavior, and migration notes.
+
+Strict `TextInput` focus additionally requires
+`IHybridInputFocusSessionProvider`. The Input System adapter binds a fresh
+session sink into each text, composition, and key-edge source callback closure.
+The legacy polled source cannot
+yet prove capture-time event ownership and therefore fails `TextInput` focus
+admission with `SessionIsolationUnsupported`; it does not fall back to an
+unscoped mode.
 
 ## Configuration
 

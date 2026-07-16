@@ -7,6 +7,7 @@ namespace Milestro.InputSystem.Model
     {
         event Action<char, double>? TextInput;
         event Action<string, double>? CompositionChanged;
+        event Action<KeyCode, bool, double>? KeyStateChanged;
         event Action? DeviceChanged;
 
         void Start();

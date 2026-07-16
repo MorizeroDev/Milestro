@@ -30,6 +30,9 @@ and rejected-override states. `ProviderId`, `ProviderKind`, `Capabilities`,
 selected provider and environment. `ImeCancellationResult` reports the most
 recent platform composition-cancellation result, and
 `ImeCancellationFailureCount` counts results other than `Succeeded`.
+`LastDiagnostic` and `DiagnosticCount` expose bounded-dispatch failures such as
+unsupported session isolation, ring overflow, work exhaustion, and listener
+exceptions.
 
 Applications can request a registered provider by ID:
 
@@ -45,11 +48,48 @@ Custom integrations implement `IHybridInputProvider` and register through
 `HybridInputRuntime.RegisterProvider`; dispose the returned registration to
 remove the provider.
 
+## Strict Focus Sessions
+
+Providers that publish focused key, committed-text, or composition events must
+also implement `IHybridInputFocusSessionProvider`. The dispatcher supplies a
+new immutable `IHybridInputEventSink` to every `BeginFocusSession` call. A
+provider callback must capture that sink when the source callback is bound; it
+must not look up a mutable current sink when the callback eventually runs.
+
+The dispatcher seals the old sink before flushing the accepted tail of a focus
+session. Calls through that sink after sealing are dropped before event
+sequence, input-ring, or pressed-key state changes. Provider changes,
+dispatcher reset, sink disposal, and device-session replacement also invalidate
+old sinks. Provider callbacks are main-thread-only in this contract.
+
+The Input System adapter implements strict focus sessions by binding fresh text,
+composition, and key-edge callback closures for each session. Key edges are
+captured from the source after-update callback; `Collect()` only snapshots held
+state and cannot retag an old edge. The legacy provider remains
+available for provider selection and direct custom use, but Unity's polled
+`Input.inputString` API does not expose capture-time ownership. It therefore
+does not currently implement the focus-session contract and cannot acquire
+`TextInput` focus. Failed admission reports
+`HybridInputDiagnosticCode.SessionIsolationUnsupported`; there is no unscoped
+or best-effort fallback.
+
+## Bounded Dispatch
+
+Focus intents, input delivery, and lifecycle callbacks run through one
+non-recursive transaction pump. It uses a fixed 128-record input ring, a fixed
+64-record notification ring, and a 256-step outer transaction limit. The 129th
+input event drops the complete undelivered batch, seals and releases that
+session, and reports `InputEventBufferOverflow`. Listener loops, notification
+overflow, and listener exceptions stop the remaining callbacks in the current
+outer transaction; the guard is restored for the next ordinary update.
+
 ## Capabilities
 
-Both built-in providers expose immutable per-frame key state, key edges,
-committed text, composition, and IME control. The optional Input System provider
-also reports `ScrollDelta` with `HybridScrollCapability.DeltaOnly`.
+Both built-in providers describe key state, key edges, committed text,
+composition, and IME control capabilities. Capability flags do not imply strict
+focus-session support; check the focus-session contract described above. The
+optional Input System provider also reports `ScrollDelta` with
+`HybridScrollCapability.DeltaOnly`.
 
 Delta-only means Milestro does not yet claim scroll device classification,
 gesture or momentum phases, gesture IDs, or scroll capture. Existing uGUI

@@ -136,7 +136,6 @@ namespace Milestro.Components
         [NonSerialized] private bool styleDirty = true;
         [NonSerialized] private bool layoutDirty = true;
         [NonSerialized] private bool paintDirty = true;
-        [NonSerialized] private bool focused;
         [NonSerialized] private bool caretVisible = true;
         [NonSerialized] private float nextBlinkTime;
         [NonSerialized] private bool compositionActive;
@@ -176,29 +175,69 @@ namespace Milestro.Components
         [NonSerialized] private int m_editorSkippedRenderRetries;
 #endif
 
+        internal event Action<string>? InternalValueChanged;
+        internal event Action<string>? InternalEndEdit;
+        internal event Action? InternalFocusGained;
+        internal event Action? InternalFocusLost;
+
+        internal bool IsDispatcherFocused => inputRegistration?.IsFocused == true;
+
         public string Text
         {
             get => m_text;
-            set
-            {
-                var next = NormalizeTextForLineMode(value, m_lineMode);
-                if (m_text == next)
-                {
-                    return;
-                }
+            set => SetText(value, notify: true);
+        }
 
-                m_text = next;
-                if (inputBox != null)
-                {
-                    inputBox.Text = m_text;
-                }
-                CancelScrollTweens();
-                compositionActive = false;
-                lastCompositionText = "";
-                ResetSurrogateInputState();
-                ResetKeyRepeatState();
-                paintDirty = true;
+        public void SetTextWithoutNotify(string value)
+        {
+            SetText(value, notify: false);
+        }
+
+        private void SetText(string value, bool notify)
+        {
+            var managedCanonical = CanonicalizeTextForLineMode(value, m_lineMode);
+            if (string.Equals(m_text, managedCanonical, StringComparison.Ordinal) &&
+                (inputBox == null || string.Equals(inputBox.Text, managedCanonical, StringComparison.Ordinal)))
+            {
+                return;
             }
+
+            var canonical = managedCanonical;
+            if (inputBox != null)
+            {
+                inputBox.Text = managedCanonical;
+                canonical = inputBox.Text;
+            }
+
+            if (string.Equals(m_text, canonical, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            CancelScrollTweens();
+            compositionActive = false;
+            lastCompositionText = "";
+            ResetSurrogateInputState();
+            ResetKeyRepeatState();
+            CommitCanonicalText(canonical, notify, sessionBound: false);
+        }
+
+        private bool CommitCanonicalText(string canonical, bool notify, bool sessionBound)
+        {
+            canonical ??= string.Empty;
+            if (string.Equals(m_text, canonical, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            m_text = canonical;
+            paintDirty = true;
+            if (notify)
+            {
+                inputSink ??= new InputSink(this);
+                HybridInputRuntime.NotifyValueChanged(inputSink, canonical, sessionBound);
+            }
+            return true;
         }
 
         public Margin margin
@@ -283,15 +322,7 @@ namespace Milestro.Components
 
                 m_lineMode = value;
                 CoerceWrapModeForLineMode();
-                var nextText = NormalizeTextForLineMode(m_text, m_lineMode);
-                if (m_text != nextText)
-                {
-                    m_text = nextText;
-                    if (inputBox != null)
-                    {
-                        inputBox.Text = m_text;
-                    }
-                }
+                SetText(m_text, notify: true);
                 compositionActive = false;
                 lastCompositionText = "";
                 ResetSurrogateInputState();
@@ -321,7 +352,7 @@ namespace Milestro.Components
                 paintDirty = true;
             }
         }
-        
+
         public TextOverflow textOverflow
         {
             get => m_textOverflow;
@@ -490,6 +521,10 @@ namespace Milestro.Components
             paintDirty = true;
             ResetBlink();
             RebuildResources();
+            if (EventSystem.current?.currentSelectedGameObject == gameObject)
+            {
+                AcquireDispatcherFocus();
+            }
         }
 
         protected override void OnDisable()
@@ -511,15 +546,11 @@ namespace Milestro.Components
 
         private void Update()
         {
-            if (focused)
+            if (IsDispatcherFocused)
             {
                 if (CanReadInput())
                 {
                     UpdateCaretBlink();
-                }
-                else
-                {
-                    ReleaseInputFocus();
                 }
             }
 
@@ -1123,7 +1154,7 @@ namespace Milestro.Components
         private void MarkElasticPresentationChanged()
         {
             paintDirty = true;
-            if (focused && inputRegistration != null)
+            if (IsDispatcherFocused && inputRegistration != null)
             {
                 UpdateCompositionCursorPosition();
             }
@@ -1187,8 +1218,13 @@ namespace Milestro.Components
         {
             CancelScrollTweens();
             RebuildResources();
-            EventSystem.current?.SetSelectedGameObject(gameObject, eventData);
-            Focus();
+            var eventSystem = EventSystem.current;
+            var wasAlreadySelected = eventSystem != null && eventSystem.currentSelectedGameObject == gameObject;
+            eventSystem?.SetSelectedGameObject(gameObject, eventData);
+            if (wasAlreadySelected)
+            {
+                AcquireDispatcherFocus();
+            }
 
             if (inputBox == null ||
                 !RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransformCache,
@@ -1210,7 +1246,6 @@ namespace Milestro.Components
             lastCompositionText = "";
             ResetSurrogateInputState();
             ResetKeyRepeatState();
-            m_text = inputBox.Text;
             ResetBlink();
             paintDirty = true;
         }
@@ -1245,7 +1280,7 @@ namespace Milestro.Components
         {
             // Legacy Input.inputString can replacement-encode supplementary-plane text;
             // IMGUI text events can still expose the original surrogate halves.
-            if (!focused || m_readOnly || !CanReadInput())
+            if (!IsDispatcherFocused || m_readOnly || !CanReadInput())
             {
                 return;
             }
@@ -1261,7 +1296,7 @@ namespace Milestro.Components
 
         public void OnSelect(BaseEventData eventData)
         {
-            Focus();
+            AcquireDispatcherFocus();
         }
 
         public void OnDeselect(BaseEventData eventData)
@@ -1271,13 +1306,12 @@ namespace Milestro.Components
 
         private void OnInputFrame(HybridInputFrame frame)
         {
-            if (!focused)
+            if (!IsDispatcherFocused)
             {
                 return;
             }
             if (!CanReadInput())
             {
-                ReleaseInputFocus();
                 return;
             }
 
@@ -1287,9 +1321,8 @@ namespace Milestro.Components
 
         private void OnInputReset(HybridInputResetReason reason)
         {
-            var releaseFocus = reason == HybridInputResetReason.FocusChanged ||
-                               reason == HybridInputResetReason.OwnerDisabled ||
-                               reason == HybridInputResetReason.DispatcherReset;
+            var releaseFocus = reason != HybridInputResetReason.ApplicationFocusLost &&
+                               reason != HybridInputResetReason.DeviceChanged;
             ResetLocalInputState(releaseFocus);
             if (isActiveAndEnabled)
             {
@@ -1303,7 +1336,7 @@ namespace Milestro.Components
             base.OnValidate();
             ElasticSettings().Validate();
             CoerceWrapModeForLineMode();
-            m_text = NormalizeTextForLineMode(m_text, m_lineMode);
+            SetText(m_text, notify: false);
             if (m_readOnly)
             {
                 ClearPendingTextInput();
@@ -1376,34 +1409,37 @@ namespace Milestro.Components
         }
 #endif
 
-        private void Focus()
+        private void OnDispatcherFocusGained()
         {
-            var wasFocused = focused;
-            if (!AcquireDispatcherFocus())
-            {
-                return;
-            }
-
-            focused = true;
-            if (!wasFocused)
-            {
-                inputFrameState.Reset();
-            }
+            inputFrameState.Reset();
             inputBox?.SetFocused(true);
             ApplyImeCompositionMode();
             ResetBlink();
             paintDirty = true;
+            InternalFocusGained?.Invoke();
+        }
+
+        private void OnDispatcherEndEdit(string finalText)
+        {
+            InternalEndEdit?.Invoke(finalText);
+        }
+
+        private void OnDispatcherFocusLost()
+        {
+            InternalFocusLost?.Invoke();
+        }
+
+        private void OnDispatcherValueChanged(string value)
+        {
+            InternalValueChanged?.Invoke(value);
         }
 
         private void ReleaseInputFocus()
         {
-            if (focused && inputRegistration != null)
+            if (IsDispatcherFocused && inputRegistration != null)
             {
                 inputRegistration.ReleaseFocus();
-                if (!focused)
-                {
-                    return;
-                }
+                return;
             }
 
             ResetLocalInputState(releaseFocus: true);
@@ -1411,12 +1447,11 @@ namespace Milestro.Components
 
         private bool AcquireDispatcherFocus()
         {
-            if (inputRegistration?.AcquireFocus() == true)
+            if (inputRegistration != null)
             {
-                return true;
+                return inputRegistration.AcquireFocus();
             }
 
-            inputRegistration?.Dispose();
             inputSink ??= new InputSink(this);
             inputRegistration = HybridInputRuntime.RegisterSink(inputSink);
             return inputRegistration.AcquireFocus();
@@ -1431,7 +1466,6 @@ namespace Milestro.Components
             ResetKeyRepeatState();
             if (releaseFocus)
             {
-                focused = false;
                 caretVisible = false;
             }
             if (inputBox != null)
@@ -1450,12 +1484,6 @@ namespace Milestro.Components
 
         private bool CanReadInput()
         {
-            var eventSystem = EventSystem.current;
-            if (eventSystem != null && eventSystem.currentSelectedGameObject != gameObject)
-            {
-                return false;
-            }
-
 #if UNITY_EDITOR
             if (Application.isPlaying)
             {
@@ -1496,11 +1524,11 @@ namespace Milestro.Components
                 ClearPendingTextInput();
                 var readOnlyChanged = ClearActiveComposition();
                 readOnlyChanged |= ReadEditingKeys(frame, false, false);
-                ApplyInputChange(readOnlyChanged);
+                ApplyInputChange(readOnlyChanged, sessionBound: true);
                 return;
             }
 
-            var changed = false;
+            var committedGroupChanged = false;
             var hadCompositionBeforeInput = compositionActive ||
                                             !string.IsNullOrEmpty(inputFrameState.CompositionText);
             var committedText = ReadCommittedText(frame, providerInput);
@@ -1509,28 +1537,31 @@ namespace Milestro.Components
             {
                 if (compositionActive)
                 {
-                    changed |= inputBox.CommitComposition(committedText);
+                    committedGroupChanged |= inputBox.CommitComposition(committedText);
                     compositionActive = false;
                     lastCompositionText = "";
                 }
                 else
                 {
                     inputBox.InsertText(committedText);
-                    changed = true;
+                    committedGroupChanged = true;
                 }
 
                 if (!string.IsNullOrEmpty(inputFrameState.CompositionText))
                 {
-                    changed |= UpdateComposition(inputFrameState.CompositionText);
+                    committedGroupChanged |= UpdateComposition(inputFrameState.CompositionText);
                 }
             }
             else
             {
-                changed |= UpdateComposition(inputFrameState.CompositionText);
+                committedGroupChanged |= UpdateComposition(inputFrameState.CompositionText);
             }
 
-            changed |= ReadEditingKeys(frame, hadCompositionBeforeInput, committedTextHadLineBreak);
-            ApplyInputChange(changed);
+            ApplyInputChange(committedGroupChanged, sessionBound: true);
+            var editingGroupChanged = ReadEditingKeys(frame,
+                hadCompositionBeforeInput,
+                committedTextHadLineBreak);
+            ApplyInputChange(editingGroupChanged, sessionBound: true);
         }
 
         private bool ReadEditingKeys(HybridInputFrame frame,
@@ -1751,7 +1782,7 @@ namespace Milestro.Components
                     return true;
                 }
 
-                var clipboardText = NormalizeTextForLineMode(GUIUtility.systemCopyBuffer, m_lineMode);
+                var clipboardText = CanonicalizeTextForLineMode(GUIUtility.systemCopyBuffer, m_lineMode);
                 if (clipboardText.Length == 0)
                 {
                     return true;
@@ -1794,7 +1825,7 @@ namespace Milestro.Components
 
         private void ApplyImeCompositionMode()
         {
-            if (!focused)
+            if (!IsDispatcherFocused)
             {
                 return;
             }
@@ -1846,16 +1877,16 @@ namespace Milestro.Components
             nextDeleteRepeatTime = 0;
         }
 
-        private void ApplyInputChange(bool changed)
+        private void ApplyInputChange(bool changed, bool sessionBound)
         {
             if (inputBox != null)
             {
                 UpdateCompositionCursorPosition();
             }
 
-            if (changed && inputBox != null)
+            var textChanged = inputBox != null && CommitCanonicalText(inputBox.Text, notify: true, sessionBound);
+            if ((changed || textChanged) && inputBox != null)
             {
-                m_text = inputBox.Text;
                 inputBox.EnsureCaretVisible();
                 CancelScrollTweens();
                 BeginKeyboardScrollInterlock();
@@ -1933,7 +1964,7 @@ namespace Milestro.Components
             {
                 ResetSurrogateInputState();
                 compositionActive = true;
-                var compositionText = NormalizeTextForLineMode(Utf16Util.RemoveUnpairedSurrogates(rawCompositionText),
+                var compositionText = CanonicalizeTextForLineMode(rawCompositionText,
                     m_lineMode);
                 if (compositionText.Length == 0)
                 {
@@ -1967,7 +1998,7 @@ namespace Milestro.Components
 
         private void UpdateCompositionCursorPosition()
         {
-            if (!focused || inputBox == null || rectTransformCache == null)
+            if (!IsDispatcherFocused || inputBox == null || rectTransformCache == null)
             {
                 return;
             }
@@ -2266,9 +2297,9 @@ namespace Milestro.Components
             return builder.ToString();
         }
 
-        private static string NormalizeTextForLineMode(string input, TextInputLineMode lineMode)
+        internal static string CanonicalizeTextForLineMode(string input, TextInputLineMode lineMode)
         {
-            var text = input ?? string.Empty;
+            var text = Utf16Util.RemoveUnpairedSurrogates(input ?? string.Empty);
             if (text.Length == 0)
             {
                 return string.Empty;
@@ -2400,7 +2431,7 @@ namespace Milestro.Components
                 return;
             }
 
-            inputBox.SetCaretVisible(focused && caretVisible);
+            inputBox.SetCaretVisible(IsDispatcherFocused && caretVisible);
             var submitted = surface!.TrySubmit(BuildRenderCommands());
             if (!submitted)
             {
@@ -2485,9 +2516,9 @@ namespace Milestro.Components
 
             inputBox = new InputBox(paragraphStyle, textStyle);
             CoerceWrapModeForLineMode();
-            m_text = NormalizeTextForLineMode(m_text, m_lineMode);
+            m_text = CanonicalizeTextForLineMode(m_text, m_lineMode);
             inputBox.SetSoftWrap(EffectiveSoftWrap());
-            inputBox.SetFocused(focused);
+            inputBox.SetFocused(IsDispatcherFocused);
             inputBox.SetTextOverflow(m_textOverflow);
             inputBox.SetEllipsis(m_ellipsisString);
             inputBox.SetMaskInput(m_maskInput);
@@ -2626,7 +2657,7 @@ namespace Milestro.Components
             }
         }
 
-        private sealed class InputSink : IHybridInputFrameSink
+        private sealed class InputSink : IHybridInputLifecycleSink
         {
             private readonly TextInput owner;
 
@@ -2634,6 +2665,11 @@ namespace Milestro.Components
             {
                 this.owner = owner;
             }
+
+            public GameObject Owner => owner.gameObject;
+            public bool IsActiveAndEnabled => owner.isActiveAndEnabled;
+            public bool CanConsumeInputNow => owner.CanReadInput();
+            public string CommittedText => owner.m_text;
 
             public void OnInputFrame(HybridInputFrame frame)
             {
@@ -2643,6 +2679,26 @@ namespace Milestro.Components
             public void OnInputReset(HybridInputResetReason reason)
             {
                 owner.OnInputReset(reason);
+            }
+
+            public void OnFocusGained()
+            {
+                owner.OnDispatcherFocusGained();
+            }
+
+            public void OnEndEdit(string finalText)
+            {
+                owner.OnDispatcherEndEdit(finalText);
+            }
+
+            public void OnFocusLost()
+            {
+                owner.OnDispatcherFocusLost();
+            }
+
+            public void OnValueChanged(string value)
+            {
+                owner.OnDispatcherValueChanged(value);
             }
         }
     }

@@ -44,6 +44,11 @@ namespace Milestro.Input
             return Dispatcher.RegisterSink(sink);
         }
 
+        internal static void NotifyValueChanged(IHybridInputLifecycleSink sink, string value, bool sessionBound)
+        {
+            Dispatcher.NotifyValueChanged(sink, value, sessionBound);
+        }
+
         internal static void ResetAndInitialize()
         {
             HybridInputPlayerLoop.Uninstall();
