@@ -1297,6 +1297,113 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void ResetUnregisterCannotCancelNormalReleaseTerminal()
+        {
+            var firstObject = new GameObject("first");
+            var secondObject = new GameObject("second");
+            try
+            {
+                using var selection = new SelectionFixture();
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var calls = new List<string>();
+                var firstSink = new LifecycleSink(firstObject, "first", calls);
+                var firstRegistration = dispatcher.RegisterSink(firstSink);
+                selection.Select(firstObject);
+                firstRegistration.AcquireFocus();
+                var diagnosticCount = dispatcher.Diagnostics.DiagnosticCount;
+                var resetSawUnfocused = false;
+                HybridInputResetReason? observedResetReason = null;
+                firstSink.OnResetCallback = reason =>
+                {
+                    observedResetReason = reason;
+                    resetSawUnfocused = !firstRegistration.IsFocused;
+                    firstRegistration.Dispose();
+                };
+
+                firstRegistration.ReleaseFocus();
+
+                Assert.That(observedResetReason, Is.EqualTo(HybridInputResetReason.FocusChanged));
+                Assert.That(resetSawUnfocused, Is.True);
+                Assert.That(firstSink.Resets, Is.EqualTo(new[] { HybridInputResetReason.FocusChanged }));
+                Assert.That(calls, Is.EqualTo(new[] { "first:Gained", "first:End", "first:Lost" }));
+                Assert.That(GetRegisteredSinkCount(dispatcher), Is.Zero);
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount));
+
+                var secondSink = new LifecycleSink(secondObject, "second", calls);
+                using var secondRegistration = dispatcher.RegisterSink(secondSink);
+                selection.Select(secondObject);
+                Assert.That(secondRegistration.AcquireFocus(), Is.True);
+                Assert.That(calls,
+                    Is.EqualTo(new[] { "first:Gained", "first:End", "first:Lost", "second:Gained" }));
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(firstObject);
+                UnityEngine.Object.DestroyImmediate(secondObject);
+            }
+        }
+
+        [Test]
+        public void ResetUnregisterCannotCancelAbortedReleaseTerminal()
+        {
+            var firstObject = new GameObject("first");
+            var secondObject = new GameObject("second");
+            try
+            {
+                using var selection = new SelectionFixture();
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var calls = new List<string>();
+                var firstSink = new LifecycleSink(firstObject, "first", calls);
+                var firstRegistration = dispatcher.RegisterSink(firstSink);
+                selection.Select(firstObject);
+                var diagnosticCount = dispatcher.Diagnostics.DiagnosticCount;
+                var resetSawUnfocused = false;
+                HybridInputResetReason? observedResetReason = null;
+                firstSink.OnResetCallback = reason =>
+                {
+                    observedResetReason = reason;
+                    resetSawUnfocused = !firstRegistration.IsFocused;
+                    firstRegistration.Dispose();
+                };
+                firstSink.OnFocusGainedCallback = () =>
+                {
+                    firstRegistration.ReleaseFocus();
+                    for (var i = 0; i <= HybridInputDispatcher.MaxPendingNotifications; ++i)
+                    {
+                        dispatcher.NotifyValueChanged(firstSink, i.ToString(), sessionBound: false);
+                    }
+                };
+
+                Assert.That(firstRegistration.AcquireFocus(), Is.False);
+
+                Assert.That(observedResetReason, Is.EqualTo(HybridInputResetReason.FocusChanged));
+                Assert.That(resetSawUnfocused, Is.True);
+                Assert.That(firstSink.Resets, Is.EqualTo(new[] { HybridInputResetReason.FocusChanged }));
+                Assert.That(calls, Is.EqualTo(new[] { "first:Gained", "first:End", "first:Lost" }));
+                Assert.That(GetRegisteredSinkCount(dispatcher), Is.Zero);
+                Assert.That(dispatcher.Diagnostics.LastDiagnostic,
+                    Is.EqualTo(HybridInputDiagnosticCode.NotificationBufferOverflow));
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
+
+                var secondSink = new LifecycleSink(secondObject, "second", calls);
+                using var secondRegistration = dispatcher.RegisterSink(secondSink);
+                selection.Select(secondObject);
+                Assert.That(secondRegistration.AcquireFocus(), Is.True);
+                Assert.That(calls,
+                    Is.EqualTo(new[] { "first:Gained", "first:End", "first:Lost", "second:Gained" }));
+                Assert.That(dispatcher.Diagnostics.DiagnosticCount, Is.EqualTo(diagnosticCount + 1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(firstObject);
+                UnityEngine.Object.DestroyImmediate(secondObject);
+            }
+        }
+
+        [Test]
         public void OrdinaryFocusSwitchCompletesTerminalBundleBeforeNextGained()
         {
             var firstObject = new GameObject("first");

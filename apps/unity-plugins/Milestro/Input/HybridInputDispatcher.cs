@@ -708,6 +708,7 @@ namespace Milestro.Input
                 releasingSinkId = 0;
                 return;
             }
+            var releaseSink = GetSinkOrNull(sinkId);
 
             var endFailed = !TryEndActiveFocusSession();
             releaseInProgress = false;
@@ -720,11 +721,11 @@ namespace Milestro.Input
                 RecordDiagnostic(HybridInputDiagnosticCode.FocusSessionEndFailed);
             }
 
-            if (!TryResetSink(sinkId, releasingReason))
+            if (!TryResetSink(releaseSink, releasingReason))
             {
                 AbortTransaction(HybridInputDiagnosticCode.ListenerException);
             }
-            FreezeTerminalForSink(sinkId);
+            FreezeTerminalForSink(sinkId, releaseSink);
         }
 
         private void CompleteAbortedRelease()
@@ -742,6 +743,7 @@ namespace Milestro.Input
                 releasingSinkId = 0;
                 return;
             }
+            var releaseSink = GetSinkOrNull(sinkId);
 
             TryEndActiveFocusSession();
             releaseInProgress = false;
@@ -749,19 +751,24 @@ namespace Milestro.Input
             TryDisableIme();
             CommitUnfocusedState();
             // Preserve the abort as the transaction's single diagnostic even if owner reset fails.
-            TryResetSink(sinkId, reason);
-            FreezeTerminalForSink(sinkId);
+            TryResetSink(releaseSink, reason);
+            FreezeTerminalForSink(sinkId, releaseSink);
         }
 
-        private bool TryResetSink(int sinkId, HybridInputResetReason reason)
+        private IHybridInputFrameSink? GetSinkOrNull(int sinkId)
         {
-            if (!sinks.TryGetValue(sinkId, out var entry))
+            return sinks.TryGetValue(sinkId, out var entry) ? entry.Sink : null;
+        }
+
+        private static bool TryResetSink(IHybridInputFrameSink? sink, HybridInputResetReason reason)
+        {
+            if (sink == null)
             {
                 return true;
             }
             try
             {
-                entry.Sink.OnInputReset(reason);
+                sink.OnInputReset(reason);
                 return true;
             }
             catch
@@ -965,7 +972,7 @@ namespace Milestro.Input
             {
                 AbortTransaction(HybridInputDiagnosticCode.ListenerException);
             }
-            FreezeTerminalForSink(sinkId);
+            FreezeTerminalForSink(sinkId, entry.Sink);
         }
 
         private void RestartSessionForDeviceChange(SessionEventSink scope)
@@ -1107,15 +1114,17 @@ namespace Milestro.Input
 
         private void FreezeTerminalForSink(int sinkId)
         {
-            if (!sinks.TryGetValue(sinkId, out var entry))
-            {
-                return;
-            }
-            if (entry.Sink is IHybridInputLifecycleSink lifecycleSink)
+            FreezeTerminalForSink(sinkId, GetSinkOrNull(sinkId));
+        }
+
+        private void FreezeTerminalForSink(int sinkId, IHybridInputFrameSink? sink)
+        {
+            if (sink is IHybridInputLifecycleSink lifecycleSink)
             {
                 FreezeTerminalBundle(lifecycleSink, sinkId, lifecycleSink.CommittedText ?? string.Empty);
+                return;
             }
-            else if (!entry.Registered)
+            if (sinks.TryGetValue(sinkId, out var entry) && !entry.Registered)
             {
                 sinks.Remove(sinkId);
             }
