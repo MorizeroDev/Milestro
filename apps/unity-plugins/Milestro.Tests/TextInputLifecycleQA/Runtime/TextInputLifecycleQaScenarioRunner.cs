@@ -625,6 +625,13 @@ namespace Milestro.TextInputLifecycleQA
                 runtimeListener);
 
             EventSystem.current!.SetSelectedGameObject(null);
+            input.SetTextWithoutNotify(string.Empty);
+            RequireRecovery(input.Text.Length == 0,
+                lifecycleEvent,
+                "silent text reset did not clear the recovery input",
+                provider,
+                input,
+                runtimeListener);
             yield return null;
             EventSystem.current.SetSelectedGameObject(input.gameObject);
             yield return WaitUntilRecovery(() => provider.HasFocusSession,
@@ -714,7 +721,10 @@ namespace Milestro.TextInputLifecycleQA
             int diagnosticBaseline)
         {
             var payload = $"qa-{lifecycleEvent}-throw";
-            input.SetTextWithoutNotify($"qa-{lifecycleEvent}-baseline");
+            EventSystem.current!.SetSelectedGameObject(null);
+            input.SetTextWithoutNotify(lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusGained
+                ? $"qa-{lifecycleEvent}-baseline"
+                : string.Empty);
 
             var throwingCount = 0;
             var tailCount = 0;
