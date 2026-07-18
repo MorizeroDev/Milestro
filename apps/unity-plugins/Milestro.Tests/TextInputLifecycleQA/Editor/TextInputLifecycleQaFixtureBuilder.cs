@@ -207,8 +207,8 @@ namespace Milestro.TextInputLifecycleQA.Editor
             }
             ValidatePersistentEvent(input, "m_OnValueChanged", receiver, "OnValueChanged", 0);
             ValidatePersistentEvent(input, "m_OnEndEdit", receiver, "OnEndEdit", 0);
-            ValidatePersistentEvent(input, "m_OnFocusGained", receiver, "OnFocusGained", 1);
-            ValidatePersistentEvent(input, "m_OnFocusLost", receiver, "OnFocusLost", 1);
+            ValidatePersistentEvent(input, "m_OnFocusGained", receiver, "OnFocusGained", 0);
+            ValidatePersistentEvent(input, "m_OnFocusLost", receiver, "OnFocusLost", 0);
 
             var dependencies = AssetDatabase.GetDependencies(ScenePath, recursive: true);
             if (Array.IndexOf(dependencies, PrefabPath) < 0)
@@ -242,8 +242,8 @@ namespace Milestro.TextInputLifecycleQA.Editor
                     "m_OnFocusGained",
                     sceneReceiver,
                     "OnFocusGained",
-                    1);
-                ValidatePersistentEvent(sceneInput, "m_OnFocusLost", sceneReceiver, "OnFocusLost", 1);
+                    0);
+                ValidatePersistentEvent(sceneInput, "m_OnFocusLost", sceneReceiver, "OnFocusLost", 0);
                 if (PrefabUtility.GetCorrespondingObjectFromSource(persistentObject) != prefab ||
                     !PrefabUtility.HasPrefabInstanceAnyOverrides(persistentObject, false))
                 {
@@ -418,6 +418,16 @@ namespace Milestro.TextInputLifecycleQA.Editor
             {
                 throw new InvalidOperationException(
                     $"{fieldName} persistent binding mismatch: target={target}, method={method}, mode={mode}.");
+            }
+            if (fieldName == "m_OnFocusGained" || fieldName == "m_OnFocusLost")
+            {
+                var receiverMethod = receiver.GetType().GetMethod(methodName);
+                if (receiverMethod == null || receiverMethod.ReturnType != typeof(void) ||
+                    receiverMethod.GetParameters().Length != 0)
+                {
+                    throw new InvalidOperationException(
+                        $"{fieldName} persistent receiver must be a void zero-parameter method: {methodName}.");
+                }
             }
         }
 
