@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using Milestro.Input;
 using UnityEngine;
 
@@ -20,6 +21,13 @@ namespace Milestro.TextInputLifecycleQA
                                                        HybridInputCapabilities.ImeControl;
         public HybridScrollCapability ScrollCapability => HybridScrollCapability.Unsupported;
         public bool HasFocusSession => sessionSink != null;
+        public int BeginCount { get; private set; }
+        public int EndCount { get; private set; }
+        public int SessionGeneration { get; private set; }
+        public int ActiveSessionGeneration { get; private set; }
+        public int ActiveSinkIdentity => sessionSink == null
+            ? 0
+            : RuntimeHelpers.GetHashCode(sessionSink);
 
         public HybridInputProviderMatch Match(HybridInputEnvironment environment)
         {
@@ -36,6 +44,7 @@ namespace Milestro.TextInputLifecycleQA
         public void Stop()
         {
             sessionSink = null;
+            ActiveSessionGeneration = 0;
         }
 
         public void Collect(HybridInputCollectContext context)
@@ -53,11 +62,15 @@ namespace Milestro.TextInputLifecycleQA
         public void BeginFocusSession(IHybridInputEventSink sink)
         {
             sessionSink = sink;
+            ++BeginCount;
+            ActiveSessionGeneration = ++SessionGeneration;
         }
 
         public void EndFocusSession()
         {
+            ++EndCount;
             sessionSink = null;
+            ActiveSessionGeneration = 0;
         }
 
         public void EnqueueCommittedText(string value)

@@ -1,9 +1,12 @@
+using System;
+using System.Collections.Generic;
 using Milestro.Components;
 using Milestro.TextInputLifecycleQA.Editor;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 
 namespace Milestro.TextInputLifecycleQA.Tests
@@ -16,6 +19,7 @@ namespace Milestro.TextInputLifecycleQA.Tests
         [Test]
         public void PersistentBindingsSurvivePrefabImportAndSceneReloadWithoutNotification()
         {
+            using var testSceneGuard = TestRunnerSceneGuard.Enter();
             var setup = EditorSceneManager.GetSceneManagerSetup();
             Scene opened = default;
             try
@@ -145,6 +149,7 @@ namespace Milestro.TextInputLifecycleQA.Tests
         [Test]
         public void ProfilerLauncherRestoresBuildSettingsAndPlayModeStartSceneExactly()
         {
+            using var testSceneGuard = TestRunnerSceneGuard.Enter();
             if (TextInputLifecycleQaProfilerLauncher.HasPendingRestore)
             {
                 TextInputLifecycleQaProfilerLauncher.RestoreEditorState();
@@ -269,6 +274,219 @@ namespace Milestro.TextInputLifecycleQA.Tests
                     $"Build Settings path mismatch at index {index}.");
                 Assert.That(actual[index].enabled, Is.EqualTo(expected[index].enabled),
                     $"Build Settings enabled mismatch at index {index}.");
+            }
+        }
+
+        private sealed class TestRunnerSceneGuard : IDisposable
+        {
+            private readonly string tempRoot;
+            private readonly string guardPath;
+            private readonly int initialGuardHandle;
+            private readonly bool originalDirty;
+            private bool disposed;
+
+            private TestRunnerSceneGuard(string tempRoot,
+                string guardPath,
+                int initialGuardHandle,
+                bool originalDirty)
+            {
+                this.tempRoot = tempRoot;
+                this.guardPath = guardPath;
+                this.initialGuardHandle = initialGuardHandle;
+                this.originalDirty = originalDirty;
+            }
+
+            public static TestRunnerSceneGuard Enter()
+            {
+                if (SceneManager.sceneCount != 1)
+                {
+                    throw new InvalidOperationException(
+                        "Task 159 EditMode QA only takes ownership of one untitled neutral scene.");
+                }
+
+                var scene = SceneManager.GetSceneAt(0);
+                if (!IsUntitledNeutral(scene) ||
+                    SceneManager.GetActiveScene().handle != scene.handle)
+                {
+                    throw new InvalidOperationException(
+                        "Task 159 EditMode QA refuses saved scenes, roots, EventSystems, or " +
+                        "a non-active Test Runner scene.");
+                }
+
+                var originalDirty = scene.isDirty;
+                var tempRoot = "Assets/__MilestroTask159TestGuard_" +
+                               Guid.NewGuid().ToString("N");
+                var guardPath = tempRoot + "/Guard.unity";
+                var folderGuid = AssetDatabase.CreateFolder("Assets",
+                    tempRoot.Substring("Assets/".Length));
+                if (string.IsNullOrEmpty(folderGuid) || !AssetDatabase.IsValidFolder(tempRoot))
+                {
+                    throw new InvalidOperationException(
+                        $"Could not create the test-owned scene guard root: {tempRoot}");
+                }
+
+                try
+                {
+                    var guardHandle = scene.handle;
+                    if (!EditorSceneManager.SaveScene(scene, guardPath) ||
+                        !IsExactSavedGuard(scene, guardPath, guardHandle))
+                    {
+                        throw new InvalidOperationException(
+                            $"Could not establish the exact test-owned scene guard: {guardPath}");
+                    }
+                    return new TestRunnerSceneGuard(tempRoot,
+                        guardPath,
+                        guardHandle,
+                        originalDirty);
+                }
+                catch
+                {
+                    if (AssetDatabase.IsValidFolder(tempRoot))
+                    {
+                        AssetDatabase.DeleteAsset(tempRoot);
+                        AssetDatabase.Refresh();
+                    }
+                    throw;
+                }
+            }
+
+            public void Dispose()
+            {
+                if (disposed)
+                {
+                    return;
+                }
+                disposed = true;
+
+                var failures = new List<string>();
+                var guardHandles = new List<int> { initialGuardHandle };
+                for (var index = SceneManager.sceneCount - 1; index >= 0; --index)
+                {
+                    var scene = SceneManager.GetSceneAt(index);
+                    if (scene.path == guardPath)
+                    {
+                        guardHandles.Add(scene.handle);
+                        continue;
+                    }
+                    if (!scene.path.StartsWith(
+                            TextInputLifecycleQaFixtureBuilder.RootPath + "/",
+                            StringComparison.Ordinal))
+                    {
+                        failures.Add($"Refusing to close a non-test scene: {Describe(scene)}");
+                        continue;
+                    }
+                    if (!EditorSceneManager.CloseScene(scene, removeScene: true))
+                    {
+                        failures.Add($"Could not close test-owned scene: {Describe(scene)}");
+                    }
+                }
+
+                Scene savedGuard = default;
+                for (var index = 0; index < SceneManager.sceneCount; ++index)
+                {
+                    var scene = SceneManager.GetSceneAt(index);
+                    if (scene.path == guardPath)
+                    {
+                        savedGuard = scene;
+                        break;
+                    }
+                }
+                if (failures.Count == 0 &&
+                    (!savedGuard.IsValid() ||
+                     !IsExactSavedGuard(savedGuard, guardPath, savedGuard.handle)))
+                {
+                    failures.Add("The exact saved test guard was not restored before cleanup.");
+                }
+
+                if (failures.Count == 0)
+                {
+                    var neutral = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,
+                        NewSceneMode.Single);
+                    if (originalDirty)
+                    {
+                        EditorSceneManager.MarkSceneDirty(neutral);
+                    }
+                    foreach (var handle in guardHandles)
+                    {
+                        if (IsLoaded(handle))
+                        {
+                            failures.Add($"Test guard handle {handle} survived cleanup.");
+                        }
+                    }
+                    if (SceneManager.sceneCount != 1 ||
+                        SceneManager.GetActiveScene().handle != neutral.handle ||
+                        !IsUntitledNeutral(neutral) || neutral.isDirty != originalDirty)
+                    {
+                        failures.Add("The neutral Test Runner scene was not restored exactly.");
+                    }
+                }
+
+                if (failures.Count == 0 && AssetDatabase.IsValidFolder(tempRoot))
+                {
+                    if (!AssetDatabase.DeleteAsset(tempRoot))
+                    {
+                        failures.Add($"Could not delete test-owned guard root: {tempRoot}");
+                    }
+                    AssetDatabase.Refresh();
+                }
+                if (AssetDatabase.IsValidFolder(tempRoot))
+                {
+                    failures.Add($"Test-owned guard root survived cleanup: {tempRoot}");
+                }
+                if (failures.Count != 0)
+                {
+                    throw new InvalidOperationException(string.Join("\n", failures));
+                }
+            }
+
+            private static bool IsUntitledNeutral(Scene scene)
+            {
+                return scene.IsValid() && scene.isLoaded &&
+                       string.IsNullOrEmpty(scene.path) &&
+                       scene.GetRootGameObjects().Length == 0 &&
+                       CountEventSystems(scene) == 0;
+            }
+
+            private static bool IsExactSavedGuard(Scene scene,
+                string expectedPath,
+                int expectedHandle)
+            {
+                return scene.IsValid() && scene.isLoaded &&
+                       scene.handle == expectedHandle &&
+                       scene.path == expectedPath && !scene.isDirty &&
+                       scene.GetRootGameObjects().Length == 0 &&
+                       CountEventSystems(scene) == 0 &&
+                       SceneManager.sceneCount == 1 &&
+                       SceneManager.GetActiveScene().handle == expectedHandle;
+            }
+
+            private static int CountEventSystems(Scene scene)
+            {
+                var count = 0;
+                foreach (var root in scene.GetRootGameObjects())
+                {
+                    count += root.GetComponentsInChildren<EventSystem>(true).Length;
+                }
+                return count;
+            }
+
+            private static bool IsLoaded(int handle)
+            {
+                for (var index = 0; index < SceneManager.sceneCount; ++index)
+                {
+                    if (SceneManager.GetSceneAt(index).handle == handle)
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            private static string Describe(Scene scene)
+            {
+                return $"handle={scene.handle},path='{scene.path}',dirty={scene.isDirty}," +
+                       $"roots={scene.GetRootGameObjects().Length}," +
+                       $"eventSystems={CountEventSystems(scene)}";
             }
         }
     }

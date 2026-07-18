@@ -35,6 +35,7 @@ namespace Milestro.TextInputLifecycleQA
         private int exceptionCasesPassed;
         private int exceptionRecoveriesPassed;
         private bool profilerBurstRunning;
+        private readonly List<TextInputLifecycleQaRecoveryCheckpoint> recoveryCheckpoints = new();
         private TextInputLifecycleQaStrictProvider? activeProvider;
         private IDisposable? activeProviderRegistration;
 
@@ -571,22 +572,12 @@ namespace Milestro.TextInputLifecycleQA
                     ++expectedDiagnosticCount;
 
                     var recoveryPayload = $"qa-{lifecycleEvent}-recovery";
-                    runtimeListener.ResetRecords();
-                    runtimeListener.enabled = true;
-                    Require(runtimeListener.IsBoundTo(input),
-                        $"Runtime listener did not bind for {lifecycleEvent} recovery.");
-                    yield return RunObserved(provider,
+                    yield return RunRecovery(provider,
                         input,
+                        runtimeListener,
+                        lifecycleEvent,
                         recoveryPayload,
-                        () => runtimeListener.ValueChangedCount == 1,
-                        () => runtimeListener.EndEditCount == 1 &&
-                              runtimeListener.FocusLostCount == 1);
-                    ValidateRuntimeListener(runtimeListener,
-                        recoveryPayload,
-                        $"{lifecycleEvent} fresh-session recovery");
-                    Require(HybridInputRuntime.Diagnostics.DiagnosticCount ==
-                            expectedDiagnosticCount,
-                        $"{lifecycleEvent} recovery added an unexpected diagnostic.");
+                        expectedDiagnosticCount);
                     ++exceptionRecoveriesPassed;
                 }
             }
@@ -595,6 +586,126 @@ namespace Milestro.TextInputLifecycleQA
                 EventSystem.current?.SetSelectedGameObject(null);
                 runtimeListener.enabled = true;
             }
+        }
+
+        private IEnumerator RunRecovery(TextInputLifecycleQaStrictProvider provider,
+            TextInput input,
+            TextInputLifecycleQaRuntimeListener runtimeListener,
+            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            string payload,
+            int expectedDiagnosticCount)
+        {
+            var releasedGeneration = provider.SessionGeneration;
+            var expectedBeginCount = provider.BeginCount + 1;
+            var expectedEndCount = provider.EndCount;
+            var released = CaptureRecoveryCheckpoint(lifecycleEvent,
+                "exception-released",
+                provider,
+                input,
+                runtimeListener);
+            RequireRecovery(!released.sessionActive && released.selectedOwner.Length == 0,
+                lifecycleEvent,
+                "exception release did not close selection and provider session",
+                provider,
+                input,
+                runtimeListener);
+
+            runtimeListener.ResetRecords();
+            runtimeListener.enabled = true;
+            CaptureRecoveryCheckpoint(lifecycleEvent,
+                "listener-bound",
+                provider,
+                input,
+                runtimeListener);
+            RequireRecovery(runtimeListener.IsBoundTo(input),
+                lifecycleEvent,
+                "runtime listener did not bind",
+                provider,
+                input,
+                runtimeListener);
+
+            EventSystem.current!.SetSelectedGameObject(null);
+            yield return null;
+            EventSystem.current.SetSelectedGameObject(input.gameObject);
+            yield return WaitUntilRecovery(() => provider.HasFocusSession,
+                lifecycleEvent,
+                "fresh-session",
+                provider,
+                input,
+                runtimeListener);
+            var freshSession = CaptureRecoveryCheckpoint(lifecycleEvent,
+                "fresh-session",
+                provider,
+                input,
+                runtimeListener);
+            RequireRecovery(freshSession.selectedInput &&
+                            freshSession.sessionActive &&
+                            freshSession.providerBeginCount == expectedBeginCount &&
+                            freshSession.providerEndCount == expectedEndCount &&
+                            freshSession.activeSessionGeneration > releasedGeneration &&
+                            freshSession.activeSinkIdentity != 0,
+                lifecycleEvent,
+                "fresh session identity did not advance exactly",
+                provider,
+                input,
+                runtimeListener);
+            RequireRecovery(freshSession.applicationFocused,
+                lifecycleEvent,
+                "application focus gate is closed",
+                provider,
+                input,
+                runtimeListener);
+            RequireRecovery(runtimeListener.FocusGainedCount == 1,
+                lifecycleEvent,
+                "fresh FocusGained was not delivered to the rebound listener",
+                provider,
+                input,
+                runtimeListener);
+
+            provider.EnqueueCommittedText(payload);
+            CaptureRecoveryCheckpoint(lifecycleEvent,
+                "text-enqueued",
+                provider,
+                input,
+                runtimeListener);
+            yield return WaitUntilRecovery(() =>
+                    input.Text == payload && runtimeListener.ValueChangedCount == 1,
+                lifecycleEvent,
+                "committed-text",
+                provider,
+                input,
+                runtimeListener);
+            CaptureRecoveryCheckpoint(lifecycleEvent,
+                "committed-text",
+                provider,
+                input,
+                runtimeListener);
+
+            EventSystem.current.SetSelectedGameObject(null);
+            yield return WaitUntilRecovery(() =>
+                    !provider.HasFocusSession &&
+                    runtimeListener.EndEditCount == 1 &&
+                    runtimeListener.FocusLostCount == 1,
+                lifecycleEvent,
+                "terminal-release",
+                provider,
+                input,
+                runtimeListener);
+            CaptureRecoveryCheckpoint(lifecycleEvent,
+                "terminal-release",
+                provider,
+                input,
+                runtimeListener);
+            ValidateRuntimeListener(runtimeListener,
+                payload,
+                $"{lifecycleEvent} fresh-session recovery");
+            RequireRecovery(HybridInputRuntime.Diagnostics.DiagnosticCount ==
+                            expectedDiagnosticCount,
+                lifecycleEvent,
+                "recovery added an unexpected diagnostic",
+                provider,
+                input,
+                runtimeListener);
         }
 
         private static IEnumerator RunExceptionCase(TextInputLifecycleQaStrictProvider provider,
@@ -906,6 +1017,92 @@ namespace Milestro.TextInputLifecycleQA
             }
         }
 
+        private IEnumerator WaitUntilRecovery(Func<bool> predicate,
+            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            string stage,
+            TextInputLifecycleQaStrictProvider provider,
+            TextInput input,
+            TextInputLifecycleQaRuntimeListener runtimeListener)
+        {
+            for (var frame = 0; frame < TimeoutFrames; ++frame)
+            {
+                if (predicate())
+                {
+                    yield break;
+                }
+                yield return null;
+            }
+            var checkpoint = CaptureRecoveryCheckpoint(lifecycleEvent,
+                stage + "-timeout",
+                provider,
+                input,
+                runtimeListener);
+            throw new TimeoutException(
+                $"Timed out at {lifecycleEvent} recovery gate {stage}: " +
+                JsonUtility.ToJson(checkpoint));
+        }
+
+        private TextInputLifecycleQaRecoveryCheckpoint CaptureRecoveryCheckpoint(
+            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            string stage,
+            TextInputLifecycleQaStrictProvider provider,
+            TextInput input,
+            TextInputLifecycleQaRuntimeListener runtimeListener)
+        {
+            var diagnostics = HybridInputRuntime.Diagnostics;
+            var selected = EventSystem.current?.currentSelectedGameObject;
+            var checkpoint = new TextInputLifecycleQaRecoveryCheckpoint
+            {
+                lifecycleEvent = lifecycleEvent.ToString(),
+                stage = stage,
+                selectedOwner = selected == null ? string.Empty : selected.name,
+                selectedInput = selected == input.gameObject,
+                applicationFocused = diagnostics.ApplicationFocused,
+                inputActive = input.gameObject.activeInHierarchy,
+                inputEnabled = input.isActiveAndEnabled,
+                sessionActive = provider.HasFocusSession,
+                providerBeginCount = provider.BeginCount,
+                providerEndCount = provider.EndCount,
+                sessionGeneration = provider.SessionGeneration,
+                activeSessionGeneration = provider.ActiveSessionGeneration,
+                activeSinkIdentity = provider.ActiveSinkIdentity,
+                text = input.Text,
+                runtimeFocusGainedCount = runtimeListener.FocusGainedCount,
+                runtimeValueChangedCount = runtimeListener.ValueChangedCount,
+                runtimeEndEditCount = runtimeListener.EndEditCount,
+                runtimeFocusLostCount = runtimeListener.FocusLostCount,
+                persistentFocusGainedCount = persistentReceiver!.FocusGainedCount,
+                persistentValueChangedCount = persistentReceiver.ValueChangedCount,
+                persistentEndEditCount = persistentReceiver.EndEditCount,
+                persistentFocusLostCount = persistentReceiver.FocusLostCount,
+                diagnosticCount = diagnostics.DiagnosticCount,
+                lastDiagnostic = diagnostics.LastDiagnostic.ToString()
+            };
+            recoveryCheckpoints.Add(checkpoint);
+            return checkpoint;
+        }
+
+        private void RequireRecovery(bool condition,
+            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            string gate,
+            TextInputLifecycleQaStrictProvider provider,
+            TextInput input,
+            TextInputLifecycleQaRuntimeListener runtimeListener)
+        {
+            if (condition)
+            {
+                return;
+            }
+            var checkpoint = CaptureRecoveryCheckpoint(lifecycleEvent,
+                gate + "-failed",
+                provider,
+                input,
+                runtimeListener);
+            throw new InvalidOperationException(
+                $"{lifecycleEvent} recovery gate failed ({gate}): " +
+                JsonUtility.ToJson(checkpoint));
+        }
+
         private static IEnumerator WaitUntil(Func<bool> predicate, string stage)
         {
             for (var frame = 0; frame < TimeoutFrames; ++frame)
@@ -1010,6 +1207,7 @@ namespace Milestro.TextInputLifecycleQA
                 persistentValuePayload = persistentReceiver.ValueChangedPayload,
                 persistentEndPayload = persistentReceiver.EndEditPayload,
                 persistentSequence = string.Join(",", persistentReceiver.Sequence),
+                recoveryCheckpoints = recoveryCheckpoints.ToArray(),
                 message = "Production TextInput UnityEvent lifecycle scenarios passed."
             };
             Complete();
@@ -1033,6 +1231,7 @@ namespace Milestro.TextInputLifecycleQA
                 exceptionRecoveryPassed = exceptionRecoveryPassed,
                 exceptionCasesPassed = exceptionCasesPassed,
                 exceptionRecoveriesPassed = exceptionRecoveriesPassed,
+                recoveryCheckpoints = recoveryCheckpoints.ToArray(),
                 message = exception.GetType().Name + ": " + exception.Message
             };
             Complete();
@@ -1074,7 +1273,38 @@ namespace Milestro.TextInputLifecycleQA
         public string persistentValuePayload = string.Empty;
         public string persistentEndPayload = string.Empty;
         public string persistentSequence = string.Empty;
+        public TextInputLifecycleQaRecoveryCheckpoint[] recoveryCheckpoints =
+            Array.Empty<TextInputLifecycleQaRecoveryCheckpoint>();
         public string message = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class TextInputLifecycleQaRecoveryCheckpoint
+    {
+        public string lifecycleEvent = string.Empty;
+        public string stage = string.Empty;
+        public string selectedOwner = string.Empty;
+        public bool selectedInput;
+        public bool applicationFocused;
+        public bool inputActive;
+        public bool inputEnabled;
+        public bool sessionActive;
+        public int providerBeginCount;
+        public int providerEndCount;
+        public int sessionGeneration;
+        public int activeSessionGeneration;
+        public int activeSinkIdentity;
+        public string text = string.Empty;
+        public int runtimeFocusGainedCount;
+        public int runtimeValueChangedCount;
+        public int runtimeEndEditCount;
+        public int runtimeFocusLostCount;
+        public int persistentFocusGainedCount;
+        public int persistentValueChangedCount;
+        public int persistentEndEditCount;
+        public int persistentFocusLostCount;
+        public int diagnosticCount;
+        public string lastDiagnostic = string.Empty;
     }
 
     [Serializable]
