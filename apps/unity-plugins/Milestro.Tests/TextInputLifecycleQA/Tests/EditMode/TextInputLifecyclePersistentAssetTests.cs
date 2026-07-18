@@ -335,10 +335,12 @@ namespace Milestro.TextInputLifecycleQA.Tests
                         throw new InvalidOperationException(
                             $"Could not save the test-owned scene guard: {guardPath}");
                     }
-                    if (!IsExactSavedGuard(scene, guardPath, guardHandle))
+                    if (!IsExactSavedGuard(scene, guardPath, guardHandle) ||
+                        !HasExactGuardRootContent(tempRoot, guardPath))
                     {
                         throw new InvalidOperationException(
                             "Saved test guard failed its exact postcondition. " +
+                            SafeDescribeRootEntries(tempRoot) + ". " +
                             DescribeLoadedScenes());
                     }
                     return new TestRunnerSceneGuard(tempRoot,
@@ -349,6 +351,7 @@ namespace Milestro.TextInputLifecycleQA.Tests
                 catch (Exception originalFailure)
                 {
                     var cleanupFailure = CleanupFailedEnter(tempRoot,
+                        guardPath,
                         guardHandle,
                         originalDirty);
                     if (cleanupFailure != null)
@@ -474,12 +477,14 @@ namespace Milestro.TextInputLifecycleQA.Tests
             }
 
             private static string? CleanupFailedEnter(string tempRoot,
+                string guardPath,
                 int originalHandle,
                 bool originalDirty)
             {
                 try
                 {
-                    if (IsSoleOwnedGuard(tempRoot, originalHandle))
+                    if (IsSoleOwnedGuard(guardPath, originalHandle) &&
+                        HasExactGuardRootContent(tempRoot, guardPath))
                     {
                         var neutral = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,
                             NewSceneMode.Single);
@@ -499,26 +504,33 @@ namespace Milestro.TextInputLifecycleQA.Tests
                             return "Neutral Test Runner setup was not restored after leaving the " +
                                    "owned guard. " + DescribeLoadedScenes();
                         }
-                        return DeleteEmptyOrOwnedTempRoot(tempRoot);
+                        return DeleteExactTempRoot(tempRoot,
+                            guardPath,
+                            allowGuardContent: true);
                     }
 
-                    if (IsOriginalUntitledScene(originalHandle) && IsTempRootEmpty(tempRoot))
+                    if (IsOriginalUntitledScene(originalHandle) &&
+                        HasExactEmptyTempRoot(tempRoot))
                     {
-                        return DeleteEmptyOrOwnedTempRoot(tempRoot);
+                        return DeleteExactTempRoot(tempRoot,
+                            guardPath,
+                            allowGuardContent: false);
                     }
 
                     return "Refusing cleanup because the original handle is no longer the sole " +
-                           "owned Guard, or because the unsaved scene/temp root changed. Evidence " +
-                           $"was preserved at {tempRoot}. " + DescribeLoadedScenes();
+                           "exact owned Guard, or because the unsaved scene/temp root content " +
+                           $"changed. Evidence was preserved at {tempRoot}. " +
+                           SafeDescribeRootEntries(tempRoot) + ". " + DescribeLoadedScenes();
                 }
                 catch (Exception cleanupException)
                 {
                     return cleanupException.GetType().Name + ": " + cleanupException.Message +
-                           ". Evidence: " + DescribeLoadedScenes();
+                           ". Evidence: " + SafeDescribeRootEntries(tempRoot) + ". " +
+                           DescribeLoadedScenes();
                 }
             }
 
-            private static bool IsSoleOwnedGuard(string tempRoot, int originalHandle)
+            private static bool IsSoleOwnedGuard(string guardPath, int originalHandle)
             {
                 if (SceneManager.sceneCount != 1)
                 {
@@ -527,7 +539,7 @@ namespace Milestro.TextInputLifecycleQA.Tests
                 var scene = SceneManager.GetSceneAt(0);
                 return scene.IsValid() && scene.isLoaded &&
                        scene.handle == originalHandle &&
-                       scene.path.StartsWith(tempRoot + "/", StringComparison.Ordinal) &&
+                       scene.path == guardPath &&
                        SceneManager.GetActiveScene().handle == originalHandle &&
                        scene.GetRootGameObjects().Length == 0 &&
                        CountEventSystems(scene) == 0;
@@ -546,17 +558,62 @@ namespace Milestro.TextInputLifecycleQA.Tests
                        IsUntitledNeutral(scene);
             }
 
-            private static bool IsTempRootEmpty(string tempRoot)
+            private static bool HasExactEmptyTempRoot(string tempRoot)
             {
-                return AssetDatabase.IsValidFolder(tempRoot) &&
+                return HasExpectedRootAndFolderMeta(tempRoot) &&
                        Directory.GetFileSystemEntries(tempRoot).Length == 0;
             }
 
-            private static string? DeleteEmptyOrOwnedTempRoot(string tempRoot)
+            private static bool HasExactGuardRootContent(string tempRoot, string guardPath)
+            {
+                if (!HasExpectedRootAndFolderMeta(tempRoot))
+                {
+                    return false;
+                }
+
+                var guardFound = false;
+                foreach (var entry in Directory.GetFileSystemEntries(tempRoot))
+                {
+                    if (SamePath(entry, guardPath))
+                    {
+                        if (!IsRegularFile(entry))
+                        {
+                            return false;
+                        }
+                        guardFound = true;
+                        continue;
+                    }
+                    if (SamePath(entry, guardPath + ".meta") && IsRegularFile(entry))
+                    {
+                        continue;
+                    }
+                    return false;
+                }
+                return guardFound;
+            }
+
+            private static bool HasExpectedRootAndFolderMeta(string tempRoot)
+            {
+                return AssetDatabase.IsValidFolder(tempRoot) &&
+                       Directory.Exists(tempRoot) && !IsReparsePoint(tempRoot) &&
+                       IsRegularFile(tempRoot + ".meta");
+            }
+
+            private static string? DeleteExactTempRoot(string tempRoot,
+                string guardPath,
+                bool allowGuardContent)
             {
                 if (!AssetDatabase.IsValidFolder(tempRoot))
                 {
                     return null;
+                }
+                var contentIsExact = allowGuardContent
+                    ? HasExactGuardRootContent(tempRoot, guardPath)
+                    : HasExactEmptyTempRoot(tempRoot);
+                if (!contentIsExact)
+                {
+                    return "Refusing to delete changed test-owned guard content. " +
+                           SafeDescribeRootEntries(tempRoot);
                 }
                 if (!AssetDatabase.DeleteAsset(tempRoot))
                 {
@@ -566,6 +623,24 @@ namespace Milestro.TextInputLifecycleQA.Tests
                 return AssetDatabase.IsValidFolder(tempRoot)
                     ? $"Test-owned guard root survived deletion: {tempRoot}"
                     : null;
+            }
+
+            private static bool IsRegularFile(string path)
+            {
+                return File.Exists(path) && !Directory.Exists(path) &&
+                       !IsReparsePoint(path);
+            }
+
+            private static bool IsReparsePoint(string path)
+            {
+                return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+            }
+
+            private static bool SamePath(string left, string right)
+            {
+                return string.Equals(Path.GetFullPath(left),
+                    Path.GetFullPath(right),
+                    StringComparison.Ordinal);
             }
 
             private static int CountEventSystems(Scene scene)
@@ -595,6 +670,76 @@ namespace Milestro.TextInputLifecycleQA.Tests
                 return $"handle={scene.handle},path='{scene.path}',dirty={scene.isDirty}," +
                        $"roots={scene.GetRootGameObjects().Length}," +
                        $"eventSystems={CountEventSystems(scene)}";
+            }
+
+            private static string SafeDescribeRootEntries(string tempRoot)
+            {
+                try
+                {
+                    var entries = new List<string>();
+                    if (Directory.Exists(tempRoot) && !IsReparsePoint(tempRoot))
+                    {
+                        foreach (var entry in Directory.GetFileSystemEntries(tempRoot))
+                        {
+                            entries.Add(DescribeFileSystemEntry(tempRoot, entry));
+                        }
+                        entries.Sort(StringComparer.Ordinal);
+                    }
+                    return "root=" + DescribeFileSystemEntry(tempRoot, ".") +
+                           ",folderMeta=" +
+                           DescribeFileSystemEntry(tempRoot + ".meta",
+                               "../" + Path.GetFileName(tempRoot) + ".meta") +
+                           ",entries=[" + string.Join(", ", entries) + "]";
+                }
+                catch (Exception exception)
+                {
+                    return $"rootEntries=<unreadable:{exception.GetType().Name}:" +
+                           exception.Message + ">";
+                }
+            }
+
+            private static string DescribeFileSystemEntry(string tempRoot, string path)
+            {
+                var root = Path.GetFullPath(tempRoot).TrimEnd(
+                    Path.DirectorySeparatorChar,
+                    Path.AltDirectorySeparatorChar);
+                var fullPath = Path.GetFullPath(path);
+                var prefix = root + Path.DirectorySeparatorChar;
+                var relativePath = fullPath.StartsWith(prefix, StringComparison.Ordinal)
+                    ? fullPath.Substring(prefix.Length)
+                    : fullPath;
+                return DescribeFileSystemEntry(path, relativePath);
+            }
+
+            private static string DescribeFileSystemEntry(string path,
+                string relativePath)
+            {
+                string type;
+                try
+                {
+                    var attributes = File.GetAttributes(path);
+                    if ((attributes & FileAttributes.ReparsePoint) != 0)
+                    {
+                        type = "symlink";
+                    }
+                    else if ((attributes & FileAttributes.Directory) != 0)
+                    {
+                        type = "directory";
+                    }
+                    else
+                    {
+                        type = "file";
+                    }
+                }
+                catch (FileNotFoundException)
+                {
+                    type = "missing";
+                }
+                catch (DirectoryNotFoundException)
+                {
+                    type = "missing";
+                }
+                return type + ":" + relativePath.Replace('\\', '/');
             }
 
             private static string DescribeLoadedScenes()
