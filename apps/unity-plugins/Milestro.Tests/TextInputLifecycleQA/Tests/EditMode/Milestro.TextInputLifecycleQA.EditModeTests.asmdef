@@ -1,0 +1,23 @@
+{
+    "name": "Milestro.TextInputLifecycleQA.EditModeTests",
+    "rootNamespace": "",
+    "references": [
+        "Milestro",
+        "Milestro.TextInputLifecycleQA.Runtime",
+        "Milestro.TextInputLifecycleQA.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "noEngineReferences": false
+}

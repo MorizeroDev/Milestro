@@ -1,0 +1,16 @@
+{
+    "name": "Milestro.TextInputLifecycleQA.Runtime",
+    "rootNamespace": "",
+    "references": [
+        "Milestro"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
