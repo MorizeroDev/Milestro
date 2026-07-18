@@ -681,13 +681,13 @@ namespace Milestro.TextInputLifecycleQA.Tests
                     {
                         foreach (var entry in Directory.GetFileSystemEntries(tempRoot))
                         {
-                            entries.Add(DescribeFileSystemEntry(tempRoot, entry));
+                            entries.Add(DescribeEntryRelativeToRoot(tempRoot, entry));
                         }
                         entries.Sort(StringComparer.Ordinal);
                     }
-                    return "root=" + DescribeFileSystemEntry(tempRoot, ".") +
+                    return "root=" + DescribeEntry(tempRoot, ".") +
                            ",folderMeta=" +
-                           DescribeFileSystemEntry(tempRoot + ".meta",
+                           DescribeEntry(tempRoot + ".meta",
                                "../" + Path.GetFileName(tempRoot) + ".meta") +
                            ",entries=[" + string.Join(", ", entries) + "]";
                 }
@@ -698,7 +698,7 @@ namespace Milestro.TextInputLifecycleQA.Tests
                 }
             }
 
-            private static string DescribeFileSystemEntry(string tempRoot, string path)
+            private static string DescribeEntryRelativeToRoot(string tempRoot, string path)
             {
                 var root = Path.GetFullPath(tempRoot).TrimEnd(
                     Path.DirectorySeparatorChar,
@@ -708,10 +708,10 @@ namespace Milestro.TextInputLifecycleQA.Tests
                 var relativePath = fullPath.StartsWith(prefix, StringComparison.Ordinal)
                     ? fullPath.Substring(prefix.Length)
                     : fullPath;
-                return DescribeFileSystemEntry(path, relativePath);
+                return DescribeEntry(path, relativePath);
             }
 
-            private static string DescribeFileSystemEntry(string path,
+            private static string DescribeEntry(string path,
                 string relativePath)
             {
                 string type;
