@@ -13,6 +13,7 @@ using UnityEditor;
 #endif
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Events;
 using UnityEngine.Serialization;
 
 namespace Milestro.Components
@@ -126,6 +127,11 @@ namespace Milestro.Components
         [FormerlySerializedAs("locale")]
         private string m_locale = "zh-Hans";
 
+        [SerializeField] private UnityEvent<string> m_OnValueChanged = new UnityEvent<string>();
+        [SerializeField] private UnityEvent<string> m_OnEndEdit = new UnityEvent<string>();
+        [SerializeField] private UnityEvent m_OnFocusGained = new UnityEvent();
+        [SerializeField] private UnityEvent m_OnFocusLost = new UnityEvent();
+
         [NonSerialized] private RectTransform rectTransformCache;
         [NonSerialized] private UnityAutoRenderTextureSurface? surface;
         [NonSerialized] private InputBox? inputBox;
@@ -175,12 +181,12 @@ namespace Milestro.Components
         [NonSerialized] private int m_editorSkippedRenderRetries;
 #endif
 
-        internal event Action<string>? InternalValueChanged;
-        internal event Action<string>? InternalEndEdit;
-        internal event Action? InternalFocusGained;
-        internal event Action? InternalFocusLost;
-
         internal bool IsDispatcherFocused => inputRegistration?.IsFocused == true;
+
+        public UnityEvent<string> onValueChanged => m_OnValueChanged ??= new UnityEvent<string>();
+        public UnityEvent<string> onEndEdit => m_OnEndEdit ??= new UnityEvent<string>();
+        public UnityEvent onFocusGained => m_OnFocusGained ??= new UnityEvent();
+        public UnityEvent onFocusLost => m_OnFocusLost ??= new UnityEvent();
 
         public string Text
         {
@@ -1416,22 +1422,22 @@ namespace Milestro.Components
             ApplyImeCompositionMode();
             ResetBlink();
             paintDirty = true;
-            InternalFocusGained?.Invoke();
+            onFocusGained.Invoke();
         }
 
         private void OnDispatcherEndEdit(string finalText)
         {
-            InternalEndEdit?.Invoke(finalText);
+            onEndEdit.Invoke(finalText);
         }
 
         private void OnDispatcherFocusLost()
         {
-            InternalFocusLost?.Invoke();
+            onFocusLost.Invoke();
         }
 
         private void OnDispatcherValueChanged(string value)
         {
-            InternalValueChanged?.Invoke(value);
+            onValueChanged.Invoke(value);
         }
 
         private void ReleaseInputFocus()

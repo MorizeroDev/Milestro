@@ -2229,11 +2229,11 @@ namespace Milestro.Tests
             {
                 var input = owner.AddComponent<TextInput>();
                 var payloads = new List<string>();
-                input.InternalValueChanged += value =>
+                input.onValueChanged.AddListener(value =>
                 {
                     Assert.That(input.Text, Is.EqualTo(value));
                     payloads.Add(value);
-                };
+                });
 
                 input.Text = "a\r\nb\ud800";
                 input.Text = "ab";
@@ -2259,7 +2259,7 @@ namespace Milestro.Tests
                 input.lineMode = TextInputLineMode.MultiLine;
                 input.SetTextWithoutNotify("a\nb");
                 var payloads = new List<string>();
-                input.InternalValueChanged += payloads.Add;
+                input.onValueChanged.AddListener(payloads.Add);
 
                 input.lineMode = TextInputLineMode.SingleLine;
 
@@ -2300,12 +2300,12 @@ namespace Milestro.Tests
                     var payloads = new List<string>();
                     var callbackTexts = new List<string>();
                     var callbackNativeTexts = new List<string>();
-                    input.InternalValueChanged += value =>
+                    input.onValueChanged.AddListener(value =>
                     {
                         payloads.Add(value);
                         callbackTexts.Add(input.Text);
                         callbackNativeTexts.Add(GetNativeInputBox(input).Text);
-                    };
+                    });
 
                     input.Text = testCase.Input;
                     input.Text = testCase.Expected;
@@ -2335,7 +2335,7 @@ namespace Milestro.Tests
                 input.lineMode = TextInputLineMode.MultiLine;
                 SetSerializedText(input, new string(new[] { 'a', '\r', '\n', 'b', '\ud800' }));
                 var payloads = new List<string>();
-                input.InternalValueChanged += payloads.Add;
+                input.onValueChanged.AddListener(payloads.Add);
 
                 InvokeRecreateInputBox(input);
                 InvokeRecreateInputBox(input);
