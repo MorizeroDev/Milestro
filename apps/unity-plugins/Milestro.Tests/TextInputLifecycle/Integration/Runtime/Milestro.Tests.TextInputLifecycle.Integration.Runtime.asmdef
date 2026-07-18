@@ -1,5 +1,5 @@
 {
-    "name": "Milestro.TextInputLifecycleQA.Runtime",
+    "name": "Milestro.Tests.TextInputLifecycle.Integration.Runtime",
     "rootNamespace": "",
     "references": [
         "Milestro"

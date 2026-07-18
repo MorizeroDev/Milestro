@@ -7,9 +7,9 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Events;
 
-namespace Milestro.TextInputLifecycleQA
+namespace Milestro.Tests.TextInputLifecycle.Integration
 {
-    public sealed class TextInputLifecycleQaScenarioRunner : MonoBehaviour
+    public sealed class TextInputLifecycleIntegrationScenarioRunner : MonoBehaviour
     {
         private const int TimeoutFrames = 300;
         private const int ProfilerWarmupEvents = 256;
@@ -17,9 +17,9 @@ namespace Milestro.TextInputLifecycleQA
 
         [SerializeField] private TextInput? noListenerInput;
         [SerializeField] private TextInput? runtimeListenerInput;
-        [SerializeField] private TextInputLifecycleQaRuntimeListener? runtimeListener;
+        [SerializeField] private TextInputLifecycleIntegrationRuntimeListener? runtimeListener;
         [SerializeField] private TextInput? persistentListenerInput;
-        [SerializeField] private TextInputLifecycleQaReceiver? persistentReceiver;
+        [SerializeField] private TextInputLifecycleIntegrationReceiver? persistentReceiver;
         [SerializeField] private string sourceHead = string.Empty;
         [SerializeField] private string sourceTree = string.Empty;
 
@@ -35,14 +35,14 @@ namespace Milestro.TextInputLifecycleQA
         private int exceptionCasesPassed;
         private int exceptionRecoveriesPassed;
         private bool profilerBurstRunning;
-        private readonly List<TextInputLifecycleQaRecoveryCheckpoint> recoveryCheckpoints = new();
-        private TextInputLifecycleQaStrictProvider? activeProvider;
+        private readonly List<TextInputLifecycleIntegrationRecoveryCheckpoint> recoveryCheckpoints = new();
+        private TextInputLifecycleIntegrationStrictProvider? activeProvider;
         private IDisposable? activeProviderRegistration;
 
         public bool Completed { get; private set; }
-        public TextInputLifecycleQaResult? Result { get; private set; }
+        public TextInputLifecycleIntegrationResult? Result { get; private set; }
 
-        public bool StartProfilerBurst(TextInputLifecycleQaProfilerCase profilerCase)
+        public bool StartProfilerBurst(TextInputLifecycleIntegrationProfilerCase profilerCase)
         {
             if (!Completed || Result?.status != "PASS" || activeProvider == null ||
                 activeProviderRegistration == null || profilerBurstRunning)
@@ -55,9 +55,9 @@ namespace Milestro.TextInputLifecycleQA
 
         public void Configure(TextInput noListener,
             TextInput runtimeListener,
-            TextInputLifecycleQaRuntimeListener runtimeObserver,
+            TextInputLifecycleIntegrationRuntimeListener runtimeObserver,
             TextInput persistentListener,
-            TextInputLifecycleQaReceiver receiver,
+            TextInputLifecycleIntegrationReceiver receiver,
             string exactSourceHead,
             string exactSourceTree)
         {
@@ -116,9 +116,9 @@ namespace Milestro.TextInputLifecycleQA
             Require(runtimeListener != null, "Runtime AddListener observer is missing.");
             Require(persistentListenerInput != null, "Persistent-listener TextInput is missing.");
             Require(persistentReceiver != null, "Persistent receiver is missing.");
-            Require(EventSystem.current != null, "QA scene has no active EventSystem.");
+            Require(EventSystem.current != null, "Integration scene has no active EventSystem.");
             Require(sourceHead.Length == 40 && sourceTree.Length == 40,
-                "QA source HEAD/tree must be exact 40-character object IDs.");
+                "Integration source HEAD/tree must be exact 40-character object IDs.");
 
             ValidateInitialSceneLoadSilence(runtimeListener!,
                 persistentReceiver!,
@@ -129,22 +129,22 @@ namespace Milestro.TextInputLifecycleQA
             initialSceneLoadPersistentReceiverPassed = true;
             initialSceneLoadStableRecorderPassed = true;
             targetSceneInitialLoadPassed = true;
-            TextInputLifecycleQaStableRecorder.Disarm();
-            TextInputLifecycleQaStableRecorder.Reset();
+            TextInputLifecycleIntegrationStableRecorder.Disarm();
+            TextInputLifecycleIntegrationStableRecorder.Reset();
 
-            activeProvider = new TextInputLifecycleQaStrictProvider();
+            activeProvider = new TextInputLifecycleIntegrationStrictProvider();
             activeProviderRegistration = HybridInputRuntime.RegisterProvider(activeProvider);
             var retainForProfiler = false;
             try
             {
-                HybridInputRuntime.SetProviderOverride(TextInputLifecycleQaStrictProvider.ProviderId);
+                HybridInputRuntime.SetProviderOverride(TextInputLifecycleIntegrationStrictProvider.ProviderId);
                 yield return WaitUntil(() =>
                         HybridInputRuntime.Diagnostics.ProviderId ==
-                        TextInputLifecycleQaStrictProvider.ProviderId,
+                        TextInputLifecycleIntegrationStrictProvider.ProviderId,
                     "provider selection");
 
                 var diagnosticBaseline = HybridInputRuntime.Diagnostics.DiagnosticCount;
-                yield return RunNoListener(activeProvider, noListenerInput!, "qa-no-listener");
+                yield return RunNoListener(activeProvider, noListenerInput!, "integration-no-listener");
                 Require(HybridInputRuntime.Diagnostics.DiagnosticCount == diagnosticBaseline,
                     "No-listener scenario changed diagnostics.");
                 noListenerPassed = true;
@@ -152,22 +152,22 @@ namespace Milestro.TextInputLifecycleQA
                 runtimeListener!.ResetRecords();
                 yield return RunObserved(activeProvider,
                     runtimeListenerInput!,
-                    "qa-runtime-listener",
+                    "integration-runtime-listener",
                     () => runtimeListener.ValueChangedCount == 1,
                     () => runtimeListener.EndEditCount == 1 && runtimeListener.FocusLostCount == 1);
                 ValidateRuntimeListener(runtimeListener,
-                    "qa-runtime-listener",
+                    "integration-runtime-listener",
                     "runtime AddListener");
                 runtimeListenerPassed = true;
 
                 persistentReceiver!.ResetRecords();
                 yield return RunObserved(activeProvider,
                     persistentListenerInput!,
-                    "qa-persistent-listener",
+                    "integration-persistent-listener",
                     () => persistentReceiver.ValueChangedCount == 1,
                     () => persistentReceiver.EndEditCount == 1 &&
                           persistentReceiver.FocusLostCount == 1);
-                ValidateReceiver(persistentReceiver, "qa-persistent-listener");
+                ValidateReceiver(persistentReceiver, "integration-persistent-listener");
                 persistentListenerPassed = true;
 
                 yield return RunExceptionAndRecoveryMatrix(activeProvider,
@@ -187,7 +187,7 @@ namespace Milestro.TextInputLifecycleQA
             }
         }
 
-        private IEnumerator ProfilerBurst(TextInputLifecycleQaProfilerCase profilerCase)
+        private IEnumerator ProfilerBurst(TextInputLifecycleIntegrationProfilerCase profilerCase)
         {
             profilerBurstRunning = true;
             var snapshot = CaptureProfilerState();
@@ -215,7 +215,7 @@ namespace Milestro.TextInputLifecycleQA
                 }
                 yield return null;
                 ResetProfilerRecords(profilerCase);
-                Debug.Log($"TASK159_QA_PROFILER case={profilerCase} phase=capture-begin " +
+                Debug.Log($"TASK159_INTEGRATION_PROFILER case={profilerCase} phase=capture-begin " +
                           $"events={ProfilerCaptureEvents} isolated=true");
                 yield return null;
                 for (var index = 0; index < ProfilerCaptureEvents; ++index)
@@ -229,7 +229,7 @@ namespace Milestro.TextInputLifecycleQA
                 yield return null;
                 yield return null;
                 ValidateProfilerCapture(profilerCase);
-                Debug.Log($"TASK159_QA_PROFILER case={profilerCase} phase=capture-end " +
+                Debug.Log($"TASK159_INTEGRATION_PROFILER case={profilerCase} phase=capture-end " +
                           $"events={ProfilerCaptureEvents} isolated=true");
                 EventSystem.current!.SetSelectedGameObject(null);
                 yield return WaitUntil(() => !activeProvider!.HasFocusSession,
@@ -248,7 +248,7 @@ namespace Milestro.TextInputLifecycleQA
                 }
             }
 
-            var result = new TextInputLifecycleQaProfilerResult
+            var result = new TextInputLifecycleIntegrationProfilerResult
             {
                 status = delivered == ProfilerCaptureEvents && listenerShapePassed && stateRestored
                     ? "PASS"
@@ -262,7 +262,7 @@ namespace Milestro.TextInputLifecycleQA
                 captureWindow = "idle begin-marker frame, frame boundary, 256 verified delivery " +
                                 "frames, full idle frame, end marker"
             };
-            Debug.Log("TASK159_QA_PROFILER_RESULT " + JsonUtility.ToJson(result));
+            Debug.Log("TASK159_INTEGRATION_PROFILER_RESULT " + JsonUtility.ToJson(result));
         }
 
         private string EnqueueProfilerEvent(int index)
@@ -332,11 +332,11 @@ namespace Milestro.TextInputLifecycleQA
             Require(runtimeListener.RecordsMatch(snapshot.RuntimeRecords) &&
                     persistentReceiver.RecordsMatch(snapshot.PersistentRecords),
                 "Profiler receiver records were not restored.");
-            Require(!TextInputLifecycleQaStableRecorder.IsArmed &&
-                    TextInputLifecycleQaStableRecorder.ValueChangedCount == 0 &&
-                    TextInputLifecycleQaStableRecorder.EndEditCount == 0 &&
-                    TextInputLifecycleQaStableRecorder.FocusGainedCount == 0 &&
-                    TextInputLifecycleQaStableRecorder.FocusLostCount == 0,
+            Require(!TextInputLifecycleIntegrationStableRecorder.IsArmed &&
+                    TextInputLifecycleIntegrationStableRecorder.ValueChangedCount == 0 &&
+                    TextInputLifecycleIntegrationStableRecorder.EndEditCount == 0 &&
+                    TextInputLifecycleIntegrationStableRecorder.FocusGainedCount == 0 &&
+                    TextInputLifecycleIntegrationStableRecorder.FocusLostCount == 0,
                 "Profiler stable-recorder state leaked across the case.");
         }
 
@@ -352,32 +352,32 @@ namespace Milestro.TextInputLifecycleQA
             public string NoListenerText = string.Empty;
             public string RuntimeListenerText = string.Empty;
             public string PersistentListenerText = string.Empty;
-            public TextInputLifecycleQaRecordsSnapshot RuntimeRecords = null!;
-            public TextInputLifecycleQaRecordsSnapshot PersistentRecords = null!;
+            public TextInputLifecycleIntegrationRecordsSnapshot RuntimeRecords = null!;
+            public TextInputLifecycleIntegrationRecordsSnapshot PersistentRecords = null!;
         }
 
-        private void SetProfilerCaseActive(TextInputLifecycleQaProfilerCase profilerCase)
+        private void SetProfilerCaseActive(TextInputLifecycleIntegrationProfilerCase profilerCase)
         {
             noListenerInput!.gameObject.SetActive(
-                profilerCase == TextInputLifecycleQaProfilerCase.NoListener);
+                profilerCase == TextInputLifecycleIntegrationProfilerCase.NoListener);
             runtimeListenerInput!.gameObject.SetActive(
-                profilerCase == TextInputLifecycleQaProfilerCase.RuntimeAddListener);
+                profilerCase == TextInputLifecycleIntegrationProfilerCase.RuntimeAddListener);
             persistentListenerInput!.gameObject.SetActive(
-                profilerCase == TextInputLifecycleQaProfilerCase.InspectorPersistent);
+                profilerCase == TextInputLifecycleIntegrationProfilerCase.InspectorPersistent);
         }
 
-        private void ValidateProfilerIsolation(TextInputLifecycleQaProfilerCase profilerCase,
+        private void ValidateProfilerIsolation(TextInputLifecycleIntegrationProfilerCase profilerCase,
             TextInput target)
         {
             Require(target.isActiveAndEnabled, $"Profiler target {profilerCase} is inactive.");
             Require(noListenerInput!.isActiveAndEnabled ==
-                    (profilerCase == TextInputLifecycleQaProfilerCase.NoListener),
+                    (profilerCase == TextInputLifecycleIntegrationProfilerCase.NoListener),
                 "No-listener profiler case isolation mismatch.");
             Require(runtimeListenerInput!.isActiveAndEnabled ==
-                    (profilerCase == TextInputLifecycleQaProfilerCase.RuntimeAddListener),
+                    (profilerCase == TextInputLifecycleIntegrationProfilerCase.RuntimeAddListener),
                 "Runtime-listener profiler case isolation mismatch.");
             Require(persistentListenerInput!.isActiveAndEnabled ==
-                    (profilerCase == TextInputLifecycleQaProfilerCase.InspectorPersistent),
+                    (profilerCase == TextInputLifecycleIntegrationProfilerCase.InspectorPersistent),
                 "Persistent-listener profiler case isolation mismatch.");
 #if UNITY_2023_1_OR_NEWER
             var activeInputs = UnityEngine.Object.FindObjectsByType<TextInput>(
@@ -391,7 +391,7 @@ namespace Milestro.TextInputLifecycleQA
 
             switch (profilerCase)
             {
-                case TextInputLifecycleQaProfilerCase.NoListener:
+                case TextInputLifecycleIntegrationProfilerCase.NoListener:
                 {
                     Require(HasNoPersistentListeners(target),
                         "No-listener profiler target has a persistent listener.");
@@ -404,13 +404,13 @@ namespace Milestro.TextInputLifecycleQA
                         "Runtime AddListener observer leaked into the no-listener profiler case.");
                     break;
                 }
-                case TextInputLifecycleQaProfilerCase.RuntimeAddListener:
+                case TextInputLifecycleIntegrationProfilerCase.RuntimeAddListener:
                     Require(HasNoPersistentListeners(target),
                         "Runtime AddListener profiler target has a persistent listener.");
                     Require(runtimeListener!.isActiveAndEnabled && runtimeListener.IsBoundTo(target),
                         "Runtime AddListener observer is not uniquely bound to its profiler target.");
                     break;
-                case TextInputLifecycleQaProfilerCase.InspectorPersistent:
+                case TextInputLifecycleIntegrationProfilerCase.InspectorPersistent:
                     Require(!runtimeListener!.isActiveAndEnabled &&
                             !runtimeListener.IsBoundTo(runtimeListenerInput),
                         "Runtime AddListener observer leaked into the persistent profiler case.");
@@ -422,21 +422,21 @@ namespace Milestro.TextInputLifecycleQA
             }
         }
 
-        private void ResetProfilerRecords(TextInputLifecycleQaProfilerCase profilerCase)
+        private void ResetProfilerRecords(TextInputLifecycleIntegrationProfilerCase profilerCase)
         {
-            if (profilerCase == TextInputLifecycleQaProfilerCase.RuntimeAddListener)
+            if (profilerCase == TextInputLifecycleIntegrationProfilerCase.RuntimeAddListener)
             {
                 runtimeListener!.ResetRecords();
             }
-            else if (profilerCase == TextInputLifecycleQaProfilerCase.InspectorPersistent)
+            else if (profilerCase == TextInputLifecycleIntegrationProfilerCase.InspectorPersistent)
             {
                 persistentReceiver!.ResetRecords();
             }
         }
 
-        private void ValidateProfilerCapture(TextInputLifecycleQaProfilerCase profilerCase)
+        private void ValidateProfilerCapture(TextInputLifecycleIntegrationProfilerCase profilerCase)
         {
-            if (profilerCase == TextInputLifecycleQaProfilerCase.RuntimeAddListener)
+            if (profilerCase == TextInputLifecycleIntegrationProfilerCase.RuntimeAddListener)
             {
                 Require(runtimeListener!.ValueChangedCount == ProfilerCaptureEvents &&
                         runtimeListener.FocusGainedCount == 0 &&
@@ -445,7 +445,7 @@ namespace Milestro.TextInputLifecycleQA
                         runtimeListener.Sequence.Count == ProfilerCaptureEvents,
                     "Runtime AddListener profiler capture count mismatch.");
             }
-            else if (profilerCase == TextInputLifecycleQaProfilerCase.InspectorPersistent)
+            else if (profilerCase == TextInputLifecycleIntegrationProfilerCase.InspectorPersistent)
             {
                 Require(persistentReceiver!.ValueChangedCount == ProfilerCaptureEvents &&
                         persistentReceiver.FocusGainedCount == 0 &&
@@ -465,7 +465,7 @@ namespace Milestro.TextInputLifecycleQA
         }
 
         private static bool HasExpectedPersistentListeners(TextInput input,
-            TextInputLifecycleQaReceiver receiver)
+            TextInputLifecycleIntegrationReceiver receiver)
         {
             return HasExpectedPersistentListener(input.onValueChanged,
                        receiver,
@@ -478,7 +478,7 @@ namespace Milestro.TextInputLifecycleQA
         }
 
         private static bool HasExpectedPersistentListener(UnityEventBase unityEvent,
-            TextInputLifecycleQaReceiver receiver,
+            TextInputLifecycleIntegrationReceiver receiver,
             string methodName)
         {
             return unityEvent.GetPersistentEventCount() == 1 &&
@@ -486,13 +486,13 @@ namespace Milestro.TextInputLifecycleQA
                    unityEvent.GetPersistentMethodName(0) == methodName;
         }
 
-        private TextInput ResolveProfilerInput(TextInputLifecycleQaProfilerCase profilerCase)
+        private TextInput ResolveProfilerInput(TextInputLifecycleIntegrationProfilerCase profilerCase)
         {
             return profilerCase switch
             {
-                TextInputLifecycleQaProfilerCase.NoListener => noListenerInput!,
-                TextInputLifecycleQaProfilerCase.RuntimeAddListener => runtimeListenerInput!,
-                TextInputLifecycleQaProfilerCase.InspectorPersistent => persistentListenerInput!,
+                TextInputLifecycleIntegrationProfilerCase.NoListener => noListenerInput!,
+                TextInputLifecycleIntegrationProfilerCase.RuntimeAddListener => runtimeListenerInput!,
+                TextInputLifecycleIntegrationProfilerCase.InspectorPersistent => persistentListenerInput!,
                 _ => throw new ArgumentOutOfRangeException(nameof(profilerCase), profilerCase, null)
             };
         }
@@ -511,7 +511,7 @@ namespace Milestro.TextInputLifecycleQA
             activeProvider = null;
         }
 
-        private static IEnumerator RunNoListener(TextInputLifecycleQaStrictProvider provider,
+        private static IEnumerator RunNoListener(TextInputLifecycleIntegrationStrictProvider provider,
             TextInput input,
             string payload)
         {
@@ -522,7 +522,7 @@ namespace Milestro.TextInputLifecycleQA
             yield return WaitUntil(() => !provider.HasFocusSession, "no-listener release");
         }
 
-        private static IEnumerator RunObserved(TextInputLifecycleQaStrictProvider provider,
+        private static IEnumerator RunObserved(TextInputLifecycleIntegrationStrictProvider provider,
             TextInput input,
             string payload,
             Func<bool> valueObserved,
@@ -537,7 +537,7 @@ namespace Milestro.TextInputLifecycleQA
                 $"{payload} terminal lifecycle");
         }
 
-        private static IEnumerator Select(TextInputLifecycleQaStrictProvider provider, TextInput input)
+        private static IEnumerator Select(TextInputLifecycleIntegrationStrictProvider provider, TextInput input)
         {
             EventSystem.current!.SetSelectedGameObject(null);
             yield return null;
@@ -546,9 +546,9 @@ namespace Milestro.TextInputLifecycleQA
         }
 
         private IEnumerator RunExceptionAndRecoveryMatrix(
-            TextInputLifecycleQaStrictProvider provider,
+            TextInputLifecycleIntegrationStrictProvider provider,
             TextInput input,
-            TextInputLifecycleQaRuntimeListener runtimeListener,
+            TextInputLifecycleIntegrationRuntimeListener runtimeListener,
             int diagnosticBaseline)
         {
             Require(HasNoPersistentListeners(input),
@@ -557,10 +557,10 @@ namespace Milestro.TextInputLifecycleQA
             try
             {
                 for (var eventIndex = 0;
-                     eventIndex <= (int)TextInputLifecycleQaExceptionEvent.FocusLost;
+                     eventIndex <= (int)TextInputLifecycleIntegrationExceptionEvent.FocusLost;
                      ++eventIndex)
                 {
-                    var lifecycleEvent = (TextInputLifecycleQaExceptionEvent)eventIndex;
+                    var lifecycleEvent = (TextInputLifecycleIntegrationExceptionEvent)eventIndex;
                     runtimeListener.enabled = false;
                     Require(!runtimeListener.IsBoundTo(input),
                         $"Runtime listener remained bound before {lifecycleEvent} exception case.");
@@ -571,7 +571,7 @@ namespace Milestro.TextInputLifecycleQA
                     ++exceptionCasesPassed;
                     ++expectedDiagnosticCount;
 
-                    var recoveryPayload = $"qa-{lifecycleEvent}-recovery";
+                    var recoveryPayload = $"integration-{lifecycleEvent}-recovery";
                     yield return RunRecovery(provider,
                         input,
                         runtimeListener,
@@ -588,10 +588,10 @@ namespace Milestro.TextInputLifecycleQA
             }
         }
 
-        private IEnumerator RunRecovery(TextInputLifecycleQaStrictProvider provider,
+        private IEnumerator RunRecovery(TextInputLifecycleIntegrationStrictProvider provider,
             TextInput input,
-            TextInputLifecycleQaRuntimeListener runtimeListener,
-            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            TextInputLifecycleIntegrationRuntimeListener runtimeListener,
+            TextInputLifecycleIntegrationExceptionEvent lifecycleEvent,
             string payload,
             int expectedDiagnosticCount)
         {
@@ -715,15 +715,15 @@ namespace Milestro.TextInputLifecycleQA
                 runtimeListener);
         }
 
-        private static IEnumerator RunExceptionCase(TextInputLifecycleQaStrictProvider provider,
+        private static IEnumerator RunExceptionCase(TextInputLifecycleIntegrationStrictProvider provider,
             TextInput input,
-            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            TextInputLifecycleIntegrationExceptionEvent lifecycleEvent,
             int diagnosticBaseline)
         {
-            var payload = $"qa-{lifecycleEvent}-throw";
+            var payload = $"integration-{lifecycleEvent}-throw";
             EventSystem.current!.SetSelectedGameObject(null);
-            input.SetTextWithoutNotify(lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusGained
-                ? $"qa-{lifecycleEvent}-baseline"
+            input.SetTextWithoutNotify(lifecycleEvent == TextInputLifecycleIntegrationExceptionEvent.FocusGained
+                ? $"integration-{lifecycleEvent}-baseline"
                 : string.Empty);
 
             var throwingCount = 0;
@@ -773,7 +773,7 @@ namespace Milestro.TextInputLifecycleQA
                 tailString);
             try
             {
-                if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusGained)
+                if (lifecycleEvent == TextInputLifecycleIntegrationExceptionEvent.FocusGained)
                 {
                     yield return BeginSelection(input);
                 }
@@ -781,7 +781,7 @@ namespace Milestro.TextInputLifecycleQA
                 {
                     yield return Select(provider, input);
                     provider.EnqueueCommittedText(payload);
-                    if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.ValueChanged)
+                    if (lifecycleEvent == TextInputLifecycleIntegrationExceptionEvent.ValueChanged)
                     {
                         yield return WaitUntil(() =>
                                 input.Text == payload && throwingCount == 1 &&
@@ -802,8 +802,8 @@ namespace Milestro.TextInputLifecycleQA
                         throwingCount == 1 &&
                         HybridInputRuntime.Diagnostics.DiagnosticCount >= diagnosticBaseline + 1,
                     $"{lifecycleEvent} exception delivery");
-                if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.EndEdit ||
-                    lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusLost)
+                if (lifecycleEvent == TextInputLifecycleIntegrationExceptionEvent.EndEdit ||
+                    lifecycleEvent == TextInputLifecycleIntegrationExceptionEvent.FocusLost)
                 {
                     yield return WaitUntil(() => !provider.HasFocusSession,
                         $"{lifecycleEvent} exception release");
@@ -862,24 +862,24 @@ namespace Milestro.TextInputLifecycleQA
         }
 
         private static bool CallbackStateWasCommitted(
-            TextInputLifecycleQaExceptionEvent lifecycleEvent,
-            TextInputLifecycleQaStrictProvider provider,
+            TextInputLifecycleIntegrationExceptionEvent lifecycleEvent,
+            TextInputLifecycleIntegrationStrictProvider provider,
             TextInput input,
             string payload,
             string? callbackPayload)
         {
             switch (lifecycleEvent)
             {
-                case TextInputLifecycleQaExceptionEvent.FocusGained:
+                case TextInputLifecycleIntegrationExceptionEvent.FocusGained:
                     return provider.HasFocusSession &&
                            EventSystem.current?.currentSelectedGameObject == input.gameObject;
-                case TextInputLifecycleQaExceptionEvent.ValueChanged:
+                case TextInputLifecycleIntegrationExceptionEvent.ValueChanged:
                     return provider.HasFocusSession && input.Text == payload &&
                            callbackPayload == payload;
-                case TextInputLifecycleQaExceptionEvent.EndEdit:
+                case TextInputLifecycleIntegrationExceptionEvent.EndEdit:
                     return !provider.HasFocusSession && input.Text == payload &&
                            callbackPayload == payload;
-                case TextInputLifecycleQaExceptionEvent.FocusLost:
+                case TextInputLifecycleIntegrationExceptionEvent.FocusLost:
                     return !provider.HasFocusSession && input.Text == payload;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(lifecycleEvent),
@@ -889,7 +889,7 @@ namespace Milestro.TextInputLifecycleQA
         }
 
         private static void ValidateExceptionCase(
-            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            TextInputLifecycleIntegrationExceptionEvent lifecycleEvent,
             int throwingCount,
             int tailCount,
             int focusGainedCount,
@@ -910,11 +910,11 @@ namespace Milestro.TextInputLifecycleQA
                 $"{lifecycleEvent} diagnostic count mismatch.");
 
             var expectedFocusGained = lifecycleEvent ==
-                TextInputLifecycleQaExceptionEvent.FocusGained ? 0 : 1;
+                TextInputLifecycleIntegrationExceptionEvent.FocusGained ? 0 : 1;
             var expectedValueChanged = lifecycleEvent ==
-                TextInputLifecycleQaExceptionEvent.FocusGained ||
-                lifecycleEvent == TextInputLifecycleQaExceptionEvent.ValueChanged ? 0 : 1;
-            var expectedEndEdit = lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusLost
+                TextInputLifecycleIntegrationExceptionEvent.FocusGained ||
+                lifecycleEvent == TextInputLifecycleIntegrationExceptionEvent.ValueChanged ? 0 : 1;
+            var expectedEndEdit = lifecycleEvent == TextInputLifecycleIntegrationExceptionEvent.FocusLost
                 ? 1
                 : 0;
             Require(focusGainedCount == expectedFocusGained,
@@ -928,7 +928,7 @@ namespace Milestro.TextInputLifecycleQA
         }
 
         private static void AddExceptionCaseListeners(TextInput input,
-            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            TextInputLifecycleIntegrationExceptionEvent lifecycleEvent,
             UnityAction focusGainedObserver,
             UnityAction<string> valueChangedObserver,
             UnityAction<string> endEditObserver,
@@ -938,7 +938,7 @@ namespace Milestro.TextInputLifecycleQA
             UnityAction tailVoid,
             UnityAction<string> tailString)
         {
-            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusGained)
+            if (lifecycleEvent == TextInputLifecycleIntegrationExceptionEvent.FocusGained)
             {
                 input.onFocusGained.AddListener(throwingVoid);
                 input.onFocusGained.AddListener(tailVoid);
@@ -947,7 +947,7 @@ namespace Milestro.TextInputLifecycleQA
             {
                 input.onFocusGained.AddListener(focusGainedObserver);
             }
-            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.ValueChanged)
+            if (lifecycleEvent == TextInputLifecycleIntegrationExceptionEvent.ValueChanged)
             {
                 input.onValueChanged.AddListener(throwingString);
                 input.onValueChanged.AddListener(tailString);
@@ -956,7 +956,7 @@ namespace Milestro.TextInputLifecycleQA
             {
                 input.onValueChanged.AddListener(valueChangedObserver);
             }
-            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.EndEdit)
+            if (lifecycleEvent == TextInputLifecycleIntegrationExceptionEvent.EndEdit)
             {
                 input.onEndEdit.AddListener(throwingString);
                 input.onEndEdit.AddListener(tailString);
@@ -965,7 +965,7 @@ namespace Milestro.TextInputLifecycleQA
             {
                 input.onEndEdit.AddListener(endEditObserver);
             }
-            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusLost)
+            if (lifecycleEvent == TextInputLifecycleIntegrationExceptionEvent.FocusLost)
             {
                 input.onFocusLost.AddListener(throwingVoid);
                 input.onFocusLost.AddListener(tailVoid);
@@ -977,7 +977,7 @@ namespace Milestro.TextInputLifecycleQA
         }
 
         private static void RemoveExceptionCaseListeners(TextInput input,
-            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            TextInputLifecycleIntegrationExceptionEvent lifecycleEvent,
             UnityAction focusGainedObserver,
             UnityAction<string> valueChangedObserver,
             UnityAction<string> endEditObserver,
@@ -987,7 +987,7 @@ namespace Milestro.TextInputLifecycleQA
             UnityAction tailVoid,
             UnityAction<string> tailString)
         {
-            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusGained)
+            if (lifecycleEvent == TextInputLifecycleIntegrationExceptionEvent.FocusGained)
             {
                 input.onFocusGained.RemoveListener(throwingVoid);
                 input.onFocusGained.RemoveListener(tailVoid);
@@ -996,7 +996,7 @@ namespace Milestro.TextInputLifecycleQA
             {
                 input.onFocusGained.RemoveListener(focusGainedObserver);
             }
-            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.ValueChanged)
+            if (lifecycleEvent == TextInputLifecycleIntegrationExceptionEvent.ValueChanged)
             {
                 input.onValueChanged.RemoveListener(throwingString);
                 input.onValueChanged.RemoveListener(tailString);
@@ -1005,7 +1005,7 @@ namespace Milestro.TextInputLifecycleQA
             {
                 input.onValueChanged.RemoveListener(valueChangedObserver);
             }
-            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.EndEdit)
+            if (lifecycleEvent == TextInputLifecycleIntegrationExceptionEvent.EndEdit)
             {
                 input.onEndEdit.RemoveListener(throwingString);
                 input.onEndEdit.RemoveListener(tailString);
@@ -1014,7 +1014,7 @@ namespace Milestro.TextInputLifecycleQA
             {
                 input.onEndEdit.RemoveListener(endEditObserver);
             }
-            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusLost)
+            if (lifecycleEvent == TextInputLifecycleIntegrationExceptionEvent.FocusLost)
             {
                 input.onFocusLost.RemoveListener(throwingVoid);
                 input.onFocusLost.RemoveListener(tailVoid);
@@ -1026,11 +1026,11 @@ namespace Milestro.TextInputLifecycleQA
         }
 
         private IEnumerator WaitUntilRecovery(Func<bool> predicate,
-            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            TextInputLifecycleIntegrationExceptionEvent lifecycleEvent,
             string stage,
-            TextInputLifecycleQaStrictProvider provider,
+            TextInputLifecycleIntegrationStrictProvider provider,
             TextInput input,
-            TextInputLifecycleQaRuntimeListener runtimeListener)
+            TextInputLifecycleIntegrationRuntimeListener runtimeListener)
         {
             for (var frame = 0; frame < TimeoutFrames; ++frame)
             {
@@ -1050,16 +1050,16 @@ namespace Milestro.TextInputLifecycleQA
                 JsonUtility.ToJson(checkpoint));
         }
 
-        private TextInputLifecycleQaRecoveryCheckpoint CaptureRecoveryCheckpoint(
-            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+        private TextInputLifecycleIntegrationRecoveryCheckpoint CaptureRecoveryCheckpoint(
+            TextInputLifecycleIntegrationExceptionEvent lifecycleEvent,
             string stage,
-            TextInputLifecycleQaStrictProvider provider,
+            TextInputLifecycleIntegrationStrictProvider provider,
             TextInput input,
-            TextInputLifecycleQaRuntimeListener runtimeListener)
+            TextInputLifecycleIntegrationRuntimeListener runtimeListener)
         {
             var diagnostics = HybridInputRuntime.Diagnostics;
             var selected = EventSystem.current?.currentSelectedGameObject;
-            var checkpoint = new TextInputLifecycleQaRecoveryCheckpoint
+            var checkpoint = new TextInputLifecycleIntegrationRecoveryCheckpoint
             {
                 lifecycleEvent = lifecycleEvent.ToString(),
                 stage = stage,
@@ -1091,11 +1091,11 @@ namespace Milestro.TextInputLifecycleQA
         }
 
         private void RequireRecovery(bool condition,
-            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            TextInputLifecycleIntegrationExceptionEvent lifecycleEvent,
             string gate,
-            TextInputLifecycleQaStrictProvider provider,
+            TextInputLifecycleIntegrationStrictProvider provider,
             TextInput input,
-            TextInputLifecycleQaRuntimeListener runtimeListener)
+            TextInputLifecycleIntegrationRuntimeListener runtimeListener)
         {
             if (condition)
             {
@@ -1125,15 +1125,15 @@ namespace Milestro.TextInputLifecycleQA
         }
 
         private static void ValidateInitialSceneLoadSilence(
-            TextInputLifecycleQaRuntimeListener runtimeRecords,
-            TextInputLifecycleQaReceiver persistentRecords,
+            TextInputLifecycleIntegrationRuntimeListener runtimeRecords,
+            TextInputLifecycleIntegrationReceiver persistentRecords,
             string expectedSourceHead,
             string expectedSourceTree)
         {
-            Require(TextInputLifecycleQaStableRecorder.IsArmed,
+            Require(TextInputLifecycleIntegrationStableRecorder.IsArmed,
                 "Stable recorder was not armed before the initial scene load.");
-            Require(TextInputLifecycleQaStableRecorder.ArmedSourceHead == expectedSourceHead &&
-                    TextInputLifecycleQaStableRecorder.ArmedSourceTree == expectedSourceTree,
+            Require(TextInputLifecycleIntegrationStableRecorder.ArmedSourceHead == expectedSourceHead &&
+                    TextInputLifecycleIntegrationStableRecorder.ArmedSourceTree == expectedSourceTree,
                 "Stable recorder was not armed by the exact target-scene bootstrap.");
             Require(runtimeRecords.FocusGainedCount == 0 &&
                     runtimeRecords.ValueChangedCount == 0 &&
@@ -1147,14 +1147,14 @@ namespace Milestro.TextInputLifecycleQA
                     persistentRecords.FocusLostCount == 0 &&
                     persistentRecords.Sequence.Count == 0,
                 "Initial scene load invoked the persistent receiver.");
-            Require(TextInputLifecycleQaStableRecorder.FocusGainedCount == 0 &&
-                    TextInputLifecycleQaStableRecorder.ValueChangedCount == 0 &&
-                    TextInputLifecycleQaStableRecorder.EndEditCount == 0 &&
-                    TextInputLifecycleQaStableRecorder.FocusLostCount == 0,
+            Require(TextInputLifecycleIntegrationStableRecorder.FocusGainedCount == 0 &&
+                    TextInputLifecycleIntegrationStableRecorder.ValueChangedCount == 0 &&
+                    TextInputLifecycleIntegrationStableRecorder.EndEditCount == 0 &&
+                    TextInputLifecycleIntegrationStableRecorder.FocusLostCount == 0,
                 "Initial scene load invoked an imported or transient persistent receiver.");
         }
 
-        private static void ValidateRuntimeListener(TextInputLifecycleQaRuntimeListener records,
+        private static void ValidateRuntimeListener(TextInputLifecycleIntegrationRuntimeListener records,
             string payload,
             string label)
         {
@@ -1169,7 +1169,7 @@ namespace Milestro.TextInputLifecycleQA
                 $"{label} sequence mismatch.");
         }
 
-        private static void ValidateReceiver(TextInputLifecycleQaReceiver receiver, string payload)
+        private static void ValidateReceiver(TextInputLifecycleIntegrationReceiver receiver, string payload)
         {
             Require(receiver.FocusGainedCount == 1, "Persistent FocusGained count mismatch.");
             Require(receiver.ValueChangedCount == 1, "Persistent ValueChanged count mismatch.");
@@ -1192,7 +1192,7 @@ namespace Milestro.TextInputLifecycleQA
 
         private void CompleteSuccess()
         {
-            Result = new TextInputLifecycleQaResult
+            Result = new TextInputLifecycleIntegrationResult
             {
                 status = "PASS",
                 sourceHead = sourceHead,
@@ -1223,7 +1223,7 @@ namespace Milestro.TextInputLifecycleQA
 
         private void CompleteFailure(Exception exception)
         {
-            Result = new TextInputLifecycleQaResult
+            Result = new TextInputLifecycleIntegrationResult
             {
                 status = "FAIL",
                 sourceHead = sourceHead,
@@ -1247,9 +1247,9 @@ namespace Milestro.TextInputLifecycleQA
 
         private void Complete()
         {
-            TextInputLifecycleQaStableRecorder.Disarm();
+            TextInputLifecycleIntegrationStableRecorder.Disarm();
             Completed = true;
-            Debug.Log("TASK159_QA_RESULT " + JsonUtility.ToJson(Result));
+            Debug.Log("TASK159_INTEGRATION_RESULT " + JsonUtility.ToJson(Result));
 #if !UNITY_EDITOR
             Application.Quit(Result?.status == "PASS" ? 0 : 1);
 #endif
@@ -1258,7 +1258,7 @@ namespace Milestro.TextInputLifecycleQA
     }
 
     [Serializable]
-    public sealed class TextInputLifecycleQaResult
+    public sealed class TextInputLifecycleIntegrationResult
     {
         public string status = string.Empty;
         public string sourceHead = string.Empty;
@@ -1281,13 +1281,13 @@ namespace Milestro.TextInputLifecycleQA
         public string persistentValuePayload = string.Empty;
         public string persistentEndPayload = string.Empty;
         public string persistentSequence = string.Empty;
-        public TextInputLifecycleQaRecoveryCheckpoint[] recoveryCheckpoints =
-            Array.Empty<TextInputLifecycleQaRecoveryCheckpoint>();
+        public TextInputLifecycleIntegrationRecoveryCheckpoint[] recoveryCheckpoints =
+            Array.Empty<TextInputLifecycleIntegrationRecoveryCheckpoint>();
         public string message = string.Empty;
     }
 
     [Serializable]
-    public sealed class TextInputLifecycleQaRecoveryCheckpoint
+    public sealed class TextInputLifecycleIntegrationRecoveryCheckpoint
     {
         public string lifecycleEvent = string.Empty;
         public string stage = string.Empty;
@@ -1316,7 +1316,7 @@ namespace Milestro.TextInputLifecycleQA
     }
 
     [Serializable]
-    public sealed class TextInputLifecycleQaProfilerResult
+    public sealed class TextInputLifecycleIntegrationProfilerResult
     {
         public string status = string.Empty;
         public string profilerCase = string.Empty;
@@ -1328,7 +1328,7 @@ namespace Milestro.TextInputLifecycleQA
         public string captureWindow = string.Empty;
     }
 
-    public enum TextInputLifecycleQaExceptionEvent
+    public enum TextInputLifecycleIntegrationExceptionEvent
     {
         FocusGained = 0,
         ValueChanged = 1,
@@ -1336,7 +1336,7 @@ namespace Milestro.TextInputLifecycleQA
         FocusLost = 3
     }
 
-    public enum TextInputLifecycleQaProfilerCase
+    public enum TextInputLifecycleIntegrationProfilerCase
     {
         NoListener = 0,
         RuntimeAddListener = 1,

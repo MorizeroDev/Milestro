@@ -8,45 +8,45 @@ using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-namespace Milestro.TextInputLifecycleQA.Editor
+namespace Milestro.Tests.TextInputLifecycle.Integration.Editor
 {
-    public static class TextInputLifecycleQaFixtureBuilder
+    public static class TextInputLifecycleIntegrationFixtureBuilder
     {
-        public const string RootPath = "Assets/__MilestroTask159QA";
+        public const string RootPath = "Assets/__MilestroTask159Integration";
         public const string PrefabPath = RootPath + "/TextInputLifecycle.prefab";
         public const string ScenePath = RootPath + "/TextInputLifecycle.unity";
         public const string SceneLoadPath = RootPath + "/TextInputLifecycle";
         public const string BootstrapScenePath = RootPath + "/TextInputLifecycleBootstrap.unity";
 
-        [MenuItem("Milestro/Task 159/Create Production Lifecycle QA Fixtures")]
+        [MenuItem("Milestro/Task 159/Create Production Lifecycle Integration Fixtures")]
         public static void GenerateFromEnvironment()
         {
             Generate(RequiredObjectId("MILESTRO_TASK159_HEAD"),
                 RequiredObjectId("MILESTRO_TASK159_TREE"));
-            Debug.Log($"Task 159 QA fixtures generated at {RootPath}.");
+            Debug.Log($"Task 159 Integration fixtures generated at {RootPath}.");
         }
 
         [MenuItem("Milestro/Task 159/Profiler/Run No-Listener Burst")]
         private static void RunNoListenerProfilerBurst()
         {
-            RunProfilerBurst(TextInputLifecycleQaProfilerCase.NoListener);
+            RunProfilerBurst(TextInputLifecycleIntegrationProfilerCase.NoListener);
         }
 
         [MenuItem("Milestro/Task 159/Profiler/Run Runtime AddListener Burst")]
         private static void RunRuntimeProfilerBurst()
         {
-            RunProfilerBurst(TextInputLifecycleQaProfilerCase.RuntimeAddListener);
+            RunProfilerBurst(TextInputLifecycleIntegrationProfilerCase.RuntimeAddListener);
         }
 
         [MenuItem("Milestro/Task 159/Profiler/Run Inspector Persistent Burst")]
         private static void RunPersistentProfilerBurst()
         {
-            RunProfilerBurst(TextInputLifecycleQaProfilerCase.InspectorPersistent);
+            RunProfilerBurst(TextInputLifecycleIntegrationProfilerCase.InspectorPersistent);
         }
 
         public static string Generate(string sourceHead, string sourceTree)
         {
-            TextInputLifecycleQaStableRecorder.Arm();
+            TextInputLifecycleIntegrationStableRecorder.Arm();
             string scenePath;
             try
             {
@@ -55,11 +55,11 @@ namespace Milestro.TextInputLifecycleQA.Editor
             }
             finally
             {
-                TextInputLifecycleQaStableRecorder.Disarm();
-                TextInputLifecycleQaStableRecorder.Reset();
+                TextInputLifecycleIntegrationStableRecorder.Disarm();
+                TextInputLifecycleIntegrationStableRecorder.Reset();
             }
 
-            TextInputLifecycleQaStableRecorder.Arm();
+            TextInputLifecycleIntegrationStableRecorder.Arm();
             try
             {
                 ValidateGeneratedAssets();
@@ -67,8 +67,8 @@ namespace Milestro.TextInputLifecycleQA.Editor
             }
             finally
             {
-                TextInputLifecycleQaStableRecorder.Disarm();
-                TextInputLifecycleQaStableRecorder.Reset();
+                TextInputLifecycleIntegrationStableRecorder.Disarm();
+                TextInputLifecycleIntegrationStableRecorder.Reset();
             }
             return scenePath;
         }
@@ -77,7 +77,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
         {
             RequireObjectId(sourceHead, nameof(sourceHead));
             RequireObjectId(sourceTree, nameof(sourceTree));
-            EnsureQaSceneIsNotLoaded();
+            EnsureIntegrationSceneIsNotLoaded();
             var setup = EditorSceneManager.GetSceneManagerSetup();
             var restoreSavedSetup = ValidateInitialSceneSetup(setup);
             var generatedSuccessfully = false;
@@ -85,19 +85,19 @@ namespace Milestro.TextInputLifecycleQA.Editor
             {
                 if (AssetDatabase.IsValidFolder(RootPath) && !AssetDatabase.DeleteAsset(RootPath))
                 {
-                    throw new InvalidOperationException($"Could not remove existing QA root {RootPath}.");
+                    throw new InvalidOperationException($"Could not remove existing Integration root {RootPath}.");
                 }
                 if (!AssetDatabase.IsValidFolder("Assets"))
                 {
                     throw new InvalidOperationException("Unity project has no Assets root.");
                 }
-                AssetDatabase.CreateFolder("Assets", "__MilestroTask159QA");
+                AssetDatabase.CreateFolder("Assets", "__MilestroTask159Integration");
 
                 var prefabRoot = CreateTextInputObject("Persistent TextInput");
                 try
                 {
                     var prefabInput = prefabRoot.GetComponent<TextInput>();
-                    var prefabReceiver = prefabRoot.AddComponent<TextInputLifecycleQaReceiver>();
+                    var prefabReceiver = prefabRoot.AddComponent<TextInputLifecycleIntegrationReceiver>();
                     BindPersistentListeners(prefabInput, prefabReceiver);
                     PrefabUtility.SaveAsPrefabAsset(prefabRoot, PrefabPath);
                 }
@@ -114,7 +114,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
 
                 var eventSystemObject = new GameObject("EventSystem",
                     typeof(EventSystem),
-                    typeof(TextInputLifecycleQaInputModule));
+                    typeof(TextInputLifecycleIntegrationInputModule));
                 SceneManager.MoveGameObjectToScene(eventSystemObject, generated);
 
                 var noListener = CreateTextInputObject("NoListener", canvasObject.transform);
@@ -122,26 +122,26 @@ namespace Milestro.TextInputLifecycleQA.Editor
                 var runtimeListener = CreateTextInputObject("RuntimeAddListener", canvasObject.transform);
                 Position(runtimeListener, 0f);
                 var runtimeInput = runtimeListener.GetComponent<TextInput>();
-                var runtimeObserver = runtimeListener.AddComponent<TextInputLifecycleQaRuntimeListener>();
+                var runtimeObserver = runtimeListener.AddComponent<TextInputLifecycleIntegrationRuntimeListener>();
                 runtimeObserver.Configure(runtimeInput);
 
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
                 if (prefab == null)
                 {
-                    throw new InvalidOperationException("Generated QA prefab could not be loaded.");
+                    throw new InvalidOperationException("Generated Integration prefab could not be loaded.");
                 }
                 var persistentObject = (GameObject)PrefabUtility.InstantiatePrefab(prefab, generated);
                 persistentObject.name = "InspectorPersistent";
                 persistentObject.transform.SetParent(canvasObject.transform, false);
                 Position(persistentObject, -260f);
                 var persistentInput = persistentObject.GetComponent<TextInput>();
-                var persistentReceiver = persistentObject.GetComponent<TextInputLifecycleQaReceiver>();
+                var persistentReceiver = persistentObject.GetComponent<TextInputLifecycleIntegrationReceiver>();
                 persistentInput.SetTextWithoutNotify("scene-prefab-override");
                 PrefabUtility.RecordPrefabInstancePropertyModifications(persistentInput);
 
-                var runnerObject = new GameObject("Task159 QA Runner");
+                var runnerObject = new GameObject("Task159 Integration Runner");
                 SceneManager.MoveGameObjectToScene(runnerObject, generated);
-                var runner = runnerObject.AddComponent<TextInputLifecycleQaScenarioRunner>();
+                var runner = runnerObject.AddComponent<TextInputLifecycleIntegrationScenarioRunner>();
                 runner.Configure(noListener.GetComponent<TextInput>(),
                     runtimeInput,
                     runtimeObserver,
@@ -152,7 +152,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
 
                 if (!EditorSceneManager.SaveScene(generated, ScenePath))
                 {
-                    throw new InvalidOperationException($"Could not save QA scene {ScenePath}.");
+                    throw new InvalidOperationException($"Could not save Integration scene {ScenePath}.");
                 }
                 AssetDatabase.SaveAssets();
                 AssetDatabase.ImportAsset(PrefabPath, ImportAssetOptions.ForceUpdate);
@@ -160,15 +160,15 @@ namespace Milestro.TextInputLifecycleQA.Editor
 
                 var bootstrapScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,
                     NewSceneMode.Single);
-                var bootstrapObject = new GameObject("Task159 QA Bootstrap");
+                var bootstrapObject = new GameObject("Task159 Integration Bootstrap");
                 SceneManager.MoveGameObjectToScene(bootstrapObject, bootstrapScene);
-                var bootstrap = bootstrapObject.AddComponent<TextInputLifecycleQaBootstrap>();
+                var bootstrap = bootstrapObject.AddComponent<TextInputLifecycleIntegrationBootstrap>();
                 bootstrap.Configure(SceneLoadPath, sourceHead, sourceTree);
                 EditorUtility.SetDirty(bootstrap);
                 if (!EditorSceneManager.SaveScene(bootstrapScene, BootstrapScenePath))
                 {
                     throw new InvalidOperationException(
-                        $"Could not save QA bootstrap scene {BootstrapScenePath}.");
+                        $"Could not save Integration bootstrap scene {BootstrapScenePath}.");
                 }
                 AssetDatabase.SaveAssets();
                 AssetDatabase.ImportAsset(BootstrapScenePath, ImportAssetOptions.ForceUpdate);
@@ -197,13 +197,13 @@ namespace Milestro.TextInputLifecycleQA.Editor
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
             if (prefab == null)
             {
-                throw new InvalidOperationException("QA prefab is missing.");
+                throw new InvalidOperationException("Integration prefab is missing.");
             }
             var input = prefab.GetComponent<TextInput>();
-            var receiver = prefab.GetComponent<TextInputLifecycleQaReceiver>();
+            var receiver = prefab.GetComponent<TextInputLifecycleIntegrationReceiver>();
             if (input == null || receiver == null)
             {
-                throw new InvalidOperationException("QA prefab is missing TextInput or receiver.");
+                throw new InvalidOperationException("Integration prefab is missing TextInput or receiver.");
             }
             ValidatePersistentEvent(input, "m_OnValueChanged", receiver, "OnValueChanged", 0);
             ValidatePersistentEvent(input, "m_OnEndEdit", receiver, "OnEndEdit", 0);
@@ -213,7 +213,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
             var dependencies = AssetDatabase.GetDependencies(ScenePath, recursive: true);
             if (Array.IndexOf(dependencies, PrefabPath) < 0)
             {
-                throw new InvalidOperationException("QA scene does not depend on the generated prefab.");
+                throw new InvalidOperationException("Integration scene does not depend on the generated prefab.");
             }
 
             Scene opened = default;
@@ -223,14 +223,14 @@ namespace Milestro.TextInputLifecycleQA.Editor
                 var persistentObject = FindInScene(opened, "InspectorPersistent");
                 if (persistentObject == null)
                 {
-                    throw new InvalidOperationException("QA scene has no persistent prefab instance.");
+                    throw new InvalidOperationException("Integration scene has no persistent prefab instance.");
                 }
                 var sceneInput = persistentObject.GetComponent<TextInput>();
-                var sceneReceiver = persistentObject.GetComponent<TextInputLifecycleQaReceiver>();
+                var sceneReceiver = persistentObject.GetComponent<TextInputLifecycleIntegrationReceiver>();
                 if (sceneInput == null || sceneReceiver == null)
                 {
                     throw new InvalidOperationException(
-                        "QA scene persistent instance is missing TextInput or receiver.");
+                        "Integration scene persistent instance is missing TextInput or receiver.");
                 }
                 ValidatePersistentEvent(sceneInput,
                     "m_OnValueChanged",
@@ -247,12 +247,12 @@ namespace Milestro.TextInputLifecycleQA.Editor
                 if (PrefabUtility.GetCorrespondingObjectFromSource(persistentObject) != prefab ||
                     !PrefabUtility.HasPrefabInstanceAnyOverrides(persistentObject, false))
                 {
-                    throw new InvalidOperationException("QA scene prefab source or override is missing.");
+                    throw new InvalidOperationException("Integration scene prefab source or override is missing.");
                 }
-                if (FindInScene(opened, "Task159 QA Runner")?
-                        .GetComponent<TextInputLifecycleQaScenarioRunner>() == null)
+                if (FindInScene(opened, "Task159 Integration Runner")?
+                        .GetComponent<TextInputLifecycleIntegrationScenarioRunner>() == null)
                 {
-                    throw new InvalidOperationException("QA scene runner is missing.");
+                    throw new InvalidOperationException("Integration scene runner is missing.");
                 }
             }
             finally
@@ -260,7 +260,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
                 if (opened.IsValid() && opened.isLoaded &&
                     !EditorSceneManager.CloseScene(opened, removeScene: true))
                 {
-                    throw new InvalidOperationException("Could not close validated QA scene.");
+                    throw new InvalidOperationException("Could not close validated Integration scene.");
                 }
             }
 
@@ -273,20 +273,20 @@ namespace Milestro.TextInputLifecycleQA.Editor
             try
             {
                 opened = EditorSceneManager.OpenScene(BootstrapScenePath, OpenSceneMode.Additive);
-                var bootstrapObject = FindInScene(opened, "Task159 QA Bootstrap");
-                var bootstrap = bootstrapObject?.GetComponent<TextInputLifecycleQaBootstrap>();
+                var bootstrapObject = FindInScene(opened, "Task159 Integration Bootstrap");
+                var bootstrap = bootstrapObject?.GetComponent<TextInputLifecycleIntegrationBootstrap>();
                 if (bootstrap == null || bootstrap.TargetScenePath != SceneLoadPath ||
                     bootstrap.SourceHead.Length != 40 || bootstrap.SourceTree.Length != 40)
                 {
                     throw new InvalidOperationException(
-                        "QA bootstrap scene target loader is missing or misconfigured.");
+                        "Integration bootstrap scene target loader is missing or misconfigured.");
                 }
                 foreach (var root in opened.GetRootGameObjects())
                 {
                     if (root.GetComponentInChildren<TextInput>(true) != null)
                     {
                         throw new InvalidOperationException(
-                            "QA bootstrap scene must not contain a TextInput.");
+                            "Integration bootstrap scene must not contain a TextInput.");
                     }
                 }
             }
@@ -295,36 +295,36 @@ namespace Milestro.TextInputLifecycleQA.Editor
                 if (opened.IsValid() && opened.isLoaded &&
                     !EditorSceneManager.CloseScene(opened, removeScene: true))
                 {
-                    throw new InvalidOperationException("Could not close validated QA bootstrap scene.");
+                    throw new InvalidOperationException("Could not close validated Integration bootstrap scene.");
                 }
             }
         }
 
         public static void DeleteGeneratedAssets()
         {
-            EnsureQaSceneIsNotLoaded();
+            EnsureIntegrationSceneIsNotLoaded();
             if (AssetDatabase.IsValidFolder(RootPath) && !AssetDatabase.DeleteAsset(RootPath))
             {
-                throw new InvalidOperationException($"Could not remove QA root {RootPath}.");
+                throw new InvalidOperationException($"Could not remove Integration root {RootPath}.");
             }
             AssetDatabase.Refresh();
         }
 
-        private static void RunProfilerBurst(TextInputLifecycleQaProfilerCase profilerCase)
+        private static void RunProfilerBurst(TextInputLifecycleIntegrationProfilerCase profilerCase)
         {
             if (!EditorApplication.isPlaying)
             {
-                throw new InvalidOperationException("Enter Play Mode and wait for TASK159_QA_RESULT PASS first.");
+                throw new InvalidOperationException("Enter Play Mode and wait for TASK159_INTEGRATION_RESULT PASS first.");
             }
 #if UNITY_2023_1_OR_NEWER
-            var runner = UnityEngine.Object.FindFirstObjectByType<TextInputLifecycleQaScenarioRunner>();
+            var runner = UnityEngine.Object.FindFirstObjectByType<TextInputLifecycleIntegrationScenarioRunner>();
 #else
-            var runner = UnityEngine.Object.FindObjectOfType<TextInputLifecycleQaScenarioRunner>();
+            var runner = UnityEngine.Object.FindObjectOfType<TextInputLifecycleIntegrationScenarioRunner>();
 #endif
             if (runner == null || !runner.StartProfilerBurst(profilerCase))
             {
                 throw new InvalidOperationException(
-                    $"Could not start {profilerCase} profiler burst; wait for the QA scenario to finish.");
+                    $"Could not start {profilerCase} profiler burst; wait for the Integration scenario to finish.");
             }
         }
 
@@ -376,7 +376,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
             return null;
         }
 
-        private static void BindPersistentListeners(TextInput input, TextInputLifecycleQaReceiver receiver)
+        private static void BindPersistentListeners(TextInput input, TextInputLifecycleIntegrationReceiver receiver)
         {
             UnityEventTools.AddPersistentListener(input.onValueChanged, receiver.OnValueChanged);
             UnityEventTools.AddPersistentListener(input.onEndEdit, receiver.OnEndEdit);
@@ -387,20 +387,20 @@ namespace Milestro.TextInputLifecycleQA.Editor
 
         private static void RequireStableRecorderSilence(string phase)
         {
-            if (!TextInputLifecycleQaStableRecorder.IsArmed ||
-                TextInputLifecycleQaStableRecorder.ValueChangedCount != 0 ||
-                TextInputLifecycleQaStableRecorder.EndEditCount != 0 ||
-                TextInputLifecycleQaStableRecorder.FocusGainedCount != 0 ||
-                TextInputLifecycleQaStableRecorder.FocusLostCount != 0)
+            if (!TextInputLifecycleIntegrationStableRecorder.IsArmed ||
+                TextInputLifecycleIntegrationStableRecorder.ValueChangedCount != 0 ||
+                TextInputLifecycleIntegrationStableRecorder.EndEditCount != 0 ||
+                TextInputLifecycleIntegrationStableRecorder.FocusGainedCount != 0 ||
+                TextInputLifecycleIntegrationStableRecorder.FocusLostCount != 0)
             {
                 throw new InvalidOperationException(
-                    $"Task 159 QA lifecycle notification occurred during {phase}.");
+                    $"Task 159 Integration lifecycle notification occurred during {phase}.");
             }
         }
 
         private static void ValidatePersistentEvent(TextInput input,
             string fieldName,
-            TextInputLifecycleQaReceiver receiver,
+            TextInputLifecycleIntegrationReceiver receiver,
             string methodName,
             int expectedMode)
         {
@@ -440,7 +440,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
                 if (scene.isDirty)
                 {
                     throw new InvalidOperationException(
-                        $"Save or discard dirty scene changes before generating QA fixtures: {scene.path}");
+                        $"Save or discard dirty scene changes before generating Integration fixtures: {scene.path}");
                 }
                 if (string.IsNullOrEmpty(scene.path))
                 {
@@ -455,7 +455,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
             if (hasUnsaved && SceneManager.sceneCount != 1)
             {
                 throw new InvalidOperationException(
-                    "An unsaved QA entry scene cannot be mixed with other loaded scenes.");
+                    "An unsaved Integration entry scene cannot be mixed with other loaded scenes.");
             }
             return setup.Length > 0 && !hasUnsaved;
         }
@@ -472,7 +472,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
             }
         }
 
-        private static void EnsureQaSceneIsNotLoaded()
+        private static void EnsureIntegrationSceneIsNotLoaded()
         {
             for (var index = 0; index < SceneManager.sceneCount; ++index)
             {
@@ -480,7 +480,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
                 if (scene.path.StartsWith(RootPath + "/", StringComparison.Ordinal))
                 {
                     throw new InvalidOperationException(
-                        $"Close the loaded QA scene before regenerating or deleting assets: {scene.path}");
+                        $"Close the loaded Integration scene before regenerating or deleting assets: {scene.path}");
                 }
             }
         }

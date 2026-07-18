@@ -1,9 +1,9 @@
 {
-    "name": "Milestro.TextInputLifecycleQA.Editor",
+    "name": "Milestro.Tests.TextInputLifecycle.Integration.Editor",
     "rootNamespace": "",
     "references": [
         "Milestro",
-        "Milestro.TextInputLifecycleQA.Runtime"
+        "Milestro.Tests.TextInputLifecycle.Integration.Runtime"
     ],
     "includePlatforms": [
         "Editor"

@@ -1,11 +1,14 @@
 {
-    "name": "Milestro.TextInputLifecycleQA.PlayModeTests",
+    "name": "Milestro.Tests.TextInputLifecycle.Integration.EditModeTests",
     "rootNamespace": "",
     "references": [
         "Milestro",
-        "Milestro.TextInputLifecycleQA.Runtime"
+        "Milestro.Tests.TextInputLifecycle.Integration.Runtime",
+        "Milestro.Tests.TextInputLifecycle.Integration.Editor"
     ],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

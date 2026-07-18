@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using Milestro.Components;
 using UnityEngine;
 
-namespace Milestro.TextInputLifecycleQA
+namespace Milestro.Tests.TextInputLifecycle.Integration
 {
-    public sealed class TextInputLifecycleQaRuntimeListener : MonoBehaviour
+    public sealed class TextInputLifecycleIntegrationRuntimeListener : MonoBehaviour
     {
         [SerializeField] private TextInput? input;
 
@@ -46,9 +46,9 @@ namespace Milestro.TextInputLifecycleQA
             sequence.Clear();
         }
 
-        public TextInputLifecycleQaRecordsSnapshot CaptureRecords()
+        public TextInputLifecycleIntegrationRecordsSnapshot CaptureRecords()
         {
-            return new TextInputLifecycleQaRecordsSnapshot(ValueChangedCount,
+            return new TextInputLifecycleIntegrationRecordsSnapshot(ValueChangedCount,
                 EndEditCount,
                 FocusGainedCount,
                 FocusLostCount,
@@ -57,7 +57,7 @@ namespace Milestro.TextInputLifecycleQA
                 sequence.ToArray());
         }
 
-        public void RestoreRecords(TextInputLifecycleQaRecordsSnapshot snapshot)
+        public void RestoreRecords(TextInputLifecycleIntegrationRecordsSnapshot snapshot)
         {
             if (snapshot == null)
             {
@@ -73,7 +73,7 @@ namespace Milestro.TextInputLifecycleQA
             sequence.AddRange(snapshot.Sequence);
         }
 
-        public bool RecordsMatch(TextInputLifecycleQaRecordsSnapshot snapshot)
+        public bool RecordsMatch(TextInputLifecycleIntegrationRecordsSnapshot snapshot)
         {
             if (snapshot == null || ValueChangedCount != snapshot.ValueChangedCount ||
                 EndEditCount != snapshot.EndEditCount ||

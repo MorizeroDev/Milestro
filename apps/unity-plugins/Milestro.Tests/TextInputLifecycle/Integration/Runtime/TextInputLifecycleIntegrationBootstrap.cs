@@ -3,9 +3,9 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Milestro.TextInputLifecycleQA
+namespace Milestro.Tests.TextInputLifecycle.Integration
 {
-    public sealed class TextInputLifecycleQaBootstrap : MonoBehaviour
+    public sealed class TextInputLifecycleIntegrationBootstrap : MonoBehaviour
     {
         [SerializeField] private string targetScenePath = string.Empty;
         [SerializeField] private string sourceHead = string.Empty;
@@ -30,7 +30,7 @@ namespace Milestro.TextInputLifecycleQA
                 yield break;
             }
 
-            TextInputLifecycleQaStableRecorder.ArmForTargetScene(sourceHead, sourceTree);
+            TextInputLifecycleIntegrationStableRecorder.ArmForTargetScene(sourceHead, sourceTree);
             AsyncOperation? operation;
             try
             {
@@ -51,14 +51,14 @@ namespace Milestro.TextInputLifecycleQA
 
         private void CompleteFailure(string message)
         {
-            var result = new TextInputLifecycleQaResult
+            var result = new TextInputLifecycleIntegrationResult
             {
                 status = "FAIL",
                 sourceHead = sourceHead,
                 sourceTree = sourceTree,
                 message = message
             };
-            Debug.Log("TASK159_QA_RESULT " + JsonUtility.ToJson(result));
+            Debug.Log("TASK159_INTEGRATION_RESULT " + JsonUtility.ToJson(result));
 #if !UNITY_EDITOR
             Application.Quit(1);
 #endif
