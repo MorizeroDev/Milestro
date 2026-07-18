@@ -150,7 +150,7 @@ Primary runtime components:
   scroll position to other scrollbars. Keyboard, committed text, composition,
   and IME ownership are supplied by the process-wide HybridInput dispatcher.
   Runtime `Text` assignments canonicalize line breaks and invalid UTF-16 and
-  notify the internal lifecycle gateway once when the canonical value changes;
+  invoke `onValueChanged` once when the canonical value changes;
   use `SetTextWithoutNotify` for an explicit silent assignment.
 - `Milestro.Components.MilestroScrollRect`: Unity `ScrollRect` extension with
   Milestro wheel tweening and optional presentation-only Elastic scrolling. The
@@ -174,6 +174,33 @@ values first check keyword mappings; quoted rich-text values such as `"serif"`
 are treated as literal named families. The TextLayout `FontCollection` expands
 these declarations when a paragraph is built, then delegates concrete family
 matching to SkParagraph's registered and system font managers.
+
+## TextInput Lifecycle Events
+
+`TextInput` exposes four getter-only Unity events:
+
+- `onValueChanged` and `onEndEdit` are `UnityEvent<string>` values. In the
+  Inspector, bind methods that take the event's Dynamic String payload.
+- `onFocusGained` and `onFocusLost` are parameterless `UnityEvent` values.
+
+Use `AddListener` and `RemoveListener` for runtime subscriptions. There is no
+second public C# event channel. Persistent Inspector listeners are serialized
+with their scene or prefab. Runtime listeners are not serialized, so their
+owner must register them again after a domain reload and remove them according
+to its own lifetime.
+
+Callbacks observe committed state. `onValueChanged` runs after `Text` contains
+the canonical payload. A normal focus release invokes `onEndEdit` with the
+final canonical text and then invokes `onFocusLost`. If a listener throws,
+Unity stops the remaining listeners in that Unity event and the HybridInput
+dispatcher reports `ListenerException`, stops the current transaction, and
+recovers for a later transaction or focus session. In particular, an
+`onEndEdit` exception can prevent `onFocusLost`; it is not retried later.
+
+Assigning a different canonical value through `Text` invokes
+`onValueChanged` once, including while the component is disabled or inactive.
+Assigning the same value does not invoke it. `SetTextWithoutNotify`, Inspector
+validation, deserialization, and scene loading are silent.
 
 ## Elastic Scrolling
 
