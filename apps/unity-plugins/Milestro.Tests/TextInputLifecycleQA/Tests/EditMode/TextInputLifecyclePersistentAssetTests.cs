@@ -28,17 +28,38 @@ namespace Milestro.TextInputLifecycleQA.Tests
                 Assert.That(prefab, Is.Not.Null);
                 AssertReceiverIsSilent(prefab!.GetComponent<TextInputLifecycleQaReceiver>());
 
-                AssetDatabase.ImportAsset(TextInputLifecycleQaFixtureBuilder.PrefabPath,
-                    ImportAssetOptions.ForceUpdate);
-                AssetDatabase.ImportAsset(TextInputLifecycleQaFixtureBuilder.ScenePath,
-                    ImportAssetOptions.ForceUpdate);
+                TextInputLifecycleQaStableRecorder.Arm();
+                try
+                {
+                    AssetDatabase.ImportAsset(TextInputLifecycleQaFixtureBuilder.PrefabPath,
+                        ImportAssetOptions.ForceUpdate);
+                    AssetDatabase.ImportAsset(TextInputLifecycleQaFixtureBuilder.ScenePath,
+                        ImportAssetOptions.ForceUpdate);
+                    AssertStableRecorderIsSilent("asset import/deserialization");
+                }
+                finally
+                {
+                    TextInputLifecycleQaStableRecorder.Disarm();
+                    TextInputLifecycleQaStableRecorder.Reset();
+                }
                 prefab = AssetDatabase.LoadAssetAtPath<GameObject>(
                     TextInputLifecycleQaFixtureBuilder.PrefabPath);
                 Assert.That(prefab, Is.Not.Null);
                 AssertReceiverIsSilent(prefab!.GetComponent<TextInputLifecycleQaReceiver>());
 
-                opened = EditorSceneManager.OpenScene(TextInputLifecycleQaFixtureBuilder.ScenePath,
-                    OpenSceneMode.Additive);
+                TextInputLifecycleQaStableRecorder.Arm();
+                try
+                {
+                    opened = EditorSceneManager.OpenScene(
+                        TextInputLifecycleQaFixtureBuilder.ScenePath,
+                        OpenSceneMode.Additive);
+                    AssertStableRecorderIsSilent("first Editor scene load");
+                }
+                finally
+                {
+                    TextInputLifecycleQaStableRecorder.Disarm();
+                    TextInputLifecycleQaStableRecorder.Reset();
+                }
                 var persistentObject = FindRoot(opened, "InspectorPersistent");
                 Assert.That(persistentObject, Is.Not.Null);
                 var receiver = persistentObject!.GetComponent<TextInputLifecycleQaReceiver>();
@@ -57,15 +78,26 @@ namespace Milestro.TextInputLifecycleQA.Tests
 
                 Assert.That(EditorSceneManager.CloseScene(opened, removeScene: true), Is.True);
                 opened = default;
-                AssetDatabase.ImportAsset(TextInputLifecycleQaFixtureBuilder.ScenePath,
-                    ImportAssetOptions.ForceUpdate);
-                opened = EditorSceneManager.OpenScene(TextInputLifecycleQaFixtureBuilder.ScenePath,
-                    OpenSceneMode.Additive);
+                TextInputLifecycleQaStableRecorder.Arm();
+                try
+                {
+                    opened = EditorSceneManager.OpenScene(
+                        TextInputLifecycleQaFixtureBuilder.ScenePath,
+                        OpenSceneMode.Additive);
+                    AssertStableRecorderIsSilent("Editor scene reopen");
+                }
+                finally
+                {
+                    TextInputLifecycleQaStableRecorder.Disarm();
+                    TextInputLifecycleQaStableRecorder.Reset();
+                }
                 AssertReceiverIsSilent(FindRoot(opened, "InspectorPersistent")!
                     .GetComponent<TextInputLifecycleQaReceiver>());
             }
             finally
             {
+                TextInputLifecycleQaStableRecorder.Disarm();
+                TextInputLifecycleQaStableRecorder.Reset();
                 if (opened.IsValid() && opened.isLoaded)
                 {
                     EditorSceneManager.CloseScene(opened, removeScene: true);
@@ -126,6 +158,20 @@ namespace Milestro.TextInputLifecycleQA.Tests
             Assert.That(receiver.FocusGainedCount, Is.Zero);
             Assert.That(receiver.FocusLostCount, Is.Zero);
             Assert.That(receiver.Sequence, Is.Empty);
+        }
+
+        private static void AssertStableRecorderIsSilent(string phase)
+        {
+            Assert.That(TextInputLifecycleQaStableRecorder.IsArmed, Is.True,
+                $"Stable recorder was not armed for {phase}.");
+            Assert.That(TextInputLifecycleQaStableRecorder.ValueChangedCount, Is.Zero,
+                $"{phase} invoked onValueChanged on an imported or transient receiver.");
+            Assert.That(TextInputLifecycleQaStableRecorder.EndEditCount, Is.Zero,
+                $"{phase} invoked onEndEdit on an imported or transient receiver.");
+            Assert.That(TextInputLifecycleQaStableRecorder.FocusGainedCount, Is.Zero,
+                $"{phase} invoked onFocusGained on an imported or transient receiver.");
+            Assert.That(TextInputLifecycleQaStableRecorder.FocusLostCount, Is.Zero,
+                $"{phase} invoked onFocusLost on an imported or transient receiver.");
         }
     }
 }

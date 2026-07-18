@@ -12,6 +12,8 @@ namespace Milestro.TextInputLifecycleQA
     public sealed class TextInputLifecycleQaScenarioRunner : MonoBehaviour
     {
         private const int TimeoutFrames = 300;
+        private const int ProfilerWarmupEvents = 256;
+        private const int ProfilerCaptureEvents = 256;
 
         [SerializeField] private TextInput? noListenerInput;
         [SerializeField] private TextInput? runtimeListenerInput;
@@ -25,6 +27,12 @@ namespace Milestro.TextInputLifecycleQA
         private bool runtimeListenerPassed;
         private bool persistentListenerPassed;
         private bool exceptionRecoveryPassed;
+        private bool initialSceneLoadPassed;
+        private bool initialSceneLoadRuntimeListenerPassed;
+        private bool initialSceneLoadPersistentReceiverPassed;
+        private bool initialSceneLoadStableRecorderPassed;
+        private int exceptionCasesPassed;
+        private int exceptionRecoveriesPassed;
         private bool profilerBurstRunning;
         private TextInputLifecycleQaStrictProvider? activeProvider;
         private IDisposable? activeProviderRegistration;
@@ -110,6 +118,14 @@ namespace Milestro.TextInputLifecycleQA
             Require(sourceHead.Length == 40 && sourceTree.Length == 40,
                 "QA source HEAD/tree must be exact 40-character object IDs.");
 
+            ValidateInitialSceneLoadSilence(runtimeListener!, persistentReceiver!);
+            initialSceneLoadPassed = true;
+            initialSceneLoadRuntimeListenerPassed = true;
+            initialSceneLoadPersistentReceiverPassed = true;
+            initialSceneLoadStableRecorderPassed = true;
+            TextInputLifecycleQaStableRecorder.Disarm();
+            TextInputLifecycleQaStableRecorder.Reset();
+
             activeProvider = new TextInputLifecycleQaStrictProvider();
             activeProviderRegistration = HybridInputRuntime.RegisterProvider(activeProvider);
             var retainForProfiler = false;
@@ -148,7 +164,7 @@ namespace Milestro.TextInputLifecycleQA
                 ValidateReceiver(persistentReceiver, "qa-persistent-listener");
                 persistentListenerPassed = true;
 
-                yield return RunExceptionAndRecovery(activeProvider,
+                yield return RunExceptionAndRecoveryMatrix(activeProvider,
                     runtimeListenerInput!,
                     runtimeListener,
                     HybridInputRuntime.Diagnostics.DiagnosticCount);
@@ -168,26 +184,36 @@ namespace Milestro.TextInputLifecycleQA
         private IEnumerator ProfilerBurst(TextInputLifecycleQaProfilerCase profilerCase)
         {
             profilerBurstRunning = true;
+            var noListenerWasActive = noListenerInput!.gameObject.activeSelf;
+            var runtimeListenerWasActive = runtimeListenerInput!.gameObject.activeSelf;
+            var persistentListenerWasActive = persistentListenerInput!.gameObject.activeSelf;
             try
             {
                 var input = ResolveProfilerInput(profilerCase);
-                if (profilerCase == TextInputLifecycleQaProfilerCase.RuntimeAddListener)
-                {
-                    runtimeListener!.ResetRecords();
-                }
-                else if (profilerCase == TextInputLifecycleQaProfilerCase.InspectorPersistent)
-                {
-                    persistentReceiver!.ResetRecords();
-                }
-
+                EventSystem.current!.SetSelectedGameObject(null);
+                yield return null;
+                SetProfilerCaseActive(profilerCase);
+                yield return null;
+                ValidateProfilerIsolation(profilerCase, input);
+                ResetProfilerRecords(profilerCase);
+                input.SetTextWithoutNotify("task159-profiler-baseline");
                 yield return Select(activeProvider!, input);
-                for (var index = 0; index < 256; ++index)
+                for (var index = 0; index < ProfilerWarmupEvents; ++index)
                 {
-                    activeProvider!.EnqueueCommittedText((index & 1) == 0
-                        ? "task159-profiler-a"
-                        : "task159-profiler-b");
+                    EnqueueProfilerEvent(index);
                     yield return null;
                 }
+                ResetProfilerRecords(profilerCase);
+                Debug.Log($"TASK159_QA_PROFILER case={profilerCase} phase=capture-begin " +
+                          $"events={ProfilerCaptureEvents} isolated=true");
+                for (var index = 0; index < ProfilerCaptureEvents; ++index)
+                {
+                    EnqueueProfilerEvent(index);
+                    yield return null;
+                }
+                ValidateProfilerCapture(profilerCase);
+                Debug.Log($"TASK159_QA_PROFILER case={profilerCase} phase=capture-end " +
+                          $"events={ProfilerCaptureEvents} isolated=true");
                 EventSystem.current!.SetSelectedGameObject(null);
                 yield return WaitUntil(() => !activeProvider!.HasFocusSession,
                     $"profiler {profilerCase} release");
@@ -195,8 +221,142 @@ namespace Milestro.TextInputLifecycleQA
             finally
             {
                 EventSystem.current?.SetSelectedGameObject(null);
+                noListenerInput!.gameObject.SetActive(noListenerWasActive);
+                runtimeListenerInput!.gameObject.SetActive(runtimeListenerWasActive);
+                persistentListenerInput!.gameObject.SetActive(persistentListenerWasActive);
                 profilerBurstRunning = false;
             }
+        }
+
+        private void EnqueueProfilerEvent(int index)
+        {
+            activeProvider!.EnqueueCommittedText((index & 1) == 0
+                ? "task159-profiler-a"
+                : "task159-profiler-b");
+        }
+
+        private void SetProfilerCaseActive(TextInputLifecycleQaProfilerCase profilerCase)
+        {
+            noListenerInput!.gameObject.SetActive(
+                profilerCase == TextInputLifecycleQaProfilerCase.NoListener);
+            runtimeListenerInput!.gameObject.SetActive(
+                profilerCase == TextInputLifecycleQaProfilerCase.RuntimeAddListener);
+            persistentListenerInput!.gameObject.SetActive(
+                profilerCase == TextInputLifecycleQaProfilerCase.InspectorPersistent);
+        }
+
+        private void ValidateProfilerIsolation(TextInputLifecycleQaProfilerCase profilerCase,
+            TextInput target)
+        {
+            Require(target.isActiveAndEnabled, $"Profiler target {profilerCase} is inactive.");
+            Require(noListenerInput!.isActiveAndEnabled ==
+                    (profilerCase == TextInputLifecycleQaProfilerCase.NoListener),
+                "No-listener profiler case isolation mismatch.");
+            Require(runtimeListenerInput!.isActiveAndEnabled ==
+                    (profilerCase == TextInputLifecycleQaProfilerCase.RuntimeAddListener),
+                "Runtime-listener profiler case isolation mismatch.");
+            Require(persistentListenerInput!.isActiveAndEnabled ==
+                    (profilerCase == TextInputLifecycleQaProfilerCase.InspectorPersistent),
+                "Persistent-listener profiler case isolation mismatch.");
+#if UNITY_2023_1_OR_NEWER
+            var activeInputs = UnityEngine.Object.FindObjectsByType<TextInput>(
+                FindObjectsInactive.Exclude,
+                FindObjectsSortMode.None);
+#else
+            var activeInputs = UnityEngine.Object.FindObjectsOfType<TextInput>();
+#endif
+            Require(activeInputs.Length == 1 && activeInputs[0] == target,
+                $"Profiler case {profilerCase} does not have exactly one active TextInput.");
+
+            switch (profilerCase)
+            {
+                case TextInputLifecycleQaProfilerCase.NoListener:
+                    Require(HasNoPersistentListeners(target),
+                        "No-listener profiler target has a persistent listener.");
+                    Require(!runtimeListener!.isActiveAndEnabled &&
+                            !runtimeListener.IsBoundTo(runtimeListenerInput),
+                        "Runtime AddListener observer leaked into the no-listener profiler case.");
+                    break;
+                case TextInputLifecycleQaProfilerCase.RuntimeAddListener:
+                    Require(HasNoPersistentListeners(target),
+                        "Runtime AddListener profiler target has a persistent listener.");
+                    Require(runtimeListener!.isActiveAndEnabled && runtimeListener.IsBoundTo(target),
+                        "Runtime AddListener observer is not uniquely bound to its profiler target.");
+                    break;
+                case TextInputLifecycleQaProfilerCase.InspectorPersistent:
+                    Require(!runtimeListener!.isActiveAndEnabled &&
+                            !runtimeListener.IsBoundTo(runtimeListenerInput),
+                        "Runtime AddListener observer leaked into the persistent profiler case.");
+                    Require(HasExpectedPersistentListeners(target, persistentReceiver!),
+                        "Persistent profiler target binding mismatch.");
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(profilerCase), profilerCase, null);
+            }
+        }
+
+        private void ResetProfilerRecords(TextInputLifecycleQaProfilerCase profilerCase)
+        {
+            if (profilerCase == TextInputLifecycleQaProfilerCase.RuntimeAddListener)
+            {
+                runtimeListener!.ResetRecords();
+            }
+            else if (profilerCase == TextInputLifecycleQaProfilerCase.InspectorPersistent)
+            {
+                persistentReceiver!.ResetRecords();
+            }
+        }
+
+        private void ValidateProfilerCapture(TextInputLifecycleQaProfilerCase profilerCase)
+        {
+            if (profilerCase == TextInputLifecycleQaProfilerCase.RuntimeAddListener)
+            {
+                Require(runtimeListener!.ValueChangedCount == ProfilerCaptureEvents &&
+                        runtimeListener.FocusGainedCount == 0 &&
+                        runtimeListener.EndEditCount == 0 &&
+                        runtimeListener.FocusLostCount == 0 &&
+                        runtimeListener.Sequence.Count == ProfilerCaptureEvents,
+                    "Runtime AddListener profiler capture count mismatch.");
+            }
+            else if (profilerCase == TextInputLifecycleQaProfilerCase.InspectorPersistent)
+            {
+                Require(persistentReceiver!.ValueChangedCount == ProfilerCaptureEvents &&
+                        persistentReceiver.FocusGainedCount == 0 &&
+                        persistentReceiver.EndEditCount == 0 &&
+                        persistentReceiver.FocusLostCount == 0 &&
+                        persistentReceiver.Sequence.Count == ProfilerCaptureEvents,
+                    "Persistent profiler capture count mismatch.");
+            }
+        }
+
+        private static bool HasNoPersistentListeners(TextInput input)
+        {
+            return input.onValueChanged.GetPersistentEventCount() == 0 &&
+                   input.onEndEdit.GetPersistentEventCount() == 0 &&
+                   input.onFocusGained.GetPersistentEventCount() == 0 &&
+                   input.onFocusLost.GetPersistentEventCount() == 0;
+        }
+
+        private static bool HasExpectedPersistentListeners(TextInput input,
+            TextInputLifecycleQaReceiver receiver)
+        {
+            return HasExpectedPersistentListener(input.onValueChanged,
+                       receiver,
+                       "OnValueChanged") &&
+                   HasExpectedPersistentListener(input.onEndEdit, receiver, "OnEndEdit") &&
+                   HasExpectedPersistentListener(input.onFocusGained,
+                       receiver,
+                       "OnFocusGained") &&
+                   HasExpectedPersistentListener(input.onFocusLost, receiver, "OnFocusLost");
+        }
+
+        private static bool HasExpectedPersistentListener(UnityEventBase unityEvent,
+            TextInputLifecycleQaReceiver receiver,
+            string methodName)
+        {
+            return unityEvent.GetPersistentEventCount() == 1 &&
+                   unityEvent.GetPersistentTarget(0) == receiver &&
+                   unityEvent.GetPersistentMethodName(0) == methodName;
         }
 
         private TextInput ResolveProfilerInput(TextInputLifecycleQaProfilerCase profilerCase)
@@ -258,47 +418,366 @@ namespace Milestro.TextInputLifecycleQA
             yield return WaitUntil(() => provider.HasFocusSession, $"focus {input.name}");
         }
 
-        private static IEnumerator RunExceptionAndRecovery(TextInputLifecycleQaStrictProvider provider,
+        private IEnumerator RunExceptionAndRecoveryMatrix(
+            TextInputLifecycleQaStrictProvider provider,
             TextInput input,
             TextInputLifecycleQaRuntimeListener runtimeListener,
             int diagnosticBaseline)
         {
-            runtimeListener.enabled = false;
-            var tailCount = 0;
-            UnityAction<string> throwing = _ => throw new InvalidOperationException("task159 listener");
-            UnityAction<string> tail = _ => ++tailCount;
-            input.onValueChanged.AddListener(throwing);
-            input.onValueChanged.AddListener(tail);
+            Require(HasNoPersistentListeners(input),
+                "Exception matrix input must not have persistent listeners.");
+            var expectedDiagnosticCount = diagnosticBaseline;
             try
             {
-                yield return Select(provider, input);
-                provider.EnqueueCommittedText("qa-listener-throw");
-                yield return WaitUntil(() =>
-                        input.Text == "qa-listener-throw" &&
-                        HybridInputRuntime.Diagnostics.DiagnosticCount == diagnosticBaseline + 1,
-                    "listener exception diagnostic");
-                Require(tailCount == 0, "UnityEvent did not short-circuit after listener exception.");
+                for (var eventIndex = 0;
+                     eventIndex <= (int)TextInputLifecycleQaExceptionEvent.FocusLost;
+                     ++eventIndex)
+                {
+                    var lifecycleEvent = (TextInputLifecycleQaExceptionEvent)eventIndex;
+                    runtimeListener.enabled = false;
+                    Require(!runtimeListener.IsBoundTo(input),
+                        $"Runtime listener remained bound before {lifecycleEvent} exception case.");
+                    yield return RunExceptionCase(provider,
+                        input,
+                        lifecycleEvent,
+                        expectedDiagnosticCount);
+                    ++exceptionCasesPassed;
+                    ++expectedDiagnosticCount;
+
+                    var recoveryPayload = $"qa-{lifecycleEvent}-recovery";
+                    runtimeListener.ResetRecords();
+                    runtimeListener.enabled = true;
+                    Require(runtimeListener.IsBoundTo(input),
+                        $"Runtime listener did not bind for {lifecycleEvent} recovery.");
+                    yield return RunObserved(provider,
+                        input,
+                        recoveryPayload,
+                        () => runtimeListener.ValueChangedCount == 1,
+                        () => runtimeListener.EndEditCount == 1 &&
+                              runtimeListener.FocusLostCount == 1);
+                    ValidateRuntimeListener(runtimeListener,
+                        recoveryPayload,
+                        $"{lifecycleEvent} fresh-session recovery");
+                    Require(HybridInputRuntime.Diagnostics.DiagnosticCount ==
+                            expectedDiagnosticCount,
+                        $"{lifecycleEvent} recovery added an unexpected diagnostic.");
+                    ++exceptionRecoveriesPassed;
+                }
             }
             finally
             {
-                input.onValueChanged.RemoveListener(throwing);
-                input.onValueChanged.RemoveListener(tail);
-                EventSystem.current!.SetSelectedGameObject(null);
+                EventSystem.current?.SetSelectedGameObject(null);
+                runtimeListener.enabled = true;
+            }
+        }
+
+        private static IEnumerator RunExceptionCase(TextInputLifecycleQaStrictProvider provider,
+            TextInput input,
+            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            int diagnosticBaseline)
+        {
+            var payload = $"qa-{lifecycleEvent}-throw";
+            input.SetTextWithoutNotify($"qa-{lifecycleEvent}-baseline");
+
+            var throwingCount = 0;
+            var tailCount = 0;
+            var focusGainedCount = 0;
+            var valueChangedCount = 0;
+            var endEditCount = 0;
+            var focusLostCount = 0;
+            var callbackStateWasCommitted = false;
+
+            UnityAction focusGainedObserver = () => ++focusGainedCount;
+            UnityAction<string> valueChangedObserver = _ => ++valueChangedCount;
+            UnityAction<string> endEditObserver = _ => ++endEditCount;
+            UnityAction focusLostObserver = () => ++focusLostCount;
+            UnityAction throwingVoid = () =>
+            {
+                ++throwingCount;
+                callbackStateWasCommitted = CallbackStateWasCommitted(lifecycleEvent,
+                    provider,
+                    input,
+                    payload,
+                    null);
+                throw new InvalidOperationException($"task159 {lifecycleEvent} listener");
+            };
+            UnityAction<string> throwingString = value =>
+            {
+                ++throwingCount;
+                callbackStateWasCommitted = CallbackStateWasCommitted(lifecycleEvent,
+                    provider,
+                    input,
+                    payload,
+                    value);
+                throw new InvalidOperationException($"task159 {lifecycleEvent} listener");
+            };
+            UnityAction tailVoid = () => ++tailCount;
+            UnityAction<string> tailString = _ => ++tailCount;
+
+            AddExceptionCaseListeners(input,
+                lifecycleEvent,
+                focusGainedObserver,
+                valueChangedObserver,
+                endEditObserver,
+                focusLostObserver,
+                throwingVoid,
+                throwingString,
+                tailVoid,
+                tailString);
+            try
+            {
+                if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusGained)
+                {
+                    yield return BeginSelection(input);
+                }
+                else
+                {
+                    yield return Select(provider, input);
+                    provider.EnqueueCommittedText(payload);
+                    if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.ValueChanged)
+                    {
+                        yield return WaitUntil(() =>
+                                input.Text == payload && throwingCount == 1 &&
+                                HybridInputRuntime.Diagnostics.DiagnosticCount >=
+                                diagnosticBaseline + 1,
+                            $"{lifecycleEvent} exception diagnostic");
+                    }
+                    else
+                    {
+                        yield return WaitUntil(() =>
+                                input.Text == payload && valueChangedCount == 1,
+                            $"{lifecycleEvent} committed text");
+                        EventSystem.current!.SetSelectedGameObject(null);
+                    }
+                }
+
+                yield return WaitUntil(() =>
+                        throwingCount == 1 &&
+                        HybridInputRuntime.Diagnostics.DiagnosticCount >= diagnosticBaseline + 1,
+                    $"{lifecycleEvent} exception delivery");
+                if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.EndEdit ||
+                    lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusLost)
+                {
+                    yield return WaitUntil(() => !provider.HasFocusSession,
+                        $"{lifecycleEvent} exception release");
+                }
+
+                ValidateExceptionCase(lifecycleEvent,
+                    throwingCount,
+                    tailCount,
+                    focusGainedCount,
+                    valueChangedCount,
+                    endEditCount,
+                    focusLostCount,
+                    callbackStateWasCommitted,
+                    diagnosticBaseline);
+
+                // Keep the throwing listener installed across idle dispatcher work. This proves
+                // the aborted notification is neither retried nor completed late.
+                yield return null;
+                yield return null;
+                ValidateExceptionCase(lifecycleEvent,
+                    throwingCount,
+                    tailCount,
+                    focusGainedCount,
+                    valueChangedCount,
+                    endEditCount,
+                    focusLostCount,
+                    callbackStateWasCommitted,
+                    diagnosticBaseline);
+            }
+            finally
+            {
+                RemoveExceptionCaseListeners(input,
+                    lifecycleEvent,
+                    focusGainedObserver,
+                    valueChangedObserver,
+                    endEditObserver,
+                    focusLostObserver,
+                    throwingVoid,
+                    throwingString,
+                    tailVoid,
+                    tailString);
+                EventSystem.current?.SetSelectedGameObject(null);
             }
 
-            yield return WaitUntil(() => !provider.HasFocusSession, "listener exception release");
-            runtimeListener.ResetRecords();
-            runtimeListener.enabled = true;
-            yield return RunObserved(provider,
-                input,
-                "qa-listener-recovery",
-                () => runtimeListener.ValueChangedCount == 1,
-                () => runtimeListener.EndEditCount == 1 && runtimeListener.FocusLostCount == 1);
-            ValidateRuntimeListener(runtimeListener,
-                "qa-listener-recovery",
-                "listener recovery");
+            yield return WaitUntil(() => !provider.HasFocusSession,
+                $"{lifecycleEvent} cleanup release");
             Require(HybridInputRuntime.Diagnostics.DiagnosticCount == diagnosticBaseline + 1,
-                "Recovery added an unexpected diagnostic.");
+                $"{lifecycleEvent} cleanup added an unexpected diagnostic.");
+        }
+
+        private static IEnumerator BeginSelection(TextInput input)
+        {
+            EventSystem.current!.SetSelectedGameObject(null);
+            yield return null;
+            EventSystem.current.SetSelectedGameObject(input.gameObject);
+        }
+
+        private static bool CallbackStateWasCommitted(
+            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            TextInputLifecycleQaStrictProvider provider,
+            TextInput input,
+            string payload,
+            string? callbackPayload)
+        {
+            switch (lifecycleEvent)
+            {
+                case TextInputLifecycleQaExceptionEvent.FocusGained:
+                    return provider.HasFocusSession &&
+                           EventSystem.current?.currentSelectedGameObject == input.gameObject;
+                case TextInputLifecycleQaExceptionEvent.ValueChanged:
+                    return provider.HasFocusSession && input.Text == payload &&
+                           callbackPayload == payload;
+                case TextInputLifecycleQaExceptionEvent.EndEdit:
+                    return !provider.HasFocusSession && input.Text == payload &&
+                           callbackPayload == payload &&
+                           EventSystem.current?.currentSelectedGameObject == null;
+                case TextInputLifecycleQaExceptionEvent.FocusLost:
+                    return !provider.HasFocusSession && input.Text == payload &&
+                           EventSystem.current?.currentSelectedGameObject == null;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(lifecycleEvent),
+                        lifecycleEvent,
+                        null);
+            }
+        }
+
+        private static void ValidateExceptionCase(
+            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            int throwingCount,
+            int tailCount,
+            int focusGainedCount,
+            int valueChangedCount,
+            int endEditCount,
+            int focusLostCount,
+            bool callbackStateWasCommitted,
+            int diagnosticBaseline)
+        {
+            Require(throwingCount == 1, $"{lifecycleEvent} throwing listener count mismatch.");
+            Require(tailCount == 0, $"{lifecycleEvent} UnityEvent tail was not suppressed.");
+            Require(callbackStateWasCommitted,
+                $"{lifecycleEvent} listener observed uncommitted production state.");
+            Require(HybridInputRuntime.Diagnostics.LastDiagnostic ==
+                    HybridInputDiagnosticCode.ListenerException,
+                $"{lifecycleEvent} diagnostic code mismatch.");
+            Require(HybridInputRuntime.Diagnostics.DiagnosticCount == diagnosticBaseline + 1,
+                $"{lifecycleEvent} diagnostic count mismatch.");
+
+            var expectedFocusGained = lifecycleEvent ==
+                TextInputLifecycleQaExceptionEvent.FocusGained ? 0 : 1;
+            var expectedValueChanged = lifecycleEvent ==
+                TextInputLifecycleQaExceptionEvent.FocusGained ||
+                lifecycleEvent == TextInputLifecycleQaExceptionEvent.ValueChanged ? 0 : 1;
+            var expectedEndEdit = lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusLost
+                ? 1
+                : 0;
+            Require(focusGainedCount == expectedFocusGained,
+                $"{lifecycleEvent} preceding FocusGained count mismatch.");
+            Require(valueChangedCount == expectedValueChanged,
+                $"{lifecycleEvent} preceding ValueChanged count mismatch.");
+            Require(endEditCount == expectedEndEdit,
+                $"{lifecycleEvent} EndEdit count mismatch.");
+            Require(focusLostCount == 0,
+                $"{lifecycleEvent} FocusLost was delivered or retried unexpectedly.");
+        }
+
+        private static void AddExceptionCaseListeners(TextInput input,
+            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            UnityAction focusGainedObserver,
+            UnityAction<string> valueChangedObserver,
+            UnityAction<string> endEditObserver,
+            UnityAction focusLostObserver,
+            UnityAction throwingVoid,
+            UnityAction<string> throwingString,
+            UnityAction tailVoid,
+            UnityAction<string> tailString)
+        {
+            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusGained)
+            {
+                input.onFocusGained.AddListener(throwingVoid);
+                input.onFocusGained.AddListener(tailVoid);
+            }
+            else
+            {
+                input.onFocusGained.AddListener(focusGainedObserver);
+            }
+            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.ValueChanged)
+            {
+                input.onValueChanged.AddListener(throwingString);
+                input.onValueChanged.AddListener(tailString);
+            }
+            else
+            {
+                input.onValueChanged.AddListener(valueChangedObserver);
+            }
+            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.EndEdit)
+            {
+                input.onEndEdit.AddListener(throwingString);
+                input.onEndEdit.AddListener(tailString);
+            }
+            else
+            {
+                input.onEndEdit.AddListener(endEditObserver);
+            }
+            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusLost)
+            {
+                input.onFocusLost.AddListener(throwingVoid);
+                input.onFocusLost.AddListener(tailVoid);
+            }
+            else
+            {
+                input.onFocusLost.AddListener(focusLostObserver);
+            }
+        }
+
+        private static void RemoveExceptionCaseListeners(TextInput input,
+            TextInputLifecycleQaExceptionEvent lifecycleEvent,
+            UnityAction focusGainedObserver,
+            UnityAction<string> valueChangedObserver,
+            UnityAction<string> endEditObserver,
+            UnityAction focusLostObserver,
+            UnityAction throwingVoid,
+            UnityAction<string> throwingString,
+            UnityAction tailVoid,
+            UnityAction<string> tailString)
+        {
+            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusGained)
+            {
+                input.onFocusGained.RemoveListener(throwingVoid);
+                input.onFocusGained.RemoveListener(tailVoid);
+            }
+            else
+            {
+                input.onFocusGained.RemoveListener(focusGainedObserver);
+            }
+            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.ValueChanged)
+            {
+                input.onValueChanged.RemoveListener(throwingString);
+                input.onValueChanged.RemoveListener(tailString);
+            }
+            else
+            {
+                input.onValueChanged.RemoveListener(valueChangedObserver);
+            }
+            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.EndEdit)
+            {
+                input.onEndEdit.RemoveListener(throwingString);
+                input.onEndEdit.RemoveListener(tailString);
+            }
+            else
+            {
+                input.onEndEdit.RemoveListener(endEditObserver);
+            }
+            if (lifecycleEvent == TextInputLifecycleQaExceptionEvent.FocusLost)
+            {
+                input.onFocusLost.RemoveListener(throwingVoid);
+                input.onFocusLost.RemoveListener(tailVoid);
+            }
+            else
+            {
+                input.onFocusLost.RemoveListener(focusLostObserver);
+            }
         }
 
         private static IEnumerator WaitUntil(Func<bool> predicate, string stage)
@@ -312,6 +791,31 @@ namespace Milestro.TextInputLifecycleQA
                 yield return null;
             }
             throw new TimeoutException($"Timed out while waiting for {stage}.");
+        }
+
+        private static void ValidateInitialSceneLoadSilence(
+            TextInputLifecycleQaRuntimeListener runtimeRecords,
+            TextInputLifecycleQaReceiver persistentRecords)
+        {
+            Require(TextInputLifecycleQaStableRecorder.IsArmed,
+                "Stable recorder was not armed before the initial scene load.");
+            Require(runtimeRecords.FocusGainedCount == 0 &&
+                    runtimeRecords.ValueChangedCount == 0 &&
+                    runtimeRecords.EndEditCount == 0 &&
+                    runtimeRecords.FocusLostCount == 0 &&
+                    runtimeRecords.Sequence.Count == 0,
+                "Initial scene load invoked the runtime AddListener observer.");
+            Require(persistentRecords.FocusGainedCount == 0 &&
+                    persistentRecords.ValueChangedCount == 0 &&
+                    persistentRecords.EndEditCount == 0 &&
+                    persistentRecords.FocusLostCount == 0 &&
+                    persistentRecords.Sequence.Count == 0,
+                "Initial scene load invoked the persistent receiver.");
+            Require(TextInputLifecycleQaStableRecorder.FocusGainedCount == 0 &&
+                    TextInputLifecycleQaStableRecorder.ValueChangedCount == 0 &&
+                    TextInputLifecycleQaStableRecorder.EndEditCount == 0 &&
+                    TextInputLifecycleQaStableRecorder.FocusLostCount == 0,
+                "Initial scene load invoked an imported or transient persistent receiver.");
         }
 
         private static void ValidateRuntimeListener(TextInputLifecycleQaRuntimeListener records,
@@ -357,10 +861,16 @@ namespace Milestro.TextInputLifecycleQA
                 status = "PASS",
                 sourceHead = sourceHead,
                 sourceTree = sourceTree,
+                initialSceneLoadPassed = initialSceneLoadPassed,
+                initialSceneLoadRuntimeListenerPassed = initialSceneLoadRuntimeListenerPassed,
+                initialSceneLoadPersistentReceiverPassed = initialSceneLoadPersistentReceiverPassed,
+                initialSceneLoadStableRecorderPassed = initialSceneLoadStableRecorderPassed,
                 noListenerPassed = noListenerPassed,
                 runtimeListenerPassed = runtimeListenerPassed,
                 persistentListenerPassed = persistentListenerPassed,
                 exceptionRecoveryPassed = exceptionRecoveryPassed,
+                exceptionCasesPassed = exceptionCasesPassed,
+                exceptionRecoveriesPassed = exceptionRecoveriesPassed,
                 persistentFocusGainedCount = persistentReceiver!.FocusGainedCount,
                 persistentValueChangedCount = persistentReceiver.ValueChangedCount,
                 persistentEndEditCount = persistentReceiver.EndEditCount,
@@ -380,6 +890,16 @@ namespace Milestro.TextInputLifecycleQA
                 status = "FAIL",
                 sourceHead = sourceHead,
                 sourceTree = sourceTree,
+                initialSceneLoadPassed = initialSceneLoadPassed,
+                initialSceneLoadRuntimeListenerPassed = initialSceneLoadRuntimeListenerPassed,
+                initialSceneLoadPersistentReceiverPassed = initialSceneLoadPersistentReceiverPassed,
+                initialSceneLoadStableRecorderPassed = initialSceneLoadStableRecorderPassed,
+                noListenerPassed = noListenerPassed,
+                runtimeListenerPassed = runtimeListenerPassed,
+                persistentListenerPassed = persistentListenerPassed,
+                exceptionRecoveryPassed = exceptionRecoveryPassed,
+                exceptionCasesPassed = exceptionCasesPassed,
+                exceptionRecoveriesPassed = exceptionRecoveriesPassed,
                 message = exception.GetType().Name + ": " + exception.Message
             };
             Complete();
@@ -387,6 +907,7 @@ namespace Milestro.TextInputLifecycleQA
 
         private void Complete()
         {
+            TextInputLifecycleQaStableRecorder.Disarm();
             Completed = true;
             Debug.Log("TASK159_QA_RESULT " + JsonUtility.ToJson(Result));
 #if !UNITY_EDITOR
@@ -402,10 +923,16 @@ namespace Milestro.TextInputLifecycleQA
         public string status = string.Empty;
         public string sourceHead = string.Empty;
         public string sourceTree = string.Empty;
+        public bool initialSceneLoadPassed;
+        public bool initialSceneLoadRuntimeListenerPassed;
+        public bool initialSceneLoadPersistentReceiverPassed;
+        public bool initialSceneLoadStableRecorderPassed;
         public bool noListenerPassed;
         public bool runtimeListenerPassed;
         public bool persistentListenerPassed;
         public bool exceptionRecoveryPassed;
+        public int exceptionCasesPassed;
+        public int exceptionRecoveriesPassed;
         public int persistentFocusGainedCount;
         public int persistentValueChangedCount;
         public int persistentEndEditCount;
@@ -414,6 +941,14 @@ namespace Milestro.TextInputLifecycleQA
         public string persistentEndPayload = string.Empty;
         public string persistentSequence = string.Empty;
         public string message = string.Empty;
+    }
+
+    public enum TextInputLifecycleQaExceptionEvent
+    {
+        FocusGained = 0,
+        ValueChanged = 1,
+        EndEdit = 2,
+        FocusLost = 3
     }
 
     public enum TextInputLifecycleQaProfilerCase
