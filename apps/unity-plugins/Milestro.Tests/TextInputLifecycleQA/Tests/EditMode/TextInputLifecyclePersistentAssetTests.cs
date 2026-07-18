@@ -142,6 +142,50 @@ namespace Milestro.TextInputLifecycleQA.Tests
             }
         }
 
+        [Test]
+        public void ProfilerLauncherRestoresBuildSettingsAndPlayModeStartSceneExactly()
+        {
+            if (TextInputLifecycleQaProfilerLauncher.HasPendingRestore)
+            {
+                TextInputLifecycleQaProfilerLauncher.RestoreEditorState();
+            }
+            var originalScenes = EditorBuildSettings.scenes;
+            var originalStartScene = EditorSceneManager.playModeStartScene;
+            try
+            {
+                TextInputLifecycleQaFixtureBuilder.Generate(TestHead, TestTree);
+
+                TextInputLifecycleQaProfilerLauncher.PrepareTemporaryEditorState();
+
+                Assert.That(TextInputLifecycleQaProfilerLauncher.HasPendingRestore, Is.True);
+                var bootstrap = AssetDatabase.LoadAssetAtPath<SceneAsset>(
+                    TextInputLifecycleQaFixtureBuilder.BootstrapScenePath);
+                var target = AssetDatabase.LoadAssetAtPath<SceneAsset>(
+                    TextInputLifecycleQaFixtureBuilder.ScenePath);
+                Assert.That(bootstrap, Is.Not.Null);
+                Assert.That(target, Is.Not.Null);
+                Assert.That(EditorSceneManager.playModeStartScene, Is.EqualTo(bootstrap));
+                AssertPreparedBuildScene(TextInputLifecycleQaFixtureBuilder.BootstrapScenePath);
+                AssertPreparedBuildScene(TextInputLifecycleQaFixtureBuilder.ScenePath);
+
+                TextInputLifecycleQaProfilerLauncher.RestoreEditorState();
+
+                Assert.That(TextInputLifecycleQaProfilerLauncher.HasPendingRestore, Is.False);
+                AssertBuildSettingsEqual(EditorBuildSettings.scenes, originalScenes);
+                Assert.That(EditorSceneManager.playModeStartScene, Is.EqualTo(originalStartScene));
+            }
+            finally
+            {
+                if (TextInputLifecycleQaProfilerLauncher.HasPendingRestore)
+                {
+                    TextInputLifecycleQaProfilerLauncher.RestoreEditorState();
+                }
+                EditorBuildSettings.scenes = originalScenes;
+                EditorSceneManager.playModeStartScene = originalStartScene;
+                TextInputLifecycleQaFixtureBuilder.DeleteGeneratedAssets();
+            }
+        }
+
         private static GameObject? FindRoot(Scene scene, string name)
         {
             foreach (var root in scene.GetRootGameObjects())
@@ -194,6 +238,38 @@ namespace Milestro.TextInputLifecycleQA.Tests
                 $"{phase} invoked onFocusGained on an imported or transient receiver.");
             Assert.That(TextInputLifecycleQaStableRecorder.FocusLostCount, Is.Zero,
                 $"{phase} invoked onFocusLost on an imported or transient receiver.");
+        }
+
+        private static void AssertPreparedBuildScene(string path)
+        {
+            var count = 0;
+            var enabled = false;
+            foreach (var scene in EditorBuildSettings.scenes)
+            {
+                if (scene.path != path)
+                {
+                    continue;
+                }
+                ++count;
+                enabled = scene.enabled;
+            }
+            Assert.That(count, Is.EqualTo(1), $"Prepared scene count mismatch for {path}.");
+            Assert.That(enabled, Is.True, $"Prepared scene is disabled: {path}.");
+            Assert.That(SceneUtility.GetBuildIndexByScenePath(path), Is.GreaterThanOrEqualTo(0),
+                $"Prepared scene is not resolvable through Build Settings: {path}.");
+        }
+
+        private static void AssertBuildSettingsEqual(EditorBuildSettingsScene[] actual,
+            EditorBuildSettingsScene[] expected)
+        {
+            Assert.That(actual.Length, Is.EqualTo(expected.Length));
+            for (var index = 0; index < actual.Length; ++index)
+            {
+                Assert.That(actual[index].path, Is.EqualTo(expected[index].path),
+                    $"Build Settings path mismatch at index {index}.");
+                Assert.That(actual[index].enabled, Is.EqualTo(expected[index].enabled),
+                    $"Build Settings enabled mismatch at index {index}.");
+            }
         }
     }
 }
