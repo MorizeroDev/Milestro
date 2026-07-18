@@ -19,6 +19,11 @@ namespace Milestro.TextInputLifecycleQA
         public string EndEditPayload { get; private set; } = string.Empty;
         public IReadOnlyList<string> Sequence => sequence;
 
+        public bool IsBoundTo(TextInput target)
+        {
+            return bound && input == target;
+        }
+
         public void Configure(TextInput target)
         {
             Unbind();
