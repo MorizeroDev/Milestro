@@ -6,26 +6,26 @@ using UnityEditor.Build.Reporting;
 using UnityEditor.Compilation;
 using UnityEngine;
 
-namespace Milestro.TextInputLifecycleQA.Editor
+namespace Milestro.Tests.TextInputLifecycle.Integration.Editor
 {
-    public static class TextInputLifecycleQaPlayerBuilder
+    public static class TextInputLifecycleIntegrationPlayerBuilder
     {
-        public const string OutputPath = "Build/Task159QA/TextInputLifecycleQA.app";
+        public const string OutputPath = "Build/Task159Integration/TextInputLifecycleIntegration.app";
 
         private static readonly Type[] RequiredRuntimeTypes =
         {
-            typeof(TextInputLifecycleQaBootstrap),
-            typeof(TextInputLifecycleQaReceiver),
-            typeof(TextInputLifecycleQaRuntimeListener),
-            typeof(TextInputLifecycleQaScenarioRunner),
-            typeof(TextInputLifecycleQaStrictProvider),
-            typeof(TextInputLifecycleQaInputModule)
+            typeof(TextInputLifecycleIntegrationBootstrap),
+            typeof(TextInputLifecycleIntegrationReceiver),
+            typeof(TextInputLifecycleIntegrationRuntimeListener),
+            typeof(TextInputLifecycleIntegrationScenarioRunner),
+            typeof(TextInputLifecycleIntegrationStrictProvider),
+            typeof(TextInputLifecycleIntegrationInputModule)
         };
 
-        [MenuItem("Milestro/Task 159/Build macOS IL2CPP Lifecycle QA Player")]
+        [MenuItem("Milestro/Task 159/Build macOS IL2CPP Lifecycle Integration Player")]
         public static void BuildMacOsIl2Cpp()
         {
-            TextInputLifecycleQaFixtureBuilder.GenerateFromEnvironment();
+            TextInputLifecycleIntegrationFixtureBuilder.GenerateFromEnvironment();
 
             var namedTarget = NamedBuildTarget.Standalone;
             var previousBackend = PlayerSettings.GetScriptingBackend(namedTarget);
@@ -33,7 +33,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
             var buildOptions = BuildOptions.Development;
             if ((buildOptions & BuildOptions.IncludeTestAssemblies) != 0)
             {
-                throw new InvalidOperationException("Task 159 QA player must exclude test assemblies.");
+                throw new InvalidOperationException("Task 159 Integration player must exclude test assemblies.");
             }
             ValidatePlayerAssemblyBoundary();
 
@@ -47,8 +47,8 @@ namespace Milestro.TextInputLifecycleQA.Editor
                 {
                     scenes = new[]
                     {
-                        TextInputLifecycleQaFixtureBuilder.BootstrapScenePath,
-                        TextInputLifecycleQaFixtureBuilder.ScenePath
+                        TextInputLifecycleIntegrationFixtureBuilder.BootstrapScenePath,
+                        TextInputLifecycleIntegrationFixtureBuilder.ScenePath
                     },
                     locationPathName = OutputPath,
                     target = BuildTarget.StandaloneOSX,
@@ -62,11 +62,11 @@ namespace Milestro.TextInputLifecycleQA.Editor
                 PlayerSettings.SetManagedStrippingLevel(namedTarget, previousStripping);
             }
 
-            Debug.Log($"Task 159 QA player build result: {report.summary.result}");
+            Debug.Log($"Task 159 Integration player build result: {report.summary.result}");
             if (report.summary.result != BuildResult.Succeeded)
             {
                 throw new InvalidOperationException(
-                    $"Task 159 QA player build failed: {report.summary.result}.");
+                    $"Task 159 Integration player build failed: {report.summary.result}.");
             }
         }
 
@@ -76,13 +76,13 @@ namespace Milestro.TextInputLifecycleQA.Editor
             foreach (var assembly in CompilationPipeline.GetAssemblies(
                          AssembliesType.PlayerWithoutTestAssemblies))
             {
-                if (assembly.name == "Milestro.TextInputLifecycleQA.Runtime")
+                if (assembly.name == "Milestro.Tests.TextInputLifecycle.Integration.Runtime")
                 {
                     runtimeFound = true;
                 }
-                if (assembly.name == "Milestro.TextInputLifecycleQA.Editor" ||
-                    assembly.name == "Milestro.TextInputLifecycleQA.EditModeTests" ||
-                    assembly.name == "Milestro.TextInputLifecycleQA.PlayModeTests")
+                if (assembly.name == "Milestro.Tests.TextInputLifecycle.Integration.Editor" ||
+                    assembly.name == "Milestro.Tests.TextInputLifecycle.Integration.EditModeTests" ||
+                    assembly.name == "Milestro.Tests.TextInputLifecycle.Integration.PlayModeTests")
                 {
                     throw new InvalidOperationException(
                         $"Test assembly leaked into PlayerWithoutTestAssemblies: {assembly.name}");
@@ -91,14 +91,14 @@ namespace Milestro.TextInputLifecycleQA.Editor
             if (!runtimeFound)
             {
                 throw new InvalidOperationException(
-                    "Task 159 QA runtime assembly is missing from PlayerWithoutTestAssemblies.");
+                    "Task 159 Integration runtime assembly is missing from PlayerWithoutTestAssemblies.");
             }
             foreach (var runtimeType in RequiredRuntimeTypes)
             {
-                if (runtimeType.Assembly.GetName().Name != "Milestro.TextInputLifecycleQA.Runtime")
+                if (runtimeType.Assembly.GetName().Name != "Milestro.Tests.TextInputLifecycle.Integration.Runtime")
                 {
                     throw new InvalidOperationException(
-                        $"Task 159 QA runtime type has the wrong assembly: {runtimeType.FullName}");
+                        $"Task 159 Integration runtime type has the wrong assembly: {runtimeType.FullName}");
                 }
             }
         }

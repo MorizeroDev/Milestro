@@ -6,7 +6,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace Milestro.Tests
+namespace Milestro.Tests.TextInputLifecycle.Unit
 {
     public class TextInputLifecycleFacadeTests
     {

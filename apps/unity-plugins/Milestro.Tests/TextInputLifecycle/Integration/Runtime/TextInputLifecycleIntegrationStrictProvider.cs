@@ -3,12 +3,12 @@ using System.Runtime.CompilerServices;
 using Milestro.Input;
 using UnityEngine;
 
-namespace Milestro.TextInputLifecycleQA
+namespace Milestro.Tests.TextInputLifecycle.Integration
 {
-    public sealed class TextInputLifecycleQaStrictProvider : IHybridInputProvider,
+    public sealed class TextInputLifecycleIntegrationStrictProvider : IHybridInputProvider,
         IHybridInputFocusSessionProvider
     {
-        public const string ProviderId = "milestro-task159-qa";
+        public const string ProviderId = "milestro-task159-integration";
 
         private IHybridInputEventSink? sessionSink;
 
@@ -32,7 +32,7 @@ namespace Milestro.TextInputLifecycleQA
         public HybridInputProviderMatch Match(HybridInputEnvironment environment)
         {
             return environment.EventSystemCount == 1 &&
-                   environment.ActiveModule is TextInputLifecycleQaInputModule
+                   environment.ActiveModule is TextInputLifecycleIntegrationInputModule
                 ? HybridInputProviderMatch.Exact
                 : HybridInputProviderMatch.None;
         }
@@ -77,7 +77,7 @@ namespace Milestro.TextInputLifecycleQA
         {
             if (sessionSink == null)
             {
-                throw new System.InvalidOperationException("No focused TextInput QA session is active.");
+                throw new System.InvalidOperationException("No focused TextInput Integration session is active.");
             }
 
             sessionSink.Enqueue(HybridInputEvent.CommittedText(value, Time.unscaledTimeAsDouble));
@@ -87,7 +87,7 @@ namespace Milestro.TextInputLifecycleQA
         {
             if (sessionSink == null)
             {
-                throw new System.InvalidOperationException("No focused TextInput QA session is active.");
+                throw new System.InvalidOperationException("No focused TextInput Integration session is active.");
             }
 
             sessionSink.ReplacePressedKeys(pressedKeys);

@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Milestro.TextInputLifecycleQA
+namespace Milestro.Tests.TextInputLifecycle.Integration
 {
-    public sealed class TextInputLifecycleQaReceiver : MonoBehaviour
+    public sealed class TextInputLifecycleIntegrationReceiver : MonoBehaviour
     {
         private readonly List<string> sequence = new List<string>();
 
@@ -27,9 +27,9 @@ namespace Milestro.TextInputLifecycleQA
             sequence.Clear();
         }
 
-        public TextInputLifecycleQaRecordsSnapshot CaptureRecords()
+        public TextInputLifecycleIntegrationRecordsSnapshot CaptureRecords()
         {
-            return new TextInputLifecycleQaRecordsSnapshot(ValueChangedCount,
+            return new TextInputLifecycleIntegrationRecordsSnapshot(ValueChangedCount,
                 EndEditCount,
                 FocusGainedCount,
                 FocusLostCount,
@@ -38,7 +38,7 @@ namespace Milestro.TextInputLifecycleQA
                 sequence.ToArray());
         }
 
-        public void RestoreRecords(TextInputLifecycleQaRecordsSnapshot snapshot)
+        public void RestoreRecords(TextInputLifecycleIntegrationRecordsSnapshot snapshot)
         {
             if (snapshot == null)
             {
@@ -54,7 +54,7 @@ namespace Milestro.TextInputLifecycleQA
             sequence.AddRange(snapshot.Sequence);
         }
 
-        public bool RecordsMatch(TextInputLifecycleQaRecordsSnapshot snapshot)
+        public bool RecordsMatch(TextInputLifecycleIntegrationRecordsSnapshot snapshot)
         {
             if (snapshot == null || ValueChangedCount != snapshot.ValueChangedCount ||
                 EndEditCount != snapshot.EndEditCount ||
@@ -81,7 +81,7 @@ namespace Milestro.TextInputLifecycleQA
             ++ValueChangedCount;
             ValueChangedPayload = value;
             sequence.Add("ValueChanged");
-            TextInputLifecycleQaStableRecorder.RecordValueChanged();
+            TextInputLifecycleIntegrationStableRecorder.RecordValueChanged();
         }
 
         public void OnEndEdit(string value)
@@ -89,27 +89,27 @@ namespace Milestro.TextInputLifecycleQA
             ++EndEditCount;
             EndEditPayload = value;
             sequence.Add("EndEdit");
-            TextInputLifecycleQaStableRecorder.RecordEndEdit();
+            TextInputLifecycleIntegrationStableRecorder.RecordEndEdit();
         }
 
         public void OnFocusGained()
         {
             ++FocusGainedCount;
             sequence.Add("FocusGained");
-            TextInputLifecycleQaStableRecorder.RecordFocusGained();
+            TextInputLifecycleIntegrationStableRecorder.RecordFocusGained();
         }
 
         public void OnFocusLost()
         {
             ++FocusLostCount;
             sequence.Add("FocusLost");
-            TextInputLifecycleQaStableRecorder.RecordFocusLost();
+            TextInputLifecycleIntegrationStableRecorder.RecordFocusLost();
         }
     }
 
-    public sealed class TextInputLifecycleQaRecordsSnapshot
+    public sealed class TextInputLifecycleIntegrationRecordsSnapshot
     {
-        public TextInputLifecycleQaRecordsSnapshot(int valueChangedCount,
+        public TextInputLifecycleIntegrationRecordsSnapshot(int valueChangedCount,
             int endEditCount,
             int focusGainedCount,
             int focusLostCount,
@@ -135,7 +135,7 @@ namespace Milestro.TextInputLifecycleQA
         public string[] Sequence { get; }
     }
 
-    public static class TextInputLifecycleQaStableRecorder
+    public static class TextInputLifecycleIntegrationStableRecorder
     {
         private static bool armed;
 

@@ -6,19 +6,19 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.TestTools;
 
-namespace Milestro.TextInputLifecycleQA.Tests
+namespace Milestro.Tests.TextInputLifecycle.Integration.PlayMode
 {
     public class TextInputLifecycleFacadePlayModeTests
     {
         [UnityTest]
         public IEnumerator RealDispatcherCoversNoListenerRuntimePersistentExceptionAndRecovery()
         {
-            TextInputLifecycleQaStableRecorder.ArmForTargetScene(
+            TextInputLifecycleIntegrationStableRecorder.ArmForTargetScene(
                 "1590000000000000000000000000000000000001",
                 "1590000000000000000000000000000000000002");
             var eventSystemObject = new GameObject("Task159 EventSystem",
                 typeof(EventSystem),
-                typeof(TextInputLifecycleQaInputModule));
+                typeof(TextInputLifecycleIntegrationInputModule));
             var root = new GameObject("Task159 Scenario Root");
             root.SetActive(false);
             try
@@ -26,16 +26,16 @@ namespace Milestro.TextInputLifecycleQA.Tests
                 var noListener = CreateInput("NoListener", root.transform);
                 var runtimeListener = CreateInput("RuntimeAddListener", root.transform);
                 var runtimeObserver = runtimeListener.gameObject
-                    .AddComponent<TextInputLifecycleQaRuntimeListener>();
+                    .AddComponent<TextInputLifecycleIntegrationRuntimeListener>();
                 runtimeObserver.Configure(runtimeListener);
                 var persistentListener = CreateInput("PersistentListener", root.transform);
-                var receiver = persistentListener.gameObject.AddComponent<TextInputLifecycleQaReceiver>();
+                var receiver = persistentListener.gameObject.AddComponent<TextInputLifecycleIntegrationReceiver>();
                 persistentListener.onValueChanged.AddListener(receiver.OnValueChanged);
                 persistentListener.onEndEdit.AddListener(receiver.OnEndEdit);
                 persistentListener.onFocusGained.AddListener(receiver.OnFocusGained);
                 persistentListener.onFocusLost.AddListener(receiver.OnFocusLost);
 
-                var runner = root.AddComponent<TextInputLifecycleQaScenarioRunner>();
+                var runner = root.AddComponent<TextInputLifecycleIntegrationScenarioRunner>();
                 runner.Configure(noListener,
                     runtimeListener,
                     runtimeObserver,
@@ -63,8 +63,8 @@ namespace Milestro.TextInputLifecycleQA.Tests
             }
             finally
             {
-                TextInputLifecycleQaStableRecorder.Disarm();
-                TextInputLifecycleQaStableRecorder.Reset();
+                TextInputLifecycleIntegrationStableRecorder.Disarm();
+                TextInputLifecycleIntegrationStableRecorder.Reset();
                 HybridInputRuntime.SetProviderOverride(null);
                 Object.Destroy(root);
                 Object.Destroy(eventSystemObject);

@@ -5,19 +5,19 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Milestro.TextInputLifecycleQA.Editor
+namespace Milestro.Tests.TextInputLifecycle.Integration.Editor
 {
     [InitializeOnLoad]
-    public static class TextInputLifecycleQaProfilerLauncher
+    public static class TextInputLifecycleIntegrationProfilerLauncher
     {
         private const int StateVersion = 1;
         private const double InterruptedTransitionGraceSeconds = 1d;
         private const string PendingStateKey =
-            "Milestro.TextInputLifecycleQA.ProfilerLauncher.PendingState.v1";
+            "Milestro.Tests.TextInputLifecycle.Integration.ProfilerLauncher.PendingState.v1";
         private static bool restoreFailureLogged;
         private static double recoverNotBefore;
 
-        static TextInputLifecycleQaProfilerLauncher()
+        static TextInputLifecycleIntegrationProfilerLauncher()
         {
             DelayInterruptedTransitionRecovery();
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
@@ -35,12 +35,12 @@ namespace Milestro.TextInputLifecycleQA.Editor
             if (EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode)
             {
                 throw new InvalidOperationException(
-                    "Task 159 Profiler QA must be launched from a stable Edit Mode state.");
+                    "Task 159 Profiler Integration must be launched from a stable Edit Mode state.");
             }
             if (EditorApplication.isCompiling || EditorApplication.isUpdating)
             {
                 throw new InvalidOperationException(
-                    "Wait for compilation and asset import to finish before launching Task 159 Profiler QA.");
+                    "Wait for compilation and asset import to finish before launching Task 159 Profiler Integration.");
             }
 
             PrepareTemporaryEditorState();
@@ -61,7 +61,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
             if (EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode)
             {
                 throw new InvalidOperationException(
-                    "Task 159 Profiler QA settings cannot be prepared during a Play Mode transition.");
+                    "Task 159 Profiler Integration settings cannot be prepared during a Play Mode transition.");
             }
             if (HasPendingRestore)
             {
@@ -69,9 +69,9 @@ namespace Milestro.TextInputLifecycleQA.Editor
             }
 
             // Validation must precede the snapshot and all temporary Editor settings changes.
-            TextInputLifecycleQaFixtureBuilder.ValidateGeneratedAssets();
-            var bootstrap = RequireSceneAsset(TextInputLifecycleQaFixtureBuilder.BootstrapScenePath);
-            RequireSceneAsset(TextInputLifecycleQaFixtureBuilder.ScenePath);
+            TextInputLifecycleIntegrationFixtureBuilder.ValidateGeneratedAssets();
+            var bootstrap = RequireSceneAsset(TextInputLifecycleIntegrationFixtureBuilder.BootstrapScenePath);
+            RequireSceneAsset(TextInputLifecycleIntegrationFixtureBuilder.ScenePath);
 
             var state = CaptureState();
             SessionState.SetString(PendingStateKey, JsonUtility.ToJson(state));
@@ -139,30 +139,30 @@ namespace Milestro.TextInputLifecycleQA.Editor
             for (var index = 0; index < original.Length; ++index)
             {
                 var path = original[index].path;
-                if (path == TextInputLifecycleQaFixtureBuilder.BootstrapScenePath ||
-                    path == TextInputLifecycleQaFixtureBuilder.ScenePath)
+                if (path == TextInputLifecycleIntegrationFixtureBuilder.BootstrapScenePath ||
+                    path == TextInputLifecycleIntegrationFixtureBuilder.ScenePath)
                 {
                     continue;
                 }
                 scenes.Add(new EditorBuildSettingsScene(path, original[index].enabled));
             }
             scenes.Add(new EditorBuildSettingsScene(
-                TextInputLifecycleQaFixtureBuilder.BootstrapScenePath,
+                TextInputLifecycleIntegrationFixtureBuilder.BootstrapScenePath,
                 enabled: true));
-            scenes.Add(new EditorBuildSettingsScene(TextInputLifecycleQaFixtureBuilder.ScenePath,
+            scenes.Add(new EditorBuildSettingsScene(TextInputLifecycleIntegrationFixtureBuilder.ScenePath,
                 enabled: true));
             return scenes.ToArray();
         }
 
         private static void VerifyPreparedState()
         {
-            RequirePreparedScene(TextInputLifecycleQaFixtureBuilder.BootstrapScenePath);
-            RequirePreparedScene(TextInputLifecycleQaFixtureBuilder.ScenePath);
+            RequirePreparedScene(TextInputLifecycleIntegrationFixtureBuilder.BootstrapScenePath);
+            RequirePreparedScene(TextInputLifecycleIntegrationFixtureBuilder.ScenePath);
             if (CurrentPlayModeStartScenePath() !=
-                TextInputLifecycleQaFixtureBuilder.BootstrapScenePath)
+                TextInputLifecycleIntegrationFixtureBuilder.BootstrapScenePath)
             {
                 throw new InvalidOperationException(
-                    "Task 159 Profiler QA start scene is not the generated bootstrap scene.");
+                    "Task 159 Profiler Integration start scene is not the generated bootstrap scene.");
             }
         }
 
@@ -183,7 +183,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
             if (count != 1 || !enabled || SceneUtility.GetBuildIndexByScenePath(expectedPath) < 0)
             {
                 throw new InvalidOperationException(
-                    $"Task 159 Profiler QA scene is not uniquely enabled and resolvable: {expectedPath}");
+                    $"Task 159 Profiler Integration scene is not uniquely enabled and resolvable: {expectedPath}");
             }
         }
 
@@ -193,7 +193,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
             if (actual.Length != expected.scenes.Length)
             {
                 throw new InvalidOperationException(
-                    "Task 159 Profiler QA did not restore the original Build Settings scene count.");
+                    "Task 159 Profiler Integration did not restore the original Build Settings scene count.");
             }
             for (var index = 0; index < actual.Length; ++index)
             {
@@ -201,13 +201,13 @@ namespace Milestro.TextInputLifecycleQA.Editor
                     actual[index].enabled != expected.scenes[index].enabled)
                 {
                     throw new InvalidOperationException(
-                        $"Task 159 Profiler QA Build Settings restoration mismatch at index {index}.");
+                        $"Task 159 Profiler Integration Build Settings restoration mismatch at index {index}.");
                 }
             }
             if (CurrentPlayModeStartScenePath() != expected.playModeStartScenePath)
             {
                 throw new InvalidOperationException(
-                    "Task 159 Profiler QA did not restore the original Play Mode start scene.");
+                    "Task 159 Profiler Integration did not restore the original Play Mode start scene.");
             }
         }
 
@@ -216,7 +216,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
             var scene = AssetDatabase.LoadAssetAtPath<SceneAsset>(path);
             if (scene == null)
             {
-                throw new InvalidOperationException($"Task 159 QA scene is missing: {path}");
+                throw new InvalidOperationException($"Task 159 Integration scene is missing: {path}");
             }
             return scene;
         }
@@ -235,7 +235,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
                 state.playModeStartScenePath == null)
             {
                 throw new InvalidOperationException(
-                    "Task 159 Profiler QA pending Editor settings snapshot is invalid.");
+                    "Task 159 Profiler Integration pending Editor settings snapshot is invalid.");
             }
             return state;
         }

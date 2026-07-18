@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Milestro.Components;
-using Milestro.TextInputLifecycleQA.Editor;
+using Milestro.Tests.TextInputLifecycle.Integration.Editor;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -11,7 +11,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
 
-namespace Milestro.TextInputLifecycleQA.Tests
+namespace Milestro.Tests.TextInputLifecycle.Integration.EditMode
 {
     public class TextInputLifecyclePersistentAssetTests
     {
@@ -26,71 +26,71 @@ namespace Milestro.TextInputLifecycleQA.Tests
             Scene opened = default;
             try
             {
-                TextInputLifecycleQaStableRecorder.Arm();
+                TextInputLifecycleIntegrationStableRecorder.Arm();
                 try
                 {
-                    TextInputLifecycleQaFixtureBuilder.GenerateAssetsWithoutValidation(TestHead,
+                    TextInputLifecycleIntegrationFixtureBuilder.GenerateAssetsWithoutValidation(TestHead,
                         TestTree);
                     AssertStableRecorderIsSilent("initial asset generation/import");
                 }
                 finally
                 {
-                    TextInputLifecycleQaStableRecorder.Disarm();
-                    TextInputLifecycleQaStableRecorder.Reset();
+                    TextInputLifecycleIntegrationStableRecorder.Disarm();
+                    TextInputLifecycleIntegrationStableRecorder.Reset();
                 }
 
-                TextInputLifecycleQaStableRecorder.Arm();
+                TextInputLifecycleIntegrationStableRecorder.Arm();
                 try
                 {
-                    TextInputLifecycleQaFixtureBuilder.ValidateGeneratedAssets();
+                    TextInputLifecycleIntegrationFixtureBuilder.ValidateGeneratedAssets();
                     AssertStableRecorderIsSilent("first builder validation/scene open");
                 }
                 finally
                 {
-                    TextInputLifecycleQaStableRecorder.Disarm();
-                    TextInputLifecycleQaStableRecorder.Reset();
+                    TextInputLifecycleIntegrationStableRecorder.Disarm();
+                    TextInputLifecycleIntegrationStableRecorder.Reset();
                 }
 
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(
-                    TextInputLifecycleQaFixtureBuilder.PrefabPath);
+                    TextInputLifecycleIntegrationFixtureBuilder.PrefabPath);
                 Assert.That(prefab, Is.Not.Null);
-                AssertReceiverIsSilent(prefab!.GetComponent<TextInputLifecycleQaReceiver>());
+                AssertReceiverIsSilent(prefab!.GetComponent<TextInputLifecycleIntegrationReceiver>());
 
-                TextInputLifecycleQaStableRecorder.Arm();
+                TextInputLifecycleIntegrationStableRecorder.Arm();
                 try
                 {
-                    AssetDatabase.ImportAsset(TextInputLifecycleQaFixtureBuilder.PrefabPath,
+                    AssetDatabase.ImportAsset(TextInputLifecycleIntegrationFixtureBuilder.PrefabPath,
                         ImportAssetOptions.ForceUpdate);
-                    AssetDatabase.ImportAsset(TextInputLifecycleQaFixtureBuilder.ScenePath,
+                    AssetDatabase.ImportAsset(TextInputLifecycleIntegrationFixtureBuilder.ScenePath,
                         ImportAssetOptions.ForceUpdate);
                     AssertStableRecorderIsSilent("asset import/deserialization");
                 }
                 finally
                 {
-                    TextInputLifecycleQaStableRecorder.Disarm();
-                    TextInputLifecycleQaStableRecorder.Reset();
+                    TextInputLifecycleIntegrationStableRecorder.Disarm();
+                    TextInputLifecycleIntegrationStableRecorder.Reset();
                 }
                 prefab = AssetDatabase.LoadAssetAtPath<GameObject>(
-                    TextInputLifecycleQaFixtureBuilder.PrefabPath);
+                    TextInputLifecycleIntegrationFixtureBuilder.PrefabPath);
                 Assert.That(prefab, Is.Not.Null);
-                AssertReceiverIsSilent(prefab!.GetComponent<TextInputLifecycleQaReceiver>());
+                AssertReceiverIsSilent(prefab!.GetComponent<TextInputLifecycleIntegrationReceiver>());
 
-                TextInputLifecycleQaStableRecorder.Arm();
+                TextInputLifecycleIntegrationStableRecorder.Arm();
                 try
                 {
                     opened = EditorSceneManager.OpenScene(
-                        TextInputLifecycleQaFixtureBuilder.ScenePath,
+                        TextInputLifecycleIntegrationFixtureBuilder.ScenePath,
                         OpenSceneMode.Additive);
                     AssertStableRecorderIsSilent("post-import Editor scene load");
                 }
                 finally
                 {
-                    TextInputLifecycleQaStableRecorder.Disarm();
-                    TextInputLifecycleQaStableRecorder.Reset();
+                    TextInputLifecycleIntegrationStableRecorder.Disarm();
+                    TextInputLifecycleIntegrationStableRecorder.Reset();
                 }
                 var persistentObject = FindRoot(opened, "InspectorPersistent");
                 Assert.That(persistentObject, Is.Not.Null);
-                var receiver = persistentObject!.GetComponent<TextInputLifecycleQaReceiver>();
+                var receiver = persistentObject!.GetComponent<TextInputLifecycleIntegrationReceiver>();
                 var input = persistentObject.GetComponent<TextInput>();
                 AssertReceiverIsSilent(receiver);
                 Assert.That(PrefabUtility.GetCorrespondingObjectFromSource(persistentObject),
@@ -108,26 +108,26 @@ namespace Milestro.TextInputLifecycleQA.Tests
 
                 Assert.That(EditorSceneManager.CloseScene(opened, removeScene: true), Is.True);
                 opened = default;
-                TextInputLifecycleQaStableRecorder.Arm();
+                TextInputLifecycleIntegrationStableRecorder.Arm();
                 try
                 {
                     opened = EditorSceneManager.OpenScene(
-                        TextInputLifecycleQaFixtureBuilder.ScenePath,
+                        TextInputLifecycleIntegrationFixtureBuilder.ScenePath,
                         OpenSceneMode.Additive);
                     AssertStableRecorderIsSilent("Editor scene reopen");
                 }
                 finally
                 {
-                    TextInputLifecycleQaStableRecorder.Disarm();
-                    TextInputLifecycleQaStableRecorder.Reset();
+                    TextInputLifecycleIntegrationStableRecorder.Disarm();
+                    TextInputLifecycleIntegrationStableRecorder.Reset();
                 }
                 AssertReceiverIsSilent(FindRoot(opened, "InspectorPersistent")!
-                    .GetComponent<TextInputLifecycleQaReceiver>());
+                    .GetComponent<TextInputLifecycleIntegrationReceiver>());
             }
             finally
             {
-                TextInputLifecycleQaStableRecorder.Disarm();
-                TextInputLifecycleQaStableRecorder.Reset();
+                TextInputLifecycleIntegrationStableRecorder.Disarm();
+                TextInputLifecycleIntegrationStableRecorder.Reset();
                 if (opened.IsValid() && opened.isLoaded)
                 {
                     EditorSceneManager.CloseScene(opened, removeScene: true);
@@ -146,7 +146,7 @@ namespace Milestro.TextInputLifecycleQA.Tests
                 {
                     EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
                 }
-                TextInputLifecycleQaFixtureBuilder.DeleteGeneratedAssets();
+                TextInputLifecycleIntegrationFixtureBuilder.DeleteGeneratedAssets();
             }
         }
 
@@ -154,44 +154,44 @@ namespace Milestro.TextInputLifecycleQA.Tests
         public void ProfilerLauncherRestoresBuildSettingsAndPlayModeStartSceneExactly()
         {
             using var testSceneGuard = TestRunnerSceneGuard.Enter();
-            if (TextInputLifecycleQaProfilerLauncher.HasPendingRestore)
+            if (TextInputLifecycleIntegrationProfilerLauncher.HasPendingRestore)
             {
-                TextInputLifecycleQaProfilerLauncher.RestoreEditorState();
+                TextInputLifecycleIntegrationProfilerLauncher.RestoreEditorState();
             }
             var originalScenes = EditorBuildSettings.scenes;
             var originalStartScene = EditorSceneManager.playModeStartScene;
             try
             {
-                TextInputLifecycleQaFixtureBuilder.Generate(TestHead, TestTree);
+                TextInputLifecycleIntegrationFixtureBuilder.Generate(TestHead, TestTree);
 
-                TextInputLifecycleQaProfilerLauncher.PrepareTemporaryEditorState();
+                TextInputLifecycleIntegrationProfilerLauncher.PrepareTemporaryEditorState();
 
-                Assert.That(TextInputLifecycleQaProfilerLauncher.HasPendingRestore, Is.True);
+                Assert.That(TextInputLifecycleIntegrationProfilerLauncher.HasPendingRestore, Is.True);
                 var bootstrap = AssetDatabase.LoadAssetAtPath<SceneAsset>(
-                    TextInputLifecycleQaFixtureBuilder.BootstrapScenePath);
+                    TextInputLifecycleIntegrationFixtureBuilder.BootstrapScenePath);
                 var target = AssetDatabase.LoadAssetAtPath<SceneAsset>(
-                    TextInputLifecycleQaFixtureBuilder.ScenePath);
+                    TextInputLifecycleIntegrationFixtureBuilder.ScenePath);
                 Assert.That(bootstrap, Is.Not.Null);
                 Assert.That(target, Is.Not.Null);
                 Assert.That(EditorSceneManager.playModeStartScene, Is.EqualTo(bootstrap));
-                AssertPreparedBuildScene(TextInputLifecycleQaFixtureBuilder.BootstrapScenePath);
-                AssertPreparedBuildScene(TextInputLifecycleQaFixtureBuilder.ScenePath);
+                AssertPreparedBuildScene(TextInputLifecycleIntegrationFixtureBuilder.BootstrapScenePath);
+                AssertPreparedBuildScene(TextInputLifecycleIntegrationFixtureBuilder.ScenePath);
 
-                TextInputLifecycleQaProfilerLauncher.RestoreEditorState();
+                TextInputLifecycleIntegrationProfilerLauncher.RestoreEditorState();
 
-                Assert.That(TextInputLifecycleQaProfilerLauncher.HasPendingRestore, Is.False);
+                Assert.That(TextInputLifecycleIntegrationProfilerLauncher.HasPendingRestore, Is.False);
                 AssertBuildSettingsEqual(EditorBuildSettings.scenes, originalScenes);
                 Assert.That(EditorSceneManager.playModeStartScene, Is.EqualTo(originalStartScene));
             }
             finally
             {
-                if (TextInputLifecycleQaProfilerLauncher.HasPendingRestore)
+                if (TextInputLifecycleIntegrationProfilerLauncher.HasPendingRestore)
                 {
-                    TextInputLifecycleQaProfilerLauncher.RestoreEditorState();
+                    TextInputLifecycleIntegrationProfilerLauncher.RestoreEditorState();
                 }
                 EditorBuildSettings.scenes = originalScenes;
                 EditorSceneManager.playModeStartScene = originalStartScene;
-                TextInputLifecycleQaFixtureBuilder.DeleteGeneratedAssets();
+                TextInputLifecycleIntegrationFixtureBuilder.DeleteGeneratedAssets();
             }
         }
 
@@ -225,7 +225,7 @@ namespace Milestro.TextInputLifecycleQA.Tests
             return null;
         }
 
-        private static void AssertReceiverIsSilent(TextInputLifecycleQaReceiver receiver)
+        private static void AssertReceiverIsSilent(TextInputLifecycleIntegrationReceiver receiver)
         {
             Assert.That(receiver, Is.Not.Null);
             Assert.That(receiver.ValueChangedCount, Is.Zero);
@@ -237,15 +237,15 @@ namespace Milestro.TextInputLifecycleQA.Tests
 
         private static void AssertStableRecorderIsSilent(string phase)
         {
-            Assert.That(TextInputLifecycleQaStableRecorder.IsArmed, Is.True,
+            Assert.That(TextInputLifecycleIntegrationStableRecorder.IsArmed, Is.True,
                 $"Stable recorder was not armed for {phase}.");
-            Assert.That(TextInputLifecycleQaStableRecorder.ValueChangedCount, Is.Zero,
+            Assert.That(TextInputLifecycleIntegrationStableRecorder.ValueChangedCount, Is.Zero,
                 $"{phase} invoked onValueChanged on an imported or transient receiver.");
-            Assert.That(TextInputLifecycleQaStableRecorder.EndEditCount, Is.Zero,
+            Assert.That(TextInputLifecycleIntegrationStableRecorder.EndEditCount, Is.Zero,
                 $"{phase} invoked onEndEdit on an imported or transient receiver.");
-            Assert.That(TextInputLifecycleQaStableRecorder.FocusGainedCount, Is.Zero,
+            Assert.That(TextInputLifecycleIntegrationStableRecorder.FocusGainedCount, Is.Zero,
                 $"{phase} invoked onFocusGained on an imported or transient receiver.");
-            Assert.That(TextInputLifecycleQaStableRecorder.FocusLostCount, Is.Zero,
+            Assert.That(TextInputLifecycleIntegrationStableRecorder.FocusLostCount, Is.Zero,
                 $"{phase} invoked onFocusLost on an imported or transient receiver.");
         }
 
@@ -305,7 +305,7 @@ namespace Milestro.TextInputLifecycleQA.Tests
                 if (SceneManager.sceneCount != 1)
                 {
                     throw new InvalidOperationException(
-                        "Task 159 EditMode QA only takes ownership of one untitled neutral scene.");
+                        "Task 159 EditMode Integration only takes ownership of one untitled neutral scene.");
                 }
 
                 var scene = SceneManager.GetSceneAt(0);
@@ -313,7 +313,7 @@ namespace Milestro.TextInputLifecycleQA.Tests
                     SceneManager.GetActiveScene().handle != scene.handle)
                 {
                     throw new InvalidOperationException(
-                        "Task 159 EditMode QA refuses saved scenes, roots, EventSystems, or " +
+                        "Task 159 EditMode Integration refuses saved scenes, roots, EventSystems, or " +
                         "a non-active Test Runner scene.");
                 }
 
@@ -388,7 +388,7 @@ namespace Milestro.TextInputLifecycleQA.Tests
                         continue;
                     }
                     if (!scene.path.StartsWith(
-                            TextInputLifecycleQaFixtureBuilder.RootPath + "/",
+                            TextInputLifecycleIntegrationFixtureBuilder.RootPath + "/",
                             StringComparison.Ordinal))
                     {
                         failures.Add($"Refusing to close a non-test scene: {Describe(scene)}");
