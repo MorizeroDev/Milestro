@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Milestro.Components;
 using UnityEngine;
@@ -43,6 +44,55 @@ namespace Milestro.TextInputLifecycleQA
             ValueChangedPayload = string.Empty;
             EndEditPayload = string.Empty;
             sequence.Clear();
+        }
+
+        public TextInputLifecycleQaRecordsSnapshot CaptureRecords()
+        {
+            return new TextInputLifecycleQaRecordsSnapshot(ValueChangedCount,
+                EndEditCount,
+                FocusGainedCount,
+                FocusLostCount,
+                ValueChangedPayload,
+                EndEditPayload,
+                sequence.ToArray());
+        }
+
+        public void RestoreRecords(TextInputLifecycleQaRecordsSnapshot snapshot)
+        {
+            if (snapshot == null)
+            {
+                throw new ArgumentNullException(nameof(snapshot));
+            }
+            ValueChangedCount = snapshot.ValueChangedCount;
+            EndEditCount = snapshot.EndEditCount;
+            FocusGainedCount = snapshot.FocusGainedCount;
+            FocusLostCount = snapshot.FocusLostCount;
+            ValueChangedPayload = snapshot.ValueChangedPayload;
+            EndEditPayload = snapshot.EndEditPayload;
+            sequence.Clear();
+            sequence.AddRange(snapshot.Sequence);
+        }
+
+        public bool RecordsMatch(TextInputLifecycleQaRecordsSnapshot snapshot)
+        {
+            if (snapshot == null || ValueChangedCount != snapshot.ValueChangedCount ||
+                EndEditCount != snapshot.EndEditCount ||
+                FocusGainedCount != snapshot.FocusGainedCount ||
+                FocusLostCount != snapshot.FocusLostCount ||
+                ValueChangedPayload != snapshot.ValueChangedPayload ||
+                EndEditPayload != snapshot.EndEditPayload ||
+                sequence.Count != snapshot.Sequence.Length)
+            {
+                return false;
+            }
+            for (var index = 0; index < sequence.Count; ++index)
+            {
+                if (sequence[index] != snapshot.Sequence[index])
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
         private void OnEnable()

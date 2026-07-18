@@ -31,6 +31,7 @@ namespace Milestro.TextInputLifecycleQA
         private bool initialSceneLoadRuntimeListenerPassed;
         private bool initialSceneLoadPersistentReceiverPassed;
         private bool initialSceneLoadStableRecorderPassed;
+        private bool targetSceneInitialLoadPassed;
         private int exceptionCasesPassed;
         private int exceptionRecoveriesPassed;
         private bool profilerBurstRunning;
@@ -118,11 +119,15 @@ namespace Milestro.TextInputLifecycleQA
             Require(sourceHead.Length == 40 && sourceTree.Length == 40,
                 "QA source HEAD/tree must be exact 40-character object IDs.");
 
-            ValidateInitialSceneLoadSilence(runtimeListener!, persistentReceiver!);
+            ValidateInitialSceneLoadSilence(runtimeListener!,
+                persistentReceiver!,
+                sourceHead,
+                sourceTree);
             initialSceneLoadPassed = true;
             initialSceneLoadRuntimeListenerPassed = true;
             initialSceneLoadPersistentReceiverPassed = true;
             initialSceneLoadStableRecorderPassed = true;
+            targetSceneInitialLoadPassed = true;
             TextInputLifecycleQaStableRecorder.Disarm();
             TextInputLifecycleQaStableRecorder.Reset();
 
@@ -184,9 +189,10 @@ namespace Milestro.TextInputLifecycleQA
         private IEnumerator ProfilerBurst(TextInputLifecycleQaProfilerCase profilerCase)
         {
             profilerBurstRunning = true;
-            var noListenerWasActive = noListenerInput!.gameObject.activeSelf;
-            var runtimeListenerWasActive = runtimeListenerInput!.gameObject.activeSelf;
-            var persistentListenerWasActive = persistentListenerInput!.gameObject.activeSelf;
+            var snapshot = CaptureProfilerState();
+            var delivered = 0;
+            var listenerShapePassed = false;
+            var stateRestored = false;
             try
             {
                 var input = ResolveProfilerInput(profilerCase);
@@ -195,22 +201,32 @@ namespace Milestro.TextInputLifecycleQA
                 SetProfilerCaseActive(profilerCase);
                 yield return null;
                 ValidateProfilerIsolation(profilerCase, input);
+                listenerShapePassed = true;
                 ResetProfilerRecords(profilerCase);
                 input.SetTextWithoutNotify("task159-profiler-baseline");
                 yield return Select(activeProvider!, input);
                 for (var index = 0; index < ProfilerWarmupEvents; ++index)
                 {
-                    EnqueueProfilerEvent(index);
+                    var expectedText = EnqueueProfilerEvent(index);
                     yield return null;
+                    Require(input.Text == expectedText,
+                        "Profiler warmup committed-text delivery mismatch.");
                 }
+                yield return null;
                 ResetProfilerRecords(profilerCase);
                 Debug.Log($"TASK159_QA_PROFILER case={profilerCase} phase=capture-begin " +
                           $"events={ProfilerCaptureEvents} isolated=true");
+                yield return null;
                 for (var index = 0; index < ProfilerCaptureEvents; ++index)
                 {
-                    EnqueueProfilerEvent(index);
+                    var expectedText = EnqueueProfilerEvent(index);
                     yield return null;
+                    Require(input.Text == expectedText,
+                        "Profiler capture committed-text delivery mismatch.");
+                    ++delivered;
                 }
+                yield return null;
+                yield return null;
                 ValidateProfilerCapture(profilerCase);
                 Debug.Log($"TASK159_QA_PROFILER case={profilerCase} phase=capture-end " +
                           $"events={ProfilerCaptureEvents} isolated=true");
@@ -220,19 +236,123 @@ namespace Milestro.TextInputLifecycleQA
             }
             finally
             {
-                EventSystem.current?.SetSelectedGameObject(null);
-                noListenerInput!.gameObject.SetActive(noListenerWasActive);
-                runtimeListenerInput!.gameObject.SetActive(runtimeListenerWasActive);
-                persistentListenerInput!.gameObject.SetActive(persistentListenerWasActive);
-                profilerBurstRunning = false;
+                try
+                {
+                    RestoreProfilerState(snapshot);
+                    stateRestored = true;
+                }
+                finally
+                {
+                    profilerBurstRunning = false;
+                }
             }
+
+            var result = new TextInputLifecycleQaProfilerResult
+            {
+                status = delivered == ProfilerCaptureEvents && listenerShapePassed && stateRestored
+                    ? "PASS"
+                    : "FAIL",
+                profilerCase = profilerCase.ToString(),
+                delivered = delivered,
+                expectedDeliveries = ProfilerCaptureEvents,
+                listenerShapePassed = listenerShapePassed,
+                markerFramesSeparated = true,
+                stateRestored = stateRestored,
+                captureWindow = "idle begin-marker frame, frame boundary, 256 verified delivery " +
+                                "frames, full idle frame, end marker"
+            };
+            Debug.Log("TASK159_QA_PROFILER_RESULT " + JsonUtility.ToJson(result));
         }
 
-        private void EnqueueProfilerEvent(int index)
+        private string EnqueueProfilerEvent(int index)
         {
-            activeProvider!.EnqueueCommittedText((index & 1) == 0
+            var expectedText = (index & 1) == 0
                 ? "task159-profiler-a"
-                : "task159-profiler-b");
+                : "task159-profiler-b";
+            activeProvider!.EnqueueCommittedText(expectedText);
+            return expectedText;
+        }
+
+        private ProfilerStateSnapshot CaptureProfilerState()
+        {
+            return new ProfilerStateSnapshot
+            {
+                Selection = EventSystem.current!.currentSelectedGameObject,
+                ProviderHadFocusSession = activeProvider!.HasFocusSession,
+                NoListenerWasActive = noListenerInput!.gameObject.activeSelf,
+                RuntimeListenerWasActive = runtimeListenerInput!.gameObject.activeSelf,
+                PersistentListenerWasActive = persistentListenerInput!.gameObject.activeSelf,
+                RuntimeObserverWasEnabled = runtimeListener!.enabled,
+                RuntimeObserverWasBound = runtimeListener.IsBoundTo(runtimeListenerInput),
+                NoListenerText = noListenerInput.Text,
+                RuntimeListenerText = runtimeListenerInput.Text,
+                PersistentListenerText = persistentListenerInput.Text,
+                RuntimeRecords = runtimeListener.CaptureRecords(),
+                PersistentRecords = persistentReceiver!.CaptureRecords()
+            };
+        }
+
+        private void RestoreProfilerState(ProfilerStateSnapshot snapshot)
+        {
+            var eventSystem = EventSystem.current!;
+            eventSystem.SetSelectedGameObject(null);
+            Require(!activeProvider!.HasFocusSession,
+                "Profiler capture session did not release before state restoration.");
+
+            runtimeListener!.enabled = snapshot.RuntimeObserverWasEnabled;
+            noListenerInput!.gameObject.SetActive(snapshot.NoListenerWasActive);
+            runtimeListenerInput!.gameObject.SetActive(snapshot.RuntimeListenerWasActive);
+            persistentListenerInput!.gameObject.SetActive(snapshot.PersistentListenerWasActive);
+            noListenerInput.SetTextWithoutNotify(snapshot.NoListenerText);
+            runtimeListenerInput.SetTextWithoutNotify(snapshot.RuntimeListenerText);
+            persistentListenerInput.SetTextWithoutNotify(snapshot.PersistentListenerText);
+
+            eventSystem.SetSelectedGameObject(snapshot.Selection);
+            runtimeListener.RestoreRecords(snapshot.RuntimeRecords);
+            persistentReceiver!.RestoreRecords(snapshot.PersistentRecords);
+
+            Require(noListenerInput.gameObject.activeSelf == snapshot.NoListenerWasActive &&
+                    runtimeListenerInput.gameObject.activeSelf == snapshot.RuntimeListenerWasActive &&
+                    persistentListenerInput.gameObject.activeSelf ==
+                    snapshot.PersistentListenerWasActive,
+                "Profiler case active state was not restored.");
+            Require(noListenerInput.Text == snapshot.NoListenerText &&
+                    runtimeListenerInput.Text == snapshot.RuntimeListenerText &&
+                    persistentListenerInput.Text == snapshot.PersistentListenerText,
+                "Profiler TextInput text state was not restored.");
+            Require(eventSystem.currentSelectedGameObject == snapshot.Selection,
+                "Profiler EventSystem selection was not restored.");
+            Require(activeProvider.HasFocusSession == snapshot.ProviderHadFocusSession,
+                "Profiler provider focus-session state was not restored.");
+            Require(runtimeListener.enabled == snapshot.RuntimeObserverWasEnabled &&
+                    runtimeListener.IsBoundTo(runtimeListenerInput) ==
+                    snapshot.RuntimeObserverWasBound,
+                "Profiler runtime listener binding state was not restored.");
+            Require(runtimeListener.RecordsMatch(snapshot.RuntimeRecords) &&
+                    persistentReceiver.RecordsMatch(snapshot.PersistentRecords),
+                "Profiler receiver records were not restored.");
+            Require(!TextInputLifecycleQaStableRecorder.IsArmed &&
+                    TextInputLifecycleQaStableRecorder.ValueChangedCount == 0 &&
+                    TextInputLifecycleQaStableRecorder.EndEditCount == 0 &&
+                    TextInputLifecycleQaStableRecorder.FocusGainedCount == 0 &&
+                    TextInputLifecycleQaStableRecorder.FocusLostCount == 0,
+                "Profiler stable-recorder state leaked across the case.");
+        }
+
+        private sealed class ProfilerStateSnapshot
+        {
+            public GameObject? Selection;
+            public bool ProviderHadFocusSession;
+            public bool NoListenerWasActive;
+            public bool RuntimeListenerWasActive;
+            public bool PersistentListenerWasActive;
+            public bool RuntimeObserverWasEnabled;
+            public bool RuntimeObserverWasBound;
+            public string NoListenerText = string.Empty;
+            public string RuntimeListenerText = string.Empty;
+            public string PersistentListenerText = string.Empty;
+            public TextInputLifecycleQaRecordsSnapshot RuntimeRecords = null!;
+            public TextInputLifecycleQaRecordsSnapshot PersistentRecords = null!;
         }
 
         private void SetProfilerCaseActive(TextInputLifecycleQaProfilerCase profilerCase)
@@ -271,12 +391,18 @@ namespace Milestro.TextInputLifecycleQA
             switch (profilerCase)
             {
                 case TextInputLifecycleQaProfilerCase.NoListener:
+                {
                     Require(HasNoPersistentListeners(target),
                         "No-listener profiler target has a persistent listener.");
+                    var noListenerBehaviours = target.GetComponents<MonoBehaviour>();
+                    Require(noListenerBehaviours.Length == 1 &&
+                            noListenerBehaviours[0] == target,
+                        "No-listener profiler target has an unexpected listener component.");
                     Require(!runtimeListener!.isActiveAndEnabled &&
                             !runtimeListener.IsBoundTo(runtimeListenerInput),
                         "Runtime AddListener observer leaked into the no-listener profiler case.");
                     break;
+                }
                 case TextInputLifecycleQaProfilerCase.RuntimeAddListener:
                     Require(HasNoPersistentListeners(target),
                         "Runtime AddListener profiler target has a persistent listener.");
@@ -795,10 +921,15 @@ namespace Milestro.TextInputLifecycleQA
 
         private static void ValidateInitialSceneLoadSilence(
             TextInputLifecycleQaRuntimeListener runtimeRecords,
-            TextInputLifecycleQaReceiver persistentRecords)
+            TextInputLifecycleQaReceiver persistentRecords,
+            string expectedSourceHead,
+            string expectedSourceTree)
         {
             Require(TextInputLifecycleQaStableRecorder.IsArmed,
                 "Stable recorder was not armed before the initial scene load.");
+            Require(TextInputLifecycleQaStableRecorder.ArmedSourceHead == expectedSourceHead &&
+                    TextInputLifecycleQaStableRecorder.ArmedSourceTree == expectedSourceTree,
+                "Stable recorder was not armed by the exact target-scene bootstrap.");
             Require(runtimeRecords.FocusGainedCount == 0 &&
                     runtimeRecords.ValueChangedCount == 0 &&
                     runtimeRecords.EndEditCount == 0 &&
@@ -865,6 +996,7 @@ namespace Milestro.TextInputLifecycleQA
                 initialSceneLoadRuntimeListenerPassed = initialSceneLoadRuntimeListenerPassed,
                 initialSceneLoadPersistentReceiverPassed = initialSceneLoadPersistentReceiverPassed,
                 initialSceneLoadStableRecorderPassed = initialSceneLoadStableRecorderPassed,
+                targetSceneInitialLoadPassed = targetSceneInitialLoadPassed,
                 noListenerPassed = noListenerPassed,
                 runtimeListenerPassed = runtimeListenerPassed,
                 persistentListenerPassed = persistentListenerPassed,
@@ -894,6 +1026,7 @@ namespace Milestro.TextInputLifecycleQA
                 initialSceneLoadRuntimeListenerPassed = initialSceneLoadRuntimeListenerPassed,
                 initialSceneLoadPersistentReceiverPassed = initialSceneLoadPersistentReceiverPassed,
                 initialSceneLoadStableRecorderPassed = initialSceneLoadStableRecorderPassed,
+                targetSceneInitialLoadPassed = targetSceneInitialLoadPassed,
                 noListenerPassed = noListenerPassed,
                 runtimeListenerPassed = runtimeListenerPassed,
                 persistentListenerPassed = persistentListenerPassed,
@@ -927,6 +1060,7 @@ namespace Milestro.TextInputLifecycleQA
         public bool initialSceneLoadRuntimeListenerPassed;
         public bool initialSceneLoadPersistentReceiverPassed;
         public bool initialSceneLoadStableRecorderPassed;
+        public bool targetSceneInitialLoadPassed;
         public bool noListenerPassed;
         public bool runtimeListenerPassed;
         public bool persistentListenerPassed;
@@ -941,6 +1075,19 @@ namespace Milestro.TextInputLifecycleQA
         public string persistentEndPayload = string.Empty;
         public string persistentSequence = string.Empty;
         public string message = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class TextInputLifecycleQaProfilerResult
+    {
+        public string status = string.Empty;
+        public string profilerCase = string.Empty;
+        public int delivered;
+        public int expectedDeliveries;
+        public bool listenerShapePassed;
+        public bool markerFramesSeparated;
+        public bool stateRestored;
+        public string captureWindow = string.Empty;
     }
 
     public enum TextInputLifecycleQaExceptionEvent

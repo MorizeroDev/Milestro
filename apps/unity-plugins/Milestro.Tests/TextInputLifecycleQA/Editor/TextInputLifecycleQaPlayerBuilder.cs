@@ -14,6 +14,7 @@ namespace Milestro.TextInputLifecycleQA.Editor
 
         private static readonly Type[] RequiredRuntimeTypes =
         {
+            typeof(TextInputLifecycleQaBootstrap),
             typeof(TextInputLifecycleQaReceiver),
             typeof(TextInputLifecycleQaRuntimeListener),
             typeof(TextInputLifecycleQaScenarioRunner),
@@ -25,7 +26,6 @@ namespace Milestro.TextInputLifecycleQA.Editor
         public static void BuildMacOsIl2Cpp()
         {
             TextInputLifecycleQaFixtureBuilder.GenerateFromEnvironment();
-            TextInputLifecycleQaFixtureBuilder.ValidateGeneratedAssets();
 
             var namedTarget = NamedBuildTarget.Standalone;
             var previousBackend = PlayerSettings.GetScriptingBackend(namedTarget);
@@ -45,7 +45,11 @@ namespace Milestro.TextInputLifecycleQA.Editor
                 PlayerSettings.SetManagedStrippingLevel(namedTarget, ManagedStrippingLevel.Medium);
                 report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
                 {
-                    scenes = new[] { TextInputLifecycleQaFixtureBuilder.ScenePath },
+                    scenes = new[]
+                    {
+                        TextInputLifecycleQaFixtureBuilder.BootstrapScenePath,
+                        TextInputLifecycleQaFixtureBuilder.ScenePath
+                    },
                     locationPathName = OutputPath,
                     target = BuildTarget.StandaloneOSX,
                     targetGroup = BuildTargetGroup.Standalone,

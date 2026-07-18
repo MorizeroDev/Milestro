@@ -15,6 +15,8 @@ namespace Milestro.TextInputLifecycleQA.Editor
         public const string RootPath = "Assets/__MilestroTask159QA";
         public const string PrefabPath = RootPath + "/TextInputLifecycle.prefab";
         public const string ScenePath = RootPath + "/TextInputLifecycle.unity";
+        public const string SceneLoadPath = RootPath + "/TextInputLifecycle";
+        public const string BootstrapScenePath = RootPath + "/TextInputLifecycleBootstrap.unity";
 
         [MenuItem("Milestro/Task 159/Create Production Lifecycle QA Fixtures")]
         public static void GenerateFromEnvironment()
@@ -44,12 +46,40 @@ namespace Milestro.TextInputLifecycleQA.Editor
 
         public static string Generate(string sourceHead, string sourceTree)
         {
+            TextInputLifecycleQaStableRecorder.Arm();
+            string scenePath;
+            try
+            {
+                scenePath = GenerateAssetsWithoutValidation(sourceHead, sourceTree);
+                RequireStableRecorderSilence("initial asset generation/import");
+            }
+            finally
+            {
+                TextInputLifecycleQaStableRecorder.Disarm();
+                TextInputLifecycleQaStableRecorder.Reset();
+            }
+
+            TextInputLifecycleQaStableRecorder.Arm();
+            try
+            {
+                ValidateGeneratedAssets();
+                RequireStableRecorderSilence("first builder validation/scene open");
+            }
+            finally
+            {
+                TextInputLifecycleQaStableRecorder.Disarm();
+                TextInputLifecycleQaStableRecorder.Reset();
+            }
+            return scenePath;
+        }
+
+        public static string GenerateAssetsWithoutValidation(string sourceHead, string sourceTree)
+        {
             RequireObjectId(sourceHead, nameof(sourceHead));
             RequireObjectId(sourceTree, nameof(sourceTree));
             EnsureQaSceneIsNotLoaded();
             var setup = EditorSceneManager.GetSceneManagerSetup();
             var restoreSavedSetup = ValidateInitialSceneSetup(setup);
-            var generated = default(Scene);
             var generatedSuccessfully = false;
             try
             {
@@ -76,7 +106,8 @@ namespace Milestro.TextInputLifecycleQA.Editor
                     UnityEngine.Object.DestroyImmediate(prefabRoot);
                 }
 
-                generated = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                var generated = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,
+                    NewSceneMode.Single);
 
                 var canvasObject = new GameObject("Canvas", typeof(Canvas), typeof(GraphicRaycaster));
                 canvasObject.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
@@ -126,13 +157,28 @@ namespace Milestro.TextInputLifecycleQA.Editor
                 AssetDatabase.SaveAssets();
                 AssetDatabase.ImportAsset(PrefabPath, ImportAssetOptions.ForceUpdate);
                 AssetDatabase.ImportAsset(ScenePath, ImportAssetOptions.ForceUpdate);
+
+                var bootstrapScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,
+                    NewSceneMode.Single);
+                var bootstrapObject = new GameObject("Task159 QA Bootstrap");
+                SceneManager.MoveGameObjectToScene(bootstrapObject, bootstrapScene);
+                var bootstrap = bootstrapObject.AddComponent<TextInputLifecycleQaBootstrap>();
+                bootstrap.Configure(SceneLoadPath, sourceHead, sourceTree);
+                EditorUtility.SetDirty(bootstrap);
+                if (!EditorSceneManager.SaveScene(bootstrapScene, BootstrapScenePath))
+                {
+                    throw new InvalidOperationException(
+                        $"Could not save QA bootstrap scene {BootstrapScenePath}.");
+                }
+                AssetDatabase.SaveAssets();
+                AssetDatabase.ImportAsset(BootstrapScenePath, ImportAssetOptions.ForceUpdate);
                 generatedSuccessfully = true;
             }
             finally
             {
                 try
                 {
-                    RestoreSceneSetup(setup, restoreSavedSetup, generated);
+                    RestoreSceneSetup(setup, restoreSavedSetup);
                 }
                 finally
                 {
@@ -143,7 +189,6 @@ namespace Milestro.TextInputLifecycleQA.Editor
                 }
             }
 
-            ValidateGeneratedAssets();
             return ScenePath;
         }
 
@@ -216,6 +261,41 @@ namespace Milestro.TextInputLifecycleQA.Editor
                     !EditorSceneManager.CloseScene(opened, removeScene: true))
                 {
                     throw new InvalidOperationException("Could not close validated QA scene.");
+                }
+            }
+
+            ValidateBootstrapScene();
+        }
+
+        private static void ValidateBootstrapScene()
+        {
+            Scene opened = default;
+            try
+            {
+                opened = EditorSceneManager.OpenScene(BootstrapScenePath, OpenSceneMode.Additive);
+                var bootstrapObject = FindInScene(opened, "Task159 QA Bootstrap");
+                var bootstrap = bootstrapObject?.GetComponent<TextInputLifecycleQaBootstrap>();
+                if (bootstrap == null || bootstrap.TargetScenePath != SceneLoadPath ||
+                    bootstrap.SourceHead.Length != 40 || bootstrap.SourceTree.Length != 40)
+                {
+                    throw new InvalidOperationException(
+                        "QA bootstrap scene target loader is missing or misconfigured.");
+                }
+                foreach (var root in opened.GetRootGameObjects())
+                {
+                    if (root.GetComponentInChildren<TextInput>(true) != null)
+                    {
+                        throw new InvalidOperationException(
+                            "QA bootstrap scene must not contain a TextInput.");
+                    }
+                }
+            }
+            finally
+            {
+                if (opened.IsValid() && opened.isLoaded &&
+                    !EditorSceneManager.CloseScene(opened, removeScene: true))
+                {
+                    throw new InvalidOperationException("Could not close validated QA bootstrap scene.");
                 }
             }
         }
@@ -305,6 +385,19 @@ namespace Milestro.TextInputLifecycleQA.Editor
             EditorUtility.SetDirty(input);
         }
 
+        private static void RequireStableRecorderSilence(string phase)
+        {
+            if (!TextInputLifecycleQaStableRecorder.IsArmed ||
+                TextInputLifecycleQaStableRecorder.ValueChangedCount != 0 ||
+                TextInputLifecycleQaStableRecorder.EndEditCount != 0 ||
+                TextInputLifecycleQaStableRecorder.FocusGainedCount != 0 ||
+                TextInputLifecycleQaStableRecorder.FocusLostCount != 0)
+            {
+                throw new InvalidOperationException(
+                    $"Task 159 QA lifecycle notification occurred during {phase}.");
+            }
+        }
+
         private static void ValidatePersistentEvent(TextInput input,
             string fieldName,
             TextInputLifecycleQaReceiver receiver,
@@ -357,13 +450,13 @@ namespace Milestro.TextInputLifecycleQA.Editor
             return setup.Length > 0 && !hasUnsaved;
         }
 
-        private static void RestoreSceneSetup(SceneSetup[] setup, bool restoreSavedSetup, Scene generated)
+        private static void RestoreSceneSetup(SceneSetup[] setup, bool restoreSavedSetup)
         {
             if (restoreSavedSetup)
             {
                 EditorSceneManager.RestoreSceneManagerSetup(setup);
             }
-            else if (generated.IsValid() && generated.isLoaded)
+            else
             {
                 EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             }
