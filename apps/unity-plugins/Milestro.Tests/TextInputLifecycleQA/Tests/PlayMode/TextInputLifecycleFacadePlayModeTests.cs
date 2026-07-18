@@ -13,7 +13,9 @@ namespace Milestro.TextInputLifecycleQA.Tests
         [UnityTest]
         public IEnumerator RealDispatcherCoversNoListenerRuntimePersistentExceptionAndRecovery()
         {
-            TextInputLifecycleQaStableRecorder.Arm();
+            TextInputLifecycleQaStableRecorder.ArmForTargetScene(
+                "1590000000000000000000000000000000000001",
+                "1590000000000000000000000000000000000002");
             var eventSystemObject = new GameObject("Task159 EventSystem",
                 typeof(EventSystem),
                 typeof(TextInputLifecycleQaInputModule));
@@ -55,6 +57,7 @@ namespace Milestro.TextInputLifecycleQA.Tests
                 Assert.That(runner.Result.initialSceneLoadRuntimeListenerPassed, Is.True);
                 Assert.That(runner.Result.initialSceneLoadPersistentReceiverPassed, Is.True);
                 Assert.That(runner.Result.initialSceneLoadStableRecorderPassed, Is.True);
+                Assert.That(runner.Result.targetSceneInitialLoadPassed, Is.True);
                 Assert.That(runner.Result.exceptionCasesPassed, Is.EqualTo(4));
                 Assert.That(runner.Result.exceptionRecoveriesPassed, Is.EqualTo(4));
             }

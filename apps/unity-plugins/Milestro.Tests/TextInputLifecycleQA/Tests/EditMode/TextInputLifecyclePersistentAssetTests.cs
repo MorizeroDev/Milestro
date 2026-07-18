@@ -20,8 +20,30 @@ namespace Milestro.TextInputLifecycleQA.Tests
             Scene opened = default;
             try
             {
-                TextInputLifecycleQaFixtureBuilder.Generate(TestHead, TestTree);
-                TextInputLifecycleQaFixtureBuilder.ValidateGeneratedAssets();
+                TextInputLifecycleQaStableRecorder.Arm();
+                try
+                {
+                    TextInputLifecycleQaFixtureBuilder.GenerateAssetsWithoutValidation(TestHead,
+                        TestTree);
+                    AssertStableRecorderIsSilent("initial asset generation/import");
+                }
+                finally
+                {
+                    TextInputLifecycleQaStableRecorder.Disarm();
+                    TextInputLifecycleQaStableRecorder.Reset();
+                }
+
+                TextInputLifecycleQaStableRecorder.Arm();
+                try
+                {
+                    TextInputLifecycleQaFixtureBuilder.ValidateGeneratedAssets();
+                    AssertStableRecorderIsSilent("first builder validation/scene open");
+                }
+                finally
+                {
+                    TextInputLifecycleQaStableRecorder.Disarm();
+                    TextInputLifecycleQaStableRecorder.Reset();
+                }
 
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(
                     TextInputLifecycleQaFixtureBuilder.PrefabPath);
@@ -53,7 +75,7 @@ namespace Milestro.TextInputLifecycleQA.Tests
                     opened = EditorSceneManager.OpenScene(
                         TextInputLifecycleQaFixtureBuilder.ScenePath,
                         OpenSceneMode.Additive);
-                    AssertStableRecorderIsSilent("first Editor scene load");
+                    AssertStableRecorderIsSilent("post-import Editor scene load");
                 }
                 finally
                 {
