@@ -1,0 +1,106 @@
+using System.Collections.Generic;
+using Milestro.Components;
+using UnityEngine;
+
+namespace Milestro.TextInputLifecycleQA
+{
+    public sealed class TextInputLifecycleQaRuntimeListener : MonoBehaviour
+    {
+        [SerializeField] private TextInput? input;
+
+        private readonly List<string> sequence = new List<string>();
+        private bool bound;
+
+        public int ValueChangedCount { get; private set; }
+        public int EndEditCount { get; private set; }
+        public int FocusGainedCount { get; private set; }
+        public int FocusLostCount { get; private set; }
+        public string ValueChangedPayload { get; private set; } = string.Empty;
+        public string EndEditPayload { get; private set; } = string.Empty;
+        public IReadOnlyList<string> Sequence => sequence;
+
+        public void Configure(TextInput target)
+        {
+            Unbind();
+            input = target;
+            if (isActiveAndEnabled)
+            {
+                Bind();
+            }
+        }
+
+        public void ResetRecords()
+        {
+            ValueChangedCount = 0;
+            EndEditCount = 0;
+            FocusGainedCount = 0;
+            FocusLostCount = 0;
+            ValueChangedPayload = string.Empty;
+            EndEditPayload = string.Empty;
+            sequence.Clear();
+        }
+
+        private void OnEnable()
+        {
+            Bind();
+        }
+
+        private void OnDisable()
+        {
+            Unbind();
+        }
+
+        private void Bind()
+        {
+            if (bound || input == null)
+            {
+                return;
+            }
+            input.onValueChanged.AddListener(OnValueChanged);
+            input.onEndEdit.AddListener(OnEndEdit);
+            input.onFocusGained.AddListener(OnFocusGained);
+            input.onFocusLost.AddListener(OnFocusLost);
+            bound = true;
+        }
+
+        private void Unbind()
+        {
+            if (!bound || input == null)
+            {
+                bound = false;
+                return;
+            }
+            input.onValueChanged.RemoveListener(OnValueChanged);
+            input.onEndEdit.RemoveListener(OnEndEdit);
+            input.onFocusGained.RemoveListener(OnFocusGained);
+            input.onFocusLost.RemoveListener(OnFocusLost);
+            bound = false;
+        }
+
+        private void OnValueChanged(string value)
+        {
+            ++ValueChangedCount;
+            ValueChangedPayload = value;
+            sequence.Add("ValueChanged");
+        }
+
+        private void OnEndEdit(string value)
+        {
+            ++EndEditCount;
+            EndEditPayload = value;
+            sequence.Add("EndEdit");
+        }
+
+        private void OnFocusGained()
+        {
+            ++FocusGainedCount;
+            sequence.Add("FocusGained");
+        }
+
+        private void OnFocusLost()
+        {
+            ++FocusLostCount;
+            sequence.Add("FocusLost");
+        }
+    }
+}

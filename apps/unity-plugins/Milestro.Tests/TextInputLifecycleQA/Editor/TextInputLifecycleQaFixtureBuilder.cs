@@ -1,0 +1,409 @@
+using System;
+using Milestro.Components;
+using UnityEditor;
+using UnityEditor.Events;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+
+namespace Milestro.TextInputLifecycleQA.Editor
+{
+    public static class TextInputLifecycleQaFixtureBuilder
+    {
+        public const string RootPath = "Assets/__MilestroTask159QA";
+        public const string PrefabPath = RootPath + "/TextInputLifecycle.prefab";
+        public const string ScenePath = RootPath + "/TextInputLifecycle.unity";
+
+        [MenuItem("Milestro/Task 159/Create Production Lifecycle QA Fixtures")]
+        public static void GenerateFromEnvironment()
+        {
+            Generate(RequiredObjectId("MILESTRO_TASK159_HEAD"),
+                RequiredObjectId("MILESTRO_TASK159_TREE"));
+            Debug.Log($"Task 159 QA fixtures generated at {RootPath}.");
+        }
+
+        [MenuItem("Milestro/Task 159/Profiler/Run No-Listener Burst")]
+        private static void RunNoListenerProfilerBurst()
+        {
+            RunProfilerBurst(TextInputLifecycleQaProfilerCase.NoListener);
+        }
+
+        [MenuItem("Milestro/Task 159/Profiler/Run Runtime AddListener Burst")]
+        private static void RunRuntimeProfilerBurst()
+        {
+            RunProfilerBurst(TextInputLifecycleQaProfilerCase.RuntimeAddListener);
+        }
+
+        [MenuItem("Milestro/Task 159/Profiler/Run Inspector Persistent Burst")]
+        private static void RunPersistentProfilerBurst()
+        {
+            RunProfilerBurst(TextInputLifecycleQaProfilerCase.InspectorPersistent);
+        }
+
+        public static string Generate(string sourceHead, string sourceTree)
+        {
+            RequireObjectId(sourceHead, nameof(sourceHead));
+            RequireObjectId(sourceTree, nameof(sourceTree));
+            EnsureQaSceneIsNotLoaded();
+            var setup = EditorSceneManager.GetSceneManagerSetup();
+            var restoreSavedSetup = ValidateInitialSceneSetup(setup);
+            var generated = default(Scene);
+            var generatedSuccessfully = false;
+            try
+            {
+                if (AssetDatabase.IsValidFolder(RootPath) && !AssetDatabase.DeleteAsset(RootPath))
+                {
+                    throw new InvalidOperationException($"Could not remove existing QA root {RootPath}.");
+                }
+                if (!AssetDatabase.IsValidFolder("Assets"))
+                {
+                    throw new InvalidOperationException("Unity project has no Assets root.");
+                }
+                AssetDatabase.CreateFolder("Assets", "__MilestroTask159QA");
+
+                var prefabRoot = CreateTextInputObject("Persistent TextInput");
+                try
+                {
+                    var prefabInput = prefabRoot.GetComponent<TextInput>();
+                    var prefabReceiver = prefabRoot.AddComponent<TextInputLifecycleQaReceiver>();
+                    BindPersistentListeners(prefabInput, prefabReceiver);
+                    PrefabUtility.SaveAsPrefabAsset(prefabRoot, PrefabPath);
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(prefabRoot);
+                }
+
+                generated = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+                var canvasObject = new GameObject("Canvas", typeof(Canvas), typeof(GraphicRaycaster));
+                canvasObject.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+
+                var eventSystemObject = new GameObject("EventSystem",
+                    typeof(EventSystem),
+                    typeof(TextInputLifecycleQaInputModule));
+                SceneManager.MoveGameObjectToScene(eventSystemObject, generated);
+
+                var noListener = CreateTextInputObject("NoListener", canvasObject.transform);
+                Position(noListener, 260f);
+                var runtimeListener = CreateTextInputObject("RuntimeAddListener", canvasObject.transform);
+                Position(runtimeListener, 0f);
+                var runtimeInput = runtimeListener.GetComponent<TextInput>();
+                var runtimeObserver = runtimeListener.AddComponent<TextInputLifecycleQaRuntimeListener>();
+                runtimeObserver.Configure(runtimeInput);
+
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+                if (prefab == null)
+                {
+                    throw new InvalidOperationException("Generated QA prefab could not be loaded.");
+                }
+                var persistentObject = (GameObject)PrefabUtility.InstantiatePrefab(prefab, generated);
+                persistentObject.name = "InspectorPersistent";
+                persistentObject.transform.SetParent(canvasObject.transform, false);
+                Position(persistentObject, -260f);
+                var persistentInput = persistentObject.GetComponent<TextInput>();
+                var persistentReceiver = persistentObject.GetComponent<TextInputLifecycleQaReceiver>();
+                persistentInput.SetTextWithoutNotify("scene-prefab-override");
+                PrefabUtility.RecordPrefabInstancePropertyModifications(persistentInput);
+
+                var runnerObject = new GameObject("Task159 QA Runner");
+                SceneManager.MoveGameObjectToScene(runnerObject, generated);
+                var runner = runnerObject.AddComponent<TextInputLifecycleQaScenarioRunner>();
+                runner.Configure(noListener.GetComponent<TextInput>(),
+                    runtimeInput,
+                    runtimeObserver,
+                    persistentInput,
+                    persistentReceiver,
+                    sourceHead,
+                    sourceTree);
+
+                if (!EditorSceneManager.SaveScene(generated, ScenePath))
+                {
+                    throw new InvalidOperationException($"Could not save QA scene {ScenePath}.");
+                }
+                AssetDatabase.SaveAssets();
+                AssetDatabase.ImportAsset(PrefabPath, ImportAssetOptions.ForceUpdate);
+                AssetDatabase.ImportAsset(ScenePath, ImportAssetOptions.ForceUpdate);
+                generatedSuccessfully = true;
+            }
+            finally
+            {
+                try
+                {
+                    RestoreSceneSetup(setup, restoreSavedSetup, generated);
+                }
+                finally
+                {
+                    if (!generatedSuccessfully)
+                    {
+                        AssetDatabase.DeleteAsset(RootPath);
+                    }
+                }
+            }
+
+            ValidateGeneratedAssets();
+            return ScenePath;
+        }
+
+        public static void ValidateGeneratedAssets()
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+            if (prefab == null)
+            {
+                throw new InvalidOperationException("QA prefab is missing.");
+            }
+            var input = prefab.GetComponent<TextInput>();
+            var receiver = prefab.GetComponent<TextInputLifecycleQaReceiver>();
+            if (input == null || receiver == null)
+            {
+                throw new InvalidOperationException("QA prefab is missing TextInput or receiver.");
+            }
+            ValidatePersistentEvent(input, "m_OnValueChanged", receiver, "OnValueChanged", 0);
+            ValidatePersistentEvent(input, "m_OnEndEdit", receiver, "OnEndEdit", 0);
+            ValidatePersistentEvent(input, "m_OnFocusGained", receiver, "OnFocusGained", 1);
+            ValidatePersistentEvent(input, "m_OnFocusLost", receiver, "OnFocusLost", 1);
+
+            var dependencies = AssetDatabase.GetDependencies(ScenePath, recursive: true);
+            if (Array.IndexOf(dependencies, PrefabPath) < 0)
+            {
+                throw new InvalidOperationException("QA scene does not depend on the generated prefab.");
+            }
+
+            Scene opened = default;
+            try
+            {
+                opened = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Additive);
+                var persistentObject = FindInScene(opened, "InspectorPersistent");
+                if (persistentObject == null)
+                {
+                    throw new InvalidOperationException("QA scene has no persistent prefab instance.");
+                }
+                var sceneInput = persistentObject.GetComponent<TextInput>();
+                var sceneReceiver = persistentObject.GetComponent<TextInputLifecycleQaReceiver>();
+                if (sceneInput == null || sceneReceiver == null)
+                {
+                    throw new InvalidOperationException(
+                        "QA scene persistent instance is missing TextInput or receiver.");
+                }
+                ValidatePersistentEvent(sceneInput,
+                    "m_OnValueChanged",
+                    sceneReceiver,
+                    "OnValueChanged",
+                    0);
+                ValidatePersistentEvent(sceneInput, "m_OnEndEdit", sceneReceiver, "OnEndEdit", 0);
+                ValidatePersistentEvent(sceneInput,
+                    "m_OnFocusGained",
+                    sceneReceiver,
+                    "OnFocusGained",
+                    1);
+                ValidatePersistentEvent(sceneInput, "m_OnFocusLost", sceneReceiver, "OnFocusLost", 1);
+                if (PrefabUtility.GetCorrespondingObjectFromSource(persistentObject) != prefab ||
+                    !PrefabUtility.HasPrefabInstanceAnyOverrides(persistentObject, false))
+                {
+                    throw new InvalidOperationException("QA scene prefab source or override is missing.");
+                }
+                if (FindInScene(opened, "Task159 QA Runner")?
+                        .GetComponent<TextInputLifecycleQaScenarioRunner>() == null)
+                {
+                    throw new InvalidOperationException("QA scene runner is missing.");
+                }
+            }
+            finally
+            {
+                if (opened.IsValid() && opened.isLoaded &&
+                    !EditorSceneManager.CloseScene(opened, removeScene: true))
+                {
+                    throw new InvalidOperationException("Could not close validated QA scene.");
+                }
+            }
+        }
+
+        public static void DeleteGeneratedAssets()
+        {
+            EnsureQaSceneIsNotLoaded();
+            if (AssetDatabase.IsValidFolder(RootPath) && !AssetDatabase.DeleteAsset(RootPath))
+            {
+                throw new InvalidOperationException($"Could not remove QA root {RootPath}.");
+            }
+            AssetDatabase.Refresh();
+        }
+
+        private static void RunProfilerBurst(TextInputLifecycleQaProfilerCase profilerCase)
+        {
+            if (!EditorApplication.isPlaying)
+            {
+                throw new InvalidOperationException("Enter Play Mode and wait for TASK159_QA_RESULT PASS first.");
+            }
+#if UNITY_2023_1_OR_NEWER
+            var runner = UnityEngine.Object.FindFirstObjectByType<TextInputLifecycleQaScenarioRunner>();
+#else
+            var runner = UnityEngine.Object.FindObjectOfType<TextInputLifecycleQaScenarioRunner>();
+#endif
+            if (runner == null || !runner.StartProfilerBurst(profilerCase))
+            {
+                throw new InvalidOperationException(
+                    $"Could not start {profilerCase} profiler burst; wait for the QA scenario to finish.");
+            }
+        }
+
+        private static GameObject CreateTextInputObject(string name, Transform? parent = null)
+        {
+            var gameObject = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer));
+            if (parent != null)
+            {
+                gameObject.transform.SetParent(parent, false);
+            }
+            var rect = (RectTransform)gameObject.transform;
+            rect.sizeDelta = new Vector2(900f, 180f);
+            gameObject.AddComponent<TextInput>();
+            return gameObject;
+        }
+
+        private static void Position(GameObject gameObject, float y)
+        {
+            ((RectTransform)gameObject.transform).anchoredPosition = new Vector2(0f, y);
+        }
+
+        private static GameObject? FindInScene(Scene scene, string name)
+        {
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                var match = Find(root.transform, name);
+                if (match != null)
+                {
+                    return match.gameObject;
+                }
+            }
+            return null;
+        }
+
+        private static Transform? Find(Transform current, string name)
+        {
+            if (current.name == name)
+            {
+                return current;
+            }
+            for (var index = 0; index < current.childCount; ++index)
+            {
+                var match = Find(current.GetChild(index), name);
+                if (match != null)
+                {
+                    return match;
+                }
+            }
+            return null;
+        }
+
+        private static void BindPersistentListeners(TextInput input, TextInputLifecycleQaReceiver receiver)
+        {
+            UnityEventTools.AddPersistentListener(input.onValueChanged, receiver.OnValueChanged);
+            UnityEventTools.AddPersistentListener(input.onEndEdit, receiver.OnEndEdit);
+            UnityEventTools.AddPersistentListener(input.onFocusGained, receiver.OnFocusGained);
+            UnityEventTools.AddPersistentListener(input.onFocusLost, receiver.OnFocusLost);
+            EditorUtility.SetDirty(input);
+        }
+
+        private static void ValidatePersistentEvent(TextInput input,
+            string fieldName,
+            TextInputLifecycleQaReceiver receiver,
+            string methodName,
+            int expectedMode)
+        {
+            var serialized = new SerializedObject(input);
+            var calls = serialized.FindProperty(fieldName + ".m_PersistentCalls.m_Calls");
+            if (calls == null || !calls.isArray || calls.arraySize != 1)
+            {
+                throw new InvalidOperationException($"{fieldName} does not have exactly one persistent call.");
+            }
+            var call = calls.GetArrayElementAtIndex(0);
+            var target = call.FindPropertyRelative("m_Target").objectReferenceValue;
+            var method = call.FindPropertyRelative("m_MethodName").stringValue;
+            var mode = call.FindPropertyRelative("m_Mode").enumValueIndex;
+            if (target != receiver || method != methodName || mode != expectedMode)
+            {
+                throw new InvalidOperationException(
+                    $"{fieldName} persistent binding mismatch: target={target}, method={method}, mode={mode}.");
+            }
+        }
+
+        private static bool ValidateInitialSceneSetup(SceneSetup[] setup)
+        {
+            var hasUnsaved = false;
+            for (var index = 0; index < SceneManager.sceneCount; ++index)
+            {
+                var scene = SceneManager.GetSceneAt(index);
+                if (scene.isDirty)
+                {
+                    throw new InvalidOperationException(
+                        $"Save or discard dirty scene changes before generating QA fixtures: {scene.path}");
+                }
+                if (string.IsNullOrEmpty(scene.path))
+                {
+                    hasUnsaved = true;
+                    if (scene.GetRootGameObjects().Length != 0)
+                    {
+                        throw new InvalidOperationException(
+                            "The only supported unsaved setup is a clean empty scene.");
+                    }
+                }
+            }
+            if (hasUnsaved && SceneManager.sceneCount != 1)
+            {
+                throw new InvalidOperationException(
+                    "An unsaved QA entry scene cannot be mixed with other loaded scenes.");
+            }
+            return setup.Length > 0 && !hasUnsaved;
+        }
+
+        private static void RestoreSceneSetup(SceneSetup[] setup, bool restoreSavedSetup, Scene generated)
+        {
+            if (restoreSavedSetup)
+            {
+                EditorSceneManager.RestoreSceneManagerSetup(setup);
+            }
+            else if (generated.IsValid() && generated.isLoaded)
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+        }
+
+        private static void EnsureQaSceneIsNotLoaded()
+        {
+            for (var index = 0; index < SceneManager.sceneCount; ++index)
+            {
+                var scene = SceneManager.GetSceneAt(index);
+                if (scene.path.StartsWith(RootPath + "/", StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Close the loaded QA scene before regenerating or deleting assets: {scene.path}");
+                }
+            }
+        }
+
+        private static string RequiredObjectId(string environmentName)
+        {
+            var value = Environment.GetEnvironmentVariable(environmentName) ?? string.Empty;
+            RequireObjectId(value, environmentName);
+            return value;
+        }
+
+        private static void RequireObjectId(string value, string label)
+        {
+            if (value.Length != 40)
+            {
+                throw new ArgumentException($"{label} must be a 40-character Git object ID.");
+            }
+            for (var index = 0; index < value.Length; ++index)
+            {
+                var character = value[index];
+                if (!((character >= '0' && character <= '9') ||
+                      (character >= 'a' && character <= 'f')))
+                {
+                    throw new ArgumentException($"{label} must be a lowercase hexadecimal Git object ID.");
+                }
+            }
+        }
+    }
+}
