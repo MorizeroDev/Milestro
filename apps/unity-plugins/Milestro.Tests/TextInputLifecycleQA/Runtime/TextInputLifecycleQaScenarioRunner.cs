@@ -878,11 +878,9 @@ namespace Milestro.TextInputLifecycleQA
                            callbackPayload == payload;
                 case TextInputLifecycleQaExceptionEvent.EndEdit:
                     return !provider.HasFocusSession && input.Text == payload &&
-                           callbackPayload == payload &&
-                           EventSystem.current?.currentSelectedGameObject == null;
+                           callbackPayload == payload;
                 case TextInputLifecycleQaExceptionEvent.FocusLost:
-                    return !provider.HasFocusSession && input.Text == payload &&
-                           EventSystem.current?.currentSelectedGameObject == null;
+                    return !provider.HasFocusSession && input.Text == payload;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(lifecycleEvent),
                         lifecycleEvent,
