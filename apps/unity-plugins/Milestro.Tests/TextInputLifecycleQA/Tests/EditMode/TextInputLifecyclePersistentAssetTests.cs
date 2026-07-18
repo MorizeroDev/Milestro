@@ -8,6 +8,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Events;
 using UnityEngine.SceneManagement;
 
 namespace Milestro.TextInputLifecycleQA.Tests
@@ -96,9 +97,11 @@ namespace Milestro.TextInputLifecycleQA.Tests
                     Is.EqualTo(prefab));
                 Assert.That(PrefabUtility.HasPrefabInstanceAnyOverrides(persistentObject, false), Is.True);
 
+                Assert.That(input.onValueChanged.GetPersistentListenerState(0),
+                    Is.EqualTo(UnityEventCallState.RuntimeOnly));
                 input.Text = "explicit-after-scene-load";
-                Assert.That(receiver.ValueChangedCount, Is.EqualTo(1));
-                Assert.That(receiver.ValueChangedPayload, Is.EqualTo("explicit-after-scene-load"));
+                Assert.That(receiver.ValueChangedCount, Is.Zero);
+                Assert.That(receiver.ValueChangedPayload, Is.Empty);
                 Assert.That(receiver.EndEditCount, Is.Zero);
                 Assert.That(receiver.FocusGainedCount, Is.Zero);
                 Assert.That(receiver.FocusLostCount, Is.Zero);
