@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Milestro.Components;
 using Milestro.TextInputLifecycleQA.Editor;
 using NUnit.Framework;
@@ -325,26 +326,38 @@ namespace Milestro.TextInputLifecycleQA.Tests
                         $"Could not create the test-owned scene guard root: {tempRoot}");
                 }
 
+                var guardHandle = scene.handle;
                 try
                 {
-                    var guardHandle = scene.handle;
-                    if (!EditorSceneManager.SaveScene(scene, guardPath) ||
-                        !IsExactSavedGuard(scene, guardPath, guardHandle))
+                    var saveSucceeded = EditorSceneManager.SaveScene(scene, guardPath);
+                    if (!saveSucceeded)
                     {
                         throw new InvalidOperationException(
-                            $"Could not establish the exact test-owned scene guard: {guardPath}");
+                            $"Could not save the test-owned scene guard: {guardPath}");
+                    }
+                    if (!IsExactSavedGuard(scene, guardPath, guardHandle))
+                    {
+                        throw new InvalidOperationException(
+                            "Saved test guard failed its exact postcondition. " +
+                            DescribeLoadedScenes());
                     }
                     return new TestRunnerSceneGuard(tempRoot,
                         guardPath,
                         guardHandle,
                         originalDirty);
                 }
-                catch
+                catch (Exception originalFailure)
                 {
-                    if (AssetDatabase.IsValidFolder(tempRoot))
+                    var cleanupFailure = CleanupFailedEnter(tempRoot,
+                        guardHandle,
+                        originalDirty);
+                    if (cleanupFailure != null)
                     {
-                        AssetDatabase.DeleteAsset(tempRoot);
-                        AssetDatabase.Refresh();
+                        throw new InvalidOperationException(
+                            "Task 159 test guard entry failed and fail-safe cleanup could not " +
+                            "complete. Original failure: " + originalFailure.Message +
+                            "\nCleanup failure: " + cleanupFailure,
+                            originalFailure);
                     }
                     throw;
                 }
@@ -460,6 +473,101 @@ namespace Milestro.TextInputLifecycleQA.Tests
                        SceneManager.GetActiveScene().handle == expectedHandle;
             }
 
+            private static string? CleanupFailedEnter(string tempRoot,
+                int originalHandle,
+                bool originalDirty)
+            {
+                try
+                {
+                    if (IsSoleOwnedGuard(tempRoot, originalHandle))
+                    {
+                        var neutral = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,
+                            NewSceneMode.Single);
+                        if (originalDirty)
+                        {
+                            EditorSceneManager.MarkSceneDirty(neutral);
+                        }
+                        if (IsLoaded(originalHandle))
+                        {
+                            return $"Owned guard handle {originalHandle} survived the Single " +
+                                   "transition. " + DescribeLoadedScenes();
+                        }
+                        if (SceneManager.sceneCount != 1 ||
+                            SceneManager.GetActiveScene().handle != neutral.handle ||
+                            !IsUntitledNeutral(neutral) || neutral.isDirty != originalDirty)
+                        {
+                            return "Neutral Test Runner setup was not restored after leaving the " +
+                                   "owned guard. " + DescribeLoadedScenes();
+                        }
+                        return DeleteEmptyOrOwnedTempRoot(tempRoot);
+                    }
+
+                    if (IsOriginalUntitledScene(originalHandle) && IsTempRootEmpty(tempRoot))
+                    {
+                        return DeleteEmptyOrOwnedTempRoot(tempRoot);
+                    }
+
+                    return "Refusing cleanup because the original handle is no longer the sole " +
+                           "owned Guard, or because the unsaved scene/temp root changed. Evidence " +
+                           $"was preserved at {tempRoot}. " + DescribeLoadedScenes();
+                }
+                catch (Exception cleanupException)
+                {
+                    return cleanupException.GetType().Name + ": " + cleanupException.Message +
+                           ". Evidence: " + DescribeLoadedScenes();
+                }
+            }
+
+            private static bool IsSoleOwnedGuard(string tempRoot, int originalHandle)
+            {
+                if (SceneManager.sceneCount != 1)
+                {
+                    return false;
+                }
+                var scene = SceneManager.GetSceneAt(0);
+                return scene.IsValid() && scene.isLoaded &&
+                       scene.handle == originalHandle &&
+                       scene.path.StartsWith(tempRoot + "/", StringComparison.Ordinal) &&
+                       SceneManager.GetActiveScene().handle == originalHandle &&
+                       scene.GetRootGameObjects().Length == 0 &&
+                       CountEventSystems(scene) == 0;
+            }
+
+            private static bool IsOriginalUntitledScene(int originalHandle)
+            {
+                if (SceneManager.sceneCount != 1)
+                {
+                    return false;
+                }
+                var scene = SceneManager.GetSceneAt(0);
+                return scene.IsValid() && scene.isLoaded &&
+                       scene.handle == originalHandle &&
+                       SceneManager.GetActiveScene().handle == originalHandle &&
+                       IsUntitledNeutral(scene);
+            }
+
+            private static bool IsTempRootEmpty(string tempRoot)
+            {
+                return AssetDatabase.IsValidFolder(tempRoot) &&
+                       Directory.GetFileSystemEntries(tempRoot).Length == 0;
+            }
+
+            private static string? DeleteEmptyOrOwnedTempRoot(string tempRoot)
+            {
+                if (!AssetDatabase.IsValidFolder(tempRoot))
+                {
+                    return null;
+                }
+                if (!AssetDatabase.DeleteAsset(tempRoot))
+                {
+                    return $"Could not delete test-owned guard root: {tempRoot}";
+                }
+                AssetDatabase.Refresh();
+                return AssetDatabase.IsValidFolder(tempRoot)
+                    ? $"Test-owned guard root survived deletion: {tempRoot}"
+                    : null;
+            }
+
             private static int CountEventSystems(Scene scene)
             {
                 var count = 0;
@@ -487,6 +595,17 @@ namespace Milestro.TextInputLifecycleQA.Tests
                 return $"handle={scene.handle},path='{scene.path}',dirty={scene.isDirty}," +
                        $"roots={scene.GetRootGameObjects().Length}," +
                        $"eventSystems={CountEventSystems(scene)}";
+            }
+
+            private static string DescribeLoadedScenes()
+            {
+                var scenes = new List<string>();
+                for (var index = 0; index < SceneManager.sceneCount; ++index)
+                {
+                    scenes.Add(Describe(SceneManager.GetSceneAt(index)));
+                }
+                return scenes.Count == 0 ? "loadedScenes=<none>" :
+                    "loadedScenes=[" + string.Join("; ", scenes) + "]";
             }
         }
     }
