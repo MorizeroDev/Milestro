@@ -46,7 +46,7 @@ namespace Milestro.Components.Internal
             return new TextBoxHorizontalScrollState(requestedScrollX,
                 DefaultAnchor,
                 HasLayout,
-                HasLayout && Approximately(requestedScrollX, DefaultAnchor));
+                HasLayout && OffsetsEqual(requestedScrollX, DefaultAnchor));
         }
 
         internal TextBoxHorizontalScrollState Resolve(TextBoxNoWrapHorizontalLayout layout,
@@ -54,9 +54,9 @@ namespace Milestro.Components.Internal
         {
             var requestedScrollX = request.HasValue ? SanitizeOffset(request.Value) : ScrollX;
             var followsDefault = !HasLayout || FollowsDefaultAnchor;
-            if (request.HasValue && HasLayout && !Approximately(requestedScrollX, ScrollX))
+            if (request.HasValue && HasLayout && !OffsetsEqual(requestedScrollX, ScrollX))
             {
-                followsDefault = Approximately(requestedScrollX, DefaultAnchor);
+                followsDefault = OffsetsEqual(requestedScrollX, DefaultAnchor);
             }
 
             var nextScrollX = followsDefault ? layout.InitialScrollX : requestedScrollX;
@@ -72,7 +72,7 @@ namespace Milestro.Components.Internal
             return FloatUtil.IsFinite(value) ? Math.Max(0f, value) : 0f;
         }
 
-        private static bool Approximately(float a, float b)
+        internal static bool OffsetsEqual(float a, float b)
         {
             return Math.Abs(a - b) <= 0.0001f;
         }
