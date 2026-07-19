@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using Milestro.Components;
 using Milestro.Components.Internal;
 using Milestro.Model;
 using NUnit.Framework;
@@ -216,6 +217,52 @@ namespace Milestro.Tests
                 Assert.That(target.RebuildCalls, Is.EqualTo(2));
                 Assert.That(target.LastViewport.HasHorizontalScrollRequest, Is.True);
                 Assert.That(producer.scrollX, Is.EqualTo(9999999f));
+                AssertHorizontalState(producer.horizontalScrollState, 9999999f, 10000000f, false);
+            }
+            finally
+            {
+                producer.DisposeRenderTarget();
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void TextBoxTryScrollXDeliversOnePixelMoveAtTenMillionToProducerState()
+        {
+            var layout = TextBoxNoWrapHorizontalLayout.Resolve(true,
+                TextAlign.Right,
+                TextDirection.Ltr,
+                100f,
+                10000100f,
+                10000164f);
+            var gameObject = new GameObject("TextBox large scroll input test", typeof(RectTransform));
+            gameObject.SetActive(false);
+            var textBox = gameObject.AddComponent<TextBox>();
+            var producer = gameObject.AddComponent<TextBoxRenderTextureProducer>();
+            var target = new TrackingRenderTarget(layout);
+            producer.renderTargetFactory = () => target;
+            try
+            {
+                producer.ApplyHorizontalScrollState(default(TextBoxHorizontalScrollState)
+                    .Resolve(layout, TextBoxHorizontalScrollRequest.None));
+                producer.RebuildOutput(forceText: true);
+
+                var consumed = InvokeNonPublic<bool>(textBox,
+                    "TryScrollX",
+                    producer,
+                    -1f,
+                    1f,
+                    false,
+                    false,
+                    new ScrollElasticSettings());
+
+                Assert.That(consumed, Is.True);
+                Assert.That(target.RebuildCalls, Is.EqualTo(2));
+                Assert.That(producer.scrollX, Is.EqualTo(9999999f));
+                AssertHorizontalState(producer.horizontalScrollState, 9999999f, 10000000f, false);
+
+                producer.RebuildOutput(forceText: false);
+                Assert.That(target.RebuildCalls, Is.EqualTo(3));
                 AssertHorizontalState(producer.horizontalScrollState, 9999999f, 10000000f, false);
             }
             finally
@@ -661,6 +708,18 @@ namespace Milestro.Tests
             }
 
             method.Invoke(target, null);
+        }
+
+        private static T InvokeNonPublic<T>(object target, string methodName, params object[] arguments)
+        {
+            var method = target.GetType().GetMethod(methodName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            if (method == null)
+            {
+                throw new MissingMethodException(target.GetType().FullName, methodName);
+            }
+
+            return (T)method.Invoke(target, arguments)!;
         }
     }
 }

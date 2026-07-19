@@ -571,7 +571,7 @@ namespace Milestro.Components
             bool allowElastic,
             ScrollElasticSettings elasticSettings)
         {
-            if (Mathf.Approximately(contentOffsetDelta, 0f))
+            if (TextBoxHorizontalScrollState.OffsetsEqual(contentOffsetDelta, 0f))
             {
                 return false;
             }
@@ -616,7 +616,7 @@ namespace Milestro.Components
 
             scrollTweenX.Cancel();
             var nextScrollX = Mathf.Clamp(producer.scrollX + deltaPixels, 0f, producer.maxScrollX);
-            if (Mathf.Approximately(producer.scrollX, nextScrollX))
+            if (TextBoxHorizontalScrollState.OffsetsEqual(producer.scrollX, nextScrollX))
             {
                 return false;
             }
