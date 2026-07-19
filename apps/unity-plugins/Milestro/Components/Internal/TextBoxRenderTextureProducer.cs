@@ -56,7 +56,8 @@ namespace Milestro.Components.Internal
         private string m_locale = "zh-Hans";
 
         [NonSerialized] private RectTransform? rectTransformCache;
-        [NonSerialized] private TextBoxRenderTarget? renderTarget;
+        [NonSerialized] private ITextBoxRenderTarget? renderTarget;
+        [NonSerialized] internal Func<ITextBoxRenderTarget>? renderTargetFactory;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
         [NonSerialized] private float m_scrollX;
         [NonSerialized] private float m_scrollY;
@@ -270,7 +271,7 @@ namespace Milestro.Components.Internal
 
         public void ScrollByX(float delta)
         {
-            if (Mathf.Approximately(delta, 0f))
+            if (TextBoxHorizontalScrollState.OffsetsEqual(delta, 0f))
             {
                 return;
             }
@@ -535,13 +536,13 @@ namespace Milestro.Components.Internal
                 settings.Size));
         }
 
-        private TextBoxRenderTarget RenderTarget
+        private ITextBoxRenderTarget RenderTarget
         {
             get
             {
                 if (renderTarget == null)
                 {
-                    renderTarget = new TextBoxRenderTarget();
+                    renderTarget = renderTargetFactory?.Invoke() ?? new TextBoxRenderTarget();
                     renderTarget.RenderEventCompleted += OnRenderEventCompleted;
                 }
 
@@ -597,7 +598,7 @@ namespace Milestro.Components.Internal
         {
             var nextScrollX = FloatUtil.IsFinite(value) ? Mathf.Max(0f, value) : 0f;
             m_horizontalScrollState = m_horizontalScrollState.WithUserRequest(nextScrollX);
-            if (Mathf.Approximately(m_scrollX, nextScrollX))
+            if (TextBoxHorizontalScrollState.OffsetsEqual(m_scrollX, nextScrollX))
             {
                 return;
             }

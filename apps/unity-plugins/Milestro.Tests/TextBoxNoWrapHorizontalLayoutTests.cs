@@ -191,20 +191,38 @@ namespace Milestro.Tests
         }
 
         [Test]
-        public void LargeScrollTreatsAOnePixelMoveAsUserPosition()
+        public void ProducerKeepsOnePixelUserMoveAtTenMillionAcrossFixedRebuilds()
         {
             var layout = TextBoxNoWrapHorizontalLayout.Resolve(true,
                 TextAlign.Right,
                 TextDirection.Ltr,
                 100f,
-                100100f,
-                100164f);
-            var state = default(TextBoxHorizontalScrollState)
-                .Resolve(layout, TextBoxHorizontalScrollRequest.None)
-                .WithUserRequest(99999f)
-                .Resolve(layout, TextBoxHorizontalScrollRequest.None);
+                10000100f,
+                10000164f);
+            var gameObject = new GameObject("TextBox large scroll test", typeof(RectTransform));
+            gameObject.SetActive(false);
+            var producer = gameObject.AddComponent<TextBoxRenderTextureProducer>();
+            var target = new TrackingRenderTarget(layout);
+            producer.renderTargetFactory = () => target;
+            try
+            {
+                producer.ApplyHorizontalScrollState(default(TextBoxHorizontalScrollState)
+                    .Resolve(layout, TextBoxHorizontalScrollRequest.None));
+                producer.scrollX = 9999999f;
 
-            AssertHorizontalState(state, 99999f, 100000f, false);
+                producer.RebuildOutput(forceText: true);
+                producer.RebuildOutput(forceText: false);
+
+                Assert.That(target.RebuildCalls, Is.EqualTo(2));
+                Assert.That(target.LastViewport.HasHorizontalScrollRequest, Is.True);
+                Assert.That(producer.scrollX, Is.EqualTo(9999999f));
+                AssertHorizontalState(producer.horizontalScrollState, 9999999f, 10000000f, false);
+            }
+            finally
+            {
+                producer.DisposeRenderTarget();
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
         }
 
         [Test]
@@ -485,78 +503,126 @@ namespace Milestro.Tests
             AssertHorizontalState(userState, 0f, 20f, false);
         }
 
-        [Test]
-        public void ProducerRetainsHorizontalStateAcrossDisableAndTargetRecreationWithoutWritingFlowY()
+        [TestCase(false, 100f, true)]
+        [TestCase(true, 7f, false)]
+        public void ProducerRecreatesTargetThatConsumesRetainedHorizontalStateWithoutWritingFlowY(
+            bool useUserPosition,
+            float expectedScrollX,
+            bool expectedFollowsDefault)
         {
-            var gameObject = new GameObject("TextBox horizontal state test");
+            var gameObject = new GameObject("TextBox horizontal state test", typeof(RectTransform));
             gameObject.SetActive(false);
+            var producer = gameObject.AddComponent<TextBoxRenderTextureProducer>();
+            var initialLayout = TextBoxNoWrapHorizontalLayout.Resolve(true,
+                TextAlign.Right,
+                TextDirection.Ltr,
+                100f,
+                120f,
+                184f);
+            var expandedLayout = TextBoxNoWrapHorizontalLayout.Resolve(true,
+                TextAlign.Right,
+                TextDirection.Ltr,
+                80f,
+                180f,
+                244f);
+            var initialTarget = new TrackingRenderTarget(initialLayout);
+            var recreatedTarget = new TrackingRenderTarget(expandedLayout);
+            var createCount = 0;
+            producer.renderTargetFactory = () => ++createCount == 1 ? initialTarget : recreatedTarget;
             try
             {
-                var producer = gameObject.AddComponent<TextBoxRenderTextureProducer>();
-                var initialLayout = TextBoxNoWrapHorizontalLayout.Resolve(true,
-                    TextAlign.Right,
-                    TextDirection.Ltr,
-                    100f,
-                    120f,
-                    184f);
                 var state = TextBoxRenderViewport.Invisible(new Vector2Int(100, 80), default)
                     .ResolveHorizontalScroll(initialLayout);
                 producer.ApplyHorizontalScrollState(state);
-                producer.scrollX = 7f;
+                if (useUserPosition)
+                {
+                    producer.scrollX = 7f;
+                }
                 producer.scrollY = 13f;
                 producer.flowMode = true;
                 producer.SetVisibleRange(5f, 25f, 20f);
+                producer.RebuildOutput(forceText: true);
+
+                Assert.That(createCount, Is.EqualTo(1));
+                Assert.That(initialTarget.RebuildCalls, Is.EqualTo(1));
+                Assert.That(initialTarget.LastViewport.HasHorizontalScrollRequest, Is.False);
 
                 InvokeNonPublic(producer, "OnDisable");
-                producer.DisposeRenderTarget();
-                Assert.That(producer.scrollX, Is.EqualTo(7f));
+                Assert.That(initialTarget.Disposed, Is.True);
+                Assert.That(producer.scrollX, Is.EqualTo(useUserPosition ? 7f : 20f));
                 Assert.That(producer.scrollY, Is.EqualTo(13f));
-                Assert.That(producer.horizontalScrollState.FollowsDefaultAnchor, Is.False);
 
-                var recreatedViewport = producer.CurrentViewport(new Vector2Int(80, 80));
-                Assert.That(recreatedViewport.HasHorizontalScrollRequest, Is.False);
-                Assert.That(recreatedViewport.RequestedScrollY, Is.EqualTo(5f));
-                var expandedLayout = TextBoxNoWrapHorizontalLayout.Resolve(true,
-                    TextAlign.Right,
-                    TextDirection.Ltr,
-                    80f,
-                    180f,
-                    244f);
-                producer.ApplyHorizontalScrollState(recreatedViewport.ResolveHorizontalScroll(expandedLayout));
-                Assert.That(producer.scrollX, Is.EqualTo(7f));
-                Assert.That(producer.scrollY, Is.EqualTo(13f));
-                Assert.That(producer.horizontalScrollState.FollowsDefaultAnchor, Is.False);
+                InvokeNonPublic(producer, "OnEnable");
 
-                producer.flowMode = false;
-                var fixedViewport = producer.CurrentViewport(new Vector2Int(80, 80));
-                Assert.That(fixedViewport.HasHorizontalScrollRequest, Is.True);
-                producer.ApplyHorizontalScrollState(fixedViewport.ResolveHorizontalScroll(expandedLayout));
-                Assert.That(producer.scrollX, Is.EqualTo(7f));
+                Assert.That(createCount, Is.EqualTo(2));
+                Assert.That(recreatedTarget.RebuildCalls, Is.EqualTo(1));
+                Assert.That(recreatedTarget.LastViewport.HasHorizontalScrollRequest, Is.False);
+                Assert.That(recreatedTarget.LastViewport.RequestedScrollY, Is.EqualTo(5f));
+                Assert.That(producer.scrollX, Is.EqualTo(expectedScrollX));
                 Assert.That(producer.scrollY, Is.EqualTo(13f));
-                Assert.That(producer.horizontalScrollState.FollowsDefaultAnchor, Is.False);
-
-                producer.flowMode = true;
-                producer.SetVisibleRange(5f, 25f, 20f);
-                var flowViewport = producer.CurrentViewport(new Vector2Int(80, 80));
-                Assert.That(flowViewport.HasHorizontalScrollRequest, Is.False);
-                producer.ApplyHorizontalScrollState(flowViewport.ResolveHorizontalScroll(expandedLayout));
-                Assert.That(producer.scrollX, Is.EqualTo(7f));
-                Assert.That(producer.scrollY, Is.EqualTo(13f));
-                Assert.That(producer.horizontalScrollState.FollowsDefaultAnchor, Is.False);
-
-                var defaultState = TextBoxRenderViewport.Invisible(new Vector2Int(100, 80), default)
-                    .ResolveHorizontalScroll(initialLayout);
-                producer.ApplyHorizontalScrollState(defaultState);
-                producer.DisposeRenderTarget();
-                var defaultViewport = producer.CurrentViewport(new Vector2Int(80, 80));
-                producer.ApplyHorizontalScrollState(defaultViewport.ResolveHorizontalScroll(expandedLayout));
-                Assert.That(producer.scrollX, Is.EqualTo(100f));
-                Assert.That(producer.scrollY, Is.EqualTo(13f));
-                Assert.That(producer.horizontalScrollState.FollowsDefaultAnchor, Is.True);
+                AssertHorizontalState(producer.horizontalScrollState,
+                    expectedScrollX,
+                    100f,
+                    expectedFollowsDefault);
             }
             finally
             {
+                producer.DisposeRenderTarget();
                 UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        private sealed class TrackingRenderTarget : ITextBoxRenderTarget
+        {
+            private readonly TextBoxNoWrapHorizontalLayout layout;
+
+            internal TrackingRenderTarget(TextBoxNoWrapHorizontalLayout layout)
+            {
+                this.layout = layout;
+            }
+
+            public Texture? OutputTexture => null;
+            public Rect OutputUvRect => new Rect(0f, 0f, 1f, 1f);
+            public int OutputWidth => 0;
+            public int OutputHeight => 0;
+            public bool HasOutput => false;
+            public long OutputVersion => 0;
+            public Vector2 ScrollOffset { get; private set; }
+            public Vector2 ContentSize => new Vector2(layout.ContentWidth, 0f);
+            public Vector2 ViewportSize => Vector2.zero;
+            public Vector2 MaxScrollOffset => new Vector2(layout.MaxScrollX, 0f);
+            public TextBoxHorizontalScrollState HorizontalScrollState { get; private set; }
+            internal TextBoxRenderViewport LastViewport { get; private set; }
+            internal int RebuildCalls { get; private set; }
+            internal bool Disposed { get; private set; }
+
+            public event Action<Milestro.Skia.UnitySkiaRenderTextureSurface.RenderSubmissionStatus>?
+                RenderEventCompleted;
+
+            public void MarkPropertiesChanged()
+            {
+            }
+
+            public void MarkPaintChanged()
+            {
+            }
+
+            public bool Rebuild(TextBoxRenderViewport viewport,
+                ColorSpace colorSpace,
+                TextBoxRenderTargetSettings settings,
+                bool forceText,
+                UnityEngine.Object? logContext)
+            {
+                LastViewport = viewport;
+                RebuildCalls++;
+                HorizontalScrollState = viewport.ResolveHorizontalScroll(layout);
+                ScrollOffset = new Vector2(HorizontalScrollState.ScrollX, viewport.RequestedScrollY);
+                return true;
+            }
+
+            public void Dispose()
+            {
+                Disposed = true;
             }
         }
 

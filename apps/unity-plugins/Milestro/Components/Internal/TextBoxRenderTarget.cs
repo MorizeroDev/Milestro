@@ -9,6 +9,31 @@ using UnityEngine;
 
 namespace Milestro.Components.Internal
 {
+    internal interface ITextBoxRenderTarget : IDisposable
+    {
+        Texture? OutputTexture { get; }
+        Rect OutputUvRect { get; }
+        int OutputWidth { get; }
+        int OutputHeight { get; }
+        bool HasOutput { get; }
+        long OutputVersion { get; }
+        Vector2 ScrollOffset { get; }
+        Vector2 ContentSize { get; }
+        Vector2 ViewportSize { get; }
+        Vector2 MaxScrollOffset { get; }
+        TextBoxHorizontalScrollState HorizontalScrollState { get; }
+
+        event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus>? RenderEventCompleted;
+
+        void MarkPropertiesChanged();
+        void MarkPaintChanged();
+        bool Rebuild(TextBoxRenderViewport viewport,
+            ColorSpace colorSpace,
+            TextBoxRenderTargetSettings settings,
+            bool forceText,
+            UnityEngine.Object? logContext);
+    }
+
     internal readonly struct TextBoxRenderViewport
     {
         private TextBoxRenderViewport(Vector2Int layoutSizePixels,
@@ -96,7 +121,7 @@ namespace Milestro.Components.Internal
         }
     }
 
-    internal sealed class TextBoxRenderTarget : IDisposable
+    internal sealed class TextBoxRenderTarget : ITextBoxRenderTarget
     {
         private static readonly Rect DefaultUvRect = new Rect(0f, 0f, 1f, 1f);
 
