@@ -708,7 +708,8 @@ namespace Milestro.Components.Internal
             if (!m_flowMode)
             {
                 return TextBoxRenderViewport.Fixed(layoutSizePixels,
-                    new Vector2(m_scrollX, m_scrollY) + m_visualScrollOffset);
+                    new Vector2(m_scrollX, m_scrollY),
+                    m_visualScrollOffset);
             }
 
             if (!m_hasVisibleRange)
