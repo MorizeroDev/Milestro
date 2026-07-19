@@ -60,6 +60,7 @@ namespace Milestro.Components.Internal
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
         [NonSerialized] private float m_scrollX;
         [NonSerialized] private float m_scrollY;
+        [NonSerialized] private TextBoxHorizontalScrollState m_horizontalScrollState;
         [NonSerialized] private Vector2 m_visualScrollOffset;
         [NonSerialized] private bool m_flowMode;
         [NonSerialized] private bool m_hasVisibleRange;
@@ -448,14 +449,9 @@ namespace Milestro.Components.Internal
 #endif
             }
 
+            ApplyHorizontalScrollState(RenderTarget.HorizontalScrollState);
             if (!m_flowMode)
             {
-                var nextScrollX = RenderTarget.ScrollOffset.x;
-                if (!Mathf.Approximately(m_scrollX, nextScrollX))
-                {
-                    m_scrollX = nextScrollX;
-                }
-
                 var nextScrollY = RenderTarget.ScrollOffset.y;
                 if (!Mathf.Approximately(m_scrollY, nextScrollY))
                 {
@@ -553,7 +549,7 @@ namespace Milestro.Components.Internal
             }
         }
 
-        private void DisposeRenderTarget()
+        internal void DisposeRenderTarget()
         {
             if (renderTarget == null)
             {
@@ -600,6 +596,7 @@ namespace Milestro.Components.Internal
         private void SetScrollX(float value)
         {
             var nextScrollX = FloatUtil.IsFinite(value) ? Mathf.Max(0f, value) : 0f;
+            m_horizontalScrollState = m_horizontalScrollState.WithUserRequest(nextScrollX);
             if (Mathf.Approximately(m_scrollX, nextScrollX))
             {
                 return;
@@ -610,6 +607,14 @@ namespace Milestro.Components.Internal
             m_editorSkippedRenderRetries = 0;
 #endif
             RenderTarget.MarkPaintChanged();
+        }
+
+        internal TextBoxHorizontalScrollState horizontalScrollState => m_horizontalScrollState;
+
+        internal void ApplyHorizontalScrollState(TextBoxHorizontalScrollState state)
+        {
+            m_horizontalScrollState = state;
+            m_scrollX = state.ScrollX;
         }
 
         private void SetScrollY(float value)
@@ -703,11 +708,12 @@ namespace Milestro.Components.Internal
             LayoutChanged?.Invoke();
         }
 
-        private TextBoxRenderViewport CurrentViewport(Vector2Int layoutSizePixels)
+        internal TextBoxRenderViewport CurrentViewport(Vector2Int layoutSizePixels)
         {
             if (!m_flowMode)
             {
                 return TextBoxRenderViewport.Fixed(layoutSizePixels,
+                    m_horizontalScrollState,
                     new Vector2(m_scrollX, m_scrollY),
                     m_visualScrollOffset);
             }
@@ -715,7 +721,7 @@ namespace Milestro.Components.Internal
             if (!m_hasVisibleRange)
             {
                 DebugFlow($"current viewport invisible: no visible range layout={layoutSizePixels.x}x{layoutSizePixels.y}");
-                return TextBoxRenderViewport.Invisible(layoutSizePixels);
+                return TextBoxRenderViewport.Invisible(layoutSizePixels, m_horizontalScrollState);
             }
 
             if (!TextBoxFlowVisibleRange.TryNormalize(m_visibleStartY,
@@ -727,7 +733,7 @@ namespace Milestro.Components.Internal
                 DebugFlow("current viewport invisible: normalized empty " +
                           $"stored=[{m_visibleStartY:F3},{m_visibleEndY:F3}] " +
                           $"layout={layoutSizePixels.x}x{layoutSizePixels.y}");
-                return TextBoxRenderViewport.Invisible(layoutSizePixels);
+                return TextBoxRenderViewport.Invisible(layoutSizePixels, m_horizontalScrollState);
             }
 
             var visibleHeight = visibleEndY - visibleStartY;
@@ -743,7 +749,11 @@ namespace Milestro.Components.Internal
                       $"visibleHeight={visibleHeight:F3} layout={layoutSizePixels.x}x{layoutSizePixels.y} " +
                       $"visibleOutput={visibleSizePixels.x}x{visibleSizePixels.y} " +
                       $"output={outputSizePixels.x}x{outputSizePixels.y}");
-            return TextBoxRenderViewport.FlowSlice(layoutSizePixels, outputSizePixels, visibleSizePixels, visibleStartY);
+            return TextBoxRenderViewport.FlowSlice(layoutSizePixels,
+                outputSizePixels,
+                visibleSizePixels,
+                m_horizontalScrollState,
+                visibleStartY);
         }
 
         private void MarkPaintChanged()

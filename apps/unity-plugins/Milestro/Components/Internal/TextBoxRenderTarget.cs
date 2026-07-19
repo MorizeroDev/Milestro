@@ -14,7 +14,9 @@ namespace Milestro.Components.Internal
         private TextBoxRenderViewport(Vector2Int layoutSizePixels,
             Vector2Int outputSizePixels,
             Vector2Int visibleOutputSizePixels,
-            Vector2 requestedScrollOffset,
+            TextBoxHorizontalScrollState horizontalScrollState,
+            TextBoxHorizontalScrollRequest horizontalScrollRequest,
+            float requestedScrollY,
             Vector2 visualScrollOffset,
             bool drawOutput,
             bool sliceOutput)
@@ -22,7 +24,9 @@ namespace Milestro.Components.Internal
             LayoutSizePixels = layoutSizePixels;
             OutputSizePixels = outputSizePixels;
             VisibleOutputSizePixels = visibleOutputSizePixels;
-            RequestedScrollOffset = requestedScrollOffset;
+            HorizontalScrollState = horizontalScrollState;
+            HorizontalScrollRequest = horizontalScrollRequest;
+            RequestedScrollY = requestedScrollY;
             VisualScrollOffset = visualScrollOffset;
             DrawOutput = drawOutput;
             SliceOutput = sliceOutput;
@@ -31,30 +35,39 @@ namespace Milestro.Components.Internal
         public Vector2Int LayoutSizePixels { get; }
         public Vector2Int OutputSizePixels { get; }
         public Vector2Int VisibleOutputSizePixels { get; }
-        public Vector2 RequestedScrollOffset { get; }
+        public TextBoxHorizontalScrollState HorizontalScrollState { get; }
+        public TextBoxHorizontalScrollRequest HorizontalScrollRequest { get; }
+        public bool HasHorizontalScrollRequest => HorizontalScrollRequest.HasValue;
+        public float RequestedScrollY { get; }
         public Vector2 VisualScrollOffset { get; }
         public bool DrawOutput { get; }
         public bool SliceOutput { get; }
 
         public static TextBoxRenderViewport Fixed(Vector2Int sizePixels,
+            TextBoxHorizontalScrollState horizontalScrollState,
             Vector2 scrollOffset,
             Vector2 visualScrollOffset)
         {
             return new TextBoxRenderViewport(sizePixels,
                 sizePixels,
                 sizePixels,
-                scrollOffset,
+                horizontalScrollState,
+                TextBoxHorizontalScrollRequest.FromValue(scrollOffset.x),
+                scrollOffset.y,
                 visualScrollOffset,
                 true,
                 false);
         }
 
-        public static TextBoxRenderViewport Invisible(Vector2Int layoutSizePixels)
+        public static TextBoxRenderViewport Invisible(Vector2Int layoutSizePixels,
+            TextBoxHorizontalScrollState horizontalScrollState)
         {
             return new TextBoxRenderViewport(layoutSizePixels,
                 Vector2Int.one,
                 Vector2Int.one,
-                Vector2.zero,
+                horizontalScrollState,
+                TextBoxHorizontalScrollRequest.None,
+                0f,
                 Vector2.zero,
                 false,
                 true);
@@ -63,15 +76,23 @@ namespace Milestro.Components.Internal
         public static TextBoxRenderViewport FlowSlice(Vector2Int layoutSizePixels,
             Vector2Int outputSizePixels,
             Vector2Int visibleOutputSizePixels,
+            TextBoxHorizontalScrollState horizontalScrollState,
             float localStartY)
         {
             return new TextBoxRenderViewport(layoutSizePixels,
                 outputSizePixels,
                 visibleOutputSizePixels,
-                new Vector2(0f, localStartY),
+                horizontalScrollState,
+                TextBoxHorizontalScrollRequest.None,
+                localStartY,
                 Vector2.zero,
                 true,
                 true);
+        }
+
+        internal TextBoxHorizontalScrollState ResolveHorizontalScroll(TextBoxNoWrapHorizontalLayout layout)
+        {
+            return HorizontalScrollState.Resolve(layout, HorizontalScrollRequest);
         }
     }
 
@@ -90,8 +111,7 @@ namespace Milestro.Components.Internal
         private float paragraphVisualLeft;
         private float paragraphVisualWidth;
         private float paragraphAlignmentOffset;
-        private float horizontalAlignmentAnchor;
-        private bool hasHorizontalAlignmentAnchor;
+        private TextBoxHorizontalScrollState horizontalScrollState;
         private long outputVersion;
         private Vector2 scrollOffset;
         private Vector2 contentSize;
@@ -113,6 +133,7 @@ namespace Milestro.Components.Internal
         public Vector2 ContentSize => contentSize;
         public Vector2 ViewportSize => viewportSize;
         public Vector2 MaxScrollOffset => maxScrollOffset;
+        public TextBoxHorizontalScrollState HorizontalScrollState => horizontalScrollState;
 
         public event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus>? RenderEventCompleted;
 
@@ -160,7 +181,7 @@ namespace Milestro.Components.Internal
             needsDraw |= UpdateScrollMetrics(settings,
                 layoutSizePixels,
                 visibleOutputSizePixels,
-                viewport.RequestedScrollOffset);
+                viewport);
             needsDraw |= paintChanged;
             if (!viewport.DrawOutput)
             {
@@ -197,8 +218,7 @@ namespace Milestro.Components.Internal
             paragraphVisualLeft = 0f;
             paragraphVisualWidth = 0f;
             paragraphAlignmentOffset = 0f;
-            horizontalAlignmentAnchor = 0f;
-            hasHorizontalAlignmentAnchor = false;
+            horizontalScrollState = default;
             scrollOffset = Vector2.zero;
             contentSize = Vector2.zero;
             viewportSize = Vector2.zero;
@@ -413,7 +433,7 @@ namespace Milestro.Components.Internal
         private bool UpdateScrollMetrics(TextBoxRenderTargetSettings settings,
             Vector2Int layoutSizePixels,
             Vector2Int outputSizePixels,
-            Vector2 requestedScrollOffset)
+            TextBoxRenderViewport viewport)
         {
             var layoutViewportWidth = ContentViewportWidth(settings, layoutSizePixels);
             var nextViewportSize = new Vector2(layoutViewportWidth,
@@ -432,15 +452,12 @@ namespace Milestro.Components.Internal
             var nextMaxScrollOffset = new Vector2(
                 Mathf.Max(0f, nextContentSize.x - nextViewportSize.x),
                 Mathf.Max(0f, nextContentSize.y - nextViewportSize.y));
-            var requestedScrollX = FloatUtil.IsFinite(requestedScrollOffset.x) ? requestedScrollOffset.x : 0f;
-            var nextScrollX = useWideNoWrapLayout
-                ? horizontalLayout.ResolveScrollX(requestedScrollX,
-                    hasHorizontalAlignmentAnchor,
-                    horizontalAlignmentAnchor)
-                : Mathf.Clamp(requestedScrollX, 0f, nextMaxScrollOffset.x);
+            var nextHorizontalScrollState = viewport.ResolveHorizontalScroll(horizontalLayout);
             var nextScrollOffset = new Vector2(
-                nextScrollX,
-                Mathf.Clamp(FloatUtil.IsFinite(requestedScrollOffset.y) ? requestedScrollOffset.y : 0f, 0f, nextMaxScrollOffset.y));
+                nextHorizontalScrollState.ScrollX,
+                Mathf.Clamp(FloatUtil.IsFinite(viewport.RequestedScrollY) ? viewport.RequestedScrollY : 0f,
+                    0f,
+                    nextMaxScrollOffset.y));
 
             var changed = viewportSize != nextViewportSize ||
                           contentSize != nextContentSize ||
@@ -451,8 +468,7 @@ namespace Milestro.Components.Internal
             contentSize = nextContentSize;
             maxScrollOffset = nextMaxScrollOffset;
             scrollOffset = nextScrollOffset;
-            hasHorizontalAlignmentAnchor = useWideNoWrapLayout;
-            horizontalAlignmentAnchor = useWideNoWrapLayout ? horizontalLayout.InitialScrollX : 0f;
+            horizontalScrollState = nextHorizontalScrollState;
             return changed;
         }
 

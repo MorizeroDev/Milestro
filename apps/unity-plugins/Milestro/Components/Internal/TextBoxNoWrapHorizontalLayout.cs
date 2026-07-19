@@ -58,19 +58,6 @@ namespace Milestro.Components.Internal
                 maxScrollX);
         }
 
-        internal float ResolveScrollX(float requestedScrollX,
-            bool hadPreviousLayout,
-            float previousInitialScrollX)
-        {
-            var nextScrollX = SanitizeOffset(requestedScrollX);
-            if (!hadPreviousLayout || Approximately(nextScrollX, previousInitialScrollX))
-            {
-                nextScrollX = InitialScrollX;
-            }
-
-            return Math.Min(MaxScrollX, nextScrollX);
-        }
-
         internal static float ResolvePaintOffsetX(float layoutAlignmentOffset,
             float scrollX,
             float visualScrollOffsetX)
@@ -118,12 +105,6 @@ namespace Milestro.Components.Internal
         private static float SanitizeSignedOffset(float value)
         {
             return FloatUtil.IsFinite(value) ? value : 0f;
-        }
-
-        private static bool Approximately(float a, float b)
-        {
-            var scale = Math.Max(1f, Math.Max(Math.Abs(a), Math.Abs(b)));
-            return Math.Abs(a - b) <= scale * 0.0001f;
         }
     }
 }
