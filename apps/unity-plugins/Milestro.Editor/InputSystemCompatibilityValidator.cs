@@ -86,11 +86,16 @@ namespace Milestro.Editor
             {
                 return HybridInputSystemPackageStatus.Missing;
             }
-            if (!TryParseStableVersion(snapshot.Version, out var major, out var minor, out _))
+            if (!TryParseSemanticVersion(snapshot.Version,
+                    out var major,
+                    out var minor,
+                    out var patch,
+                    out var isPrerelease))
             {
                 return HybridInputSystemPackageStatus.Unsupported;
             }
-            if (major < 1 || major == 1 && minor < 16)
+            if (major < 1 || major == 1 &&
+                (minor < 16 || minor == 16 && patch == 0 && isPrerelease))
             {
                 return HybridInputSystemPackageStatus.BelowMinimum;
             }
@@ -114,7 +119,7 @@ namespace Milestro.Editor
             }
 
             var currentVersion = CurrentVersionDescription(snapshot);
-            var fixes = "Upgrade com.unity.inputsystem to a stable version in [1.16.0,2.0.0), " +
+            var fixes = "Upgrade com.unity.inputsystem to a compatible version in [1.16.0,2.0.0-0), " +
                         "change Active Input Handling to Both, or change Active Input Handling " +
                         "to Input Manager (Old).";
             if (mode == InputHandlingMode.Both)
@@ -135,15 +140,17 @@ namespace Milestro.Editor
                 "; minimum: 1.16.0). " + fixes);
         }
 
-        private static bool TryParseStableVersion(string value,
+        private static bool TryParseSemanticVersion(string value,
             out int major,
             out int minor,
-            out int patch)
+            out int patch,
+            out bool isPrerelease)
         {
             major = 0;
             minor = 0;
             patch = 0;
-            if (string.IsNullOrEmpty(value) || value.IndexOf('-', StringComparison.Ordinal) >= 0)
+            isPrerelease = false;
+            if (string.IsNullOrEmpty(value))
             {
                 return false;
             }
@@ -154,7 +161,26 @@ namespace Milestro.Editor
             {
                 return false;
             }
-            var core = metadataIndex < 0 ? value : value.Substring(0, metadataIndex);
+            if (metadataIndex >= 0 &&
+                !ValidateIdentifiers(value.Substring(metadataIndex + 1), false))
+            {
+                return false;
+            }
+
+            var coreAndPrerelease = metadataIndex < 0
+                ? value
+                : value.Substring(0, metadataIndex);
+            var prereleaseIndex = coreAndPrerelease.IndexOf('-');
+            var core = prereleaseIndex < 0
+                ? coreAndPrerelease
+                : coreAndPrerelease.Substring(0, prereleaseIndex);
+            isPrerelease = prereleaseIndex >= 0;
+            if (isPrerelease &&
+                !ValidateIdentifiers(coreAndPrerelease.Substring(prereleaseIndex + 1), true))
+            {
+                return false;
+            }
+
             var parts = core.Split('.');
             return parts.Length == 3 &&
                    TryParseVersionPart(parts[0], out major) &&
@@ -171,6 +197,47 @@ namespace Milestro.Editor
                        NumberStyles.None,
                        CultureInfo.InvariantCulture,
                        out result);
+        }
+
+        private static bool ValidateIdentifiers(string value,
+            bool rejectLeadingZeroNumericIdentifiers)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return false;
+            }
+
+            var identifiers = value.Split('.');
+            for (var i = 0; i < identifiers.Length; ++i)
+            {
+                var identifier = identifiers[i];
+                if (string.IsNullOrEmpty(identifier))
+                {
+                    return false;
+                }
+
+                var isNumeric = true;
+                for (var j = 0; j < identifier.Length; ++j)
+                {
+                    var character = identifier[j];
+                    var isDigit = character >= '0' && character <= '9';
+                    var isLetter = character >= 'A' && character <= 'Z' ||
+                                   character >= 'a' && character <= 'z';
+                    if (!isDigit && !isLetter && character != '-')
+                    {
+                        return false;
+                    }
+                    isNumeric &= isDigit;
+                }
+
+                if (rejectLeadingZeroNumericIdentifiers && isNumeric &&
+                    identifier.Length > 1 && identifier[0] == '0')
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static string CurrentVersionDescription(InputSystemPackageSnapshot snapshot)

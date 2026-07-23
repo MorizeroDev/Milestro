@@ -44,7 +44,7 @@ These are required by `Milestro.asmdef`: `party.para.util.colors` is used by the
 rich text color parser, and `party.para.util.unitynative` is used by managed
 native-object wrappers and native callback helpers.
 
-`com.unity.inputsystem` is optional. With a version in `[1.18.0,2.0.0)`, the
+`com.unity.inputsystem` is optional. With a version in `[1.16.0,2.0.0-0)`, the
 packaged `Milestro.InputSystem` assembly serves projects using
 `InputSystemUIInputModule`. Without it, the base `Milestro` assembly remains
 importable and can use Unity's legacy `StandaloneInputModule` when the Legacy

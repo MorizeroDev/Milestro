@@ -44,7 +44,7 @@ namespace Milestro.Tests
         {
             Assert.That(HybridInputSystemCompatibility.MinimumVersion, Is.EqualTo("1.16.0"));
             Assert.That(HybridInputSystemCompatibility.MaximumVersionExclusive,
-                Is.EqualTo("2.0.0"));
+                Is.EqualTo("2.0.0-0"));
         }
     }
 }

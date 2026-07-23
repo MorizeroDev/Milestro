@@ -32,9 +32,10 @@ provides `Newtonsoft.Json`, Milestro model DTOs include `JsonProperty` metadata
 for compatibility with Newtonsoft-based serialization. Milestro does not require
 that symbol or package by default.
 
-Optional: install stable `com.unity.inputsystem` version `1.16.0` or later, below `2.0`,
-to use Milestro with an active `InputSystemUIInputModule`. The packaged
-`Milestro.InputSystem` assembly is constrained to `[1.16.0,2.0.0)` and is not
+Optional: install `com.unity.inputsystem` in the compatibility range
+`[1.16.0,2.0.0-0)` to use Milestro with an active
+`InputSystemUIInputModule`. The packaged
+`Milestro.InputSystem` assembly uses that same range and is not
 compiled when that package is absent. The base `Milestro` assembly has no Input
 System package reference and continues to support the legacy
 `StandaloneInputModule` when Unity enables the Legacy Input Manager.
@@ -214,14 +215,19 @@ Milestro selects one input provider from the active Unity event-system module:
 - `StandaloneInputModule` selects the built-in `legacy` provider when the
   Legacy Input Manager is enabled.
 - `InputSystemUIInputModule` selects the optional `input-system` provider when
-  stable `com.unity.inputsystem` is `[1.16.0,2.0.0)` and `Milestro.InputSystem` is
+  `com.unity.inputsystem` is `[1.16.0,2.0.0-0)` and `Milestro.InputSystem` is
   present.
 - With Active Input Handling set to Both, an unsupported Input System package
   selects the core `legacy` provider for an exact `InputSystemUIInputModule`
   delta-only scroll fallback. This route does not claim strict TextInput focus.
-- With Input System Package (New) only, missing, below-minimum, prerelease,
-  unparseable, or `2.0.0` and newer package states are Editor errors and fail
+- With Input System Package (New) only, missing, below-minimum, unparseable,
+  or `2.0.0-0` and newer package states are Editor errors and fail
   the player build instead of silently producing `NoMatch`.
+
+The compatibility range follows Unity's package-version comparison, so a valid
+1.x prerelease above the `1.16.0` floor has the same assembly/provider owner as
+the corresponding 1.x range. Prerelease contents are not separately
+runtime-certified; the runtime matrix uses official stable package releases.
 
 Selection requires exactly one active `EventSystem`. No match, multiple active
 event systems, or equally ranked providers fail closed and are reported through

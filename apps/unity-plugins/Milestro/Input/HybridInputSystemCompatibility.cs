@@ -6,7 +6,7 @@ namespace Milestro.Input
     internal static class HybridInputSystemCompatibility
     {
         internal const string MinimumVersion = "1.16.0";
-        internal const string MaximumVersionExclusive = "2.0.0";
+        internal const string MaximumVersionExclusive = "2.0.0-0";
         internal const string InputSystemUiModuleTypeName =
             "UnityEngine.InputSystem.UI.InputSystemUIInputModule";
 
@@ -62,13 +62,13 @@ namespace Milestro.Input
             Debug.LogWarning(
                 "Milestro Input System integration is unavailable. Using the legacy delta-only " +
                 "scroll fallback for InputSystemUIInputModule. Supported com.unity.inputsystem " +
-                "versions are [1.16.0,2.0.0). Upgrade the package, change Active Input Handling " +
+                "versions are [1.16.0,2.0.0-0). Upgrade the package, change Active Input Handling " +
                 "to Both, or change it to Input Manager (Old).");
 #else
             runtimeIssueReported = true;
             Debug.LogError(
                 "Milestro Input System integration is unavailable. Supported com.unity.inputsystem " +
-                "versions are [1.16.0,2.0.0). Upgrade the package, change Active Input Handling " +
+                "versions are [1.16.0,2.0.0-0). Upgrade the package, change Active Input Handling " +
                 "to Both, or change it to Input Manager (Old).");
 #endif
 #endif

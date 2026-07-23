@@ -8,10 +8,14 @@ namespace Milestro.Tests
     {
         [TestCase(false, null, HybridInputSystemPackageStatus.Missing)]
         [TestCase(true, "1.15.9", HybridInputSystemPackageStatus.BelowMinimum)]
+        [TestCase(true, "1.16.0-pre.1", HybridInputSystemPackageStatus.BelowMinimum)]
         [TestCase(true, "1.16.0", HybridInputSystemPackageStatus.Supported)]
+        [TestCase(true, "1.17.0-pre.1", HybridInputSystemPackageStatus.Supported)]
+        [TestCase(true, "1.17.0+ci-42", HybridInputSystemPackageStatus.Supported)]
         [TestCase(true, "1.19.7", HybridInputSystemPackageStatus.Supported)]
+        [TestCase(true, "2.0.0-0", HybridInputSystemPackageStatus.Unsupported)]
+        [TestCase(true, "2.0.0-pre.1", HybridInputSystemPackageStatus.Unsupported)]
         [TestCase(true, "2.0.0", HybridInputSystemPackageStatus.Unsupported)]
-        [TestCase(true, "1.16.0-preview.1", HybridInputSystemPackageStatus.Unsupported)]
         [TestCase(true, "garbage", HybridInputSystemPackageStatus.Unsupported)]
         public void ClassifierCoversSupportedRangeAndInvalidStates(bool present,
             string? version,
@@ -26,11 +30,13 @@ namespace Milestro.Tests
 
         [TestCase("1.15.99", HybridInputSystemPackageStatus.BelowMinimum)]
         [TestCase("1.16.0+build.1", HybridInputSystemPackageStatus.Supported)]
-        [TestCase("1.17.0-pre.1", HybridInputSystemPackageStatus.Unsupported)]
+        [TestCase("1.17.0-pre.1+ci-42", HybridInputSystemPackageStatus.Supported)]
         [TestCase("01.16.0", HybridInputSystemPackageStatus.Unsupported)]
         [TestCase("1.16", HybridInputSystemPackageStatus.Unsupported)]
+        [TestCase("1.17.0-pre..1", HybridInputSystemPackageStatus.Unsupported)]
+        [TestCase("1.17.0+ci..42", HybridInputSystemPackageStatus.Unsupported)]
         [TestCase("", HybridInputSystemPackageStatus.Unsupported)]
-        public void ClassifierIsStrictForStableSemanticVersions(string version,
+        public void ClassifierIsStrictForSemanticVersions(string version,
             HybridInputSystemPackageStatus expected)
         {
             Assert.That(InputSystemCompatibilityPolicy.Classify(
@@ -82,7 +88,7 @@ namespace Milestro.Tests
         [TestCase(false, null)]
         [TestCase(true, "1.14.2")]
         [TestCase(true, "2.0.0")]
-        [TestCase(true, "1.17.0-preview.1")]
+        [TestCase(true, "2.0.0-pre.1")]
         [TestCase(true, "garbage")]
         public void PureInputSystemErrorNamesCurrentMinimumAndAllFixes(bool present,
             string? version)

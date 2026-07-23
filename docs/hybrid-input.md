@@ -14,7 +14,7 @@ Automatic selection follows the active module on the single active Unity
 | Active module | Provider ID | Availability |
 | --- | --- | --- |
 | `StandaloneInputModule` | `legacy` | Unity build has `ENABLE_LEGACY_INPUT_MANAGER` |
-| `InputSystemUIInputModule` | `input-system` | Stable `com.unity.inputsystem` is `[1.16.0,2.0.0)` |
+| `InputSystemUIInputModule` | `input-system` | `com.unity.inputsystem` is `[1.16.0,2.0.0-0)` |
 | `InputSystemUIInputModule` | `legacy` delta-only fallback | Active Input Handling is Both and the package is outside the supported range |
 
 Selection fails closed when there is no matching provider, more than one active
@@ -119,23 +119,28 @@ scrolling.
 
 The base `Milestro` assembly does not reference `Unity.InputSystem`. The
 `Milestro.InputSystem` assembly contains the optional adapter and has a Unity
-version define for stable `com.unity.inputsystem` `[1.16.0,2.0.0)`. A project without
+version define for `com.unity.inputsystem` `[1.16.0,2.0.0-0)`. A project without
 that package can import and compile the core runtime; the optional assembly is
 not enabled, and automatic selection can still use the legacy provider when the
 Legacy Input Manager is available.
 
-When Active Input Handling is Both and the package is missing, below `1.16.0`,
-prerelease, unparseable, or `2.0.0` and newer, an exact
+When Active Input Handling is Both and the package is missing, below `1.16.0`
+(including `1.16.0` prereleases), unparseable, or `2.0.0-0` and newer, an exact
 `InputSystemUIInputModule` match uses the core legacy provider only as a
 delta-only scroll route. It enriches the existing uGUI
 `PointerEventData.scrollDelta`; it does not read a second source. Strict
 `TextInput` focus remains unavailable on that fallback. The Editor reports a
 warning. With Input System Package (New) only, the same unsupported states are
 Editor errors and fail the player build. Diagnostics name the current version,
-the `1.16.0` minimum, and three remedies: upgrade to a stable supported package,
+the `1.16.0` minimum, and three remedies: upgrade to a compatible package,
 change Active Input Handling to Both, or change it to Input Manager (Old).
 Legacy-only projects do not receive this warning and retain ordinary
 `StandaloneInputModule` behavior.
+
+This compatibility range follows Unity's package-version comparison. A valid
+1.x prerelease above the `1.16.0` floor therefore compiles and selects the same
+optional provider; prerelease contents are not separately runtime-certified.
+Official stable 1.x releases provide the API/runtime certification matrix.
 
 The Gradle release package recursively includes the complete `Milestro`,
 `Milestro.Editor`, `Milestro.Experimental`, `Milestro.InputSystem`, and
@@ -180,5 +185,5 @@ When updating an existing Unity project:
    consuming Milestro's private text frames or key edges; application gameplay
    input should continue through the application's own Unity input layer.
 3. Use one active `EventSystem` with the module matching the intended provider.
-4. Install stable `com.unity.inputsystem` `[1.16.0,2.0.0)` when the project uses
+4. Install `com.unity.inputsystem` `[1.16.0,2.0.0-0)` when the project uses
    `InputSystemUIInputModule`; it is not a core Milestro dependency.
