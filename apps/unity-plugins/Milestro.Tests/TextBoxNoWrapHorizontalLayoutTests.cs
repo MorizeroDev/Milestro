@@ -204,6 +204,7 @@ namespace Milestro.Tests
             gameObject.SetActive(false);
             var producer = gameObject.AddComponent<TextBoxRenderTextureProducer>();
             var target = new TrackingRenderTarget(layout);
+            producer.DisposeRenderTarget();
             producer.renderTargetFactory = () => target;
             try
             {
@@ -238,8 +239,9 @@ namespace Milestro.Tests
             var gameObject = new GameObject("TextBox large scroll input test", typeof(RectTransform));
             gameObject.SetActive(false);
             var textBox = gameObject.AddComponent<TextBox>();
-            var producer = gameObject.AddComponent<TextBoxRenderTextureProducer>();
+            var producer = gameObject.GetComponent<TextBoxRenderTextureProducer>();
             var target = new TrackingRenderTarget(layout);
+            producer.DisposeRenderTarget();
             producer.renderTargetFactory = () => target;
             try
             {
@@ -575,6 +577,7 @@ namespace Milestro.Tests
             var initialTarget = new TrackingRenderTarget(initialLayout);
             var recreatedTarget = new TrackingRenderTarget(expandedLayout);
             var createCount = 0;
+            producer.DisposeRenderTarget();
             producer.renderTargetFactory = () => ++createCount == 1 ? initialTarget : recreatedTarget;
             try
             {
