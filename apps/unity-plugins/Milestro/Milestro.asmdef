@@ -12,6 +12,12 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.inputsystem",
+            "expression": "[1.16.0,2.0.0)",
+            "define": "MILESTRO_INPUT_SYSTEM_SUPPORTED"
+        }
+    ],
     "noEngineReferences": false
 }

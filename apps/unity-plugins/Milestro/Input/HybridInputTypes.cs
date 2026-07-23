@@ -113,6 +113,15 @@ namespace Milestro.Input
         OverrideRejected = 4
     }
 
+    public enum HybridInputSystemPackageStatus
+    {
+        NotApplicable = 0,
+        Missing = 1,
+        BelowMinimum = 2,
+        Supported = 3,
+        Unsupported = 4
+    }
+
     public enum HybridInputImeCancellationResult
     {
         NotAttempted = 0,
@@ -457,6 +466,31 @@ namespace Milestro.Input
             DiagnosticCount = Math.Max(0, diagnosticCount);
             ImeCancellationResult = HybridInputImeCancellationDiagnostics.LastResult;
             ImeCancellationFailureCount = HybridInputImeCancellationDiagnostics.FailureCount;
+            InputSystemPackageStatus = HybridInputSystemPackageStatus.NotApplicable;
+        }
+
+        private HybridInputDiagnostics(HybridInputDiagnostics source,
+            HybridInputSystemPackageStatus inputSystemPackageStatus)
+        {
+            SelectionStatus = source.SelectionStatus;
+            ProviderId = source.ProviderId;
+            ProviderKind = source.ProviderKind;
+            Capabilities = source.Capabilities;
+            ScrollCapability = source.ScrollCapability;
+            ActiveModuleType = source.ActiveModuleType;
+            EventSystemCount = source.EventSystemCount;
+            ApplicationFocused = source.ApplicationFocused;
+            LastDiagnostic = source.LastDiagnostic;
+            DiagnosticCount = source.DiagnosticCount;
+            ImeCancellationResult = source.ImeCancellationResult;
+            ImeCancellationFailureCount = source.ImeCancellationFailureCount;
+            InputSystemPackageStatus = inputSystemPackageStatus;
+        }
+
+        internal HybridInputDiagnostics WithInputSystemPackageStatus(
+            HybridInputSystemPackageStatus inputSystemPackageStatus)
+        {
+            return new HybridInputDiagnostics(this, inputSystemPackageStatus);
         }
 
         public HybridInputSelectionStatus SelectionStatus { get; }
@@ -471,5 +505,6 @@ namespace Milestro.Input
         public int DiagnosticCount { get; }
         public HybridInputImeCancellationResult ImeCancellationResult { get; }
         public int ImeCancellationFailureCount { get; }
+        public HybridInputSystemPackageStatus InputSystemPackageStatus { get; }
     }
 }

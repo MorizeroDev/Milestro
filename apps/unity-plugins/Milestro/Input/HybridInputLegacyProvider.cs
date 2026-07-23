@@ -41,6 +41,11 @@ namespace Milestro.Input
             KeyCode.Z
         };
 
+        private const HybridInputCapabilities LegacyCapabilities = HybridInputCapabilities.KeyState |
+                                                                   HybridInputCapabilities.CommittedText |
+                                                                   HybridInputCapabilities.Composition |
+                                                                   HybridInputCapabilities.ImeControl;
+
         private readonly ILegacyInputSource source;
         private readonly IHybridInputImeSessionCanceller imeSessionCanceller;
         private readonly List<KeyCode> pressedKeys = new List<KeyCode>();
@@ -56,6 +61,7 @@ namespace Milestro.Input
         private Vector2 imeCursorPosition;
         private bool hasAppliedImeCursor;
         private Vector2 appliedImeCursorPosition;
+        private bool inputSystemScrollFallback;
 
         internal HybridInputLegacyProvider()
             : this(new UnityLegacyInputSource(), HybridInputNativeImeSessionCanceller.Shared)
@@ -77,19 +83,32 @@ namespace Milestro.Input
         public string Id => ProviderId;
         public int Priority => 0;
         public HybridInputProviderKind Kind => HybridInputProviderKind.Legacy;
-        public HybridInputCapabilities Capabilities => HybridInputCapabilities.KeyState |
-                                                       HybridInputCapabilities.CommittedText |
-                                                       HybridInputCapabilities.Composition |
-                                                       HybridInputCapabilities.ImeControl;
-        public HybridScrollCapability ScrollCapability => HybridScrollCapability.Unsupported;
+        public HybridInputCapabilities Capabilities => inputSystemScrollFallback
+            ? LegacyCapabilities | HybridInputCapabilities.ScrollDelta
+            : LegacyCapabilities;
+        public HybridScrollCapability ScrollCapability => inputSystemScrollFallback
+            ? HybridScrollCapability.DeltaOnly
+            : HybridScrollCapability.Unsupported;
 
         public HybridInputProviderMatch Match(HybridInputEnvironment environment)
         {
-            return environment.EventSystemCount == 1 &&
-                   environment.ActiveModule != null &&
-                   environment.ActiveModule.GetType() == typeof(StandaloneInputModule)
-                ? HybridInputProviderMatch.Exact
-                : HybridInputProviderMatch.None;
+            inputSystemScrollFallback = false;
+            if (environment.EventSystemCount != 1 || environment.ActiveModule == null)
+            {
+                return HybridInputProviderMatch.None;
+            }
+            if (environment.ActiveModule.GetType() == typeof(StandaloneInputModule))
+            {
+                return HybridInputProviderMatch.Exact;
+            }
+#if ENABLE_INPUT_SYSTEM && ENABLE_LEGACY_INPUT_MANAGER && !MILESTRO_INPUT_SYSTEM_SUPPORTED
+            if (HybridInputSystemCompatibility.IsExactInputSystemUiModule(environment.ActiveModule))
+            {
+                inputSystemScrollFallback = true;
+                return HybridInputProviderMatch.Exact;
+            }
+#endif
+            return HybridInputProviderMatch.None;
         }
 
         public void Start(IHybridInputEventSink eventSink)
