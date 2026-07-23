@@ -14,7 +14,8 @@ Automatic selection follows the active module on the single active Unity
 | Active module | Provider ID | Availability |
 | --- | --- | --- |
 | `StandaloneInputModule` | `legacy` | Unity build has `ENABLE_LEGACY_INPUT_MANAGER` |
-| `InputSystemUIInputModule` | `input-system` | `com.unity.inputsystem` is `[1.18.0,2.0.0)` |
+| `InputSystemUIInputModule` | `input-system` | Stable `com.unity.inputsystem` is `[1.16.0,2.0.0)` |
+| `InputSystemUIInputModule` | `legacy` delta-only fallback | Active Input Handling is Both and the package is outside the supported range |
 
 Selection fails closed when there is no matching provider, more than one active
 event system, or a tie between equally ranked providers. Inspect the current
@@ -30,6 +31,9 @@ and rejected-override states. `ProviderId`, `ProviderKind`, `Capabilities`,
 selected provider and environment. `ImeCancellationResult` reports the most
 recent platform composition-cancellation result, and
 `ImeCancellationFailureCount` counts results other than `Succeeded`.
+`InputSystemPackageStatus` independently reports `NotApplicable`, `Missing`,
+`BelowMinimum`, `Supported`, or `Unsupported` for the optional package; it does
+not replace or reinterpret provider-selection fields.
 `LastDiagnostic` and `DiagnosticCount` expose bounded-dispatch failures such as
 unsupported session isolation, ring overflow, work exhaustion, and listener
 exceptions.
@@ -65,8 +69,9 @@ old sinks. Provider callbacks are main-thread-only in this contract.
 The Input System adapter implements strict focus sessions by binding fresh text,
 composition, and key-edge callback closures for each session. Key edges are
 captured from the source after-update callback; `Collect()` only snapshots held
-state and cannot retag an old edge. The legacy provider remains
-available for provider selection and direct custom use, but Unity's polled
+state and cannot retag an old edge. The ordinary legacy provider and the
+Both-mode compatibility fallback remain available for provider selection and
+direct custom use, but Unity's polled
 `Input.inputString` API does not expose capture-time ownership. It therefore
 does not currently implement the focus-session contract and cannot acquire
 `TextInput` focus. Failed admission reports
@@ -114,10 +119,23 @@ scrolling.
 
 The base `Milestro` assembly does not reference `Unity.InputSystem`. The
 `Milestro.InputSystem` assembly contains the optional adapter and has a Unity
-version define for `com.unity.inputsystem` `[1.18.0,2.0.0)`. A project without
+version define for stable `com.unity.inputsystem` `[1.16.0,2.0.0)`. A project without
 that package can import and compile the core runtime; the optional assembly is
 not enabled, and automatic selection can still use the legacy provider when the
 Legacy Input Manager is available.
+
+When Active Input Handling is Both and the package is missing, below `1.16.0`,
+prerelease, unparseable, or `2.0.0` and newer, an exact
+`InputSystemUIInputModule` match uses the core legacy provider only as a
+delta-only scroll route. It enriches the existing uGUI
+`PointerEventData.scrollDelta`; it does not read a second source. Strict
+`TextInput` focus remains unavailable on that fallback. The Editor reports a
+warning. With Input System Package (New) only, the same unsupported states are
+Editor errors and fail the player build. Diagnostics name the current version,
+the `1.16.0` minimum, and three remedies: upgrade to a stable supported package,
+change Active Input Handling to Both, or change it to Input Manager (Old).
+Legacy-only projects do not receive this warning and retain ordinary
+`StandaloneInputModule` behavior.
 
 The Gradle release package recursively includes the complete `Milestro`,
 `Milestro.Editor`, `Milestro.Experimental`, `Milestro.InputSystem`, and
@@ -162,5 +180,5 @@ When updating an existing Unity project:
    consuming Milestro's private text frames or key edges; application gameplay
    input should continue through the application's own Unity input layer.
 3. Use one active `EventSystem` with the module matching the intended provider.
-4. Install `com.unity.inputsystem` `[1.18.0,2.0.0)` only when the project uses
+4. Install stable `com.unity.inputsystem` `[1.16.0,2.0.0)` when the project uses
    `InputSystemUIInputModule`; it is not a core Milestro dependency.

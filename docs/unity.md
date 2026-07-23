@@ -32,9 +32,9 @@ provides `Newtonsoft.Json`, Milestro model DTOs include `JsonProperty` metadata
 for compatibility with Newtonsoft-based serialization. Milestro does not require
 that symbol or package by default.
 
-Optional: install `com.unity.inputsystem` version `1.18.0` or later, below `2.0`,
+Optional: install stable `com.unity.inputsystem` version `1.16.0` or later, below `2.0`,
 to use Milestro with an active `InputSystemUIInputModule`. The packaged
-`Milestro.InputSystem` assembly is constrained to `[1.18.0,2.0.0)` and is not
+`Milestro.InputSystem` assembly is constrained to `[1.16.0,2.0.0)` and is not
 compiled when that package is absent. The base `Milestro` assembly has no Input
 System package reference and continues to support the legacy
 `StandaloneInputModule` when Unity enables the Legacy Input Manager.
@@ -180,8 +180,12 @@ matching to SkParagraph's registered and system font managers.
 `TextBox`, `TextInput`, and `MilestroScrollRect` each own a serialized
 `scrollElastic` setting group. Elastic is enabled by default, but only takes
 effect when the selected HybridInput provider reports at least delta-only
-scroll capability. The legacy provider reports `Unsupported`, so scrolling
-remains clamped and the Elastic settings have no visual effect in that mode.
+scroll capability. The ordinary legacy provider reports `Unsupported`, so
+scrolling remains clamped and the Elastic settings have no visual effect for a
+`StandaloneInputModule`. In a Both-mode project whose Input System package is
+outside Milestro's supported range, the core compatibility route reports
+`DeltaOnly` only while it exactly matches `InputSystemUIInputModule`; this keeps
+Elastic available without changing Legacy-only behavior.
 
 Overscroll is presentation-only. Logical offsets, normalized positions,
 scrollbars, selection, composition, caret geometry, and hit testing remain
@@ -210,8 +214,14 @@ Milestro selects one input provider from the active Unity event-system module:
 - `StandaloneInputModule` selects the built-in `legacy` provider when the
   Legacy Input Manager is enabled.
 - `InputSystemUIInputModule` selects the optional `input-system` provider when
-  `com.unity.inputsystem` is `[1.18.0,2.0.0)` and `Milestro.InputSystem` is
+  stable `com.unity.inputsystem` is `[1.16.0,2.0.0)` and `Milestro.InputSystem` is
   present.
+- With Active Input Handling set to Both, an unsupported Input System package
+  selects the core `legacy` provider for an exact `InputSystemUIInputModule`
+  delta-only scroll fallback. This route does not claim strict TextInput focus.
+- With Input System Package (New) only, missing, below-minimum, prerelease,
+  unparseable, or `2.0.0` and newer package states are Editor errors and fail
+  the player build instead of silently producing `NoMatch`.
 
 Selection requires exactly one active `EventSystem`. No match, multiple active
 event systems, or equally ranked providers fail closed and are reported through
