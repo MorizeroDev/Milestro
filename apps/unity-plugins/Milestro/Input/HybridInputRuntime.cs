@@ -10,7 +10,8 @@ namespace Milestro.Input
         private static readonly HybridInputDispatcher Dispatcher = new HybridInputDispatcher();
         private static bool playerLoopInstalled;
 
-        public static HybridInputDiagnostics Diagnostics => Dispatcher.Diagnostics;
+        public static HybridInputDiagnostics Diagnostics => Dispatcher.Diagnostics.WithInputSystemPackageStatus(
+            HybridInputSystemCompatibility.PackageStatus);
         public static bool IsPlayerLoopInstalled => playerLoopInstalled;
 
         public static bool IsKeyPressed(KeyCode key)
@@ -54,6 +55,7 @@ namespace Milestro.Input
             HybridInputPlayerLoop.Uninstall();
             playerLoopInstalled = false;
             Dispatcher.Reset();
+            HybridInputSystemCompatibility.ResetRuntimeReport();
 #if ENABLE_LEGACY_INPUT_MANAGER
             Dispatcher.RegisterProvider(new HybridInputLegacyProvider());
 #endif
@@ -67,7 +69,9 @@ namespace Milestro.Input
 
         private static void Drain()
         {
-            Dispatcher.RefreshEnvironment(CaptureEnvironment());
+            var environment = CaptureEnvironment();
+            HybridInputSystemCompatibility.ReportRuntimeIssueIfNeeded(environment);
+            Dispatcher.RefreshEnvironment(environment);
             Dispatcher.Drain(Time.frameCount, Time.unscaledTimeAsDouble);
         }
 

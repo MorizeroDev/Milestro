@@ -109,6 +109,98 @@ namespace Milestro.Tests
             Assert.That((provider.Capabilities & HybridInputCapabilities.ScrollPhase) == 0, Is.True);
         }
 
+#if ENABLE_INPUT_SYSTEM && ENABLE_LEGACY_INPUT_MANAGER && !MILESTRO_INPUT_SYSTEM_SUPPORTED
+        [Test]
+        public void UnsupportedInputSystemInBothUsesOneLegacyDeltaOnlyRoute()
+        {
+            var gameObject = new GameObject();
+            try
+            {
+                var module = gameObject.AddComponent<
+                    UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
+                var provider = new HybridInputLegacyProvider(new FakeLegacyInputSource());
+                var dispatcher = new HybridInputDispatcher();
+                dispatcher.RegisterProvider(provider);
+                dispatcher.RefreshEnvironment(new HybridInputEnvironment(module, 1, true));
+                dispatcher.Drain(1, 1d);
+
+                var diagnostics = dispatcher.Diagnostics;
+                Assert.That(diagnostics.SelectionStatus,
+                    Is.EqualTo(HybridInputSelectionStatus.Selected));
+                Assert.That(diagnostics.ProviderId, Is.EqualTo(HybridInputLegacyProvider.ProviderId));
+                Assert.That(diagnostics.ProviderKind, Is.EqualTo(HybridInputProviderKind.Legacy));
+                Assert.That(diagnostics.ScrollCapability,
+                    Is.EqualTo(HybridScrollCapability.DeltaOnly));
+                Assert.That((diagnostics.Capabilities & HybridInputCapabilities.ScrollDelta) != 0,
+                    Is.True);
+                Assert.That(provider, Is.Not.InstanceOf<IHybridInputFocusSessionProvider>());
+
+                var eventData = new PointerEventData(null!)
+                {
+                    scrollDelta = new Vector2(1.25f, -2.5f)
+                };
+                var resolved = dispatcher.ResolveScrollInput(eventData);
+
+                Assert.That(resolved.Delta, Is.EqualTo(eventData.scrollDelta));
+                Assert.That(resolved.Metadata.Capability,
+                    Is.EqualTo(HybridScrollCapability.DeltaOnly));
+                Assert.That(resolved.Metadata.DeviceKind,
+                    Is.EqualTo(HybridInputDeviceKind.Unknown));
+                Assert.That(resolved.Metadata.GesturePhase,
+                    Is.EqualTo(HybridInputPhase.Unknown));
+                Assert.That(resolved.Metadata.MomentumPhase,
+                    Is.EqualTo(HybridInputPhase.Unknown));
+                Assert.That(resolved.Metadata.GestureId, Is.Zero);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void UnsupportedInputSystemFallbackKeepsExistingFailClosedBoundaries()
+        {
+            var gameObject = new GameObject();
+            try
+            {
+                var module = gameObject.AddComponent<
+                    UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
+                var derivedModule = gameObject.AddComponent<DerivedInputSystemUIInputModule>();
+                var standaloneModule = gameObject.AddComponent<StandaloneInputModule>();
+                var provider = new HybridInputLegacyProvider(new FakeLegacyInputSource());
+
+                Assert.That(provider.Match(new HybridInputEnvironment(module, 2, true)),
+                    Is.EqualTo(HybridInputProviderMatch.None));
+                Assert.That(provider.ScrollCapability,
+                    Is.EqualTo(HybridScrollCapability.Unsupported));
+                Assert.That(provider.Match(new HybridInputEnvironment(null, 1, true)),
+                    Is.EqualTo(HybridInputProviderMatch.None));
+                Assert.That(provider.Match(new HybridInputEnvironment(derivedModule, 1, true)),
+                    Is.EqualTo(HybridInputProviderMatch.None));
+                Assert.That(provider.Match(new HybridInputEnvironment(module, 1, true)),
+                    Is.EqualTo(HybridInputProviderMatch.Exact));
+                Assert.That(provider.ScrollCapability,
+                    Is.EqualTo(HybridScrollCapability.DeltaOnly));
+                Assert.That(provider.Match(new HybridInputEnvironment(standaloneModule, 1, true)),
+                    Is.EqualTo(HybridInputProviderMatch.Exact));
+                Assert.That(provider.ScrollCapability,
+                    Is.EqualTo(HybridScrollCapability.Unsupported));
+                Assert.That((provider.Capabilities & HybridInputCapabilities.ScrollDelta) == 0,
+                    Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        private sealed class DerivedInputSystemUIInputModule :
+            UnityEngine.InputSystem.UI.InputSystemUIInputModule
+        {
+        }
+#endif
+
         [Test]
         public void ActiveCompositionFocusHandoffQuarantinesOnePollBoundary()
         {
@@ -391,5 +483,18 @@ namespace Milestro.Tests
             }
         }
     }
+
 }
+
+#if ENABLE_INPUT_SYSTEM && ENABLE_LEGACY_INPUT_MANAGER && !MILESTRO_INPUT_SYSTEM_SUPPORTED
+namespace UnityEngine.InputSystem.UI
+{
+    internal class InputSystemUIInputModule : BaseInputModule
+    {
+        public override void Process()
+        {
+        }
+    }
+}
+#endif
 #endif
