@@ -3,6 +3,7 @@
     "rootNamespace": "",
     "references": [
         "Milestro",
+        "Milestro.Editor",
         "party.para.util.unitynative"
     ],
     "includePlatforms": [
