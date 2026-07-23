@@ -143,6 +143,35 @@ namespace Milestro.InputSystemTests
         }
 
         [Test]
+        public void SupportedPackageProviderPreservesTheCompleteContract()
+        {
+            var gameObject = new GameObject();
+            try
+            {
+                var module = gameObject.AddComponent<InputSystemUIInputModule>();
+                var provider = new HybridInputSystemProvider(new FakeInputSystemSource());
+
+                Assert.That(provider.Id, Is.EqualTo(HybridInputSystemProvider.ProviderId));
+                Assert.That(provider.Kind, Is.EqualTo(HybridInputProviderKind.InputSystem));
+                Assert.That(provider.Match(new HybridInputEnvironment(module, 1, true)),
+                    Is.EqualTo(HybridInputProviderMatch.Exact));
+                Assert.That(provider.Capabilities,
+                    Is.EqualTo(HybridInputCapabilities.KeyState |
+                               HybridInputCapabilities.CommittedText |
+                               HybridInputCapabilities.Composition |
+                               HybridInputCapabilities.ImeControl |
+                               HybridInputCapabilities.ScrollDelta));
+                Assert.That(provider.ScrollCapability, Is.EqualTo(HybridScrollCapability.DeltaOnly));
+                Assert.That(provider, Is.InstanceOf<IHybridInputFocusSessionProvider>());
+                Assert.That(provider, Is.InstanceOf<IHybridScrollInputProvider>());
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
         public void ScrollResolverEnrichesTheExistingUguiDeltaWithoutReadingAnotherSource()
         {
             var provider = new HybridInputSystemProvider(new FakeInputSystemSource());

@@ -12,13 +12,13 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [
-        "MILESTRO_INPUT_SYSTEM_1_18_OR_NEWER"
+        "MILESTRO_INPUT_SYSTEM_SUPPORTED"
     ],
     "versionDefines": [
         {
             "name": "com.unity.inputsystem",
-            "expression": "[1.18.0,2.0.0)",
-            "define": "MILESTRO_INPUT_SYSTEM_1_18_OR_NEWER"
+            "expression": "[1.16.0,2.0.0)",
+            "define": "MILESTRO_INPUT_SYSTEM_SUPPORTED"
         }
     ],
     "noEngineReferences": false
