@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Milestro.Components;
 using Milestro.Tests.TextInputLifecycle.Integration.Editor;
 using NUnit.Framework;
@@ -17,6 +18,21 @@ namespace Milestro.Tests.TextInputLifecycle.Integration.EditMode
     {
         private const string TestHead = "1590000000000000000000000000000000000001";
         private const string TestTree = "1590000000000000000000000000000000000002";
+
+        [OneTimeSetUp]
+        public void CreateEmptyTestRunnerBootstrapScene()
+        {
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            Assert.That(SceneManager.sceneCount, Is.EqualTo(1));
+            Assert.That(scene.IsValid(), Is.True);
+            Assert.That(scene.isLoaded, Is.True);
+            Assert.That(SceneManager.GetActiveScene().handle, Is.EqualTo(scene.handle));
+            Assert.That(scene.path, Is.Empty);
+            Assert.That(scene.GetRootGameObjects(), Is.Empty);
+            Assert.That(scene.GetRootGameObjects()
+                .SelectMany(root => root.GetComponentsInChildren<EventSystem>(true)), Is.Empty);
+        }
 
         [Test]
         public void PersistentBindingsSurvivePrefabImportAndSceneReloadWithoutNotification()
