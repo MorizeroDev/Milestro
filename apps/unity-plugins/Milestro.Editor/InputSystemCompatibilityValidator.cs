@@ -291,7 +291,7 @@ namespace Milestro.Editor
         {
             try
             {
-                var packages = PackageInfo.GetAllRegisteredPackages();
+                var packages = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages();
                 if (packages == null)
                 {
                     return InputSystemPackageSnapshot.QueryFailed("package query returned null");
