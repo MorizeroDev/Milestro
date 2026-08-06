@@ -26,11 +26,16 @@ namespace Milestro
             InitIcu();
         }
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetRuntime()
+        {
+            HybridInputRuntime.ResetAndInitialize();
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void RuntimeBoot()
         {
             Boot();
-            HybridInputRuntime.ResetAndInitialize();
         }
 
 #if UNITY_EDITOR
