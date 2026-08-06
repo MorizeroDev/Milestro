@@ -64,8 +64,12 @@ void MarkSubmissionCompleted(MilestroUnityRenderSubmission* submission,
     }
 
     ReleaseSubmissionOwnedResources(submission);
+#if defined(__cpp_lib_atomic_ref) && __cpp_lib_atomic_ref >= 201806L
     std::atomic_ref<int32_t> completed(submission->completed);
     completed.store(static_cast<int32_t>(status), std::memory_order_release);
+#else
+    reinterpret_cast<std::atomic<int32_t>*>(&submission->completed)->store(static_cast<int32_t>(status), std::memory_order_release);
+#endif
 }
 
 bool IsSameRenderTarget(const MilestroUnityRenderSubmission* lhs, const MilestroUnityRenderSubmission* rhs) {
@@ -108,8 +112,12 @@ void MarkDrainCompleted(MilestroUnityRenderDrain* drain) {
         return;
     }
 
+#if defined(__cpp_lib_atomic_ref) && __cpp_lib_atomic_ref >= 201806L
     std::atomic_ref<int32_t> completed(drain->completed);
     completed.store(1, std::memory_order_release);
+#else
+    reinterpret_cast<std::atomic<int32_t>*>(&drain->completed)->store(1, std::memory_order_release);
+#endif
 }
 
 bool IsRenderDrainPayload(void* data) {
@@ -317,6 +325,9 @@ void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* subm
             return;
         }
 
+        if (gUnityGraphics != nullptr) {
+            gRenderer = gUnityGraphics->GetRenderer();
+        }
         if (gRenderer != kUnityGfxRendererVulkan) {
             MILESTROLOG_ERROR("Milestro Vulkan render event invoked while Unity renderer is {}.",
                               static_cast<int>(gRenderer));

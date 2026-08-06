@@ -293,8 +293,14 @@ bool LoadIcuImpl(void* dataPtr, std::string& path) {
 #if MILESTRO_PLATFORM_IOS
         IcuLoaded = init_icu(dataPtr) || load_from(path);
 #else
+        std::string currentPath;
+        try {
+            currentPath = std::filesystem::current_path().string();
+        } catch (...) {
+        }
+
         IcuLoaded = init_icu(dataPtr) || load_from(path) || load_from(library_icudtl_path()) ||
-                    load_from(std::filesystem::current_path().string()) ||
+                    (!currentPath.empty() && load_from(currentPath)) ||
                     load_from(milestro::util::env::getenv("MILESTRO_UNICODE_ICUDAL_PATH"));
 #endif
         if (IcuLoaded) {

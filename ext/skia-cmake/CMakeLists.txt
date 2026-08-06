@@ -381,6 +381,7 @@ milestro_skia_append_gn_string(skia_gl_standard "${MILESTRO_SKIA_GL_STANDARD}")
 milestro_skia_append_gn_bool(skia_use_egl MILESTRO_SKIA_USE_EGL)
 milestro_skia_append_gn_bool(skia_use_direct3d MILESTRO_SKIA_USE_DIRECT3D)
 milestro_skia_append_gn_bool(skia_use_vulkan MILESTRO_SKIA_USE_VULKAN)
+milestro_skia_append_gn_bool(skia_use_vma MILESTRO_SKIA_USE_VULKAN)
 milestro_skia_append_gn_bool(skia_use_partition_alloc MILESTRO_SKIA_USE_PARTITION_ALLOC)
 
 milestro_skia_append_gn_bool(skia_use_icu OFF)

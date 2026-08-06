@@ -9,7 +9,7 @@ namespace Milestro.Binding
     private const string dllName = "__Internal";
     private const string EntryPointPrefix = "FrameworkBinding";
 #else
-        private const string dllName = "libMilestro";
+        private const string dllName = "Milestro";
         private const string EntryPointPrefix = "";
 #endif
 

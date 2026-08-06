@@ -6,12 +6,19 @@
 
 static IUnityLog *unityLogPtr = nullptr;
 
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif
+
 extern "C" {
 
 UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API
 UnityPluginLoad(IUnityInterfaces *unityInterfacesPtr) {
-    unityLogPtr = unityInterfacesPtr->Get<IUnityLog>();
-    milestro::log::MilestroLogger::initWithUnity(unityLogPtr);
+    MILESTROLOG_ERROR("UnityPluginLoad EXECUTED with unityInterfacesPtr={}", static_cast<void*>(unityInterfacesPtr));
+    unityLogPtr = unityInterfacesPtr != nullptr ? unityInterfacesPtr->Get<IUnityLog>() : nullptr;
+    if (unityLogPtr != nullptr) {
+        milestro::log::MilestroLogger::initWithUnity(unityLogPtr);
+    }
     milestro::game::unity_render::Load(unityInterfacesPtr);
     MILESTROLOG_DEBUG ("Milestro Launched");
 }

@@ -48,6 +48,8 @@ namespace Milestro.Skia
                     return UnitySkiaGraphicsBackend.Metal;
                 case GraphicsDeviceType.Direct3D12:
                     return UnitySkiaGraphicsBackend.Direct3D12;
+                case GraphicsDeviceType.Vulkan:
+                    return UnitySkiaGraphicsBackend.Vulkan;
                 case GraphicsDeviceType.OpenGLES3:
                     return UnitySkiaGraphicsBackend.OpenGLES;
                 case GraphicsDeviceType.OpenGLCore:

@@ -346,6 +346,7 @@ if (ANDROID)
         set(MILESTRO_ENABLE_UNITY_VULKAN_RENDER ON)
         set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES}
                 ${MILESTRO_ANDROID_VULKAN_LIBRARY})
+        list(APPEND MILESTRO_DEFINITIONS "SK_USE_VMA")
     else ()
         message(WARNING "Milestro Unity Vulkan render backend disabled: Android vulkan library not found")
     endif ()
@@ -564,6 +565,10 @@ target_link_libraries(Milestro
         skia
         nlohmann_json::nlohmann_json
 )
+
+if (ANDROID)
+    target_link_libraries(Milestro PRIVATE log)
+endif()
 
 install(TARGETS Milestro
         RUNTIME DESTINATION bin
