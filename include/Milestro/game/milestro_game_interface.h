@@ -30,10 +30,19 @@ MILESTRO_API int64_t MilestroGetVersion(int32_t& major, int32_t& minor, int32_t&
 MILESTRO_API int64_t MilestroImeCancelComposition(int32_t& result);
 
 [[milize::CSharpType("IntPtr")]] MILESTRO_API void* MilestroUnityRenderGetRenderEventAndDataFunc();
+[[milize::CSharpType("IntPtr")]] MILESTRO_API void* MilestroUnityRenderGetVulkanEventFunc();
 MILESTRO_API int64_t MilestroUnityRenderGetMetalRenderEventId(int32_t& eventId);
 MILESTRO_API int64_t MilestroUnityRenderGetRenderTextureEventId(int32_t graphicsBackend, int32_t& eventId);
 MILESTRO_API int64_t MilestroUnityRenderEnqueueSubmission(int32_t graphicsBackend,
                                                           [[milize::CSharpType("IntPtr")]] void* submission);
+MILESTRO_API int64_t MilestroUnityRenderGetVulkanEventInfo(int32_t& prepareEventId,
+                                                           int32_t& submitEventId,
+                                                           uint64_t& epoch);
+MILESTRO_API int64_t MilestroUnityRenderEnqueueVulkanSubmission(
+    uint64_t epoch,
+    [[milize::CSharpType("IntPtr")]] void* submission,
+    uint64_t& serial);
+MILESTRO_API int64_t MilestroUnityRenderCancelVulkanSubmission(uint64_t epoch, uint64_t serial);
 MILESTRO_API int64_t MilestroUnityRenderCreateD3D12ExternalTexture(int32_t width,
                                                                    int32_t height,
                                                                    int32_t storageSrgb,

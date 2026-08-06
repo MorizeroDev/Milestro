@@ -1,7 +1,7 @@
 #ifndef MILESTRO_UNITY_RENDER_VULKAN_BACKEND_H
 #define MILESTRO_UNITY_RENDER_VULKAN_BACKEND_H
 
-#include "unity_render/MilestroUnityRenderSubmission.h"
+#include "unity_render/MilestroUnityRenderVulkanLifecycle.h"
 
 #include <IUnityGraphics.h>
 #include <IUnityInterface.h>
@@ -10,24 +10,15 @@
 
 namespace milestro::unity_render::vulkan {
 
-// Vulkan submission can be completed from Unity's AccessQueue callback, which
-// may run after the original render event returns. The callback owns the
-// submission completion transition and the drain's pending-count transition.
-using RenderCompletionCallback = void (*)(MilestroUnityRenderSubmission* submission,
-                                          MilestroUnityRenderSubmissionStatus status,
-                                          void* userData);
-
-// Returned after AccessQueue accepts a submission. The completion callback is
-// responsible for publishing the final submission status in that case.
-constexpr int64_t kRenderDeferred = 1;
-
 void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
                            IUnityInterfaces* unityInterfaces,
                            UnityGfxRenderer renderer,
-                           int renderEventId);
-int64_t Render(MilestroUnityRenderSubmission& submission,
-               RenderCompletionCallback completionCallback,
-               void* completionUserData);
+                           int firstRenderEventId);
+void OnRenderEvent(int eventId);
+
+int64_t GetEventInfo(int32_t& prepareEventId, int32_t& submitEventId, uint64_t& epoch);
+int64_t EnqueueSubmission(uint64_t epoch, void* submission, uint64_t& serial);
+int64_t CancelSubmission(uint64_t epoch, uint64_t serial);
 
 } // namespace milestro::unity_render::vulkan
 

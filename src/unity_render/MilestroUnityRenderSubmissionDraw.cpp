@@ -10,6 +10,8 @@
 #include "include/core/SkImage.h"
 #include "include/core/SkSamplingOptions.h"
 
+#include <atomic>
+
 namespace milestro::unity_render {
 
 namespace {
@@ -133,6 +135,22 @@ void ReleaseSubmissionOwnedResources(MilestroUnityRenderSubmission* submission) 
         command.resource = nullptr;
         command.resourceOwnership = static_cast<int32_t>(MilestroUnityDrawResourceOwnership::None);
     }
+}
+
+void CompleteSubmission(MilestroUnityRenderSubmission* submission,
+                        MilestroUnityRenderSubmissionStatus status) {
+    if (submission == nullptr) {
+        return;
+    }
+
+    ReleaseSubmissionOwnedResources(submission);
+#if defined(__cpp_lib_atomic_ref) && __cpp_lib_atomic_ref >= 201806L
+    std::atomic_ref<int32_t> completed(submission->completed);
+    completed.store(static_cast<int32_t>(status), std::memory_order_release);
+#else
+    reinterpret_cast<std::atomic<int32_t>*>(&submission->completed)
+        ->store(static_cast<int32_t>(status), std::memory_order_release);
+#endif
 }
 
 } // namespace milestro::unity_render

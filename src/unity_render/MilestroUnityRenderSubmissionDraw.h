@@ -9,6 +9,9 @@ namespace milestro::unity_render {
 
 void DrawSubmission(SkCanvas* canvas, const MilestroUnityRenderSubmission& submission);
 void ReleaseSubmissionOwnedResources(MilestroUnityRenderSubmission* submission);
+void CompleteSubmission(
+    MilestroUnityRenderSubmission* submission,
+    MilestroUnityRenderSubmissionStatus status = MilestroUnityRenderSubmissionStatus::Drawn);
 
 } // namespace milestro::unity_render
 

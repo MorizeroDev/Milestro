@@ -11,7 +11,6 @@
 #include <atomic>
 #include <cstring>
 #include <mutex>
-#include <new>
 #include <vector>
 
 #include "unity_render/MilestroUnityRenderLog.h"
@@ -39,8 +38,12 @@ namespace {
 constexpr int kMetalDrawEventOffset = 0;
 constexpr int kD3D12DrawEventOffset = 1;
 constexpr int kGLDrawEventOffset = 2;
-constexpr int kVulkanDrawEventOffset = 3;
-constexpr int kReservedEventCount = 4;
+constexpr int kVulkanFirstEventOffset = 3;
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+constexpr int kReservedEventCount = kVulkanFirstEventOffset + vulkan::kReservedEventIdCount;
+#else
+constexpr int kReservedEventCount = kVulkanFirstEventOffset;
+#endif
 constexpr int32_t kRenderDrainMagic = 0x4D524451; // MRDQ
 constexpr int kSubmissionQueueCount = 6;
 
@@ -60,17 +63,7 @@ struct MilestroUnityRenderDrain {
 
 void MarkSubmissionCompleted(MilestroUnityRenderSubmission* submission,
                              MilestroUnityRenderSubmissionStatus status = MilestroUnityRenderSubmissionStatus::Drawn) {
-    if (submission == nullptr) {
-        return;
-    }
-
-    ReleaseSubmissionOwnedResources(submission);
-#if defined(__cpp_lib_atomic_ref) && __cpp_lib_atomic_ref >= 201806L
-    std::atomic_ref<int32_t> completed(submission->completed);
-    completed.store(static_cast<int32_t>(status), std::memory_order_release);
-#else
-    reinterpret_cast<std::atomic<int32_t>*>(&submission->completed)->store(static_cast<int32_t>(status), std::memory_order_release);
-#endif
+    CompleteSubmission(submission, status);
 }
 
 bool IsSameRenderTarget(const MilestroUnityRenderSubmission* lhs, const MilestroUnityRenderSubmission* rhs) {
@@ -121,59 +114,6 @@ void MarkDrainCompleted(MilestroUnityRenderDrain* drain) {
 #endif
 }
 
-// A Vulkan AccessQueue callback may run after the render-event callback has
-// returned. Keep the drain payload alive until every deferred submission has
-// published its completion status.
-class DrainCompletionState {
-public:
-    explicit DrainCompletionState(MilestroUnityRenderDrain* drain)
-        : drain_(drain) {
-    }
-
-    void AddPending() {
-        refs_.fetch_add(1, std::memory_order_relaxed);
-        pending_.fetch_add(1, std::memory_order_release);
-    }
-
-    void CompletePending() {
-        const int32_t previous = pending_.fetch_sub(1, std::memory_order_acq_rel);
-        if (previous == 1) {
-            TryComplete();
-        }
-        Release();
-    }
-
-    void FinishDispatch() {
-        dispatching_.store(false, std::memory_order_release);
-        TryComplete();
-        Release();
-    }
-
-private:
-    void TryComplete() {
-        if (dispatching_.load(std::memory_order_acquire) ||
-            pending_.load(std::memory_order_acquire) != 0) {
-            return;
-        }
-
-        if (!drainCompleted_.exchange(true, std::memory_order_acq_rel)) {
-            MarkDrainCompleted(drain_);
-        }
-    }
-
-    void Release() {
-        if (refs_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-            delete this;
-        }
-    }
-
-    MilestroUnityRenderDrain* drain_ = nullptr;
-    std::atomic<int32_t> pending_{0};
-    std::atomic<int32_t> refs_{1};
-    std::atomic<bool> dispatching_{true};
-    std::atomic<bool> drainCompleted_{false};
-};
-
 bool IsRenderDrainPayload(void* data) {
     if (data == nullptr) {
         return false;
@@ -188,7 +128,6 @@ int SubmissionQueueIndex(int32_t graphicsBackend) {
     switch (static_cast<MilestroUnityGraphicsBackend>(graphicsBackend)) {
         case MilestroUnityGraphicsBackend::Metal:
         case MilestroUnityGraphicsBackend::Direct3D12:
-        case MilestroUnityGraphicsBackend::Vulkan:
         case MilestroUnityGraphicsBackend::OpenGL:
         case MilestroUnityGraphicsBackend::OpenGLES:
             return graphicsBackend;
@@ -262,19 +201,7 @@ int64_t EnqueueSubmission(int32_t graphicsBackend, MilestroUnityRenderSubmission
     return MILESTRO_API_RET_OK;
 }
 
-void CompleteVulkanSubmission(MilestroUnityRenderSubmission* submission,
-                              MilestroUnityRenderSubmissionStatus status,
-                              void* userData) {
-    auto* drainCompletion = static_cast<DrainCompletionState*>(userData);
-    MarkSubmissionCompleted(submission, status);
-    if (drainCompletion != nullptr) {
-        drainCompletion->CompletePending();
-    }
-}
-
-void RenderQueuedSubmission(int eventOffset,
-                            MilestroUnityRenderSubmission* submission,
-                            DrainCompletionState* drainCompletion) {
+void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* submission) {
     if (submission == nullptr) {
         return;
     }
@@ -384,50 +311,6 @@ void RenderQueuedSubmission(int eventOffset,
         return;
     }
 
-    if (eventOffset == kVulkanDrawEventOffset) {
-        if (target.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan)) {
-            MILESTROLOG_ERROR("Milestro Vulkan render event received backend {}.", target.graphicsBackend);
-            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
-            return;
-        }
-
-        if (gUnityGraphics != nullptr) {
-            gRenderer = gUnityGraphics->GetRenderer();
-        }
-        if (gRenderer != kUnityGfxRendererVulkan) {
-            MILESTROLOG_ERROR("Milestro Vulkan render event invoked while Unity renderer is {}.",
-                              static_cast<int>(gRenderer));
-            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
-            return;
-        }
-
-#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
-        if (drainCompletion == nullptr) {
-            MILESTROLOG_ERROR("Milestro Vulkan render event has no drain completion state.");
-            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
-            return;
-        }
-
-        drainCompletion->AddPending();
-        const auto status = vulkan::Render(*submission, &CompleteVulkanSubmission, drainCompletion);
-        if (status == vulkan::kRenderDeferred) {
-            return;
-        }
-
-        drainCompletion->CompletePending();
-        if (status < 0) {
-            MILESTROLOG_ERROR("Milestro Vulkan render event failed: {}", status);
-            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
-            return;
-        }
-        MarkSubmissionCompleted(submission);
-#else
-        MILESTROLOG_ERROR("Milestro Vulkan render backend is not enabled in this Milestro build.");
-        MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
-#endif
-        return;
-    }
-
     MILESTRO_RENDER_LOG_WARN("Ignoring unknown Milestro Unity render event offset: {}", eventOffset);
     MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
 }
@@ -439,26 +322,18 @@ void DrainRenderQueue(int eventOffset, MilestroUnityRenderDrain* drain) {
 
     std::lock_guard renderLock(gRenderSystemMutex);
     std::vector<MilestroUnityRenderSubmission*> submissions = DrainQueuedSubmissions(drain->graphicsBackend);
-    auto* drainCompletion = new (std::nothrow) DrainCompletionState(drain);
-    if (drainCompletion == nullptr) {
-        MILESTROLOG_ERROR("Failed to allocate Milestro render-drain completion state.");
-        for (MilestroUnityRenderSubmission* submission: submissions) {
-            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
-        }
-        MarkDrainCompleted(drain);
-        return;
-    }
-
     for (MilestroUnityRenderSubmission* submission: submissions) {
-        RenderQueuedSubmission(eventOffset, submission, drainCompletion);
+        RenderQueuedSubmission(eventOffset, submission);
     }
-    drainCompletion->FinishDispatch();
+    MarkDrainCompleted(drain);
 }
 
 void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType) {
     std::lock_guard renderLock(gRenderSystemMutex);
 
-    if (eventType == kUnityGfxDeviceEventInitialize && gUnityGraphics != nullptr) {
+    if ((eventType == kUnityGfxDeviceEventInitialize ||
+         eventType == kUnityGfxDeviceEventAfterReset) &&
+        gUnityGraphics != nullptr) {
         gRenderer = gUnityGraphics->GetRenderer();
     } else if (eventType == kUnityGfxDeviceEventShutdown) {
         gRenderer = kUnityGfxRendererNull;
@@ -485,7 +360,7 @@ void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType
     vulkan::OnGraphicsDeviceEvent(eventType,
                                   gUnityInterfaces,
                                   gRenderer,
-                                  gEventBase >= 0 ? gEventBase + kVulkanDrawEventOffset : -1);
+                                  gEventBase >= 0 ? gEventBase + kVulkanFirstEventOffset : -1);
 #endif
 }
 
@@ -510,8 +385,24 @@ void UNITY_INTERFACE_API OnRenderEvent(int eventId, void* data) {
     DrainRenderQueue(eventOffset, static_cast<MilestroUnityRenderDrain*>(data));
 }
 
+void UNITY_INTERFACE_API OnVulkanRenderEvent(int eventId) {
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    vulkan::OnRenderEvent(eventId);
+#else
+    (void) eventId;
+#endif
+}
+
 void* RenderEventFunc() {
     return reinterpret_cast<void*>(&OnRenderEvent);
+}
+
+void* VulkanRenderEventFunc() {
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    return reinterpret_cast<void*>(&OnVulkanRenderEvent);
+#else
+    return nullptr;
+#endif
 }
 
 int64_t MetalRenderEventId(int32_t& eventId) {
@@ -548,14 +439,10 @@ int64_t RenderTextureEventId(int32_t graphicsBackend, int32_t& eventId) {
             return MILESTRO_API_RET_FAILED;
 #endif
         case MilestroUnityGraphicsBackend::Vulkan:
-#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
-            eventId = gEventBase + kVulkanDrawEventOffset;
-            return MILESTRO_API_RET_OK;
-#else
             eventId = -1;
-            MILESTROLOG_ERROR("Milestro Unity Vulkan render backend is not enabled in this build.");
+            MILESTROLOG_ERROR(
+                "Milestro Unity Vulkan uses the dedicated Prepare/Submit event API, not a drain event id.");
             return MILESTRO_API_RET_FAILED;
-#endif
         default:
             eventId = -1;
             MILESTROLOG_ERROR("Milestro Unity render backend {} is unknown.", graphicsBackend);
@@ -569,6 +456,10 @@ void* GetRenderEventFuncForExport() {
     return RenderEventFunc();
 }
 
+void* GetVulkanRenderEventFuncForExport() {
+    return VulkanRenderEventFunc();
+}
+
 int64_t GetMetalRenderEventIdForExport(int32_t& eventId) {
     return MetalRenderEventId(eventId);
 }
@@ -579,6 +470,40 @@ int64_t GetRenderTextureEventIdForExport(int32_t graphicsBackend, int32_t& event
 
 int64_t EnqueueSubmissionForExport(int32_t graphicsBackend, void* submission) {
     return EnqueueSubmission(graphicsBackend, static_cast<MilestroUnityRenderSubmission*>(submission));
+}
+
+int64_t GetVulkanEventInfoForExport(int32_t& prepareEventId,
+                                    int32_t& submitEventId,
+                                    uint64_t& epoch) {
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    return vulkan::GetEventInfo(prepareEventId, submitEventId, epoch);
+#else
+    prepareEventId = -1;
+    submitEventId = -1;
+    epoch = 0;
+    return MILESTRO_API_RET_FAILED;
+#endif
+}
+
+int64_t EnqueueVulkanSubmissionForExport(uint64_t epoch, void* submission, uint64_t& serial) {
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    return vulkan::EnqueueSubmission(epoch, submission, serial);
+#else
+    (void) epoch;
+    (void) submission;
+    serial = 0;
+    return MILESTRO_API_RET_FAILED;
+#endif
+}
+
+int64_t CancelVulkanSubmissionForExport(uint64_t epoch, uint64_t serial) {
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    return vulkan::CancelSubmission(epoch, serial);
+#else
+    (void) epoch;
+    (void) serial;
+    return MILESTRO_API_RET_FAILED;
+#endif
 }
 
 int64_t CreateD3D12ExternalTextureForExport(int32_t width,
@@ -637,8 +562,6 @@ void Unload() {
         gUnityGraphics->UnregisterDeviceEventCallback(OnGraphicsDeviceEvent);
     }
     CompleteQueuedSubmissions();
-    // The Vulkan shutdown path blocks until every accepted AccessQueue callback
-    // has returned its plugin-owned state before Unity can unload this module.
     OnGraphicsDeviceEvent(kUnityGfxDeviceEventShutdown);
     gEventBase = -1;
     gUnityGraphics = nullptr;

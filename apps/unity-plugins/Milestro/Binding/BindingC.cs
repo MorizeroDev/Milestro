@@ -26,6 +26,10 @@ namespace Milestro.Binding
         internal static extern unsafe IntPtr UnityRenderGetRenderEventAndDataFunc();
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetVulkanEventFunc")]
+        internal static extern unsafe IntPtr UnityRenderGetVulkanEventFunc();
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetMetalRenderEventId")]
         internal static extern unsafe long UnityRenderGetMetalRenderEventId(out int eventId);
 
@@ -36,6 +40,22 @@ namespace Milestro.Binding
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderEnqueueSubmission")]
         internal static extern unsafe long UnityRenderEnqueueSubmission(int graphicsBackend, IntPtr submission);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetVulkanEventInfo")]
+        internal static extern unsafe long UnityRenderGetVulkanEventInfo(out int prepareEventId,
+                                                                         out int submitEventId,
+                                                                         out ulong epoch);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderEnqueueVulkanSubmission")]
+        internal static extern unsafe long UnityRenderEnqueueVulkanSubmission(ulong epoch,
+                                                                               IntPtr submission,
+                                                                               out ulong serial);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderCancelVulkanSubmission")]
+        internal static extern unsafe long UnityRenderCancelVulkanSubmission(ulong epoch, ulong serial);
 
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderCreateD3D12ExternalTexture")]

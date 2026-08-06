@@ -19,6 +19,10 @@ void* FrameworkBindingMilestroUnityRenderGetRenderEventAndDataFunc() {
     return MilestroUnityRenderGetRenderEventAndDataFunc();
 }
 
+void* FrameworkBindingMilestroUnityRenderGetVulkanEventFunc() {
+    return MilestroUnityRenderGetVulkanEventFunc();
+}
+
 int64_t FrameworkBindingMilestroUnityRenderGetMetalRenderEventId(int32_t& eventId) {
     return MilestroUnityRenderGetMetalRenderEventId(eventId);
 }
@@ -30,6 +34,23 @@ int64_t FrameworkBindingMilestroUnityRenderGetRenderTextureEventId(int32_t graph
 int64_t FrameworkBindingMilestroUnityRenderEnqueueSubmission(int32_t graphicsBackend,
                                                              [[milize::CSharpType("IntPtr")]] void* submission) {
     return MilestroUnityRenderEnqueueSubmission(graphicsBackend, submission);
+}
+
+int64_t FrameworkBindingMilestroUnityRenderGetVulkanEventInfo(int32_t& prepareEventId,
+                                                               int32_t& submitEventId,
+                                                               uint64_t& epoch) {
+    return MilestroUnityRenderGetVulkanEventInfo(prepareEventId, submitEventId, epoch);
+}
+
+int64_t FrameworkBindingMilestroUnityRenderEnqueueVulkanSubmission(
+        uint64_t epoch,
+        [[milize::CSharpType("IntPtr")]] void* submission,
+        uint64_t& serial) {
+    return MilestroUnityRenderEnqueueVulkanSubmission(epoch, submission, serial);
+}
+
+int64_t FrameworkBindingMilestroUnityRenderCancelVulkanSubmission(uint64_t epoch, uint64_t serial) {
+    return MilestroUnityRenderCancelVulkanSubmission(epoch, serial);
 }
 
 int64_t FrameworkBindingMilestroUnityRenderCreateD3D12ExternalTexture(int32_t width,

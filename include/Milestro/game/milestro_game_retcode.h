@@ -4,6 +4,8 @@
 #include <cstdint>
 
 constexpr int64_t MILESTRO_API_RET_OK = 0;
+constexpr int64_t MILESTRO_API_RET_PENDING = 1;
+constexpr int64_t MILESTRO_API_RET_RETRY = 2;
 constexpr int64_t MILESTRO_API_RET_UNEXPECTED_EXCEPTION = -11709394;
 constexpr int64_t MILESTRO_API_RET_FAILED = -1;
 
