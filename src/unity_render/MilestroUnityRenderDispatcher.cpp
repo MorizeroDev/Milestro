@@ -637,6 +637,8 @@ void Unload() {
         gUnityGraphics->UnregisterDeviceEventCallback(OnGraphicsDeviceEvent);
     }
     CompleteQueuedSubmissions();
+    // The Vulkan shutdown path blocks until every accepted AccessQueue callback
+    // has returned its plugin-owned state before Unity can unload this module.
     OnGraphicsDeviceEvent(kUnityGfxDeviceEventShutdown);
     gEventBase = -1;
     gUnityGraphics = nullptr;

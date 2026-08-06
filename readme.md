@@ -164,8 +164,8 @@ The render-target path is platform-dependent:
   `MILESTRO_ENABLE_DESKTOP_VULKAN_RENDER`.
 
 `UnityAutoRenderTextureSurface` currently auto-selects Metal, Direct3D 12,
-OpenGLES3, or OpenGLCore from Unity's active graphics device. MSAA render targets
-are not supported yet.
+Vulkan, OpenGLES3, or OpenGLCore from Unity's active graphics device. MSAA
+render targets are not supported yet.
 
 ## Repository Layout
 
