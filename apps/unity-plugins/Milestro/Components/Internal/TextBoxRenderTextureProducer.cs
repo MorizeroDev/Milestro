@@ -55,8 +55,12 @@ namespace Milestro.Components.Internal
         [SerializeField]
         private string m_locale = "zh-Hans";
 
+        [SerializeField]
+        private UnitySkiaGraphicsBackend m_backend = UnitySkiaGraphicsBackend.Auto;
+
         [NonSerialized] private RectTransform? rectTransformCache;
         [NonSerialized] private TextBoxRenderTarget? renderTarget;
+        [NonSerialized] private UnitySkiaGraphicsBackend renderTargetBackend = UnitySkiaGraphicsBackend.Auto;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
         [NonSerialized] private float m_scrollX;
         [NonSerialized] private float m_scrollY;
@@ -105,6 +109,24 @@ namespace Milestro.Components.Internal
             {
                 m_content = value ?? "";
                 MarkPropertiesChanged();
+            }
+        }
+
+        public UnitySkiaGraphicsBackend backend
+        {
+            get => m_backend;
+            set
+            {
+                var nextBackend = NormalizeBackend(value);
+                if (m_backend == nextBackend)
+                {
+                    return;
+                }
+
+                m_backend = nextBackend;
+                DisposeRenderTarget();
+                NotifyOutputChanged();
+                NotifyLayoutChanged();
             }
         }
 
@@ -379,6 +401,13 @@ namespace Milestro.Components.Internal
             m_margin.Normalize();
             m_scrollX = FloatUtil.IsFinite(m_scrollX) ? Mathf.Max(0f, m_scrollX) : 0f;
             m_scrollY = FloatUtil.IsFinite(m_scrollY) ? Mathf.Max(0f, m_scrollY) : 0f;
+            var nextBackend = NormalizeBackend(m_backend);
+            if (renderTarget != null && renderTargetBackend != nextBackend)
+            {
+                DisposeRenderTarget();
+                NotifyOutputChanged();
+            }
+            m_backend = nextBackend;
             MarkPropertiesChanged();
             if (isActiveAndEnabled)
             {
@@ -426,6 +455,11 @@ namespace Milestro.Components.Internal
 
         private void RebuildResources(bool forceText)
         {
+            if (renderTarget?.OutputTexture is RenderTexture outputTexture && !outputTexture.IsCreated())
+            {
+                renderTarget.MarkPaintChanged();
+            }
+
             var settings = CurrentSettings();
             var hadPreviousMeasurement = TryBuildLayoutMeasurement(settings, out var previousMeasurement);
             var currentSize = CurrentSize();
@@ -545,12 +579,25 @@ namespace Milestro.Components.Internal
             {
                 if (renderTarget == null)
                 {
-                    renderTarget = new TextBoxRenderTarget();
+                    renderTarget = new TextBoxRenderTarget(m_backend);
+                    renderTargetBackend = m_backend;
                     renderTarget.RenderEventCompleted += OnRenderEventCompleted;
                 }
 
                 return renderTarget;
             }
+        }
+
+        private static UnitySkiaGraphicsBackend NormalizeBackend(UnitySkiaGraphicsBackend value)
+        {
+            return value == UnitySkiaGraphicsBackend.Auto ||
+                   value == UnitySkiaGraphicsBackend.Metal ||
+                   value == UnitySkiaGraphicsBackend.Direct3D12 ||
+                   value == UnitySkiaGraphicsBackend.Vulkan ||
+                   value == UnitySkiaGraphicsBackend.OpenGL ||
+                   value == UnitySkiaGraphicsBackend.OpenGLES
+                ? value
+                : UnitySkiaGraphicsBackend.Auto;
         }
 
         private void DisposeRenderTarget()
@@ -576,9 +623,10 @@ namespace Milestro.Components.Internal
                 return;
             }
 
+            renderTarget?.MarkPaintChanged();
+
 #if UNITY_EDITOR
-            if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Skipped &&
-                !Application.isPlaying &&
+            if (!Application.isPlaying &&
                 isActiveAndEnabled &&
                 m_editorSkippedRenderRetries < MaxEditorSkippedRenderRetries)
             {

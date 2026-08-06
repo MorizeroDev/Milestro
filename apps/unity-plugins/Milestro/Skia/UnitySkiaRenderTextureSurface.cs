@@ -12,6 +12,9 @@ namespace Milestro.Skia
 {
     public sealed class UnitySkiaRenderTextureSurface : IDisposable
     {
+        private const long VulkanCancellationCompleted = 0;
+        private const long VulkanRetry = 2;
+
         private enum RenderTextureHandleKind
         {
             RenderBuffer = 1,
@@ -178,6 +181,7 @@ namespace Milestro.Skia
                 command->ClipHeight = 0f;
                 command->VisualOffsetX = 0f;
                 command->VisualOffsetY = 0f;
+                command->ResourceOwnership = (int)UnitySkiaRenderCommandList.ResourceOwnership.None;
 
                 var submission = (RenderSubmissionPayload*)SubmissionPtr;
                 submission->Target = target;
@@ -191,6 +195,15 @@ namespace Milestro.Skia
                 ThrowIfDisposed();
                 commandBuffer.Clear();
                 commandBuffer.IssuePluginEventAndData(renderEventFunc, renderEventId, SubmissionPtr);
+                Graphics.ExecuteCommandBuffer(commandBuffer);
+            }
+
+            public void SubmitVulkan(IntPtr renderEventFunc, int prepareEventId, int submitEventId)
+            {
+                ThrowIfDisposed();
+                commandBuffer.Clear();
+                commandBuffer.IssuePluginEvent(renderEventFunc, prepareEventId);
+                commandBuffer.IssuePluginEvent(renderEventFunc, submitEventId);
                 Graphics.ExecuteCommandBuffer(commandBuffer);
             }
 
@@ -347,6 +360,24 @@ namespace Milestro.Skia
                 throw new InvalidOperationException("Milestro slim text render slot is not owned by this submission.");
             }
 
+            private void SubmitPreparedVulkan(PendingRenderEvent pendingEvent,
+                IntPtr renderEventFunc,
+                int prepareEventId,
+                int submitEventId)
+            {
+                for (var i = 0; i < slots.Length; ++i)
+                {
+                    var slot = slots[i];
+                    if (slot.PendingEvent == pendingEvent)
+                    {
+                        slot.SubmitVulkan(renderEventFunc, prepareEventId, submitEventId);
+                        return;
+                    }
+                }
+
+                throw new InvalidOperationException("Milestro slim text render slot is not owned by this submission.");
+            }
+
             internal bool TryPrepareAndSubmit(RenderTargetPayload target,
                 Vector2 baseline,
                 bool drawText,
@@ -368,6 +399,59 @@ namespace Milestro.Skia
                 catch
                 {
                     CancelPendingEvent(pendingEvent);
+                    throw;
+                }
+
+                return true;
+            }
+
+            internal bool TryPrepareAndSubmitVulkan(RenderTargetPayload target,
+                Vector2 baseline,
+                bool drawText,
+                IntPtr renderEventFunc,
+                int prepareEventId,
+                int submitEventId,
+                ulong epoch,
+                Texture texture,
+                UnitySkiaRenderTextureSurface owner)
+            {
+                if (!TryPrepareSlot(target, baseline, drawText, out var pendingEvent))
+                {
+                    return false;
+                }
+
+                var nativeAccepted = false;
+                ulong serial = 0;
+                try
+                {
+                    AddReusablePendingEvent(pendingEvent, texture, owner);
+                    var enqueueStatus = BindingC.UnityRenderEnqueueVulkanSubmission(
+                        epoch,
+                        pendingEvent.SubmissionPtr,
+                        out serial);
+                    if (enqueueStatus == VulkanRetry)
+                    {
+                        CancelPendingEvent(pendingEvent);
+                        return false;
+                    }
+                    ExitCodeUtil.ThrowIfFailed(enqueueStatus);
+                    nativeAccepted = true;
+                    SubmitPreparedVulkan(pendingEvent, renderEventFunc, prepareEventId, submitEventId);
+                }
+                catch
+                {
+                    if (nativeAccepted)
+                    {
+                        if (BindingC.UnityRenderCancelVulkanSubmission(epoch, serial) ==
+                            VulkanCancellationCompleted)
+                        {
+                            CancelPendingEvent(pendingEvent);
+                        }
+                    }
+                    else
+                    {
+                        CancelPendingEvent(pendingEvent);
+                    }
                     throw;
                 }
 
@@ -425,6 +509,7 @@ namespace Milestro.Skia
         }
 
         private const int RenderDrainMagic = 0x4D524451; // MRDQ
+        private const int VulkanMaxCommandsPerSubmission = 256;
         private static readonly object PendingLock = new object();
         private static readonly List<PendingRenderEvent> PendingEvents = new List<PendingRenderEvent>();
         private static readonly List<DeferredRelease> DeferredReleases = new List<DeferredRelease>();
@@ -494,8 +579,16 @@ namespace Milestro.Skia
             Backend = backend;
             EnsureBackendSupported(backend);
             this.descriptor = NormalizeDescriptor(descriptor);
-            renderEventFunc = BindingC.UnityRenderGetRenderEventAndDataFunc();
-            ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderGetRenderTextureEventId((int)Backend, out renderEventId));
+            if (Backend == UnitySkiaGraphicsBackend.Vulkan)
+            {
+                renderEventFunc = BindingC.UnityRenderGetVulkanEventFunc();
+                renderEventId = -1;
+            }
+            else
+            {
+                renderEventFunc = BindingC.UnityRenderGetRenderEventAndDataFunc();
+                ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderGetRenderTextureEventId((int)Backend, out renderEventId));
+            }
             Resize(this.descriptor.Width, this.descriptor.Height);
         }
 
@@ -612,9 +705,41 @@ namespace Milestro.Skia
             IDisposable[] ownedResources = Array.Empty<IDisposable>();
             NativeOwnedResource[] nativeOwnedResources = Array.Empty<NativeOwnedResource>();
             PendingRenderEvent? pendingEvent = null;
-            var enqueued = false;
+            var nativeAccepted = false;
+            var vulkanEpoch = 0UL;
+            var vulkanSerial = 0UL;
+            var vulkanPrepareEventId = -1;
+            var vulkanSubmitEventId = -1;
             try
             {
+                if (Backend == UnitySkiaGraphicsBackend.Vulkan)
+                {
+                    renderEventFunc = BindingC.UnityRenderGetVulkanEventFunc();
+                    if (renderEventFunc == IntPtr.Zero)
+                    {
+                        throw new InvalidOperationException("Milestro Vulkan render event callback is unavailable.");
+                    }
+                    if (commands.Count > VulkanMaxCommandsPerSubmission)
+                    {
+                        throw new ArgumentOutOfRangeException(nameof(commands),
+                            "Milestro Vulkan submissions support at most 256 draw commands.");
+                    }
+
+                    var eventInfoStatus = BindingC.UnityRenderGetVulkanEventInfo(
+                        out vulkanPrepareEventId,
+                        out vulkanSubmitEventId,
+                        out vulkanEpoch);
+                    if (eventInfoStatus == VulkanRetry)
+                    {
+                        return false;
+                    }
+                    ExitCodeUtil.ThrowIfFailed(eventInfoStatus);
+                    if (vulkanPrepareEventId < 0 || vulkanSubmitEventId < 0 || vulkanEpoch == 0)
+                    {
+                        throw new InvalidOperationException("Milestro Vulkan device epoch is unavailable.");
+                    }
+                }
+
                 commandsPtr = MarshalCommands(commands, out resources, out ownedResources, out nativeOwnedResources);
                 var submission = new RenderSubmissionPayload
                 {
@@ -635,13 +760,44 @@ namespace Milestro.Skia
                     resources,
                     ownedResources,
                     this);
-                ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderEnqueueSubmission((int)Backend, submissionPtr));
-                enqueued = true;
-                ScheduleRenderDrain(Backend, renderEventFunc, renderEventId);
+                if (Backend == UnitySkiaGraphicsBackend.Vulkan)
+                {
+                    var enqueueStatus = BindingC.UnityRenderEnqueueVulkanSubmission(
+                        vulkanEpoch,
+                        submissionPtr,
+                        out vulkanSerial);
+                    if (enqueueStatus == VulkanRetry)
+                    {
+                        CancelPendingEvent(pendingEvent);
+                        DisposeNativeOwnedResources(nativeOwnedResources);
+                        return false;
+                    }
+                    ExitCodeUtil.ThrowIfFailed(enqueueStatus);
+                    nativeAccepted = true;
+                    try
+                    {
+                        IssueVulkanEvents(renderEventFunc, vulkanPrepareEventId, vulkanSubmitEventId);
+                    }
+                    catch
+                    {
+                        if (BindingC.UnityRenderCancelVulkanSubmission(vulkanEpoch, vulkanSerial) ==
+                            VulkanCancellationCompleted)
+                        {
+                            CancelPendingEvent(pendingEvent);
+                        }
+                        throw;
+                    }
+                }
+                else
+                {
+                    ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderEnqueueSubmission((int)Backend, submissionPtr));
+                    nativeAccepted = true;
+                    ScheduleRenderDrain(Backend, renderEventFunc, renderEventId);
+                }
             }
             catch
             {
-                if (pendingEvent != null && !enqueued)
+                if (pendingEvent != null && !nativeAccepted)
                 {
                     CancelPendingEvent(pendingEvent);
                     DisposeNativeOwnedResources(nativeOwnedResources);
@@ -706,13 +862,43 @@ namespace Milestro.Skia
                 PreferredFormat = (int)descriptor.PreferredFormat
             };
 
-            var queued = submission.TryPrepareAndSubmit(target,
-                baseline,
-                drawText,
-                renderEventFunc,
-                renderEventId,
-                Texture!,
-                this);
+            bool queued;
+            if (Backend == UnitySkiaGraphicsBackend.Vulkan)
+            {
+                renderEventFunc = BindingC.UnityRenderGetVulkanEventFunc();
+                if (renderEventFunc == IntPtr.Zero)
+                {
+                    throw new InvalidOperationException("Milestro Vulkan render event callback is unavailable.");
+                }
+                var eventInfoStatus = BindingC.UnityRenderGetVulkanEventInfo(
+                    out var prepareEventId,
+                    out var submitEventId,
+                    out var epoch);
+                if (eventInfoStatus == VulkanRetry)
+                {
+                    return false;
+                }
+                ExitCodeUtil.ThrowIfFailed(eventInfoStatus);
+                queued = submission.TryPrepareAndSubmitVulkan(target,
+                    baseline,
+                    drawText,
+                    renderEventFunc,
+                    prepareEventId,
+                    submitEventId,
+                    epoch,
+                    Texture!,
+                    this);
+            }
+            else
+            {
+                queued = submission.TryPrepareAndSubmit(target,
+                    baseline,
+                    drawText,
+                    renderEventFunc,
+                    renderEventId,
+                    Texture!,
+                    this);
+            }
             return queued;
         }
 
@@ -1274,6 +1460,32 @@ namespace Milestro.Skia
                 cmd.IssuePluginEventAndData(pendingDrain.RenderEventFunc,
                     pendingDrain.RenderEventId,
                     pendingDrain.DrainPtr);
+                Graphics.ExecuteCommandBuffer(cmd);
+            }
+            finally
+            {
+                cmd?.Release();
+            }
+        }
+
+        private static void IssueVulkanEvents(IntPtr renderEventFunc,
+            int prepareEventId,
+            int submitEventId)
+        {
+            if (renderEventFunc == IntPtr.Zero || prepareEventId < 0 || submitEventId < 0)
+            {
+                throw new InvalidOperationException("Milestro Vulkan render events are unavailable.");
+            }
+
+            CommandBuffer? cmd = null;
+            try
+            {
+                cmd = new CommandBuffer
+                {
+                    name = "Milestro Vulkan Prepare and Submit"
+                };
+                cmd.IssuePluginEvent(renderEventFunc, prepareEventId);
+                cmd.IssuePluginEvent(renderEventFunc, submitEventId);
                 Graphics.ExecuteCommandBuffer(cmd);
             }
             finally

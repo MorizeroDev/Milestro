@@ -60,6 +60,7 @@ namespace Milestro.Components.Internal
     internal sealed class TextBoxRenderTarget : IDisposable
     {
         private static readonly Rect DefaultUvRect = new Rect(0f, 0f, 1f, 1f);
+        private readonly UnitySkiaGraphicsBackend backend;
 
         private UnityAutoRenderTextureSurface? surface;
         private Paragraph? paragraph;
@@ -77,6 +78,11 @@ namespace Milestro.Components.Internal
         private Vector2 viewportSize;
         private Vector2 maxScrollOffset;
         private Vector2Int outputVisibleSizePixels = Vector2Int.one;
+
+        public TextBoxRenderTarget(UnitySkiaGraphicsBackend backend = UnitySkiaGraphicsBackend.Auto)
+        {
+            this.backend = backend;
+        }
 
         public Texture? OutputTexture => surface?.Texture;
         public Rect OutputUvRect => surface != null
@@ -186,10 +192,12 @@ namespace Milestro.Components.Internal
         private bool EnsureSurface(Vector2Int sizePixels, ColorSpace colorSpace)
         {
             sizePixels = NormalizeSize(sizePixels);
-            if (surface == null || surface.ColorSpace != colorSpace)
+            if (surface == null ||
+                surface.ColorSpace != colorSpace ||
+                surface.RenderTexture != null && !surface.RenderTexture.IsCreated())
             {
                 DisposeSurface();
-                SetSurface(new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, colorSpace));
+                SetSurface(new UnityAutoRenderTextureSurface(backend, sizePixels.x, sizePixels.y, colorSpace));
                 MarkOutputChanged();
                 return true;
             }

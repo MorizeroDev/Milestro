@@ -32,9 +32,10 @@ namespace Milestro.Components
         [SerializeField] private SlimTextVerticalAlign m_verticalAlign = SlimTextVerticalAlign.Top;
         [SerializeField] private bool m_autoFitTexture;
         [SerializeField] private bool m_fallbackToSystemFont = true;
+        [SerializeField] private UnitySkiaGraphicsBackend m_backend = UnitySkiaGraphicsBackend.Auto;
         [SerializeField] private Material? m_material;
         [SerializeField] private string m_texturePropertyName = DefaultTexturePropertyName;
-        [SerializeField] private bool m_disableRendererWhenNoOutput;
+        [SerializeField] private bool m_disableRendererWhenNoOutput = true;
         [SerializeField, HideInInspector] private SlimTextRenderTextureProducer? m_ownedProducer;
         [SerializeField, HideInInspector] private RenderTextureMeshPresenter? m_ownedPresenter;
         [SerializeField, HideInInspector] private MeshFilter? m_ownedMeshFilter;
@@ -174,6 +175,22 @@ namespace Milestro.Components
             }
         }
 
+        public UnitySkiaGraphicsBackend backend
+        {
+            get => m_backend;
+            set
+            {
+                var nextBackend = NormalizeBackend(value);
+                if (m_backend == nextBackend)
+                {
+                    return;
+                }
+
+                m_backend = nextBackend;
+                ApplyConfiguration();
+            }
+        }
+
         public Material? material
         {
             get => m_material;
@@ -295,6 +312,7 @@ namespace Milestro.Components
 
         private void ApplyProducerSettings(SlimTextRenderTextureProducer producer, bool useManagedStringText)
         {
+            producer.backend = m_backend;
             if (useManagedStringText)
             {
                 producer.SetManagedStringText(m_text);
@@ -692,6 +710,7 @@ namespace Milestro.Components
 
             m_fontWeight = NormalizeFontWeight(m_fontWeight);
             m_fontSize = NormalizeFontSize(m_fontSize);
+            m_backend = NormalizeBackend(m_backend);
             m_textureSizePixels = NormalizeTextureSize(m_textureSizePixels);
             m_pixelsPerUnit = NormalizePixelsPerUnit(m_pixelsPerUnit);
             NormalizeRectOffsetInPlace();
@@ -719,6 +738,18 @@ namespace Milestro.Components
         private static float NormalizePixelsPerUnit(float pixelsPerUnit)
         {
             return FloatUtil.IsFinite(pixelsPerUnit) ? Mathf.Max(1f, pixelsPerUnit) : 1f;
+        }
+
+        private static UnitySkiaGraphicsBackend NormalizeBackend(UnitySkiaGraphicsBackend value)
+        {
+            return value == UnitySkiaGraphicsBackend.Auto ||
+                   value == UnitySkiaGraphicsBackend.Metal ||
+                   value == UnitySkiaGraphicsBackend.Direct3D12 ||
+                   value == UnitySkiaGraphicsBackend.Vulkan ||
+                   value == UnitySkiaGraphicsBackend.OpenGL ||
+                   value == UnitySkiaGraphicsBackend.OpenGLES
+                ? value
+                : UnitySkiaGraphicsBackend.Auto;
         }
 
         private void EnsureRectOffset()

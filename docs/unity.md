@@ -313,9 +313,50 @@ device:
 
 - Metal
 - Direct3D12
-- Vulkan
 - OpenGLES3
 - OpenGLCore
+
+Vulkan is available only through explicit `UnitySkiaRenderTextureSurface`
+selection or an explicit component backend. For `TextBoxRenderTextureProducer`,
+`SlimTextRenderTextureProducer`, `TextInput`, and `WorldSpaceSlimText`, set the
+backend before the GameObject is activated
+(or serialize the same value in the Inspector):
+
+```csharp
+using Milestro.Components.Internal;
+using Milestro.Skia;
+
+var producer = gameObject.GetComponent<TextBoxRenderTextureProducer>();
+producer.backend = UnitySkiaGraphicsBackend.Vulkan;
+```
+
+The native path uses a bounded Prepare/Submit event pair and keeps device
+epochs separate; it is not automatically selected because Unity does not
+publish a queued-render-event drain contract before native plugin unload.
+Applications opting in must keep the documented unload risk boundary in their
+player lifecycle.
+
+The native lifecycle is bounded: each device epoch receives one never-reused
+Prepare/Submit event-id pair (32 epoch slots per process), the native FIFO holds
+at most 32 submissions, and at most 64 event callbacks may remain outstanding.
+Prepare records Unity image barriers with `DontCare`; Submit uses
+`Allow + FlushCommandBuffers + SyncWorkerThreads` for synchronous Ganesh
+submission. Shutdown atomically gates the active epoch and returns without
+waiting; late fixed events only match their old epoch and no-op. This state
+machine relies on Unity's documented rendering-thread use of graphics-device
+and plugin-event callbacks for active-device submission and device reset. It
+does not claim that `UnityPluginUnload` drains Unity-owned callbacks.
+
+The managed/native boundary is exposed by
+`MilestroUnityRenderGetVulkanEventInfo`,
+`MilestroUnityRenderEnqueueVulkanSubmission`, and
+`MilestroUnityRenderCancelVulkanSubmission`; Vulkan submissions carry only a
+native queue record and epoch/serial, never a transient callback pointer. A
+full queue returns `MILESTRO_API_RET_RETRY` and the managed caller drops that
+frame. Lifecycle coverage is in
+`MilestroTest_UnityRenderVulkanSupport`, including fake-host callback-return
+checks, deferred same-thread and asynchronous delivery, late-event no-op,
+queue bounds, cancellation, and repeated device reloads.
 
 Native Vulkan support depends on the platform build:
 

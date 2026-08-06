@@ -40,6 +40,18 @@ namespace Milestro.Skia
             surface = new UnitySkiaRenderTextureSurface(SelectBackendForCurrentGraphicsDevice(), width, height, colorSpace);
         }
 
+        internal UnityAutoRenderTextureSurface(UnitySkiaGraphicsBackend backend,
+            int width,
+            int height,
+            UnityEngine.ColorSpace colorSpace)
+        {
+            surface = new UnitySkiaRenderTextureSurface(
+                backend == UnitySkiaGraphicsBackend.Auto ? SelectBackendForCurrentGraphicsDevice() : backend,
+                width,
+                height,
+                colorSpace);
+        }
+
         public static UnitySkiaGraphicsBackend SelectBackendForCurrentGraphicsDevice()
         {
             switch (SystemInfo.graphicsDeviceType)
@@ -49,14 +61,16 @@ namespace Milestro.Skia
                 case GraphicsDeviceType.Direct3D12:
                     return UnitySkiaGraphicsBackend.Direct3D12;
                 case GraphicsDeviceType.Vulkan:
-                    return UnitySkiaGraphicsBackend.Vulkan;
+                    throw new NotSupportedException(
+                        "Milestro automatic RenderTexture surface does not enable Vulkan. " +
+                        "Use UnitySkiaRenderTextureSurface with explicit Vulkan opt-in after accepting the Unity unload lifecycle boundary.");
                 case GraphicsDeviceType.OpenGLES3:
                     return UnitySkiaGraphicsBackend.OpenGLES;
                 case GraphicsDeviceType.OpenGLCore:
                     return UnitySkiaGraphicsBackend.OpenGL;
                 default:
                     throw new NotSupportedException(
-                        "Milestro automatic RenderTexture surface supports Metal, Direct3D12, Vulkan, OpenGLES3, and OpenGLCore. Current Unity graphics device is " +
+                        "Milestro automatic RenderTexture surface supports Metal, Direct3D12, OpenGLES3, and OpenGLCore. Current Unity graphics device is " +
                         SystemInfo.graphicsDeviceType + ".");
             }
         }

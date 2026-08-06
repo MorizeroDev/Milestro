@@ -10,6 +10,7 @@ namespace Milestro.Components.Internal
     internal sealed class SlimTextRenderTarget : IDisposable
     {
         private static readonly Rect DefaultUvRect = new Rect(0f, 0f, 1f, 1f);
+        private readonly UnitySkiaGraphicsBackend backend;
 
         private UnityAutoRenderTextureSurface? surface;
         private SkFont? font;
@@ -29,12 +30,18 @@ namespace Milestro.Components.Internal
         private UnitySkiaRenderTextureSurface.SlimTextNoAllocSubmission? noAllocSubmission;
         private long outputVersion;
 
+        public SlimTextRenderTarget(UnitySkiaGraphicsBackend backend = UnitySkiaGraphicsBackend.Auto)
+        {
+            this.backend = NormalizeBackend(backend);
+        }
+
         public Texture? OutputTexture => surface?.Texture;
         public Rect OutputUvRect => surface?.DisplayUvRect ?? DefaultUvRect;
         public int OutputWidth => surface?.Width ?? 0;
         public int OutputHeight => surface?.Height ?? 0;
         public bool HasOutput => surface?.Texture != null;
         public long OutputVersion => outputVersion;
+        internal UnitySkiaGraphicsBackend Backend => backend;
 
         public event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus>? RenderEventCompleted;
 
@@ -161,10 +168,15 @@ namespace Milestro.Components.Internal
         private bool EnsureSurface(Vector2Int sizePixels, ColorSpace colorSpace)
         {
             sizePixels = NormalizeSize(sizePixels);
-            if (surface == null || surface.ColorSpace != colorSpace)
+            if (surface == null ||
+                surface.ColorSpace != colorSpace ||
+                (surface.RenderTexture != null && !surface.RenderTexture.IsCreated()))
             {
                 DisposeSurface();
-                SetSurface(new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, colorSpace));
+                SetSurface(new UnityAutoRenderTextureSurface(backend,
+                    sizePixels.x,
+                    sizePixels.y,
+                    colorSpace));
                 MarkOutputChanged();
                 return true;
             }
@@ -359,7 +371,7 @@ namespace Milestro.Components.Internal
             {
                 MarkOutputChanged();
             }
-            else if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Skipped)
+            else
             {
                 paintChanged = true;
                 noAllocTextChanged = noAllocMode || noAllocTextChanged;
@@ -517,6 +529,18 @@ namespace Milestro.Components.Internal
         private static float NormalizeFontSize(float fontSize)
         {
             return FloatUtil.IsFinite(fontSize) ? Mathf.Max(1f, fontSize) : 1f;
+        }
+
+        private static UnitySkiaGraphicsBackend NormalizeBackend(UnitySkiaGraphicsBackend value)
+        {
+            return value == UnitySkiaGraphicsBackend.Auto ||
+                   value == UnitySkiaGraphicsBackend.Metal ||
+                   value == UnitySkiaGraphicsBackend.Direct3D12 ||
+                   value == UnitySkiaGraphicsBackend.Vulkan ||
+                   value == UnitySkiaGraphicsBackend.OpenGL ||
+                   value == UnitySkiaGraphicsBackend.OpenGLES
+                ? value
+                : UnitySkiaGraphicsBackend.Auto;
         }
 
         private void EnsureNoAllocCapacityForText(byte[] buffer, int offset, int length)

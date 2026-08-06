@@ -24,6 +24,7 @@ namespace Milestro.Components.Internal
         [SerializeField] private SlimTextHorizontalAlign m_horizontalAlign = SlimTextHorizontalAlign.Left;
         [SerializeField] private SlimTextVerticalAlign m_verticalAlign = SlimTextVerticalAlign.Top;
         [SerializeField] private bool m_fallbackToSystemFont = true;
+        [SerializeField] private UnitySkiaGraphicsBackend m_backend = UnitySkiaGraphicsBackend.Auto;
 
         [NonSerialized] private RectTransform? rectTransformCache;
         [NonSerialized] private SlimTextRenderTarget? renderTarget;
@@ -47,6 +48,24 @@ namespace Milestro.Components.Internal
             set
             {
                 SetManagedStringText(value);
+            }
+        }
+
+        public UnitySkiaGraphicsBackend backend
+        {
+            get => m_backend;
+            set
+            {
+                var nextBackend = NormalizeBackend(value);
+                if (m_backend == nextBackend)
+                {
+                    return;
+                }
+
+                m_backend = nextBackend;
+                DisposeRenderTarget();
+                NotifyOutputChanged();
+                MarkPropertiesChanged();
             }
         }
 
@@ -212,6 +231,13 @@ namespace Milestro.Components.Internal
 #if UNITY_EDITOR
         private void OnValidate()
         {
+            var nextBackend = NormalizeBackend(m_backend);
+            if (renderTarget != null && renderTarget.Backend != nextBackend)
+            {
+                DisposeRenderTarget();
+                NotifyOutputChanged();
+            }
+            m_backend = nextBackend;
             NormalizeSerializedValues();
             MarkPropertiesChanged();
             if (isActiveAndEnabled)
@@ -388,7 +414,7 @@ namespace Milestro.Components.Internal
             {
                 if (renderTarget == null)
                 {
-                    renderTarget = new SlimTextRenderTarget();
+                    renderTarget = new SlimTextRenderTarget(m_backend);
                     renderTarget.RenderEventCompleted += OnRenderEventCompleted;
                 }
 
@@ -484,6 +510,18 @@ namespace Milestro.Components.Internal
         private static float NormalizeFontSize(float fontSize)
         {
             return FloatUtil.IsFinite(fontSize) ? Mathf.Max(1f, fontSize) : 1f;
+        }
+
+        private static UnitySkiaGraphicsBackend NormalizeBackend(UnitySkiaGraphicsBackend value)
+        {
+            return value == UnitySkiaGraphicsBackend.Auto ||
+                   value == UnitySkiaGraphicsBackend.Metal ||
+                   value == UnitySkiaGraphicsBackend.Direct3D12 ||
+                   value == UnitySkiaGraphicsBackend.Vulkan ||
+                   value == UnitySkiaGraphicsBackend.OpenGL ||
+                   value == UnitySkiaGraphicsBackend.OpenGLES
+                ? value
+                : UnitySkiaGraphicsBackend.Auto;
         }
 
         private void EnsureRectOffset()

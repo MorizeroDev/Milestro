@@ -126,8 +126,12 @@ namespace Milestro.Components
         [FormerlySerializedAs("locale")]
         private string m_locale = "zh-Hans";
 
+        [SerializeField]
+        private UnitySkiaGraphicsBackend m_backend = UnitySkiaGraphicsBackend.Auto;
+
         [NonSerialized] private RectTransform rectTransformCache;
         [NonSerialized] private UnityAutoRenderTextureSurface? surface;
+        [NonSerialized] private UnitySkiaGraphicsBackend surfaceBackendSelection = UnitySkiaGraphicsBackend.Auto;
         [NonSerialized] private InputBox? inputBox;
         [NonSerialized] private HybridInputDispatcher.HybridInputSinkRegistration? inputRegistration;
         [NonSerialized] private InputSink? inputSink;
@@ -186,6 +190,24 @@ namespace Milestro.Components
         {
             get => m_text;
             set => SetText(value, notify: true);
+        }
+
+        public UnitySkiaGraphicsBackend backend
+        {
+            get => m_backend;
+            set
+            {
+                var nextBackend = NormalizeBackend(value);
+                if (m_backend == nextBackend)
+                {
+                    return;
+                }
+
+                m_backend = nextBackend;
+                Texture = null;
+                DisposeSurface();
+                paintDirty = true;
+            }
         }
 
         public void SetTextWithoutNotify(string value)
@@ -1334,6 +1356,7 @@ namespace Milestro.Components
         protected override void OnValidate()
         {
             base.OnValidate();
+            m_backend = NormalizeBackend(m_backend);
             ElasticSettings().Validate();
             CoerceWrapModeForLineMode();
             SetText(m_text, notify: false);
@@ -1363,6 +1386,10 @@ namespace Milestro.Components
             styleDirty = true;
             layoutDirty = true;
             paintDirty = true;
+            if (isActiveAndEnabled)
+            {
+                QueueEditorRebuild();
+            }
         }
 #endif
 
@@ -2394,10 +2421,17 @@ namespace Milestro.Components
 #endif
             var sizePixels = CurrentSize();
             var surfaceColorSpace = SurfaceColorSpace();
-            if (surface == null || surface.ColorSpace != surfaceColorSpace)
+            if (surface == null ||
+                surfaceBackendSelection != m_backend ||
+                surface.ColorSpace != surfaceColorSpace ||
+                (surface.RenderTexture != null && !surface.RenderTexture.IsCreated()))
             {
                 DisposeSurface();
-                SetSurface(new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, surfaceColorSpace));
+                SetSurface(new UnityAutoRenderTextureSurface(m_backend,
+                    sizePixels.x,
+                    sizePixels.y,
+                    surfaceColorSpace));
+                surfaceBackendSelection = m_backend;
                 ApplySurfaceToGraphic();
                 paintDirty = true;
             }
@@ -2470,10 +2504,23 @@ namespace Milestro.Components
             surface = null;
         }
 
+        private static UnitySkiaGraphicsBackend NormalizeBackend(UnitySkiaGraphicsBackend value)
+        {
+            return value == UnitySkiaGraphicsBackend.Auto ||
+                   value == UnitySkiaGraphicsBackend.Metal ||
+                   value == UnitySkiaGraphicsBackend.Direct3D12 ||
+                   value == UnitySkiaGraphicsBackend.Vulkan ||
+                   value == UnitySkiaGraphicsBackend.OpenGL ||
+                   value == UnitySkiaGraphicsBackend.OpenGLES
+                ? value
+                : UnitySkiaGraphicsBackend.Auto;
+        }
+
         private void OnRenderEventCompleted(UnitySkiaRenderTextureSurface.RenderSubmissionStatus status)
         {
             if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn)
             {
+                ApplySurfaceToGraphic();
 #if UNITY_EDITOR
                 m_editorSkippedRenderRetries = 0;
                 if (!Application.isPlaying && this && isActiveAndEnabled)
@@ -2486,14 +2533,14 @@ namespace Milestro.Components
                 return;
             }
 
+            paintDirty = true;
+
 #if UNITY_EDITOR
-            if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Skipped &&
-                !Application.isPlaying &&
+            if (!Application.isPlaying &&
                 isActiveAndEnabled &&
                 m_editorSkippedRenderRetries < MaxEditorSkippedRenderRetries)
             {
                 ++m_editorSkippedRenderRetries;
-                paintDirty = true;
                 QueueEditorRebuild();
             }
 #endif
