@@ -5,8 +5,12 @@
 #include "unity_render/MilestroUnityRenderSubmissionDraw.h"
 
 #include <IUnityGraphicsVulkan.h>
+#include <atomic>
 #include <cstdint>
+#include <cstring>
 #include <functional>
+#include <mutex>
+#include <new>
 
 #include "unity_render/MilestroUnityRenderLog.h"
 
@@ -22,12 +26,6 @@
 #include "include/gpu/vk/VulkanBackendContext.h"
 #include "include/gpu/vk/VulkanExtensions.h"
 
-#include <android/log.h>
-#include <dlfcn.h>
-
-#define ALOGE(...) __android_log_print(ANDROID_LOG_ERROR, "MilestroVulkan", __VA_ARGS__)
-#define ALOGI(...) __android_log_print(ANDROID_LOG_INFO, "MilestroVulkan", __VA_ARGS__)
-
 namespace milestro::unity_render::vulkan {
 
 namespace {
@@ -41,11 +39,12 @@ UnityVulkanInstance gCachedInstance{};
 skgpu::VulkanExtensions gVkExtensions;
 IUnityInterfaces* gUnityInterfacesCache = nullptr;
 int gRenderEventIdCache = -1;
+bool gEventConfigured = false;
+std::mutex gVulkanQueueMutex;
 
-struct StageAccess {
-    VkPipelineStageFlags stage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-    VkAccessFlags access = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-};
+struct VulkanQueueSubmission;
+VulkanQueueSubmission* gPendingQueueHead = nullptr;
+bool gVulkanDeviceActive = false;
 
 template <typename T>
 unsigned long long NonDispatchableHandle(T handle) {
@@ -54,28 +53,6 @@ unsigned long long NonDispatchableHandle(T handle) {
 #else
     return static_cast<unsigned long long>(handle);
 #endif
-}
-
-StageAccess StageAccessForLayout(VkImageLayout layout) {
-    switch (layout) {
-        case VK_IMAGE_LAYOUT_UNDEFINED:
-            return {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0};
-        case VK_IMAGE_LAYOUT_GENERAL:
-            return {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT};
-        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-            return {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                    VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT};
-        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-            return {VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT};
-        case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-            return {VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT};
-        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-            return {VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT};
-        case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
-            return {VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0};
-        default:
-            return {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT};
-    }
 }
 
 const char* AccessName(UnityVulkanResourceAccessMode mode) {
@@ -100,7 +77,9 @@ bool AccessNativeTexture(void* nativeTexture,
                          uint64_t renderSerial,
                          const char* label) {
     if (gVulkan == nullptr || gVulkan->AccessTexture == nullptr) {
-        ALOGE("AccessTexture unavailable during %s event %llu", label, (unsigned long long)renderSerial);
+        MILESTROLOG_ERROR("Milestro Vulkan AccessTexture is unavailable during {} event {}.",
+                          label,
+                          renderSerial);
         return false;
     }
 
@@ -112,27 +91,23 @@ bool AccessNativeTexture(void* nativeTexture,
                                            access,
                                            mode,
                                            &image);
-    ALOGI("%s AccessTexture event=%llu ok=%d image=%llu layout=%d format=%d %ux%u",
-          label, (unsigned long long)renderSerial, ok ? 1 : 0, NonDispatchableHandle(image.image),
-          (int)image.layout, (int)image.format, image.extent.width, image.extent.height);
+    MILESTRO_RENDER_LOG_INFO("Milestro Vulkan {} AccessTexture event={} ok={} mode={} image={} layout={} format={} {}x{}.",
+                             label,
+                             renderSerial,
+                             ok ? 1 : 0,
+                             AccessName(mode),
+                             NonDispatchableHandle(image.image),
+                             static_cast<int>(image.layout),
+                             static_cast<int>(image.format),
+                             image.extent.width,
+                             image.extent.height);
     return ok;
 }
 
-bool LogRecordingState(uint64_t renderSerial, const char* label) {
-    if (gVulkan == nullptr || gVulkan->CommandRecordingState == nullptr) {
-        ALOGE("CommandRecordingState unavailable during %s event %llu", label, (unsigned long long)renderSerial);
+bool ConfigureEvent(int renderEventId) {
+    if (gVulkan == nullptr || gVulkan->ConfigureEvent == nullptr || renderEventId < 0) {
+        MILESTROLOG_ERROR("Milestro Vulkan render event cannot be configured: interface or event id is unavailable.");
         return false;
-    }
-
-    UnityVulkanRecordingState state = {};
-    const bool ok = gVulkan->CommandRecordingState(&state, kUnityVulkanGraphicsQueueAccess_DontCare);
-    ALOGI("%s CommandRecordingState event=%llu ok=%d cmdBuffer=%p", label, (unsigned long long)renderSerial, ok ? 1 : 0, (void*)state.commandBuffer);
-    return ok;
-}
-
-void ConfigureEvent(int renderEventId) {
-    if (gVulkan == nullptr || renderEventId < 0) {
-        return;
     }
 
     UnityVulkanPluginEventConfig config = {};
@@ -141,7 +116,8 @@ void ConfigureEvent(int renderEventId) {
     config.flags = kUnityVulkanEventConfigFlag_EnsurePreviousFrameSubmission |
                    kUnityVulkanEventConfigFlag_ModifiesCommandBuffersState;
     gVulkan->ConfigureEvent(renderEventId, &config);
-    ALOGI("Configured Vulkan render event %d", renderEventId);
+    MILESTRO_RENDER_LOG_INFO("Configured Milestro Vulkan render event {} for Unity resource access.", renderEventId);
+    return true;
 }
 
 void LogHeaderContract() {
@@ -149,7 +125,7 @@ void LogHeaderContract() {
         return;
     }
 
-    ALOGI("Milestro Vulkan PluginAPI contract active.");
+    MILESTRO_RENDER_LOG_INFO("Milestro Vulkan PluginAPI contract active.");
     gLoggedHeaderContract = true;
 }
 
@@ -373,22 +349,16 @@ bool EnsureInitialized(IUnityInterfaces* unityInterfaces, int renderEventId) {
 
         auto getProc = instance.getInstanceProcAddr;
         if (getProc == nullptr) {
-            ALOGE("EnsureInitialized failed: getInstanceProcAddr is null!");
+            MILESTROLOG_ERROR("EnsureInitialized failed: Unity getInstanceProcAddr is null.");
             return false;
         }
 
         backendCtx.fMemoryAllocator = sk_make_sp<SimpleVulkanMemoryAllocator>(instance.device, instance.physicalDevice, getProc, instance.instance);
-        ALOGI("SimpleVulkanMemoryAllocator created successfully.");
+        MILESTRO_RENDER_LOG_INFO("SimpleVulkanMemoryAllocator created successfully.");
 
-        PFN_vkGetInstanceProcAddr systemGetInstanceProcAddr = nullptr;
-        void* vulkanLib = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
-        if (vulkanLib) {
-            systemGetInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(
-                dlsym(vulkanLib, "vkGetInstanceProcAddr"));
-        }
-        if (systemGetInstanceProcAddr == nullptr) {
-            systemGetInstanceProcAddr = getProc;
-        }
+        // Unity's interface supplies the loader entry point on every supported
+        // platform. Do not open a platform-specific Vulkan shared library here.
+        PFN_vkGetInstanceProcAddr systemGetInstanceProcAddr = getProc;
 
         auto vkGetDeviceProcAddr = reinterpret_cast<PFN_vkGetDeviceProcAddr>(getProc(instance.instance, "vkGetDeviceProcAddr"));
 
@@ -418,11 +388,14 @@ bool EnsureInitialized(IUnityInterfaces* unityInterfaces, int renderEventId) {
                 result = systemGetInstanceProcAddr(cachedInst, name);
             }
             if (result == nullptr && name != nullptr && strcmp(name, "vkEnumerateInstanceVersion") == 0) {
-                ALOGI("Providing FallbackEnumerateInstanceVersion for Vulkan 1.0 compatibility");
+                MILESTRO_RENDER_LOG_INFO("Providing fallback vkEnumerateInstanceVersion for Vulkan 1.0 compatibility.");
                 return reinterpret_cast<PFN_vkVoidFunction>(+FallbackEnumerateInstanceVersion);
             }
             if (result == nullptr) {
-                ALOGE("fGetProc MISSING: '%s' (inst=%p, dev=%p)", name ? name : "null", static_cast<void*>(inst), static_cast<void*>(dev));
+                MILESTROLOG_ERROR("Vulkan proc '{}' is unavailable (instance={}, device={}).",
+                                  name != nullptr ? name : "null",
+                                  static_cast<void*>(inst),
+                                  static_cast<void*>(dev));
             }
             return result;
         };
@@ -436,93 +409,295 @@ bool EnsureInitialized(IUnityInterfaces* unityInterfaces, int renderEventId) {
             return false;
         }
 
-        MILESTROLOG_ERROR("Skia Vulkan GrDirectContext created successfully!");
-        ConfigureEvent(gRenderEventIdCache);
+        MILESTRO_RENDER_LOG_INFO("Skia Vulkan GrDirectContext created successfully.");
     }
 
     return true;
 }
+
+namespace {
+
+struct VulkanQueueSubmission {
+    MilestroUnityRenderSubmission* submission = nullptr;
+    UnityVulkanImage colorTarget{};
+    UnityVulkanInstance instance{};
+    uint64_t renderSerial = 0;
+    RenderCompletionCallback completionCallback = nullptr;
+    void* completionUserData = nullptr;
+    std::atomic<bool> completionSent{false};
+    bool canceled = false;
+    bool linked = false;
+    VulkanQueueSubmission* previous = nullptr;
+    VulkanQueueSubmission* next = nullptr;
+};
+
+void LinkPendingQueueSubmission(VulkanQueueSubmission* queued) {
+    if (queued == nullptr || queued->linked) {
+        return;
+    }
+
+    queued->previous = nullptr;
+    queued->next = gPendingQueueHead;
+    if (gPendingQueueHead != nullptr) {
+        gPendingQueueHead->previous = queued;
+    }
+    gPendingQueueHead = queued;
+    queued->linked = true;
+}
+
+void UnlinkPendingQueueSubmission(VulkanQueueSubmission* queued) {
+    if (queued == nullptr || !queued->linked) {
+        return;
+    }
+
+    if (queued->previous != nullptr) {
+        queued->previous->next = queued->next;
+    } else {
+        gPendingQueueHead = queued->next;
+    }
+    if (queued->next != nullptr) {
+        queued->next->previous = queued->previous;
+    }
+
+    queued->previous = nullptr;
+    queued->next = nullptr;
+    queued->linked = false;
+}
+
+bool DrawVulkanSubmission(const VulkanQueueSubmission& queued, GrDirectContext* context) {
+    if (queued.submission == nullptr || context == nullptr || context->abandoned()) {
+        return false;
+    }
+
+    const auto& payload = queued.submission->target;
+    context->resetContext();
+
+    GrVkImageInfo vkInfo;
+    vkInfo.fImage = queued.colorTarget.image;
+    vkInfo.fAlloc = {};
+    vkInfo.fImageTiling = queued.colorTarget.tiling;
+    vkInfo.fImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    vkInfo.fFormat = queued.colorTarget.format;
+    vkInfo.fImageUsageFlags = queued.colorTarget.usage;
+    vkInfo.fSampleCount = 1;
+    vkInfo.fLevelCount = 1;
+    vkInfo.fCurrentQueueFamily = queued.instance.queueFamilyIndex;
+    vkInfo.fSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    GrBackendRenderTarget backendRT =
+        GrBackendRenderTargets::MakeVk(payload.width, payload.height, vkInfo);
+
+    SkColorType colorType = kRGBA_8888_SkColorType;
+    if (queued.colorTarget.format == VK_FORMAT_B8G8R8A8_UNORM ||
+        queued.colorTarget.format == VK_FORMAT_B8G8R8A8_SRGB) {
+        colorType = kBGRA_8888_SkColorType;
+    } else if (queued.colorTarget.format != VK_FORMAT_R8G8B8A8_UNORM &&
+               queued.colorTarget.format != VK_FORMAT_R8G8B8A8_SRGB) {
+        MILESTROLOG_ERROR("Unexpected Vulkan RenderTexture format {}; defaulting to RGBA8888.",
+                          static_cast<int>(queued.colorTarget.format));
+    }
+
+    sk_sp<SkColorSpace> colorSpace;
+    if (queued.colorTarget.format == VK_FORMAT_R8G8B8A8_SRGB ||
+        queued.colorTarget.format == VK_FORMAT_B8G8R8A8_SRGB) {
+        colorSpace = SkColorSpace::MakeSRGB();
+    } else if (payload.colorSpace == 1) {
+        colorSpace = SkColorSpace::MakeSRGBLinear();
+    } else {
+        colorSpace = SkColorSpace::MakeSRGB();
+    }
+
+    sk_sp<SkSurface> surface = SkSurfaces::WrapBackendRenderTarget(
+        context, backendRT, kTopLeft_GrSurfaceOrigin, colorType, colorSpace, nullptr);
+    if (surface == nullptr) {
+        MILESTROLOG_ERROR("Failed to wrap Unity Vulkan RenderTexture as a Skia surface ({}x{}, format={}).",
+                          payload.width,
+                          payload.height,
+                          static_cast<int>(queued.colorTarget.format));
+        return false;
+    }
+
+    milestro::unity_render::DrawSubmission(surface->getCanvas(), *queued.submission);
+    context->flushAndSubmit(surface.get());
+    MILESTRO_RENDER_LOG_INFO("Skia Vulkan draw completed for render event {}.", queued.renderSerial);
+    return true;
+}
+
+void PublishQueueCompletion(VulkanQueueSubmission* queued,
+                            MilestroUnityRenderSubmissionStatus status) {
+    if (queued == nullptr) {
+        return;
+    }
+
+    bool expected = false;
+    if (!queued->completionSent.compare_exchange_strong(expected,
+                                                        true,
+                                                        std::memory_order_acq_rel)) {
+        return;
+    }
+
+    if (queued->completionCallback != nullptr) {
+        queued->completionCallback(queued->submission, status, queued->completionUserData);
+    }
+}
+
+void UNITY_INTERFACE_API OnVulkanQueueAccess(int eventId, void* userData) {
+    (void) eventId;
+    auto* queued = static_cast<VulkanQueueSubmission*>(userData);
+    if (queued == nullptr) {
+        return;
+    }
+
+    // Ganesh contexts are not thread-safe. Keep drawing, completion publication,
+    // and pending-list removal serialized with device shutdown so Unload cannot
+    // return while a queue callback is still using plugin state.
+    std::lock_guard queueLock(gVulkanQueueMutex);
+    if (!queued->completionSent.load(std::memory_order_acquire)) {
+        MilestroUnityRenderSubmissionStatus status = MilestroUnityRenderSubmissionStatus::Failed;
+        if (!queued->canceled && gVulkanDeviceActive && gVulkan != nullptr &&
+            EnsureInitialized(nullptr, -1) && gDirectContext != nullptr) {
+            const UnityVulkanInstance current = gVulkan->Instance();
+            if (current.device == queued->instance.device &&
+                current.graphicsQueue == queued->instance.graphicsQueue) {
+                if (DrawVulkanSubmission(*queued, gDirectContext.get())) {
+                    status = MilestroUnityRenderSubmissionStatus::Drawn;
+                }
+            } else {
+                MILESTROLOG_ERROR("Unity Vulkan device or graphics queue changed before queued submission {}.",
+                                  queued->renderSerial);
+            }
+        } else {
+            MILESTROLOG_ERROR("Unity Vulkan queue callback ran without an initialized Skia context.");
+        }
+
+        PublishQueueCompletion(queued, status);
+    }
+
+    UnlinkPendingQueueSubmission(queued);
+    delete queued;
+}
+
+} // namespace
 
 void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
                            IUnityInterfaces* unityInterfaces,
                            UnityGfxRenderer renderer,
                            int renderEventId) {
     if (eventType == kUnityGfxDeviceEventShutdown) {
+        std::lock_guard queueLock(gVulkanQueueMutex);
+        gVulkanDeviceActive = false;
+
+        // AccessQueue has no cancellation API. Publish failure now, but keep
+        // each callback record alive so a callback already accepted by Unity
+        // can safely observe completionSent, unlink itself, and delete it.
+        int pendingCount = 0;
+        for (VulkanQueueSubmission* queued = gPendingQueueHead;
+             queued != nullptr;
+             queued = queued->next) {
+            queued->canceled = true;
+            if (!queued->completionSent.load(std::memory_order_acquire)) {
+                PublishQueueCompletion(queued, MilestroUnityRenderSubmissionStatus::Failed);
+                ++pendingCount;
+            }
+        }
+        if (pendingCount != 0) {
+            MILESTRO_RENDER_LOG_WARN("Canceled {} pending Milestro Vulkan queue submission(s) during device shutdown.",
+                                     pendingCount);
+        }
+
         if (gDirectContext) {
             gDirectContext->abandonContext();
             gDirectContext.reset();
         }
         gCachedInstance = {};
         gVulkan = nullptr;
+        gUnityInterfacesCache = nullptr;
         gRenderEventIdCache = -1;
+        gEventConfigured = false;
+        gLoggedHeaderContract = false;
         return;
     }
 
-    if (eventType != kUnityGfxDeviceEventInitialize) {
+    if (eventType != kUnityGfxDeviceEventInitialize || renderer != kUnityGfxRendererVulkan) {
         return;
     }
 
-    // Cache the render event ID for deferred initialization.
-    // Do NOT call EnsureInitialized here — Unity's Vulkan device
-    // may not be fully ready during UnityPluginLoad / early init.
-    // Initialization is deferred to the first Render() call.
+    std::lock_guard queueLock(gVulkanQueueMutex);
+    gVulkanDeviceActive = false;
+    if (unityInterfaces != nullptr) {
+        gUnityInterfacesCache = unityInterfaces;
+        gVulkan = unityInterfaces->Get<IUnityGraphicsVulkan>();
+    }
     if (renderEventId >= 0) {
         gRenderEventIdCache = renderEventId;
     }
-    if (unityInterfaces != nullptr && gVulkan == nullptr) {
-        gVulkan = unityInterfaces->Get<IUnityGraphicsVulkan>();
+
+    if (gVulkan == nullptr) {
+        MILESTROLOG_ERROR("Unity Vulkan graphics interface is unavailable during device initialization.");
+        return;
     }
+
+    // ConfigureEvent is required during initialization. The event itself only
+    // records Unity resource barriers; Skia submission happens later through
+    // AccessQueue, which supplies the queue ownership and flush guarantee.
+    gEventConfigured = ConfigureEvent(gRenderEventIdCache);
+    gVulkanDeviceActive = gEventConfigured;
+    LogHeaderContract();
 }
 
-int64_t Render(const MilestroUnityRenderSubmission& submission) {
+int64_t Render(MilestroUnityRenderSubmission& submission,
+               RenderCompletionCallback completionCallback,
+               void* completionUserData) {
     const auto& payload = submission.target;
     const uint64_t renderSerial = ++gRenderSerial;
 
+    if (completionCallback == nullptr) {
+        MILESTROLOG_ERROR("Milestro Vulkan render submission has no completion callback.");
+        return MILESTRO_API_RET_FAILED;
+    }
+    if (!gEventConfigured || gRenderEventIdCache < 0) {
+        MILESTROLOG_ERROR("Milestro Vulkan render event was not configured during device initialization.");
+        return MILESTRO_API_RET_FAILED;
+    }
+    if (gVulkan == nullptr && gUnityInterfacesCache != nullptr) {
+        gVulkan = gUnityInterfacesCache->Get<IUnityGraphicsVulkan>();
+    }
+    if (gVulkan == nullptr || gVulkan->AccessTexture == nullptr || gVulkan->AccessQueue == nullptr) {
+        MILESTROLOG_ERROR("Unity Vulkan resource-access or queue-access API is unavailable.");
+        return MILESTRO_API_RET_FAILED;
+    }
+
     if (payload.width <= 0 || payload.height <= 0) {
-        ALOGE("Failed: payload width or height <= 0 (%dx%d)", payload.width, payload.height);
+        MILESTROLOG_ERROR("Invalid Vulkan render payload size ({}x{}).", payload.width, payload.height);
         return MILESTRO_API_RET_FAILED;
     }
-
     if (payload.msaaSamples != 1) {
-        ALOGE("Failed: msaaSamples != 1 (%d)", payload.msaaSamples);
+        MILESTROLOG_ERROR("Vulkan RenderTexture MSAA is not implemented ({} samples).", payload.msaaSamples);
         return MILESTRO_API_RET_FAILED;
     }
-
     if (payload.handleKind != static_cast<int32_t>(MilestroUnityRenderTextureHandleKind::NativeTexture)) {
-        ALOGE("Failed: handleKind != NativeTexture (%d)", payload.handleKind);
+        MILESTROLOG_ERROR("Vulkan render target requires NativeTexture handle kind, got {}.", payload.handleKind);
         return MILESTRO_API_RET_FAILED;
     }
-
     if (payload.nativeTextureHandle == nullptr) {
-        ALOGE("Failed: nativeTextureHandle is null");
+        MILESTROLOG_ERROR("Vulkan render target native texture handle is null.");
         return MILESTRO_API_RET_FAILED;
     }
-    
-    if (!gDirectContext) {
-        if (!EnsureInitialized(nullptr, -1)) {
-            ALOGE("Failed: gDirectContext is null after EnsureInitialized");
-            return MILESTRO_API_RET_FAILED;
-        }
+
+    const UnityVulkanInstance instance = gVulkan->Instance();
+    if (instance.device == VK_NULL_HANDLE || instance.graphicsQueue == VK_NULL_HANDLE) {
+        MILESTROLOG_ERROR("Unity Vulkan device or graphics queue is unavailable for render event {}.",
+                          renderSerial);
+        return MILESTRO_API_RET_FAILED;
     }
 
-    LogHeaderContract();
-    UnityVulkanInstance instance = gVulkan != nullptr ? gVulkan->Instance() : UnityVulkanInstance {};
-    ALOGI("Render event=%llu payloadSize=%dx%d, handle=%p, dev=%p, queue=%p, family=%u",
-          (unsigned long long)renderSerial, payload.width, payload.height,
-          payload.nativeTextureHandle, (void*)instance.device, (void*)instance.graphicsQueue, instance.queueFamilyIndex);
-
-    UnityVulkanImage observed = {};
-    if (!AccessNativeTexture(payload.nativeTextureHandle,
-                             VK_IMAGE_LAYOUT_UNDEFINED,
-                             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                             0,
-                             kUnityVulkanResourceAccess_ObserveOnly,
-                             observed,
+    MILESTRO_RENDER_LOG_INFO("Scheduling Vulkan render event {} for {}x{} (device={}, queue={}, family={}).",
                              renderSerial,
-                             "observe")) {
-        ALOGE("Failed: AccessNativeTexture observe failed");
-        return MILESTRO_API_RET_FAILED;
-    }
+                             payload.width,
+                             payload.height,
+                             static_cast<void*>(instance.device),
+                             static_cast<void*>(instance.graphicsQueue),
+                             instance.queueFamilyIndex);
 
     UnityVulkanImage colorTarget = {};
     if (!AccessNativeTexture(payload.nativeTextureHandle,
@@ -533,85 +708,41 @@ int64_t Render(const MilestroUnityRenderSubmission& submission) {
                              colorTarget,
                              renderSerial,
                              "color-attachment")) {
-        ALOGE("Failed: AccessNativeTexture color-attachment failed");
+        MILESTROLOG_ERROR("Unity Vulkan color-attachment resource access failed for render event {}.",
+                          renderSerial);
         return MILESTRO_API_RET_FAILED;
     }
 
-    if (!LogRecordingState(renderSerial, "after-color-attachment-access")) {
-        ALOGE("Failed: LogRecordingState failed");
+    auto* queued = new (std::nothrow) VulkanQueueSubmission();
+    if (queued == nullptr) {
+        MILESTROLOG_ERROR("Failed to allocate Vulkan queue submission for render event {}.", renderSerial);
         return MILESTRO_API_RET_FAILED;
     }
+    queued->submission = &submission;
+    queued->colorTarget = colorTarget;
+    queued->instance = instance;
+    queued->renderSerial = renderSerial;
+    queued->completionCallback = completionCallback;
+    queued->completionUserData = completionUserData;
 
-    gDirectContext->resetContext();
-
-    GrVkImageInfo vkInfo;
-    vkInfo.fImage = colorTarget.image;
-    vkInfo.fAlloc = {};
-    vkInfo.fImageTiling = colorTarget.tiling;
-    vkInfo.fImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    vkInfo.fFormat = colorTarget.format;
-    vkInfo.fImageUsageFlags = colorTarget.usage;
-    vkInfo.fSampleCount = 1;
-    vkInfo.fLevelCount = 1;
-    vkInfo.fCurrentQueueFamily = instance.queueFamilyIndex;
-    vkInfo.fSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    GrBackendRenderTarget backendRT = GrBackendRenderTargets::MakeVk(payload.width, payload.height, vkInfo);
-
-    SkColorType colorType = kRGBA_8888_SkColorType;
-    sk_sp<SkColorSpace> colorSpace;
-    if (colorTarget.format == VK_FORMAT_B8G8R8A8_UNORM || colorTarget.format == VK_FORMAT_B8G8R8A8_SRGB) {
-        colorType = kBGRA_8888_SkColorType;
-    } else if (colorTarget.format != VK_FORMAT_R8G8B8A8_UNORM && colorTarget.format != VK_FORMAT_R8G8B8A8_SRGB) {
-        ALOGE("Unexpected format %d, defaulting to RGBA8888", (int)colorTarget.format);
-    }
-
-    if (colorTarget.format == VK_FORMAT_R8G8B8A8_SRGB || colorTarget.format == VK_FORMAT_B8G8R8A8_SRGB) {
-        colorSpace = SkColorSpace::MakeSRGB();
-    } else {
-        if (payload.colorSpace == 1) {
-            colorSpace = SkColorSpace::MakeSRGBLinear();
-        } else {
-            colorSpace = SkColorSpace::MakeSRGB();
+    {
+        std::lock_guard queueLock(gVulkanQueueMutex);
+        if (!gVulkanDeviceActive) {
+            delete queued;
+            MILESTROLOG_ERROR("Unity Vulkan device became unavailable before render event {} could access the queue.",
+                              renderSerial);
+            return MILESTRO_API_RET_FAILED;
         }
+        LinkPendingQueueSubmission(queued);
     }
 
-    sk_sp<SkSurface> surface = SkSurfaces::WrapBackendRenderTarget(
-            gDirectContext.get(), backendRT, kTopLeft_GrSurfaceOrigin, colorType, colorSpace, nullptr);
-
-    bool drawSuccess = false;
-    if (surface) {
-        milestro::unity_render::DrawSubmission(surface->getCanvas(), submission);
-        gDirectContext->flushAndSubmit(surface.get());
-        drawSuccess = true;
-        ALOGI("Skia Vulkan draw SUCCESS!");
-    } else {
-        ALOGE("Failed: SkSurfaces::WrapBackendRenderTarget returned NULL! size=%dx%d format=%d", payload.width, payload.height, (int)colorTarget.format);
-    }
-
-    const VkImageLayout restoreLayout = observed.layout == VK_IMAGE_LAYOUT_UNDEFINED
-                                            ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-                                            : observed.layout;
-    StageAccess restoreAccess = StageAccessForLayout(restoreLayout);
-    UnityVulkanImage restored = {};
-    if (!AccessNativeTexture(payload.nativeTextureHandle,
-                             restoreLayout,
-                             restoreAccess.stage,
-                             restoreAccess.access,
-                             kUnityVulkanResourceAccess_PipelineBarrier,
-                             restored,
-                             renderSerial,
-                             "restore-observed-layout")) {
-        ALOGE("Failed: restore AccessNativeTexture failed");
-        return MILESTRO_API_RET_FAILED;
-    }
-
-    if (!LogRecordingState(renderSerial, "after-restore-access")) {
-        ALOGE("Failed: restore LogRecordingState failed");
-        return MILESTRO_API_RET_FAILED;
-    }
-
-    return drawSuccess ? MILESTRO_API_RET_OK : MILESTRO_API_RET_FAILED;
+    // AccessTexture above records the transition in Unity's command buffer and
+    // updates Unity's tracked layout. flush=true submits that buffer before
+    // this callback, and AccessQueue grants exclusive graphics-queue access to
+    // Ganesh. The target intentionally remains in COLOR_ATTACHMENT_OPTIMAL;
+    // Unity will insert the next transition when it uses the texture again.
+    gVulkan->AccessQueue(&OnVulkanQueueAccess, gRenderEventIdCache, queued, true);
+    return kRenderDeferred;
 }
 
 } // namespace milestro::unity_render::vulkan

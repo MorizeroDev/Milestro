@@ -11,6 +11,7 @@
 #include <atomic>
 #include <cstring>
 #include <mutex>
+#include <new>
 #include <vector>
 
 #include "unity_render/MilestroUnityRenderLog.h"
@@ -120,6 +121,59 @@ void MarkDrainCompleted(MilestroUnityRenderDrain* drain) {
 #endif
 }
 
+// A Vulkan AccessQueue callback may run after the render-event callback has
+// returned. Keep the drain payload alive until every deferred submission has
+// published its completion status.
+class DrainCompletionState {
+public:
+    explicit DrainCompletionState(MilestroUnityRenderDrain* drain)
+        : drain_(drain) {
+    }
+
+    void AddPending() {
+        refs_.fetch_add(1, std::memory_order_relaxed);
+        pending_.fetch_add(1, std::memory_order_release);
+    }
+
+    void CompletePending() {
+        const int32_t previous = pending_.fetch_sub(1, std::memory_order_acq_rel);
+        if (previous == 1) {
+            TryComplete();
+        }
+        Release();
+    }
+
+    void FinishDispatch() {
+        dispatching_.store(false, std::memory_order_release);
+        TryComplete();
+        Release();
+    }
+
+private:
+    void TryComplete() {
+        if (dispatching_.load(std::memory_order_acquire) ||
+            pending_.load(std::memory_order_acquire) != 0) {
+            return;
+        }
+
+        if (!drainCompleted_.exchange(true, std::memory_order_acq_rel)) {
+            MarkDrainCompleted(drain_);
+        }
+    }
+
+    void Release() {
+        if (refs_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            delete this;
+        }
+    }
+
+    MilestroUnityRenderDrain* drain_ = nullptr;
+    std::atomic<int32_t> pending_{0};
+    std::atomic<int32_t> refs_{1};
+    std::atomic<bool> dispatching_{true};
+    std::atomic<bool> drainCompleted_{false};
+};
+
 bool IsRenderDrainPayload(void* data) {
     if (data == nullptr) {
         return false;
@@ -208,7 +262,19 @@ int64_t EnqueueSubmission(int32_t graphicsBackend, MilestroUnityRenderSubmission
     return MILESTRO_API_RET_OK;
 }
 
-void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* submission) {
+void CompleteVulkanSubmission(MilestroUnityRenderSubmission* submission,
+                              MilestroUnityRenderSubmissionStatus status,
+                              void* userData) {
+    auto* drainCompletion = static_cast<DrainCompletionState*>(userData);
+    MarkSubmissionCompleted(submission, status);
+    if (drainCompletion != nullptr) {
+        drainCompletion->CompletePending();
+    }
+}
+
+void RenderQueuedSubmission(int eventOffset,
+                            MilestroUnityRenderSubmission* submission,
+                            DrainCompletionState* drainCompletion) {
     if (submission == nullptr) {
         return;
     }
@@ -336,7 +402,19 @@ void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* subm
         }
 
 #if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
-        const auto status = vulkan::Render(*submission);
+        if (drainCompletion == nullptr) {
+            MILESTROLOG_ERROR("Milestro Vulkan render event has no drain completion state.");
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
+            return;
+        }
+
+        drainCompletion->AddPending();
+        const auto status = vulkan::Render(*submission, &CompleteVulkanSubmission, drainCompletion);
+        if (status == vulkan::kRenderDeferred) {
+            return;
+        }
+
+        drainCompletion->CompletePending();
         if (status < 0) {
             MILESTROLOG_ERROR("Milestro Vulkan render event failed: {}", status);
             MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
@@ -361,10 +439,20 @@ void DrainRenderQueue(int eventOffset, MilestroUnityRenderDrain* drain) {
 
     std::lock_guard renderLock(gRenderSystemMutex);
     std::vector<MilestroUnityRenderSubmission*> submissions = DrainQueuedSubmissions(drain->graphicsBackend);
-    for (MilestroUnityRenderSubmission* submission: submissions) {
-        RenderQueuedSubmission(eventOffset, submission);
+    auto* drainCompletion = new (std::nothrow) DrainCompletionState(drain);
+    if (drainCompletion == nullptr) {
+        MILESTROLOG_ERROR("Failed to allocate Milestro render-drain completion state.");
+        for (MilestroUnityRenderSubmission* submission: submissions) {
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
+        }
+        MarkDrainCompleted(drain);
+        return;
     }
-    MarkDrainCompleted(drain);
+
+    for (MilestroUnityRenderSubmission* submission: submissions) {
+        RenderQueuedSubmission(eventOffset, submission, drainCompletion);
+    }
+    drainCompletion->FinishDispatch();
 }
 
 void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType) {

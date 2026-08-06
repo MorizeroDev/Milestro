@@ -313,11 +313,11 @@ device:
 
 - Metal
 - Direct3D12
+- Vulkan
 - OpenGLES3
 - OpenGLCore
 
-`UnitySkiaRenderTextureSurface` also has a Vulkan backend enum path, but native
-Vulkan support depends on the platform build:
+Native Vulkan support depends on the platform build:
 
 - Android enables Vulkan when the NDK Vulkan library is found.
 - Desktop Vulkan is behind `MILESTRO_ENABLE_DESKTOP_VULKAN_RENDER`.
