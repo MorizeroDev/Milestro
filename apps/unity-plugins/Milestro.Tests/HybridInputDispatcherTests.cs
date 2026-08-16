@@ -311,6 +311,50 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void TextInputFocusPositionsImeCursorBeforeEnablingIme()
+        {
+            var inputObject = new GameObject("text-input", typeof(RectTransform));
+            var selectedOwner = new GameObject("selected-owner");
+            inputObject.SetActive(false);
+            try
+            {
+                using var selection = new SelectionFixture();
+                selection.Select(selectedOwner);
+                var calls = new List<string>();
+                var provider = new FakeProvider("provider",
+                    HybridInputProviderMatch.Exact,
+                    calls: calls);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(selectedOwner, "owner");
+                using var registration = dispatcher.RegisterSink(sink);
+                Assert.That(registration.AcquireFocus(), Is.True);
+
+                var input = inputObject.AddComponent<TextInput>();
+                InvokeRecreateInputBox(input);
+                SetTextInputPrivateField(input, "inputRegistration", registration);
+                calls.Clear();
+
+                typeof(TextInput).GetMethod("OnDispatcherFocusGained",
+                        BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(input, null);
+
+                Assert.That(calls,
+                    Is.EqualTo(new[]
+                    {
+                        "provider:ime-cursor",
+                        "provider:ime:True",
+                        "provider:ime-cursor"
+                    }));
+                SetTextInputPrivateField(input, "inputRegistration", null!);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(inputObject);
+                UnityEngine.Object.DestroyImmediate(selectedOwner);
+            }
+        }
+
+        [Test]
         public void KeyStateAndEdgesShareOneSealedFrame()
         {
             var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
@@ -2968,6 +3012,7 @@ namespace Milestro.Tests
             public void SetImeCursorPosition(Vector2 position)
             {
                 ImeCursorPosition = position;
+                calls?.Add($"{Id}:ime-cursor");
             }
 
             internal void Emit(HybridInputEvent inputEvent)

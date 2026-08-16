@@ -1,6 +1,6 @@
 {
     "name": "Milestro",
-    "rootNamespace": "",
+    "rootNamespace": "Milestro",
     "references": [
         "party.para.util.colors",
         "party.para.util.unitynative"

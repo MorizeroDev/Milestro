@@ -1,6 +1,6 @@
 {
     "name": "Milestro.InputSystem.Tests",
-    "rootNamespace": "",
+    "rootNamespace": "Milestro.InputSystem.Tests",
     "references": [
         "Milestro",
         "Milestro.InputSystem",

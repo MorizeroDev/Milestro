@@ -1,6 +1,6 @@
 {
     "name": "Milestro.Experimental",
-    "rootNamespace": "",
+    "rootNamespace": "Milestro.Experimental",
     "references": [
         "Milestro",
         "party.para.util.unitynative"

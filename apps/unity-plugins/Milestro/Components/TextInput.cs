@@ -1187,6 +1187,12 @@ namespace Milestro.Components
                 rectTransform.TransformPoint(presentedLocalPoint));
         }
 
+        internal static Vector2 ConvertScreenPointToImeCursorPosition(Vector2 screenPoint,
+            float screenHeight)
+        {
+            return new Vector2(screenPoint.x, screenHeight - screenPoint.y);
+        }
+
         private float ScrollTweenDurationSeconds()
         {
             return FloatUtil.IsFinite(m_scrollTweenDurationSeconds)
@@ -1419,6 +1425,7 @@ namespace Milestro.Components
         {
             inputFrameState.Reset();
             inputBox?.SetFocused(true);
+            UpdateCompositionCursorPosition();
             ApplyImeCompositionMode();
             ResetBlink();
             paintDirty = true;
@@ -2023,10 +2030,12 @@ namespace Milestro.Components
             var elasticOffset = new Vector2(scrollElasticX.Offset, scrollElasticY.Offset);
             var logicalLocalPoint = ContentPointToLocalPoint(logicalContentPoint);
             var camera = canvas == null || canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
-            inputRegistration?.SetImeCursorPosition(ResolveElasticPresentationScreenPoint(rectTransformCache,
+            var screenPoint = ResolveElasticPresentationScreenPoint(rectTransformCache,
                 logicalLocalPoint,
                 elasticOffset,
-                camera));
+                camera);
+            inputRegistration?.SetImeCursorPosition(ConvertScreenPointToImeCursorPosition(screenPoint,
+                Screen.height));
         }
 
         private static bool IsEscapeSequenceLead(char ch)

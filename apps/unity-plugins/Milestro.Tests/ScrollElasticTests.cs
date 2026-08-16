@@ -804,6 +804,13 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void TextInputImeCursorUsesTopLeftScreenOrigin()
+        {
+            Assert.That(TextInput.ConvertScreenPointToImeCursorPosition(new Vector2(24f, 35f), 100f),
+                Is.EqualTo(new Vector2(24f, 65f)));
+        }
+
+        [Test]
         public void IdleTextOwnersReturnBeforeRuntimeOrLayoutInspection()
         {
             var textBoxObject = new GameObject("Idle TextBox");

@@ -35,6 +35,31 @@ namespace Milestro.InputSystemTests
             }
         }
 
+#if ENABLE_LEGACY_INPUT_MANAGER
+        [Test]
+        public void MacEditorKeyboardMirrorsImeActivationToLegacyInputManager()
+        {
+            var previousMode = UnityEngine.Input.imeCompositionMode;
+            var keyboard = UnityEngine.InputSystem.InputSystem.AddDevice<UnityEngine.InputSystem.Keyboard>();
+            try
+            {
+                var wrapped = new UnityInputSystemKeyboard(keyboard);
+                UnityEngine.Input.imeCompositionMode = IMECompositionMode.Off;
+
+                wrapped.SetImeEnabled(true);
+                Assert.That(UnityEngine.Input.imeCompositionMode, Is.EqualTo(IMECompositionMode.On));
+
+                wrapped.SetImeEnabled(false);
+                Assert.That(UnityEngine.Input.imeCompositionMode, Is.EqualTo(IMECompositionMode.Off));
+            }
+            finally
+            {
+                UnityEngine.Input.imeCompositionMode = previousMode;
+                UnityEngine.InputSystem.InputSystem.RemoveDevice(keyboard);
+            }
+        }
+#endif
+
         [Test]
         public void CollectPublishesEdgesAndHeldSnapshot()
         {

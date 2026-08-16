@@ -1,6 +1,6 @@
 {
     "name": "Milestro.InputSystem",
-    "rootNamespace": "",
+    "rootNamespace": "Milestro.InputSystem",
     "references": [
         "Milestro",
         "Unity.InputSystem"

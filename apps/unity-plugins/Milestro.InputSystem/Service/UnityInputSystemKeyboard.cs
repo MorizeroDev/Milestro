@@ -58,6 +58,10 @@ namespace Milestro.InputSystem.Service
         public void SetImeEnabled(bool enabled)
         {
             keyboard.SetIMEEnabled(enabled);
+#if ENABLE_LEGACY_INPUT_MANAGER
+            // Unity 6 can accept the Input System command without starting a macOS marked-text session.
+            UnityEngine.Input.imeCompositionMode = enabled ? IMECompositionMode.On : IMECompositionMode.Off;
+#endif
         }
 
         public void SetImeCursorPosition(Vector2 position)

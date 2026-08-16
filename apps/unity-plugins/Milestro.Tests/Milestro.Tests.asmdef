@@ -1,6 +1,6 @@
 {
     "name": "Milestro.Tests",
-    "rootNamespace": "",
+    "rootNamespace": "Milestro.Tests",
     "references": [
         "Milestro",
         "Milestro.Editor",
