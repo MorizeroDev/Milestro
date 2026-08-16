@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using Milestro.Extensions;
 using Milestro.Model;
@@ -27,6 +28,7 @@ namespace Milestro.Components.Internal
 
         void MarkPropertiesChanged();
         void MarkPaintChanged();
+        bool TryHitLink(Vector2 normalizedViewportPoint, out TextBoxLinkHit hit);
         bool Rebuild(TextBoxRenderViewport viewport,
             ColorSpace colorSpace,
             TextBoxRenderTargetSettings settings,
@@ -119,6 +121,27 @@ namespace Milestro.Components.Internal
         {
             return HorizontalScrollState.Resolve(layout, HorizontalScrollRequest);
         }
+
+        internal bool Matches(TextBoxRenderViewport other)
+        {
+            return LayoutSizePixels == other.LayoutSizePixels &&
+                   OutputSizePixels == other.OutputSizePixels &&
+                   VisibleOutputSizePixels == other.VisibleOutputSizePixels &&
+                   TextBoxHorizontalScrollState.OffsetsEqual(HorizontalScrollState.ScrollX,
+                       other.HorizontalScrollState.ScrollX) &&
+                   TextBoxHorizontalScrollState.OffsetsEqual(HorizontalScrollState.DefaultAnchor,
+                       other.HorizontalScrollState.DefaultAnchor) &&
+                   HorizontalScrollState.HasLayout == other.HorizontalScrollState.HasLayout &&
+                   HorizontalScrollState.FollowsDefaultAnchor == other.HorizontalScrollState.FollowsDefaultAnchor &&
+                   HorizontalScrollRequest.HasValue == other.HorizontalScrollRequest.HasValue &&
+                   TextBoxHorizontalScrollState.OffsetsEqual(HorizontalScrollRequest.Value,
+                       other.HorizontalScrollRequest.Value) &&
+                   TextBoxHorizontalScrollState.OffsetsEqual(RequestedScrollY, other.RequestedScrollY) &&
+                   TextBoxHorizontalScrollState.OffsetsEqual(VisualScrollOffset.x, other.VisualScrollOffset.x) &&
+                   TextBoxHorizontalScrollState.OffsetsEqual(VisualScrollOffset.y, other.VisualScrollOffset.y) &&
+                   DrawOutput == other.DrawOutput &&
+                   SliceOutput == other.SliceOutput;
+        }
     }
 
     internal sealed class TextBoxRenderTarget : ITextBoxRenderTarget
@@ -143,6 +166,12 @@ namespace Milestro.Components.Internal
         private Vector2 viewportSize;
         private Vector2 maxScrollOffset;
         private Vector2Int outputVisibleSizePixels = Vector2Int.one;
+        private IReadOnlyList<RichTextParser.LinkAnnotation> linkAnnotations =
+            Array.Empty<RichTextParser.LinkAnnotation>();
+        private TextBoxLinkGeometryPublication linkGeometryPublication;
+        private long pendingCompletionToken;
+        private TextBoxRenderViewport pendingViewport;
+        private ColorSpace pendingColorSpace;
 
         public Texture? OutputTexture => surface?.Texture;
         public Rect OutputUvRect => surface != null
@@ -166,11 +195,54 @@ namespace Milestro.Components.Internal
         {
             layoutChanged = true;
             paintChanged = true;
+            linkGeometryPublication.InvalidatePublished();
+            linkGeometryPublication.RequestRebuild();
         }
 
         public void MarkPaintChanged()
         {
             paintChanged = true;
+            linkGeometryPublication.InvalidatePublished();
+            linkGeometryPublication.RequestRebuild();
+        }
+
+        public bool TryHitLink(Vector2 normalizedViewportPoint, out TextBoxLinkHit hit)
+        {
+            hit = default;
+            if (!linkGeometryPublication.TryGetPublished(out var snapshot, out var generation) ||
+                !FloatUtil.IsFinite(normalizedViewportPoint.x) ||
+                !FloatUtil.IsFinite(normalizedViewportPoint.y) ||
+                normalizedViewportPoint.x < 0f ||
+                normalizedViewportPoint.x > 1f ||
+                normalizedViewportPoint.y < 0f ||
+                normalizedViewportPoint.y > 1f)
+            {
+                return false;
+            }
+
+            var outputPoint = new Vector2(normalizedViewportPoint.x * snapshot.VisibleOutputSize.x,
+                normalizedViewportPoint.y * snapshot.VisibleOutputSize.y);
+            if (!snapshot.ClipRect.Contains(outputPoint))
+            {
+                return false;
+            }
+
+            var paragraphPoint = outputPoint - snapshot.PaintPosition;
+            foreach (var annotation in snapshot.Links)
+            {
+                if (!snapshot.Paragraph.HitTestRange(annotation.StartUtf16, annotation.EndUtf16, paragraphPoint))
+                {
+                    continue;
+                }
+
+                hit = new TextBoxLinkHit(annotation.Href,
+                    annotation.Id,
+                    annotation.Occurrence,
+                    generation);
+                return true;
+            }
+
+            return false;
         }
 
         public bool Rebuild(TextBoxRenderViewport viewport,
@@ -180,6 +252,23 @@ namespace Milestro.Components.Internal
             UnityEngine.Object? logContext)
         {
             ValidateMargin(settings.Margin);
+            if (forceText)
+            {
+                layoutChanged = true;
+                paintChanged = true;
+                linkGeometryPublication.InvalidatePublished();
+            }
+
+            if (linkGeometryPublication.HasPending)
+            {
+                if (forceText || layoutChanged || paintChanged ||
+                    !pendingViewport.Matches(viewport) || pendingColorSpace != colorSpace)
+                {
+                    linkGeometryPublication.RequestRebuild();
+                }
+                return false;
+            }
+
             var layoutSizePixels = NormalizeSize(viewport.LayoutSizePixels);
             var outputSizePixels = NormalizeSize(viewport.OutputSizePixels);
             var visibleOutputSizePixels = ClampVisibleOutputSize(NormalizeSize(viewport.VisibleOutputSizePixels),
@@ -201,6 +290,10 @@ namespace Milestro.Components.Internal
                 ReplaceParagraph(BuildParagraph(settings, layoutSizePixels));
                 needsDraw = true;
             }
+            if (linkAnnotations.Count > 0)
+            {
+                linkGeometryPublication.RequireControlledSubmission();
+            }
 
             needsDraw |= ResizeParagraph(paragraph, settings, layoutSizePixels);
             needsDraw |= UpdateScrollMetrics(settings,
@@ -210,6 +303,7 @@ namespace Milestro.Components.Internal
             needsDraw |= paintChanged;
             if (!viewport.DrawOutput)
             {
+                linkGeometryPublication.InvalidatePublished();
                 layoutChanged = false;
                 paintChanged = false;
                 return true;
@@ -220,12 +314,40 @@ namespace Milestro.Components.Internal
                 return true;
             }
 
-            if (!TrySubmit(BuildRenderCommands(settings, viewport, layoutSizePixels, visibleOutputSizePixels, logContext)))
+            if (linkGeometryPublication.RequiresControlledSubmission &&
+                !linkGeometryPublication.CanBeginControlledSubmission)
+            {
+                layoutChanged = false;
+                paintChanged = true;
+                return false;
+            }
+
+            var commands = BuildRenderCommands(settings,
+                viewport,
+                layoutSizePixels,
+                visibleOutputSizePixels,
+                logContext,
+                out var paintPosition,
+                out var clipRect);
+            var hasHitGeometry = paragraph != null &&
+                                 linkAnnotations.Count > 0 &&
+                                 clipRect.width > 0f &&
+                                 clipRect.height > 0f;
+            var hitGeometry = hasHitGeometry
+                ? new TextBoxLinkGeometrySnapshot(paragraph!,
+                    linkAnnotations,
+                    paintPosition,
+                    clipRect,
+                    visibleOutputSizePixels)
+                : default;
+            if (!TrySubmit(commands, hasHitGeometry, hitGeometry))
             {
                 paintChanged = true;
                 return false;
             }
 
+            pendingViewport = viewport;
+            pendingColorSpace = colorSpace;
             layoutChanged = false;
             paintChanged = false;
             return true;
@@ -249,6 +371,11 @@ namespace Milestro.Components.Internal
             viewportSize = Vector2.zero;
             maxScrollOffset = Vector2.zero;
             outputVisibleSizePixels = Vector2Int.one;
+            linkAnnotations = Array.Empty<RichTextParser.LinkAnnotation>();
+            linkGeometryPublication.Reset();
+            pendingCompletionToken = 0;
+            pendingViewport = default;
+            pendingColorSpace = default;
             MarkOutputChanged();
         }
 
@@ -273,19 +400,49 @@ namespace Milestro.Components.Internal
             return true;
         }
 
-        private bool TrySubmit(UnitySkiaRenderCommandList commands)
+        private bool TrySubmit(UnitySkiaRenderCommandList commands,
+            bool hasHitGeometry,
+            TextBoxLinkGeometrySnapshot hitGeometry)
         {
             if (surface == null)
             {
                 throw new InvalidOperationException("Milestro TextBox render target has no surface.");
             }
 
-            if (!surface.TrySubmit(commands))
+            if (!linkGeometryPublication.RequiresControlledSubmission && !hasHitGeometry)
             {
-                return false;
+                if (!surface.TrySubmit(commands))
+                {
+                    return false;
+                }
+
+                linkGeometryPublication.TrackOrdinarySubmission();
+                return true;
             }
 
-            return true;
+            if (!linkGeometryPublication.TryBegin(hasHitGeometry, hitGeometry, out var token))
+            {
+                throw new InvalidOperationException("Milestro TextBox render target already has a pending submission.");
+            }
+
+            pendingCompletionToken = token;
+            try
+            {
+                if (surface.TrySubmit(commands))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                linkGeometryPublication.Cancel(token, out _);
+                pendingCompletionToken = 0;
+                throw;
+            }
+
+            linkGeometryPublication.Cancel(token, out _);
+            pendingCompletionToken = 0;
+            return false;
         }
 
         private void SetSurface(UnityAutoRenderTextureSurface nextSurface)
@@ -304,6 +461,10 @@ namespace Milestro.Components.Internal
             surface.RenderEventCompleted -= HandleRenderEventCompleted;
             surface.Dispose();
             surface = null;
+            linkGeometryPublication.Reset();
+            pendingCompletionToken = 0;
+            pendingViewport = default;
+            pendingColorSpace = default;
         }
 
         private void ClearSurfaceOutput()
@@ -319,22 +480,53 @@ namespace Milestro.Components.Internal
 
         private void HandleRenderEventCompleted(UnitySkiaRenderTextureSurface.RenderSubmissionStatus status)
         {
+            if (!linkGeometryPublication.HasPending)
+            {
+                if (!linkGeometryPublication.CompleteOrdinarySubmission())
+                {
+                    return;
+                }
+
+                HandleCompletedOutput(status);
+                RenderEventCompleted?.Invoke(status);
+                return;
+            }
+
+            var token = pendingCompletionToken;
+            if (!linkGeometryPublication.Complete(token, status, out var needsRebuild))
+            {
+                return;
+            }
+
+            pendingCompletionToken = 0;
+            pendingViewport = default;
+            pendingColorSpace = default;
+            paintChanged |= needsRebuild;
+
+            HandleCompletedOutput(status);
+            RenderEventCompleted?.Invoke(status);
+        }
+
+        private void HandleCompletedOutput(UnitySkiaRenderTextureSurface.RenderSubmissionStatus status)
+        {
             if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn)
             {
                 MarkOutputChanged();
             }
-            else if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Skipped)
+            else
             {
                 paintChanged = true;
             }
-
-            RenderEventCompleted?.Invoke(status);
         }
 
         private Paragraph BuildParagraph(TextBoxRenderTargetSettings settings, Vector2Int layoutSizePixels)
         {
-            var result = CreateParagraph(settings, out var plainText);
+            var result = CreateParagraph(settings, out var payload);
+            var plainText = PlainText(payload);
             paragraphPlainText = plainText;
+            linkAnnotations = payload.Links.Count == 0
+                ? Array.Empty<RichTextParser.LinkAnnotation>()
+                : new List<RichTextParser.LinkAnnotation>(payload.Links);
             ResizeParagraph(result, settings, layoutSizePixels, true);
             return result;
         }
@@ -347,7 +539,7 @@ namespace Milestro.Components.Internal
         }
 
         private Paragraph CreateParagraph(TextBoxRenderTargetSettings settings,
-            out string plainText)
+            out RichTextParser.ParagraphPayload payload)
         {
             using var paragraphStyle = new ParagraphStyle();
             paragraphStyle.TextAlign = settings.TextAlign;
@@ -374,9 +566,8 @@ namespace Milestro.Components.Internal
 
             var parser = new RichTextParser.RichTextParser();
             parser.ParseText(settings.Content);
-            var segments = parser.ConvertToSegments();
-            plainText = PlainText(segments);
-            return segments.ToParagraph(paragraphStyle, textStyle);
+            payload = parser.ConvertToSegments();
+            return payload.ToParagraph(paragraphStyle, textStyle);
         }
 
         private static void ValidateMargin(Margin margin)
@@ -587,22 +778,26 @@ namespace Milestro.Components.Internal
             TextBoxRenderViewport viewport,
             Vector2Int layoutSizePixels,
             Vector2Int outputSizePixels,
-            UnityEngine.Object? logContext)
+            UnityEngine.Object? logContext,
+            out Vector2 paintPosition,
+            out Rect clipRect)
         {
             var commands = new UnitySkiaRenderCommandList();
+            paintPosition = Vector2.zero;
+            clipRect = default;
             if (paragraph != null)
             {
                 var margin = ResolveMargin(settings, layoutSizePixels);
                 var layoutViewportSize = new Vector2(ContentViewportWidth(settings, layoutSizePixels),
                     ContentViewportHeight(settings, layoutSizePixels));
                 var autoOffset = AutoContentOffset(settings, layoutViewportSize);
-                var paintPosition = new Vector2(
+                paintPosition = new Vector2(
                     margin.Left + autoOffset.x + TextBoxNoWrapHorizontalLayout.ResolvePaintOffsetX(
                         paragraphAlignmentOffset,
                         scrollOffset.x,
                         viewport.VisualScrollOffset.x),
                     margin.Top + autoOffset.y - scrollOffset.y - viewport.VisualScrollOffset.y);
-                var clipRect = ResolveClipRect(settings, viewport, margin, outputSizePixels);
+                clipRect = ResolveClipRect(settings, viewport, margin, outputSizePixels);
                 commands.DrawParagraphSnapshot(() => BuildPaintParagraph(settings), paintPosition, clipRect);
             }
             else

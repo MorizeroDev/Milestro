@@ -265,6 +265,12 @@ MilestroSkiaTextlayoutParagraphResolveNoWrapContentWidth(milestro::skia::textlay
                                                          [[milize::CSharpType("void*")]] void* text,
                                                          uint64_t size,
                                                          float& width);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphHitTestRange(milestro::skia::textlayout::Paragraph* p,
+                                                                 uint64_t startUtf16,
+                                                                 uint64_t endUtf16,
+                                                                 float x,
+                                                                 float y,
+                                                                 int32_t& hit);
 MILESTRO_API int64_t MilestroSkiaTextlayoutResolveNoWrapProbeLayoutWidth(uint64_t textSize,
                                                                          float fontSize,
                                                                          float viewportWidth,

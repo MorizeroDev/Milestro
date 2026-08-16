@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using Milestro.Components.Internal;
 using Milestro.Input;
@@ -15,7 +16,13 @@ using UnityEngine.UI;
 namespace Milestro.Components
 {
     [AddComponentMenu("Milestro/Text Box")]
-    public class TextBox : RenderTextureGraphic, IScrollHandler, ITextBoxScrollTarget
+    public class TextBox : RenderTextureGraphic,
+        ICancelHandler,
+        IPointerDownHandler,
+        IPointerUpHandler,
+        IPointerClickHandler,
+        IScrollHandler,
+        ITextBoxScrollTarget
     {
         private const float DefaultScrollWheelStepPixels = 48f;
         private const float DefaultScrollTweenDurationSeconds = 0.14f;
@@ -26,6 +33,9 @@ namespace Milestro.Components
 
         [SerializeField]
         private ScrollElasticSettings? m_scrollElastic = new ScrollElasticSettings();
+
+        [SerializeField]
+        private LinkClickedEvent? m_OnLinkClicked = new LinkClickedEvent();
 
         public ScrollElasticSettings scrollElastic
         {
@@ -58,6 +68,9 @@ namespace Milestro.Components
         [NonSerialized] private float flowVisibleStartY;
         [NonSerialized] private float flowVisibleEndY;
         [NonSerialized] private float flowVisibleCapacityHeight;
+        [NonSerialized]
+        private readonly Dictionary<int, LinkPressState> linkPresses = new Dictionary<int, LinkPressState>();
+        [NonSerialized] private ulong nextLinkPressToken;
 #if MILESTRO_FLOW_TEXTBOX_DEBUG
         [NonSerialized] private bool flowDiagnosticsEnabled;
 #endif
@@ -66,6 +79,8 @@ namespace Milestro.Components
 #endif
 
         internal event Action? LayoutChanged;
+
+        public LinkClickedEvent onLinkClicked => m_OnLinkClicked ??= new LinkClickedEvent();
 
         protected override void OnEnable()
         {
@@ -77,6 +92,7 @@ namespace Milestro.Components
 
         protected override void OnDisable()
         {
+            ClearLinkPresses();
             SettleElastic(producerCache, rebuild: false);
             base.OnDisable();
             CancelScrollTweens();
@@ -85,6 +101,12 @@ namespace Milestro.Components
             Texture = null;
             observedOutputVersion = long.MinValue;
             LayoutChanged?.Invoke();
+        }
+
+        protected override void OnDestroy()
+        {
+            ClearLinkPresses();
+            base.OnDestroy();
         }
 
         private void Update()
@@ -279,6 +301,178 @@ namespace Milestro.Components
             ScrollEventUtil.PassScrollToParent(transform, eventData, unusedScrollDelta);
             ObserveElasticRelease(axis, scrollInput.Metadata, elasticSettings.ReleaseDelaySeconds);
             eventData.Use();
+        }
+
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            if (eventData == null)
+            {
+                return;
+            }
+
+            linkPresses.Remove(eventData.pointerId);
+            if (!AcceptsLinkPointer(eventData) || !TryResolveLinkHit(eventData, out var hit))
+            {
+                return;
+            }
+
+            var token = NextLinkPressToken();
+            linkPresses[eventData.pointerId] = new LinkPressState(hit, token);
+        }
+
+        public void OnPointerUp(PointerEventData eventData)
+        {
+            if (eventData == null || !linkPresses.TryGetValue(eventData.pointerId, out var press))
+            {
+                return;
+            }
+
+            if (!isActiveAndEnabled)
+            {
+                linkPresses.Remove(eventData.pointerId);
+                return;
+            }
+
+            try
+            {
+                StartCoroutine(ClearReleasedLinkPress(eventData.pointerId, press.Token));
+            }
+            catch
+            {
+                linkPresses.Remove(eventData.pointerId);
+                throw;
+            }
+        }
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (eventData == null || !linkPresses.TryGetValue(eventData.pointerId, out var press))
+            {
+                return;
+            }
+
+            try
+            {
+                if (!eventData.eligibleForClick ||
+                    !AcceptsLinkPointer(eventData) ||
+                    !TryResolveLinkHit(eventData, out var releaseHit) ||
+                    !press.Hit.IsSameOccurrence(releaseHit))
+                {
+                    return;
+                }
+
+                onLinkClicked.Invoke(new LinkClickedEventArgs(releaseHit.Href, releaseHit.Id));
+            }
+            finally
+            {
+                linkPresses.Remove(eventData.pointerId);
+            }
+        }
+
+        public void OnCancel(BaseEventData eventData)
+        {
+            ClearLinkPresses();
+        }
+
+        private bool TryResolveLinkHit(PointerEventData eventData, out TextBoxLinkHit hit)
+        {
+            hit = default;
+            if (!isActiveAndEnabled ||
+                !TryScreenPointToNormalizedViewport(eventData.position,
+                    eventData.pressEventCamera,
+                    out var normalizedViewportPoint))
+            {
+                return false;
+            }
+
+            var producer = ProducerComponent();
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: false);
+            return producer.TryHitLink(normalizedViewportPoint, out hit);
+        }
+
+        private bool TryScreenPointToNormalizedViewport(Vector2 screenPoint,
+            Camera? eventCamera,
+            out Vector2 normalizedViewportPoint)
+        {
+            normalizedViewportPoint = default;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform,
+                    screenPoint,
+                    eventCamera,
+                    out var localPoint))
+            {
+                return false;
+            }
+
+            var rect = GetPixelAdjustedRect();
+            var top = rect.yMax;
+            var bottom = rect.yMin;
+            if (flowModeActive)
+            {
+                if (!flowVisible || flowVisibleEndY <= flowVisibleStartY)
+                {
+                    return false;
+                }
+
+                top = Mathf.Clamp(rect.yMax - flowVisibleStartY, rect.yMin, rect.yMax);
+                bottom = Mathf.Clamp(rect.yMax - flowVisibleEndY, rect.yMin, rect.yMax);
+            }
+
+            if (rect.width <= 0f || top <= bottom ||
+                localPoint.x < rect.xMin || localPoint.x > rect.xMax ||
+                localPoint.y < bottom || localPoint.y > top)
+            {
+                return false;
+            }
+
+            normalizedViewportPoint = new Vector2((localPoint.x - rect.xMin) / rect.width,
+                (top - localPoint.y) / (top - bottom));
+            return true;
+        }
+
+        private static bool AcceptsLinkPointer(PointerEventData eventData)
+        {
+            return eventData.button == PointerEventData.InputButton.Left;
+        }
+
+        private IEnumerator ClearReleasedLinkPress(int pointerId, ulong token)
+        {
+            yield return null;
+            if (linkPresses.TryGetValue(pointerId, out var press) && press.Token == token)
+            {
+                linkPresses.Remove(pointerId);
+            }
+        }
+
+        private ulong NextLinkPressToken()
+        {
+            unchecked
+            {
+                ++nextLinkPressToken;
+                if (nextLinkPressToken == 0)
+                {
+                    ++nextLinkPressToken;
+                }
+
+                return nextLinkPressToken;
+            }
+        }
+
+        private void ClearLinkPresses()
+        {
+            linkPresses.Clear();
+        }
+
+        private readonly struct LinkPressState
+        {
+            internal LinkPressState(TextBoxLinkHit hit, ulong token)
+            {
+                Hit = hit;
+                Token = token;
+            }
+
+            internal TextBoxLinkHit Hit { get; }
+            internal ulong Token { get; }
         }
 
         public Vector2 GetScrollPercent()

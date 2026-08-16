@@ -475,6 +475,17 @@ namespace Milestro.Components.Internal
             RebuildResources(forceText);
         }
 
+        internal bool TryHitLink(Vector2 normalizedViewportPoint, out TextBoxLinkHit hit)
+        {
+            if (renderTarget == null)
+            {
+                hit = default;
+                return false;
+            }
+
+            return renderTarget.TryHitLink(normalizedViewportPoint, out hit);
+        }
+
         internal bool TryGetLayoutMeasurement(out TextBoxLayoutMeasurement measurement)
         {
             return TryBuildLayoutMeasurement(CurrentSettings(), out measurement);

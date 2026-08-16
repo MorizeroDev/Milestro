@@ -9,9 +9,12 @@ namespace Milestro.RichTextParser.AST
 
         public IList<XmlNode> Children { get; private set; } = new List<XmlNode>();
 
-        public XmlElementNode(string tag, Dictionary<string, string> attributes) : base(tag)
+        public bool IsEmptyElement { get; private set; }
+
+        public XmlElementNode(string tag, Dictionary<string, string> attributes, bool isEmptyElement) : base(tag)
         {
             Attributes = attributes;
+            IsEmptyElement = isEmptyElement;
         }
 #if UNITY_EDITOR
         public override string ToString()

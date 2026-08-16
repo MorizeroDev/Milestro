@@ -72,7 +72,7 @@ namespace Milestro.RichTextParser
 
         private void PushElement(string tagName, bool isEmptyElement, Dictionary<string, string> attributes)
         {
-            var node = new XmlElementNode(tagName, attributes);
+            var node = new XmlElementNode(tagName, attributes, isEmptyElement);
 
             PushNode(node);
             if (isEmptyElement)
@@ -178,6 +178,10 @@ namespace Milestro.RichTextParser
         private void ConvertToSegments(Context ctx, XmlElementNode node)
         {
             var state = ctx.TextStyleState.Clone();
+            var isAnchor = false;
+            var anchorHref = "";
+            var anchorId = "";
+            var anchorStartUtf16 = 0;
             if (node.Tag == "b" || node.Tag == "strong")
             {
                 state.FontWeight = FontWeight.Bold;
@@ -298,6 +302,18 @@ namespace Milestro.RichTextParser
                 AddText(ctx, state, "\n");
                 return;
             }
+            else if (node.Tag == "a")
+            {
+                ValidateAnchor(node, out anchorHref, out anchorId);
+                if (ctx.HasActiveLink)
+                {
+                    throw new InvalidCastException("nested <a> elements are not supported");
+                }
+
+                isAnchor = true;
+                anchorStartUtf16 = ctx.TextLengthUtf16;
+                ctx.HasActiveLink = true;
+            }
             else if (node.Tag == "root")
             {
                 // ignore
@@ -320,6 +336,42 @@ namespace Milestro.RichTextParser
                     AddText(ctx, state, textNode.Text);
                 }
             }
+
+            if (isAnchor)
+            {
+                ctx.HasActiveLink = false;
+                ctx.Result.AddLink(new LinkAnnotation(anchorHref,
+                    anchorId,
+                    anchorStartUtf16,
+                    ctx.TextLengthUtf16,
+                    ctx.Result.Links.Count));
+            }
+        }
+
+        private static void ValidateAnchor(XmlElementNode node, out string href, out string id)
+        {
+            if (node.IsEmptyElement)
+            {
+                throw new InvalidCastException("<a> must use an explicit closing tag");
+            }
+
+            if (!node.Attributes.TryGetValue("href", out href) || string.IsNullOrEmpty(href))
+            {
+                throw new InvalidCastException("<a> requires a non-empty href attribute");
+            }
+
+            var hasId = node.Attributes.TryGetValue("id", out id);
+            if (hasId && string.IsNullOrEmpty(id))
+            {
+                throw new InvalidCastException("<a> id must be non-empty when provided");
+            }
+
+            id = hasId ? id : "";
+            var expectedAttributeCount = hasId ? 2 : 1;
+            if (node.Attributes.Count != expectedAttributeCount)
+            {
+                throw new InvalidCastException("<a> only accepts href and optional id attributes");
+            }
         }
 
         private static void StartParagraph(Context ctx, TextStyleState state)
@@ -333,6 +385,7 @@ namespace Milestro.RichTextParser
         private static void AddText(Context ctx, TextStyleState state, string text)
         {
             ctx.Result.Body.Add(TextSegment.MakeText(state, text));
+            ctx.TextLengthUtf16 += text.Length;
         }
 
         private static readonly CultureInfo ParseCulture = CultureInfo.GetCultureInfo("en");

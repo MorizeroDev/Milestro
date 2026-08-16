@@ -1,0 +1,23 @@
+{
+    "name": "Milestro.Tests.TextBoxHyperlinkIntegration.EditModeTests",
+    "rootNamespace": "",
+    "references": [
+        "Milestro",
+        "Milestro.Tests.TextBoxHyperlinkIntegration.Runtime",
+        "Milestro.Tests.TextBoxHyperlinkIntegration.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "noEngineReferences": false
+}

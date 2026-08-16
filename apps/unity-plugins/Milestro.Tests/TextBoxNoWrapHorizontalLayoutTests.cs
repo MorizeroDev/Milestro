@@ -657,6 +657,12 @@ namespace Milestro.Tests
             {
             }
 
+            public bool TryHitLink(Vector2 normalizedViewportPoint, out TextBoxLinkHit hit)
+            {
+                hit = default;
+                return false;
+            }
+
             public bool Rebuild(TextBoxRenderViewport viewport,
                 ColorSpace colorSpace,
                 TextBoxRenderTargetSettings settings,

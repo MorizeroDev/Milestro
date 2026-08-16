@@ -37,6 +37,8 @@ public :
 
     SkScalar resolveNoWrapContentWidth(const char* text, size_t length) const;
 
+    bool hitTestRange(size_t startUtf16, size_t endUtf16, SkScalar x, SkScalar y) const;
+
     uint64_t splitGlyph(SkScalar x, SkScalar y, void* context,
                                  MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback = nullptr);
 

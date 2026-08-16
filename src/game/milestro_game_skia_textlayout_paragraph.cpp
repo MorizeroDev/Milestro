@@ -4,6 +4,8 @@
 #include "Milestro/skia/textlayout/Paragraph.h"
 #include "Milestro/util/milestro_strutil.h"
 
+#include <limits>
+
 extern "C" {
 int64_t MilestroSkiaTextlayoutParagraphDestroy(milestro::skia::textlayout::Paragraph *&ret) try {
     delete ret;
@@ -48,6 +50,27 @@ int64_t MilestroSkiaTextlayoutParagraphResolveNoWrapContentWidth(milestro::skia:
                                                                  uint64_t size,
                                                                  float &width) try {
     width = p->resolveNoWrapContentWidth(static_cast<const char *>(text), static_cast<size_t>(size));
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutParagraphHitTestRange(milestro::skia::textlayout::Paragraph* p,
+                                                    uint64_t startUtf16,
+                                                    uint64_t endUtf16,
+                                                    float x,
+                                                    float y,
+                                                    int32_t& hit) try {
+    if (p == nullptr) {
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    if (startUtf16 > std::numeric_limits<size_t>::max() || endUtf16 > std::numeric_limits<size_t>::max()) {
+        hit = 0;
+        return MILESTRO_API_RET_OK;
+    }
+
+    hit = p->hitTestRange(static_cast<size_t>(startUtf16), static_cast<size_t>(endUtf16), x, y) ? 1 : 0;
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;

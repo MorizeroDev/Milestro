@@ -542,6 +542,15 @@ FrameworkBindingMilestroSkiaTextlayoutParagraphResolveNoWrapContentWidth(milestr
     return MilestroSkiaTextlayoutParagraphResolveNoWrapContentWidth(p, text, size, width);
 }
 
+int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphHitTestRange(milestro::skia::textlayout::Paragraph* p,
+                                                                    uint64_t startUtf16,
+                                                                    uint64_t endUtf16,
+                                                                    float x,
+                                                                    float y,
+                                                                    int32_t& hit) {
+    return MilestroSkiaTextlayoutParagraphHitTestRange(p, startUtf16, endUtf16, x, y, hit);
+}
+
 int64_t FrameworkBindingMilestroSkiaTextlayoutResolveNoWrapProbeLayoutWidth(uint64_t textSize,
                                                                             float fontSize,
                                                                             float viewportWidth,

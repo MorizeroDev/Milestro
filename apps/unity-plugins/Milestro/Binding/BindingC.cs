@@ -429,6 +429,11 @@ namespace Milestro.Binding
         SkiaTextlayoutParagraphResolveNoWrapContentWidth(IntPtr p, void* text, ulong size, out float width);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphHitTestRange")]
+        internal static extern unsafe long
+        SkiaTextlayoutParagraphHitTestRange(IntPtr p, ulong startUtf16, ulong endUtf16, float x, float y, out int hit);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutResolveNoWrapProbeLayoutWidth")]
         internal static extern unsafe long
         SkiaTextlayoutResolveNoWrapProbeLayoutWidth(ulong textSize, float fontSize, float viewportWidth, out float width);

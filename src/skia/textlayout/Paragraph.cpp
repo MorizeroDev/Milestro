@@ -6,11 +6,33 @@
 #include "Milestro/skia/Path.h"
 #include "Milestro/skia/textlayout/NoWrapLayout.h"
 
+#include <cmath>
+#include <limits>
+
 using namespace milestro::skia::textlayout;
 using namespace milestro::skia;
 
 SkScalar Paragraph::resolveNoWrapContentWidth(const char* text, size_t length) const {
     return ResolveNoWrapContentWidth(paragraph.get(), text, length);
+}
+
+bool Paragraph::hitTestRange(size_t startUtf16, size_t endUtf16, SkScalar x, SkScalar y) const {
+    if (paragraph == nullptr || endUtf16 <= startUtf16 || endUtf16 > std::numeric_limits<unsigned>::max() ||
+        !std::isfinite(x) || !std::isfinite(y)) {
+        return false;
+    }
+
+    const auto boxes = paragraph->getRectsForRange(static_cast<unsigned>(startUtf16),
+                                                   static_cast<unsigned>(endUtf16),
+                                                   ::skia::textlayout::RectHeightStyle::kTight,
+                                                   ::skia::textlayout::RectWidthStyle::kTight);
+    for (const auto& box: boxes) {
+        if (box.rect.width() > 0 && box.rect.height() > 0 && box.rect.contains(x, y)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 uint64_t

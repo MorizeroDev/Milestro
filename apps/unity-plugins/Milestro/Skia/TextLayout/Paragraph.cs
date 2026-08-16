@@ -98,6 +98,23 @@ namespace Milestro.Skia.TextLayout
             return ret;
         }
 
+        internal bool HitTestRange(int startUtf16, int endUtf16, Vector2 position)
+        {
+            if (startUtf16 < 0 || endUtf16 <= startUtf16)
+            {
+                return false;
+            }
+
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutParagraphHitTestRange(NativePtr,
+                    (ulong)startUtf16,
+                    (ulong)endUtf16,
+                    position.x,
+                    position.y,
+                    out var hit));
+            return hit != 0;
+        }
+
         public void Paint(Canvas canvas, Vector2 position)
         {
             ExitCodeUtil.ThrowIfFailed(

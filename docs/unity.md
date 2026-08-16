@@ -344,6 +344,30 @@ Supported tags in the current parser:
 - `<font color="..." size="..." weight="...">`: inline style values
 - `<p align="...">`: paragraph alignment
 - `<br>`: line break
+- `<a href="target" id="optional-id">...</a>`: a clickable TextBox range.
+  `href` is required and non-empty. `id` may be omitted, but an explicitly
+  empty `id`, unknown or duplicate attributes, nested anchors, and malformed
+  XML are rejected. Link targets are returned to the application unchanged;
+  Milestro never opens or interprets them.
+
+Read-only `TextBox` exposes the serialized, getter-only
+`onLinkClicked` event. Its `LinkClickedEventArgs` payload contains `Href` and
+`Id`; omitted `id` is reported as an empty string. A click is emitted only when
+the primary mouse button or a touch press and release hit the same visible link
+range without becoming a drag. Keyboard and controller link navigation are not
+implemented because TextBox does not currently own a focus or active-link
+navigation model.
+
+Task 201 persistent-listener and stripping checks are available from the Unity
+menus under `Milestro/Task 201`. Generate/open the fixture to verify the saved
+prefab and scene in Play Mode, or build the ordinary macOS IL2CPP player with
+Medium managed stripping. After the
+`TASK201_HYPERLINK_INTEGRATION_READY` log appears, physically click the visible
+link once with the primary mouse button and require a
+`TASK201_HYPERLINK_INTEGRATION_RESULT` log whose status is `PASS`.
+Before launching Unity, set `MILESTRO_TASK201_HEAD` and
+`MILESTRO_TASK201_TREE` to the exact 40-character candidate commit and tree
+IDs; both values are embedded in the result log.
 
 Unknown tags throw during conversion. In the Unity editor, parser errors are
 returned as visible error text; in player builds the fallback text is
