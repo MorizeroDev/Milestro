@@ -8,6 +8,7 @@ using Milestro.Model;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Events;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 
@@ -85,6 +86,174 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void ListenerReenteringSameClickCannotRedeliverObservedPress()
+        {
+            var fixture = CreateFixture();
+            try
+            {
+                var calls = 0;
+                var reentered = false;
+                var pointer = fixture.PointerAt(0.25f, 0.5f, pointerId: 20);
+                fixture.TextBox.onLinkClicked.AddListener(_ =>
+                {
+                    ++calls;
+                    if (!reentered)
+                    {
+                        reentered = true;
+                        fixture.TextBox.OnPointerClick(pointer);
+                    }
+                });
+
+                fixture.TextBox.OnPointerDown(pointer);
+                fixture.TextBox.OnPointerClick(pointer);
+
+                Assert.That(calls, Is.EqualTo(1));
+            }
+            finally
+            {
+                fixture.Dispose();
+            }
+        }
+
+        [Test]
+        public void ListenerCreatedSamePointerPressSurvivesOuterClick()
+        {
+            var fixture = CreateFixture();
+            try
+            {
+                var calls = 0;
+                var pointer = fixture.PointerAt(0.25f, 0.5f, pointerId: 21);
+                fixture.TextBox.onLinkClicked.AddListener(_ =>
+                {
+                    ++calls;
+                    if (calls == 1)
+                    {
+                        fixture.TextBox.OnPointerDown(pointer);
+                    }
+                });
+
+                fixture.TextBox.OnPointerDown(pointer);
+                fixture.TextBox.OnPointerClick(pointer);
+                fixture.TextBox.OnPointerClick(pointer);
+                fixture.TextBox.OnPointerClick(pointer);
+
+                Assert.That(calls, Is.EqualTo(2));
+            }
+            finally
+            {
+                fixture.Dispose();
+            }
+        }
+
+        [Test]
+        public void ListenerChangingTextCannotMakeObservedPressRetryable()
+        {
+            var fixture = CreateFixture();
+            try
+            {
+                var calls = 0;
+                var pointer = fixture.PointerAt(0.25f, 0.5f, pointerId: 22);
+                fixture.TextBox.onLinkClicked.AddListener(_ =>
+                {
+                    ++calls;
+                    fixture.Producer.content = "listener changed text";
+                });
+
+                fixture.TextBox.OnPointerDown(pointer);
+                fixture.TextBox.OnPointerClick(pointer);
+                fixture.TextBox.OnPointerClick(pointer);
+
+                Assert.That(calls, Is.EqualTo(1));
+            }
+            finally
+            {
+                fixture.Dispose();
+            }
+        }
+
+        [Test]
+        public void ListenerDisablingTextBoxCannotDeleteLaterPress()
+        {
+            var fixture = CreateFixture();
+            try
+            {
+                var calls = 0;
+                var pointer = fixture.PointerAt(0.25f, 0.5f, pointerId: 23);
+                fixture.TextBox.onLinkClicked.AddListener(_ =>
+                {
+                    ++calls;
+                    fixture.TextBox.enabled = false;
+                });
+
+                fixture.TextBox.OnPointerDown(pointer);
+                fixture.TextBox.OnPointerClick(pointer);
+                fixture.TextBox.enabled = true;
+                fixture.TextBox.OnPointerClick(pointer);
+                fixture.TextBox.OnPointerDown(pointer);
+                fixture.TextBox.OnPointerClick(pointer);
+
+                Assert.That(calls, Is.EqualTo(2));
+            }
+            finally
+            {
+                fixture.Dispose();
+            }
+        }
+
+        [Test]
+        public void ListenerDestroyingTextBoxReturnsWithoutPostCallbackAccess()
+        {
+            var fixture = CreateFixture();
+            try
+            {
+                var calls = 0;
+                var pointer = fixture.PointerAt(0.25f, 0.5f, pointerId: 24);
+                fixture.TextBox.onLinkClicked.AddListener(_ =>
+                {
+                    ++calls;
+                    UnityEngine.Object.DestroyImmediate(fixture.TextBox);
+                });
+
+                fixture.TextBox.OnPointerDown(pointer);
+                Assert.That(() => fixture.TextBox.OnPointerClick(pointer), Throws.Nothing);
+                Assert.That(calls, Is.EqualTo(1));
+            }
+            finally
+            {
+                fixture.Dispose();
+            }
+        }
+
+        [Test]
+        public void ThrowingListenerConsumesOldPressAndAllowsLaterPress()
+        {
+            var fixture = CreateFixture();
+            try
+            {
+                var pointer = fixture.PointerAt(0.25f, 0.5f, pointerId: 25);
+                UnityAction<LinkClickedEventArgs> throwing = _ =>
+                    throw new InvalidOperationException("listener failure");
+                fixture.TextBox.onLinkClicked.AddListener(throwing);
+
+                fixture.TextBox.OnPointerDown(pointer);
+                Assert.Throws<InvalidOperationException>(() => fixture.TextBox.OnPointerClick(pointer));
+                Assert.That(() => fixture.TextBox.OnPointerClick(pointer), Throws.Nothing);
+
+                fixture.TextBox.onLinkClicked.RemoveListener(throwing);
+                var calls = 0;
+                fixture.TextBox.onLinkClicked.AddListener(_ => ++calls);
+                fixture.TextBox.OnPointerDown(pointer);
+                fixture.TextBox.OnPointerClick(pointer);
+
+                Assert.That(calls, Is.EqualTo(1));
+            }
+            finally
+            {
+                fixture.Dispose();
+            }
+        }
+
+        [Test]
         public void EqualPayloadDifferentOccurrenceDoesNotInvoke()
         {
             var fixture = CreateFixture();
@@ -96,6 +265,32 @@ namespace Milestro.Tests
                 fixture.TextBox.OnPointerDown(pointer);
 
                 pointer.position = fixture.ScreenPoint(0.75f, 0.5f);
+                fixture.TextBox.OnPointerClick(pointer);
+                pointer.position = fixture.ScreenPoint(0.25f, 0.5f);
+                fixture.TextBox.OnPointerClick(pointer);
+
+                Assert.That(calls, Is.Zero);
+            }
+            finally
+            {
+                fixture.Dispose();
+            }
+        }
+
+        [Test]
+        public void MissingReleaseHitConsumesObservedPress()
+        {
+            var fixture = CreateFixture();
+            try
+            {
+                var calls = 0;
+                fixture.TextBox.onLinkClicked.AddListener(_ => ++calls);
+                var pointer = fixture.PointerAt(0.25f, 0.5f, pointerId: 26);
+                fixture.TextBox.OnPointerDown(pointer);
+
+                pointer.position = fixture.ScreenPoint(0.5f, 0.5f);
+                fixture.TextBox.OnPointerClick(pointer);
+                pointer.position = fixture.ScreenPoint(0.25f, 0.5f);
                 fixture.TextBox.OnPointerClick(pointer);
 
                 Assert.That(calls, Is.Zero);

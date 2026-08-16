@@ -351,22 +351,20 @@ namespace Milestro.Components
                 return;
             }
 
-            try
+            if (!TryConsumeLinkPress(eventData.pointerId, press))
             {
-                if (!eventData.eligibleForClick ||
-                    !AcceptsLinkPointer(eventData) ||
-                    !TryResolveLinkHit(eventData, out var releaseHit) ||
-                    !press.Hit.IsSameOccurrence(releaseHit))
-                {
-                    return;
-                }
+                return;
+            }
 
-                onLinkClicked.Invoke(new LinkClickedEventArgs(releaseHit.Href, releaseHit.Id));
-            }
-            finally
+            if (!eventData.eligibleForClick ||
+                !AcceptsLinkPointer(eventData) ||
+                !TryResolveLinkHit(eventData, out var releaseHit) ||
+                !press.Hit.IsSameOccurrence(releaseHit))
             {
-                linkPresses.Remove(eventData.pointerId);
+                return;
             }
+
+            onLinkClicked.Invoke(new LinkClickedEventArgs(releaseHit.Href, releaseHit.Id));
         }
 
         public void OnCancel(BaseEventData eventData)
@@ -444,6 +442,17 @@ namespace Milestro.Components
             }
         }
 
+        private bool TryConsumeLinkPress(int pointerId, LinkPressState observedPress)
+        {
+            if (!linkPresses.TryGetValue(pointerId, out var currentPress) ||
+                !currentPress.HasSameIdentity(observedPress))
+            {
+                return false;
+            }
+
+            return linkPresses.Remove(pointerId);
+        }
+
         private ulong NextLinkPressToken()
         {
             unchecked
@@ -473,6 +482,11 @@ namespace Milestro.Components
 
             internal TextBoxLinkHit Hit { get; }
             internal ulong Token { get; }
+
+            internal bool HasSameIdentity(LinkPressState other)
+            {
+                return Token == other.Token && Hit.IsSameOccurrence(other.Hit);
+            }
         }
 
         public Vector2 GetScrollPercent()
