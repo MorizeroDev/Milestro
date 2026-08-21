@@ -18,6 +18,22 @@ target_compile_definitions(${MILESTRO_TEST_NAME} PRIVATE
         MILESTRO_TEST_EMOJI_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/NotoColorEmoji.ttf.bytes"
 )
 
+set(MILESTRO_VARIABLE_FONT_WEIGHT_TEST_NAME "MilestroTest_SkiaVariableFontWeight")
+add_executable(${MILESTRO_VARIABLE_FONT_WEIGHT_TEST_NAME} src/test_variable_font_weight.cpp)
+target_link_libraries(${MILESTRO_VARIABLE_FONT_WEIGHT_TEST_NAME} PRIVATE
+        GTest::gtest GTest::gtest_main
+        Milestro
+        ${PROJECT_PLATFORM_LIBRARIES}
+)
+target_compile_definitions(${MILESTRO_VARIABLE_FONT_WEIGHT_TEST_NAME} PRIVATE
+        MILESTRO_TEST_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/SourceHanSans-VF.otf.woff2.bytes"
+        MILESTRO_TEST_EMOJI_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/NotoColorEmoji.ttf.bytes"
+        MILESTRO_TEST_FIRA_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/费拉代码-可变字体.ttf.bytes"
+        MILESTRO_TEST_MULTI_AXIS_FONT_PATH="${PROJECT_SOURCE_DIR}/ext/skia/resources/fonts/Variable.ttf"
+        MILESTRO_TEST_VARIABLE_TTC_PATH="${PROJECT_SOURCE_DIR}/ext/skia/resources/fonts/NotoSansCJK-VF-subset.otf.ttc"
+        MILESTRO_TEST_STATIC_TTC_PATH="${PROJECT_SOURCE_DIR}/ext/skia/resources/fonts/test.ttc"
+)
+
 set(MILESTRO_PARAGRAPH_HIT_TEST_NAME "MilestroTest_SkiaParagraphHitTest")
 add_executable(${MILESTRO_PARAGRAPH_HIT_TEST_NAME} src/test_paragraph_hit_test.cpp)
 target_link_libraries(${MILESTRO_PARAGRAPH_HIT_TEST_NAME} PRIVATE
@@ -40,6 +56,15 @@ if (NOT ANDROID)
     )
     set_tests_properties(${MILESTRO_TEST_NAME} PROPERTIES ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
     set_property(TEST ${MILESTRO_TEST_NAME} APPEND PROPERTY ENVIRONMENT "DYLD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+
+    add_test(NAME ${MILESTRO_VARIABLE_FONT_WEIGHT_TEST_NAME}
+            COMMAND ${MILESTRO_VARIABLE_FONT_WEIGHT_TEST_NAME})
+    set_tests_properties(${MILESTRO_VARIABLE_FONT_WEIGHT_TEST_NAME} PROPERTIES
+            ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    )
+    set_property(TEST ${MILESTRO_VARIABLE_FONT_WEIGHT_TEST_NAME} APPEND PROPERTY
+            ENVIRONMENT "DYLD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
+    )
 
     add_test(NAME ${MILESTRO_PARAGRAPH_HIT_TEST_NAME} COMMAND ${MILESTRO_PARAGRAPH_HIT_TEST_NAME})
     set_tests_properties(${MILESTRO_PARAGRAPH_HIT_TEST_NAME} PROPERTIES

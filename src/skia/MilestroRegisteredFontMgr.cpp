@@ -11,7 +11,11 @@
 #include "Milestro/skia/MilestroRegisteredFontMgr.h"
 #include "Milestro/skia/Typeface.h"
 #include <algorithm>
+#include <bit>
+#include <cstdint>
 #include <memory>
+#include <mutex>
+#include <tuple>
 #include <utility>
 #include <vector>
 #include <src/ports/SkFontMgr_custom.h>
@@ -55,17 +59,41 @@ MilestroRegisteredFontStyleSet::MilestroRegisteredFontStyleSet(SkString familyNa
 }
 
 void MilestroRegisteredFontStyleSet::appendTypeface(sk_sp<SkTypeface> typeface) {
-    fStyles.emplace_back(std::move(typeface));
+    auto baseTypeface = typeface;
+    fStyles.push_back(RegisteredTypeface{
+            std::move(typeface),
+            std::move(baseTypeface),
+            {},
+            0,
+            {},
+            {},
+    });
+}
+
+void MilestroRegisteredFontStyleSet::appendTypefaceWithVariations(sk_sp<SkTypeface> typeface,
+                                                                  sk_sp<SkTypeface> baseTypeface,
+                                                                  std::string sourcePath,
+                                                                  int faceIndex,
+                                                                  std::vector<VariationAxis> axes,
+                                                                  std::vector<VariationCoordinate> position) {
+    fStyles.push_back(RegisteredTypeface{
+            std::move(typeface),
+            std::move(baseTypeface),
+            std::move(sourcePath),
+            faceIndex,
+            std::move(axes),
+            std::move(position),
+    });
 }
 
 int MilestroRegisteredFontStyleSet::count() {
-    return fStyles.size();
+    return static_cast<int>(fStyles.size());
 }
 
 void MilestroRegisteredFontStyleSet::getStyle(int index, SkFontStyle *style, SkString *name) {
     SkASSERT(index < fStyles.size());
     if (style) {
-        *style = fStyles[index]->fontStyle();
+        *style = fStyles[index].typeface->fontStyle();
     }
     if (name) {
         name->reset();
@@ -74,11 +102,89 @@ void MilestroRegisteredFontStyleSet::getStyle(int index, SkFontStyle *style, SkS
 
 sk_sp<SkTypeface> MilestroRegisteredFontStyleSet::createTypeface(int index) {
     SkASSERT(index < fStyles.size());
-    return fStyles[index];
+    return fStyles[index].typeface;
 }
 
 sk_sp<SkTypeface> MilestroRegisteredFontStyleSet::matchStyle(const SkFontStyle &pattern) {
-    return this->matchStyleCSS3(pattern);
+    auto matched = this->matchStyleCSS3(pattern);
+    if (matched == nullptr) {
+        return nullptr;
+    }
+
+    const auto record = std::find_if(fStyles.begin(), fStyles.end(), [&matched](const auto &item) {
+        return item.typeface->uniqueID() == matched->uniqueID();
+    });
+    if (record == fStyles.end() || record->baseTypeface == nullptr) {
+        return matched;
+    }
+
+    const auto weightAxis = std::find_if(record->axes.begin(), record->axes.end(), [](const auto &axis) {
+        return axis.tag == SkFontArguments::VariationPosition::Coordinate::wght;
+    });
+    if (weightAxis == record->axes.end()) {
+        return matched;
+    }
+
+    std::vector<VariationCoordinate> coordinates;
+    coordinates.reserve(record->axes.size());
+    for (const auto &axis: record->axes) {
+        const auto existing =
+                std::find_if(record->position.begin(), record->position.end(), [&axis](const auto &coordinate) {
+                    return coordinate.axis == axis.tag;
+                });
+        const SkScalar value = axis.tag == SkFontArguments::VariationPosition::Coordinate::wght
+                                       ? std::clamp(static_cast<SkScalar>(pattern.weight()), axis.min, axis.max)
+                               : existing == record->position.end() ? axis.def
+                                                                    : existing->value;
+        coordinates.push_back({axis.tag, value});
+    }
+
+    VariationCacheKey cacheKey{record->sourcePath, record->faceIndex, coordinates};
+    {
+        const std::lock_guard lock(fVariationCacheMutex);
+        const auto cached = fVariationCache.find(cacheKey);
+        if (cached != fVariationCache.end()) {
+            return cached->second;
+        }
+    }
+
+    SkFontArguments arguments;
+    arguments.setCollectionIndex(record->faceIndex);
+    arguments.setVariationDesignPosition({coordinates.data(), static_cast<int>(coordinates.size())});
+    auto cloned = record->baseTypeface->makeClone(arguments);
+    if (cloned == nullptr) {
+        return matched;
+    }
+
+    const std::lock_guard lock(fVariationCacheMutex);
+    return fVariationCache.emplace(std::move(cacheKey), std::move(cloned)).first->second;
+}
+
+bool MilestroRegisteredFontStyleSet::VariationCacheKeyLess::operator()(const VariationCacheKey &left,
+                                                                       const VariationCacheKey &right) const {
+    if (left.sourcePath != right.sourcePath) {
+        return left.sourcePath < right.sourcePath;
+    }
+    if (left.faceIndex != right.faceIndex) {
+        return left.faceIndex < right.faceIndex;
+    }
+    if (left.coordinates.size() != right.coordinates.size()) {
+        return left.coordinates.size() < right.coordinates.size();
+    }
+    for (size_t index = 0; index < left.coordinates.size(); ++index) {
+        const auto leftCoordinate = std::tuple{
+                left.coordinates[index].axis,
+                std::bit_cast<uint32_t>(left.coordinates[index].value),
+        };
+        const auto rightCoordinate = std::tuple{
+                right.coordinates[index].axis,
+                std::bit_cast<uint32_t>(right.coordinates[index].value),
+        };
+        if (leftCoordinate != rightCoordinate) {
+            return leftCoordinate < rightCoordinate;
+        }
+    }
+    return false;
 }
 
 SkString MilestroRegisteredFontStyleSet::getFamilyName() { return fFamilyName; }
@@ -183,6 +289,10 @@ MilestroRegisteredFontMgr::RegisterResult MilestroRegisteredFontMgr::registerFon
     struct PendingTypeface {
         SkString familyName;
         sk_sp<SkTypeface> typeface;
+        sk_sp<SkTypeface> baseTypeface;
+        int faceIndex;
+        std::vector<SkFontParameters::Variation::Axis> axes;
+        std::vector<SkFontArguments::VariationPosition::Coordinate> position;
         MilestroFontFaceInfo info;
     };
 
@@ -194,23 +304,31 @@ MilestroRegisteredFontMgr::RegisterResult MilestroRegisteredFontMgr::registerFon
             // MILESTROLOG_DEBUG("---- failed to open <%s> as a font\n", filename.c_str());
             continue;
         }
+        sk_sp<SkTypeface> baseTypeface;
         for (int instanceIndex = 0; instanceIndex <= numInstances; ++instanceIndex) {
             bool isFixedPitch;
             SkString realname;
             SkFontStyle style = SkFontStyle(); // avoid uninitialized warning
+            SkFontScanner::AxisDefinitions axes;
+            SkFontScanner::VariationPosition position;
             if (!fScanner->scanInstance(stream.get(),
                                         faceIndex,
                                         instanceIndex,
                                         &realname,
                                         &style,
                                         &isFixedPitch,
-                                        nullptr,
-                                        nullptr)) {
+                                        &axes,
+                                        &position)) {
                 MILESTROLOG_DEBUG("---- failed to open file face as a font. file:{} face:{}", filename.c_str(), faceIndex);
                 continue;
             }
 
             const int packedIndex = (instanceIndex << 16) + faceIndex;
+            auto typeface = sk_make_sp<SkTypeface_File>(
+                    style, isFixedPitch, true, realname, filename.c_str(), packedIndex);
+            if (instanceIndex == 0) {
+                baseTypeface = typeface;
+            }
 
             MilestroFontFaceInfo info;
             info.sourcePath = filename.c_str();
@@ -225,8 +343,11 @@ MilestroRegisteredFontMgr::RegisterResult MilestroRegisteredFontMgr::registerFon
 
             pendingTypefaces.push_back(PendingTypeface{
                 realname,
-                sk_make_sp<SkTypeface_File>(
-                    style, isFixedPitch, true, realname, filename.c_str(), packedIndex),
+                std::move(typeface),
+                baseTypeface,
+                faceIndex,
+                std::vector<SkFontParameters::Variation::Axis>(axes.begin(), axes.end()),
+                std::vector<SkFontArguments::VariationPosition::Coordinate>(position.begin(), position.end()),
                 std::move(info),
             });
         }
@@ -250,7 +371,12 @@ MilestroRegisteredFontMgr::RegisterResult MilestroRegisteredFontMgr::registerFon
             addTo = sk_make_sp<MilestroRegisteredFontStyleSet>(pending.familyName);
             fFamilies.push_back(addTo);
         }
-        addTo->appendTypeface(std::move(pending.typeface));
+        addTo->appendTypefaceWithVariations(std::move(pending.typeface),
+                                            std::move(pending.baseTypeface),
+                                            pending.info.sourcePath,
+                                            pending.faceIndex,
+                                            std::move(pending.axes),
+                                            std::move(pending.position));
         fFaces.emplace_back(std::move(pending.info));
     }
 //    fStreamHolder.emplace_back(std::move(stream));

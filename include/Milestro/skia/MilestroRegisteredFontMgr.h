@@ -1,7 +1,9 @@
 #ifndef MILESTRO_MILESTROREGISTEREDFONTMGR_H
 #define MILESTRO_MILESTROREGISTEREDFONTMGR_H
 
+#include "include/core/SkFontArguments.h"
 #include "include/core/SkFontMgr.h"
+#include "include/core/SkFontParameters.h"
 #include "include/core/SkFontScanner.h"
 #include "include/core/SkFontStyle.h"
 #include "include/core/SkRefCnt.h"
@@ -10,6 +12,8 @@
 #include "Milestro/common/milestro_export_macros.h"
 #include "FontRegistryTypes.h"
 #include <cstdint>
+#include <map>
+#include <mutex>
 #include <string>
 #include <vector>
 #include <src/ports/SkTypeface_FreeType.h>
@@ -33,7 +37,38 @@ public:
     SkString getFamilyName();
 
 private:
-    skia_private::TArray<sk_sp<SkTypeface>> fStyles;
+    using VariationAxis = SkFontParameters::Variation::Axis;
+    using VariationCoordinate = SkFontArguments::VariationPosition::Coordinate;
+
+    struct RegisteredTypeface {
+        sk_sp<SkTypeface> typeface;
+        sk_sp<SkTypeface> baseTypeface;
+        std::string sourcePath;
+        int faceIndex;
+        std::vector<VariationAxis> axes;
+        std::vector<VariationCoordinate> position;
+    };
+
+    struct VariationCacheKey {
+        std::string sourcePath;
+        int faceIndex;
+        std::vector<VariationCoordinate> coordinates;
+    };
+
+    struct VariationCacheKeyLess {
+        bool operator()(const VariationCacheKey& left, const VariationCacheKey& right) const;
+    };
+
+    void appendTypefaceWithVariations(sk_sp<SkTypeface> typeface,
+                                      sk_sp<SkTypeface> baseTypeface,
+                                      std::string sourcePath,
+                                      int faceIndex,
+                                      std::vector<VariationAxis> axes,
+                                      std::vector<VariationCoordinate> position);
+
+    std::vector<RegisteredTypeface> fStyles;
+    std::map<VariationCacheKey, sk_sp<SkTypeface>, VariationCacheKeyLess> fVariationCache;
+    std::mutex fVariationCacheMutex;
     SkString fFamilyName;
 
     friend class MilestroRegisteredFontMgr;
