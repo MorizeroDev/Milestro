@@ -53,13 +53,15 @@ namespace Milestro.Tests
                 Is.EqualTo(HybridInputSystemPackageStatus.Unsupported));
         }
 
-        [TestCase(InputHandlingMode.LegacyOnly, InputSystemValidationSeverity.None, false)]
-        [TestCase(InputHandlingMode.Both, InputSystemValidationSeverity.Warning, false)]
-        [TestCase(InputHandlingMode.InputSystemOnly, InputSystemValidationSeverity.Error, true)]
-        internal void UnsupportedPackageDecisionDependsOnlyOnInputHandlingMode(InputHandlingMode mode,
-            InputSystemValidationSeverity expectedSeverity,
+        [TestCase((int)InputHandlingMode.LegacyOnly, (int)InputSystemValidationSeverity.None, false)]
+        [TestCase((int)InputHandlingMode.Both, (int)InputSystemValidationSeverity.Warning, false)]
+        [TestCase((int)InputHandlingMode.InputSystemOnly, (int)InputSystemValidationSeverity.Error, true)]
+        public void UnsupportedPackageDecisionDependsOnlyOnInputHandlingMode(int modeValue,
+            int expectedSeverityValue,
             bool expectedBuildBlock)
         {
+            var mode = (InputHandlingMode)modeValue;
+            var expectedSeverity = (InputSystemValidationSeverity)expectedSeverityValue;
             var decision = InputSystemCompatibilityPolicy.Decide(
                 InputSystemPackageSnapshot.Present("1.14.2"),
                 mode);
