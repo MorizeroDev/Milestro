@@ -46,7 +46,9 @@ namespace Milestro.Components.Internal
             float requestedScrollY,
             Vector2 visualScrollOffset,
             bool drawOutput,
-            bool sliceOutput)
+            bool sliceOutput,
+            bool useScreenSpaceRasterization,
+            float desiredRasterScale)
         {
             LayoutSizePixels = layoutSizePixels;
             OutputSizePixels = outputSizePixels;
@@ -57,6 +59,8 @@ namespace Milestro.Components.Internal
             VisualScrollOffset = visualScrollOffset;
             DrawOutput = drawOutput;
             SliceOutput = sliceOutput;
+            UseScreenSpaceRasterization = useScreenSpaceRasterization;
+            DesiredRasterScale = desiredRasterScale;
         }
 
         public Vector2Int LayoutSizePixels { get; }
@@ -69,6 +73,8 @@ namespace Milestro.Components.Internal
         public Vector2 VisualScrollOffset { get; }
         public bool DrawOutput { get; }
         public bool SliceOutput { get; }
+        public bool UseScreenSpaceRasterization { get; }
+        public float DesiredRasterScale { get; }
 
         public static TextBoxRenderViewport Fixed(Vector2Int sizePixels,
             TextBoxHorizontalScrollState horizontalScrollState,
@@ -83,7 +89,9 @@ namespace Milestro.Components.Internal
                 scrollOffset.y,
                 visualScrollOffset,
                 true,
-                false);
+                false,
+                false,
+                1f);
         }
 
         public static TextBoxRenderViewport Invisible(Vector2Int layoutSizePixels,
@@ -97,7 +105,9 @@ namespace Milestro.Components.Internal
                 0f,
                 Vector2.zero,
                 false,
-                true);
+                true,
+                false,
+                1f);
         }
 
         public static TextBoxRenderViewport FlowSlice(Vector2Int layoutSizePixels,
@@ -114,7 +124,24 @@ namespace Milestro.Components.Internal
                 localStartY,
                 Vector2.zero,
                 true,
-                true);
+                true,
+                false,
+                1f);
+        }
+
+        internal TextBoxRenderViewport WithScreenSpaceRasterization(float desiredRasterScale)
+        {
+            return new TextBoxRenderViewport(LayoutSizePixels,
+                OutputSizePixels,
+                VisibleOutputSizePixels,
+                HorizontalScrollState,
+                HorizontalScrollRequest,
+                RequestedScrollY,
+                VisualScrollOffset,
+                DrawOutput,
+                SliceOutput,
+                true,
+                desiredRasterScale);
         }
 
         internal TextBoxHorizontalScrollState ResolveHorizontalScroll(TextBoxNoWrapHorizontalLayout layout)
@@ -140,7 +167,10 @@ namespace Milestro.Components.Internal
                    TextBoxHorizontalScrollState.OffsetsEqual(VisualScrollOffset.x, other.VisualScrollOffset.x) &&
                    TextBoxHorizontalScrollState.OffsetsEqual(VisualScrollOffset.y, other.VisualScrollOffset.y) &&
                    DrawOutput == other.DrawOutput &&
-                   SliceOutput == other.SliceOutput;
+                   SliceOutput == other.SliceOutput &&
+                   UseScreenSpaceRasterization == other.UseScreenSpaceRasterization &&
+                   BitConverter.SingleToInt32Bits(DesiredRasterScale) ==
+                   BitConverter.SingleToInt32Bits(other.DesiredRasterScale);
         }
     }
 
@@ -148,7 +178,7 @@ namespace Milestro.Components.Internal
     {
         private static readonly Rect DefaultUvRect = new Rect(0f, 0f, 1f, 1f);
 
-        private UnityAutoRenderTextureSurface? surface;
+        private ManagedRenderTextureSurface? surface;
         private Paragraph? paragraph;
         private bool layoutChanged = true;
         private bool paintChanged = true;
@@ -176,7 +206,9 @@ namespace Milestro.Components.Internal
         public Texture? OutputTexture => surface?.Texture;
         public Rect OutputUvRect => surface != null
             ? ResolveOutputUvRect(surface.DisplayUvRect,
-                outputVisibleSizePixels,
+                ScreenSpaceRasterMetrics.RasterizeVisibleSize(outputVisibleSizePixels,
+                    surface.EffectiveRasterScale,
+                    new Vector2Int(surface.Width, surface.Height)),
                 new Vector2Int(surface.Width, surface.Height))
             : DefaultUvRect;
         public int OutputWidth => surface?.Width ?? 0;
@@ -276,9 +308,23 @@ namespace Milestro.Components.Internal
             outputVisibleSizePixels = visibleOutputSizePixels;
 
             var needsDraw = false;
+            var surfaceReady = true;
             if (viewport.DrawOutput)
             {
-                needsDraw = EnsureSurface(outputSizePixels, colorSpace);
+                surfaceReady = EnsureSurface(outputSizePixels,
+                        colorSpace,
+                        viewport.UseScreenSpaceRasterization,
+                        viewport.DesiredRasterScale,
+                        logContext,
+                        out var surfaceChanged);
+                if (!surfaceReady)
+                {
+                    needsDraw = true;
+                }
+                else
+                {
+                    needsDraw = surfaceChanged;
+                }
             }
             else
             {
@@ -307,6 +353,14 @@ namespace Milestro.Components.Internal
                 layoutChanged = false;
                 paintChanged = false;
                 return true;
+            }
+
+            if (!surfaceReady || surface == null || !surface.HasSurface)
+            {
+                layoutChanged = false;
+                paintChanged = true;
+                linkGeometryPublication.InvalidatePublished();
+                return false;
             }
 
             if (!needsDraw)
@@ -379,25 +433,34 @@ namespace Milestro.Components.Internal
             MarkOutputChanged();
         }
 
-        private bool EnsureSurface(Vector2Int sizePixels, ColorSpace colorSpace)
+        private bool EnsureSurface(Vector2Int sizePixels,
+            ColorSpace colorSpace,
+            bool useScreenSpaceRasterization,
+            float desiredRasterScale,
+            UnityEngine.Object? logContext,
+            out bool changed)
         {
             sizePixels = NormalizeSize(sizePixels);
-            if (surface == null || surface.ColorSpace != colorSpace)
+            var currentSurface = surface;
+            if (currentSurface == null)
             {
-                DisposeSurface();
-                SetSurface(new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, colorSpace));
+                currentSurface = new ManagedRenderTextureSurface();
+                SetSurface(currentSurface);
+            }
+
+            var ready = useScreenSpaceRasterization
+                ? currentSurface.TryEnsureScreenSpace(sizePixels,
+                    desiredRasterScale,
+                    colorSpace,
+                    logContext,
+                    out changed)
+                : currentSurface.EnsureExact(sizePixels, colorSpace, out changed);
+            if (changed)
+            {
                 MarkOutputChanged();
-                return true;
             }
 
-            if (surface.Width == sizePixels.x && surface.Height == sizePixels.y)
-            {
-                return false;
-            }
-
-            surface.Resize(sizePixels.x, sizePixels.y);
-            MarkOutputChanged();
-            return true;
+            return ready;
         }
 
         private bool TrySubmit(UnitySkiaRenderCommandList commands,
@@ -445,7 +508,7 @@ namespace Milestro.Components.Internal
             return false;
         }
 
-        private void SetSurface(UnityAutoRenderTextureSurface nextSurface)
+        private void SetSurface(ManagedRenderTextureSurface nextSurface)
         {
             surface = nextSurface;
             surface.RenderEventCompleted += HandleRenderEventCompleted;

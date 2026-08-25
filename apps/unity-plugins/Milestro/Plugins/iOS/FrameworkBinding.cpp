@@ -32,6 +32,52 @@ int64_t FrameworkBindingMilestroUnityRenderEnqueueSubmission(int32_t graphicsBac
     return MilestroUnityRenderEnqueueSubmission(graphicsBackend, submission);
 }
 
+int64_t FrameworkBindingMilestroUnityRenderGetPayloadAbiInfo(uint32_t& abiVersion,
+                                                             uint64_t& layoutFingerprint,
+                                                             uint32_t& targetSize,
+                                                             uint32_t& submissionSize,
+                                                             uint32_t& targetEffectiveScaleOffset,
+                                                             uint32_t& targetDeviceEpochOffset,
+                                                             uint32_t& submissionTargetOffset,
+                                                             uint32_t& submissionCompletedOffset) {
+    return MilestroUnityRenderGetPayloadAbiInfo(abiVersion,
+                                                layoutFingerprint,
+                                                targetSize,
+                                                submissionSize,
+                                                targetEffectiveScaleOffset,
+                                                targetDeviceEpochOffset,
+                                                submissionTargetOffset,
+                                                submissionCompletedOffset);
+}
+
+int64_t FrameworkBindingMilestroUnityRenderGetDeviceEpoch(uint64_t& deviceEpoch) {
+    return MilestroUnityRenderGetDeviceEpoch(deviceEpoch);
+}
+
+int64_t FrameworkBindingMilestroUnityRenderGetDiagnosticsSnapshot(uint32_t& abiVersion,
+                                                                  uint32_t& structSize,
+                                                                  uint64_t& acceptedSubmissionCount,
+                                                                  uint64_t& rejectedSubmissionCount,
+                                                                  int32_t& hasLastAcceptedSubmission,
+                                                                  int32_t& lastAcceptedGraphicsBackend,
+                                                                  int32_t& lastAcceptedRasterWidth,
+                                                                  int32_t& lastAcceptedRasterHeight,
+                                                                  float& lastAcceptedEffectiveScale,
+                                                                  uint64_t& lastAcceptedDeviceEpoch,
+                                                                  uint64_t& currentDeviceEpoch) {
+    return MilestroUnityRenderGetDiagnosticsSnapshot(abiVersion,
+                                                     structSize,
+                                                     acceptedSubmissionCount,
+                                                     rejectedSubmissionCount,
+                                                     hasLastAcceptedSubmission,
+                                                     lastAcceptedGraphicsBackend,
+                                                     lastAcceptedRasterWidth,
+                                                     lastAcceptedRasterHeight,
+                                                     lastAcceptedEffectiveScale,
+                                                     lastAcceptedDeviceEpoch,
+                                                     currentDeviceEpoch);
+}
+
 int64_t FrameworkBindingMilestroUnityRenderCreateD3D12ExternalTexture(int32_t width,
                                                                       int32_t height,
                                                                       int32_t storageSrgb,

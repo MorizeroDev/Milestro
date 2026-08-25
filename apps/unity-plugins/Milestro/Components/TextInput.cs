@@ -133,7 +133,8 @@ namespace Milestro.Components
         [SerializeField] private UnityEvent m_OnFocusLost = new UnityEvent();
 
         [NonSerialized] private RectTransform rectTransformCache;
-        [NonSerialized] private UnityAutoRenderTextureSurface? surface;
+        [NonSerialized] private ManagedRenderTextureSurface? surface;
+        [NonSerialized] private readonly Vector3[] screenSpaceWorldCorners = new Vector3[4];
         [NonSerialized] private InputBox? inputBox;
         [NonSerialized] private HybridInputDispatcher.HybridInputSinkRegistration? inputRegistration;
         [NonSerialized] private InputSink? inputSink;
@@ -2409,18 +2410,26 @@ namespace Milestro.Components
 #endif
             var sizePixels = CurrentSize();
             var surfaceColorSpace = SurfaceColorSpace();
-            if (surface == null || surface.ColorSpace != surfaceColorSpace)
+            var currentSurface = surface;
+            if (currentSurface == null)
             {
-                DisposeSurface();
-                SetSurface(new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, surfaceColorSpace));
-                ApplySurfaceToGraphic();
-                paintDirty = true;
+                currentSurface = new ManagedRenderTextureSurface();
+                SetSurface(currentSurface);
             }
-            else if (surface.Width != sizePixels.x || surface.Height != sizePixels.y)
+
+            var surfaceChanged = false;
+            var surfaceReady = ScreenSpaceRasterMetrics.TryMeasure(rectTransformCache,
+                                   screenSpaceWorldCorners,
+                                   out var rasterMeasurement) &&
+                               currentSurface.TryEnsureScreenSpace(sizePixels,
+                                   rasterMeasurement.DesiredScale,
+                                   surfaceColorSpace,
+                                   this,
+                                   out surfaceChanged);
+            if (surfaceReady &&
+                (surfaceChanged || Texture != currentSurface.Texture || UvRect != currentSurface.DisplayUvRect))
             {
-                surface.Resize(sizePixels.x, sizePixels.y);
                 ApplySurfaceToGraphic();
-                layoutDirty = true;
                 paintDirty = true;
             }
 
@@ -2453,6 +2462,12 @@ namespace Milestro.Components
                 return;
             }
 
+            if (!surfaceReady)
+            {
+                paintDirty = true;
+                return;
+            }
+
             inputBox.SetCaretVisible(IsDispatcherFocused && caretVisible);
             var submitted = surface!.TrySubmit(BuildRenderCommands());
             if (!submitted)
@@ -2467,7 +2482,7 @@ namespace Milestro.Components
             paintDirty = false;
         }
 
-        private void SetSurface(UnityAutoRenderTextureSurface nextSurface)
+        private void SetSurface(ManagedRenderTextureSurface nextSurface)
         {
             surface = nextSurface;
             surface.RenderEventCompleted += OnRenderEventCompleted;

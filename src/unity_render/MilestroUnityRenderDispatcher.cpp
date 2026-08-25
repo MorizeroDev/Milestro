@@ -2,6 +2,7 @@
 
 #include "game/milestro_game_retcode.h"
 #include "unity_render/MilestroUnityGraphicsBackend.h"
+#include "unity_render/MilestroUnityRenderDiagnostics.h"
 #include "unity_render/MilestroUnityRenderSubmission.h"
 #include "unity_render/MilestroUnityRenderSubmissionDraw.h"
 
@@ -10,6 +11,7 @@
 #include <array>
 #include <atomic>
 #include <cstring>
+#include <limits>
 #include <mutex>
 #include <vector>
 
@@ -50,12 +52,32 @@ int gEventBase = -1;
 std::mutex gSubmissionQueueMutex;
 std::array<std::vector<MilestroUnityRenderSubmission*>, kSubmissionQueueCount> gSubmissionQueues;
 std::mutex gRenderSystemMutex;
+std::atomic<uint64_t> gDeviceEpoch{1};
+MilestroUnityRenderDiagnostics gDiagnostics;
 
 struct MilestroUnityRenderDrain {
     int32_t magic = 0;
     int32_t graphicsBackend = 0;
     int32_t completed = 0;
 };
+
+uint64_t CurrentDeviceEpoch() {
+    return gDeviceEpoch.load(std::memory_order_acquire);
+}
+
+void AdvanceDeviceEpoch() {
+    uint64_t current = CurrentDeviceEpoch();
+    while (current != std::numeric_limits<uint64_t>::max()) {
+        const uint64_t next = MilestroUnityRenderNextDeviceEpoch(current);
+        if (gDeviceEpoch.compare_exchange_weak(current, next, std::memory_order_acq_rel, std::memory_order_acquire)) {
+            return;
+        }
+    }
+}
+
+bool HasCurrentPayloadAbi(const MilestroUnityRenderSubmission* submission) {
+    return MilestroUnityRenderSubmissionHasCurrentAbi(submission, CurrentDeviceEpoch());
+}
 
 void MarkSubmissionCompleted(MilestroUnityRenderSubmission* submission,
                              MilestroUnityRenderSubmissionStatus status = MilestroUnityRenderSubmissionStatus::Drawn) {
@@ -166,11 +188,21 @@ void CompleteQueuedSubmissions() {
 
 int64_t EnqueueSubmission(int32_t graphicsBackend, MilestroUnityRenderSubmission* submission) {
     if (submission == nullptr) {
+        gDiagnostics.RecordRejectedSubmission();
         MILESTROLOG_ERROR("Milestro Unity render enqueue received null submission.");
         return MILESTRO_API_RET_FAILED;
     }
 
+    std::lock_guard renderLock(gRenderSystemMutex);
+
+    if (!HasCurrentPayloadAbi(submission)) {
+        gDiagnostics.RecordRejectedSubmission();
+        MILESTROLOG_ERROR("Milestro Unity render enqueue rejected an ABI, scale, or device-epoch mismatch.");
+        return MILESTRO_API_RET_FAILED;
+    }
+
     if (submission->target.graphicsBackend != graphicsBackend) {
+        gDiagnostics.RecordRejectedSubmission();
         MILESTROLOG_ERROR("Milestro Unity render enqueue backend mismatch: requested={}, submission={}.",
                           graphicsBackend,
                           submission->target.graphicsBackend);
@@ -179,6 +211,7 @@ int64_t EnqueueSubmission(int32_t graphicsBackend, MilestroUnityRenderSubmission
 
     const int queueIndex = SubmissionQueueIndex(graphicsBackend);
     if (queueIndex < 0) {
+        gDiagnostics.RecordRejectedSubmission();
         MILESTROLOG_ERROR("Milestro Unity render enqueue received unknown backend {}.", graphicsBackend);
         return MILESTRO_API_RET_FAILED;
     }
@@ -197,11 +230,23 @@ int64_t EnqueueSubmission(int32_t graphicsBackend, MilestroUnityRenderSubmission
         MILESTRO_RENDER_LOG_WARN("Dropping superseded Milestro Metal render submission before queue drain.");
         MarkSubmissionCompleted(superseded, MilestroUnityRenderSubmissionStatus::Failed);
     }
+    const MilestroUnityRenderTargetPayload& target = submission->target;
+    gDiagnostics.RecordAcceptedSubmission(graphicsBackend,
+                                          target.width,
+                                          target.height,
+                                          target.effectiveScale,
+                                          target.deviceEpoch);
     return MILESTRO_API_RET_OK;
 }
 
 void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* submission) {
     if (submission == nullptr) {
+        return;
+    }
+
+    if (!HasCurrentPayloadAbi(submission)) {
+        MILESTROLOG_ERROR("Milestro Unity render event rejected a stale or incompatible submission payload.");
+        MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
         return;
     }
 
@@ -359,6 +404,10 @@ void DrainRenderQueue(int eventOffset, MilestroUnityRenderDrain* drain) {
 void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType) {
     std::lock_guard renderLock(gRenderSystemMutex);
 
+    if (eventType == kUnityGfxDeviceEventInitialize || eventType == kUnityGfxDeviceEventShutdown) {
+        CompleteQueuedSubmissions();
+    }
+
     if (eventType == kUnityGfxDeviceEventInitialize && gUnityGraphics != nullptr) {
         gRenderer = gUnityGraphics->GetRenderer();
     } else if (eventType == kUnityGfxDeviceEventShutdown) {
@@ -388,6 +437,10 @@ void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType
                                   gRenderer,
                                   gEventBase >= 0 ? gEventBase + kVulkanDrawEventOffset : -1);
 #endif
+
+    if (eventType == kUnityGfxDeviceEventInitialize || eventType == kUnityGfxDeviceEventShutdown) {
+        AdvanceDeviceEpoch();
+    }
 }
 
 void UNITY_INTERFACE_API OnRenderEvent(int eventId, void* data) {
@@ -482,6 +535,57 @@ int64_t EnqueueSubmissionForExport(int32_t graphicsBackend, void* submission) {
     return EnqueueSubmission(graphicsBackend, static_cast<MilestroUnityRenderSubmission*>(submission));
 }
 
+int64_t GetPayloadAbiInfoForExport(uint32_t& abiVersion,
+                                   uint64_t& layoutFingerprint,
+                                   uint32_t& targetSize,
+                                   uint32_t& submissionSize,
+                                   uint32_t& targetEffectiveScaleOffset,
+                                   uint32_t& targetDeviceEpochOffset,
+                                   uint32_t& submissionTargetOffset,
+                                   uint32_t& submissionCompletedOffset) {
+    abiVersion = kMilestroUnityRenderPayloadAbiVersion;
+    layoutFingerprint = kMilestroUnityRenderPayloadLayoutFingerprint;
+    targetSize = kMilestroUnityRenderTargetPayloadSize;
+    submissionSize = kMilestroUnityRenderSubmissionSize;
+    targetEffectiveScaleOffset = kMilestroUnityRenderTargetEffectiveScaleOffset;
+    targetDeviceEpochOffset = kMilestroUnityRenderTargetDeviceEpochOffset;
+    submissionTargetOffset = kMilestroUnityRenderSubmissionTargetOffset;
+    submissionCompletedOffset = kMilestroUnityRenderSubmissionCompletedOffset;
+    return MILESTRO_API_RET_OK;
+}
+
+int64_t GetDeviceEpochForExport(uint64_t& deviceEpoch) {
+    deviceEpoch = CurrentDeviceEpoch();
+    return deviceEpoch == 0 ? MILESTRO_API_RET_FAILED : MILESTRO_API_RET_OK;
+}
+
+int64_t GetDiagnosticsSnapshotForExport(uint32_t& abiVersion,
+                                        uint32_t& structSize,
+                                        uint64_t& acceptedSubmissionCount,
+                                        uint64_t& rejectedSubmissionCount,
+                                        int32_t& hasLastAcceptedSubmission,
+                                        int32_t& lastAcceptedGraphicsBackend,
+                                        int32_t& lastAcceptedRasterWidth,
+                                        int32_t& lastAcceptedRasterHeight,
+                                        float& lastAcceptedEffectiveScale,
+                                        uint64_t& lastAcceptedDeviceEpoch,
+                                        uint64_t& currentDeviceEpoch) {
+    std::lock_guard renderLock(gRenderSystemMutex);
+    const MilestroUnityRenderDiagnosticsSnapshot snapshot = gDiagnostics.Snapshot(CurrentDeviceEpoch());
+    abiVersion = snapshot.abiVersion;
+    structSize = snapshot.structSize;
+    acceptedSubmissionCount = snapshot.acceptedSubmissionCount;
+    rejectedSubmissionCount = snapshot.rejectedSubmissionCount;
+    hasLastAcceptedSubmission = snapshot.hasLastAcceptedSubmission;
+    lastAcceptedGraphicsBackend = snapshot.lastAcceptedGraphicsBackend;
+    lastAcceptedRasterWidth = snapshot.lastAcceptedRasterWidth;
+    lastAcceptedRasterHeight = snapshot.lastAcceptedRasterHeight;
+    lastAcceptedEffectiveScale = snapshot.lastAcceptedEffectiveScale;
+    lastAcceptedDeviceEpoch = snapshot.lastAcceptedDeviceEpoch;
+    currentDeviceEpoch = snapshot.currentDeviceEpoch;
+    return currentDeviceEpoch == 0 ? MILESTRO_API_RET_FAILED : MILESTRO_API_RET_OK;
+}
+
 int64_t CreateD3D12ExternalTextureForExport(int32_t width,
                                             int32_t height,
                                             int32_t storageSrgb,
@@ -537,7 +641,6 @@ void Unload() {
     if (gUnityGraphics != nullptr) {
         gUnityGraphics->UnregisterDeviceEventCallback(OnGraphicsDeviceEvent);
     }
-    CompleteQueuedSubmissions();
     OnGraphicsDeviceEvent(kUnityGfxDeviceEventShutdown);
     gEventBase = -1;
     gUnityGraphics = nullptr;

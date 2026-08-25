@@ -295,6 +295,7 @@ namespace Milestro.Components
 
         private void ApplyProducerSettings(SlimTextRenderTextureProducer producer, bool useManagedStringText)
         {
+            producer.screenSpaceRasterization = false;
             if (useManagedStringText)
             {
                 producer.SetManagedStringText(m_text);

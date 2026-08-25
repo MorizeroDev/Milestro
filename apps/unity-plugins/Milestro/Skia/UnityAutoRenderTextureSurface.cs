@@ -1,4 +1,5 @@
 using System;
+using Milestro.Configuration;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -24,6 +25,10 @@ namespace Milestro.Skia
 
         public int Width => surface.Width;
         public int Height => surface.Height;
+        internal float EffectiveRasterScale => surface.EffectiveRasterScale;
+        internal ulong DeviceEpoch => surface.DeviceEpoch;
+        internal RenderSurfaceCounterSnapshot CounterSnapshot => surface.CounterSnapshot;
+        internal RenderSurfaceDiagnosticsSnapshot DiagnosticsSnapshot => surface.DiagnosticsSnapshot;
 
         public UnityAutoRenderTextureSurface(int width, int height)
         {
@@ -38,6 +43,37 @@ namespace Milestro.Skia
         public UnityAutoRenderTextureSurface(int width, int height, UnityEngine.ColorSpace colorSpace)
         {
             surface = new UnitySkiaRenderTextureSurface(SelectBackendForCurrentGraphicsDevice(), width, height, colorSpace);
+        }
+
+        private UnityAutoRenderTextureSurface(UnitySkiaRenderTextureSurface surface)
+        {
+            this.surface = surface;
+        }
+
+        internal static bool TryCreate(RenderSurfaceCandidate candidate,
+            UnityEngine.ColorSpace colorSpace,
+            RenderSurfaceConfiguration configuration,
+            out UnityAutoRenderTextureSurface? surface,
+            out RenderSurfaceFailureReason failureReason)
+        {
+            surface = null;
+            if (!UnitySkiaRenderTextureSurface.TryCreate(SelectBackendForCurrentGraphicsDevice(),
+                    candidate,
+                    colorSpace,
+                    configuration,
+                    out var skiaSurface,
+                    out failureReason))
+            {
+                return false;
+            }
+
+            surface = new UnityAutoRenderTextureSurface(skiaSurface!);
+            return true;
+        }
+
+        internal static ulong ReadCurrentDeviceEpoch()
+        {
+            return UnitySkiaRenderTextureSurface.ReadCurrentDeviceEpoch();
         }
 
         public static UnitySkiaGraphicsBackend SelectBackendForCurrentGraphicsDevice()
@@ -62,6 +98,21 @@ namespace Milestro.Skia
         public void Resize(int width, int height)
         {
             surface.Resize(width, height);
+        }
+
+        internal bool TryResize(RenderSurfaceCandidate candidate,
+            RenderSurfaceConfiguration configuration,
+            out RenderSurfaceFailureReason failureReason)
+        {
+            return surface.TryResize(candidate, configuration, out failureReason);
+        }
+
+        internal bool TryResize(RenderSurfaceCandidate candidate,
+            UnityEngine.ColorSpace colorSpace,
+            RenderSurfaceConfiguration configuration,
+            out RenderSurfaceFailureReason failureReason)
+        {
+            return surface.TryResize(candidate, colorSpace, configuration, out failureReason);
         }
 
         public void DisposeResourceAfterPendingDraws(IDisposable resource)

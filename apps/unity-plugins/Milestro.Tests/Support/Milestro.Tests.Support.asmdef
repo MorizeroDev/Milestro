@@ -1,0 +1,17 @@
+{
+    "name": "Milestro.Tests.Support",
+    "rootNamespace": "Milestro.Tests",
+    "references": [
+        "Milestro",
+        "party.para.util.unitynative"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -14,6 +14,8 @@ namespace Milestro.Configuration
 
         public TextInputConfiguration TextInput { get; set; } = new TextInputConfiguration();
 
+        public RenderSurfaceConfiguration RenderSurface { get; set; } = new RenderSurfaceConfiguration();
+
         public WorldSpaceTextBoxConfiguration WorldSpaceTextBox { get; set; } = new WorldSpaceTextBoxConfiguration();
 
         public IcuConfiguration Icu { get; set; } = new IcuConfiguration();

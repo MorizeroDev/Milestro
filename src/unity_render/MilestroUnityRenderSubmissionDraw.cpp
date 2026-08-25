@@ -1,4 +1,5 @@
 #include "unity_render/MilestroUnityRenderSubmissionDraw.h"
+#include "unity_render/MilestroUnityRenderTransform.h"
 
 #include <Milestro/skia/Image.h>
 #include <Milestro/skia/SlimTextDrawSnapshot.h>
@@ -106,9 +107,11 @@ void DrawSubmission(SkCanvas* canvas, const MilestroUnityRenderSubmission& submi
         return;
     }
 
-    for (int32_t i = 0; i < submission.commandCount; ++i) {
-        DrawCommand(canvas, submission.commands[i]);
-    }
+    MilestroUnityRenderWithEffectiveScale(canvas, submission.target.effectiveScale, [&]() {
+        for (int32_t i = 0; i < submission.commandCount; ++i) {
+            DrawCommand(canvas, submission.commands[i]);
+        }
+    });
 }
 
 void ReleaseSubmissionOwnedResources(MilestroUnityRenderSubmission* submission) {

@@ -14,6 +14,26 @@ void *GetRenderEventFuncForExport();
 int64_t GetMetalRenderEventIdForExport(int32_t &eventId);
 int64_t GetRenderTextureEventIdForExport(int32_t graphicsBackend, int32_t &eventId);
 int64_t EnqueueSubmissionForExport(int32_t graphicsBackend, void *submission);
+int64_t GetPayloadAbiInfoForExport(uint32_t& abiVersion,
+                                   uint64_t& layoutFingerprint,
+                                   uint32_t& targetSize,
+                                   uint32_t& submissionSize,
+                                   uint32_t& targetEffectiveScaleOffset,
+                                   uint32_t& targetDeviceEpochOffset,
+                                   uint32_t& submissionTargetOffset,
+                                   uint32_t& submissionCompletedOffset);
+int64_t GetDeviceEpochForExport(uint64_t& deviceEpoch);
+int64_t GetDiagnosticsSnapshotForExport(uint32_t& abiVersion,
+                                        uint32_t& structSize,
+                                        uint64_t& acceptedSubmissionCount,
+                                        uint64_t& rejectedSubmissionCount,
+                                        int32_t& hasLastAcceptedSubmission,
+                                        int32_t& lastAcceptedGraphicsBackend,
+                                        int32_t& lastAcceptedRasterWidth,
+                                        int32_t& lastAcceptedRasterHeight,
+                                        float& lastAcceptedEffectiveScale,
+                                        uint64_t& lastAcceptedDeviceEpoch,
+                                        uint64_t& currentDeviceEpoch);
 int64_t CreateD3D12ExternalTextureForExport(int32_t width,
                                             int32_t height,
                                             int32_t storageSrgb,

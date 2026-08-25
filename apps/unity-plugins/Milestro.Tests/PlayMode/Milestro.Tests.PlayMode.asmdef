@@ -1,0 +1,21 @@
+{
+    "name": "Milestro.Tests.PlayMode",
+    "rootNamespace": "Milestro.Tests",
+    "references": [
+        "Milestro",
+        "Milestro.Tests.Support",
+        "party.para.util.unitynative"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "noEngineReferences": false
+}

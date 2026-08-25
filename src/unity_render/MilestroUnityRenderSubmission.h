@@ -5,7 +5,10 @@
 
 #include <Milestro/game/milestro_game_types.h>
 
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <limits>
 
 enum class MilestroUnityDrawCommandKind : int32_t {
     Paragraph = 1,
@@ -44,6 +47,8 @@ struct MilestroUnityDrawCommand {
 };
 
 struct MilestroUnityRenderSubmission {
+    uint32_t abiVersion = 0;
+    uint32_t structSize = 0;
     MilestroUnityRenderTargetPayload target;
     MilestroUnityDrawCommand* commands = nullptr;
     int32_t commandCount = 0;
@@ -52,5 +57,69 @@ struct MilestroUnityRenderSubmission {
     // Values use MilestroUnityRenderSubmissionStatus, with 0 reserved for pending.
     int32_t completed = 0;
 };
+
+static_assert(sizeof(MilestroUnityRenderSubmission) <= std::numeric_limits<uint32_t>::max());
+inline constexpr uint32_t kMilestroUnityRenderSubmissionSize =
+        static_cast<uint32_t>(sizeof(MilestroUnityRenderSubmission));
+inline constexpr uint32_t kMilestroUnityRenderSubmissionTargetOffset = offsetof(MilestroUnityRenderSubmission, target);
+inline constexpr uint32_t kMilestroUnityRenderSubmissionCompletedOffset =
+        offsetof(MilestroUnityRenderSubmission, completed);
+
+static_assert(offsetof(MilestroUnityRenderSubmission, abiVersion) == 0);
+static_assert(offsetof(MilestroUnityRenderSubmission, structSize) == sizeof(uint32_t));
+
+constexpr uint64_t MilestroUnityRenderLayoutFingerprintMix(uint64_t hash, uint64_t value) noexcept {
+    return (hash ^ value) * 1099511628211ULL;
+}
+
+constexpr uint64_t MilestroUnityRenderPayloadLayoutFingerprint() noexcept {
+    uint64_t hash = 14695981039346656037ULL;
+#define MILESTRO_MIX_LAYOUT_VALUE(value) hash = MilestroUnityRenderLayoutFingerprintMix(hash, (value))
+#define MILESTRO_MIX_MEMBER(type, member) MILESTRO_MIX_LAYOUT_VALUE(offsetof(type, member))
+    MILESTRO_MIX_LAYOUT_VALUE(kMilestroUnityRenderTargetPayloadSize);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, abiVersion);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, structSize);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, graphicsBackend);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, handleKind);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, colorRenderBufferHandle);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, nativeTextureHandle);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, width);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, height);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, colorSpace);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, storageSrgb);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, clearBeforeDraw);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, msaaSamples);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, resolveStrategy);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, preferredFormat);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, effectiveScale);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, deviceEpoch);
+    MILESTRO_MIX_LAYOUT_VALUE(kMilestroUnityRenderSubmissionSize);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderSubmission, abiVersion);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderSubmission, structSize);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderSubmission, target);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderSubmission, commands);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderSubmission, commandCount);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderSubmission, completed);
+#undef MILESTRO_MIX_MEMBER
+#undef MILESTRO_MIX_LAYOUT_VALUE
+    return hash;
+}
+
+inline constexpr uint64_t kMilestroUnityRenderPayloadLayoutFingerprint = MilestroUnityRenderPayloadLayoutFingerprint();
+static_assert(kMilestroUnityRenderPayloadLayoutFingerprint != 0);
+
+inline bool MilestroUnityRenderSubmissionHasCurrentAbi(const MilestroUnityRenderSubmission* submission,
+                                                       uint64_t expectedDeviceEpoch) noexcept {
+    if (submission == nullptr || expectedDeviceEpoch == 0 ||
+        submission->abiVersion != kMilestroUnityRenderPayloadAbiVersion ||
+        submission->structSize != kMilestroUnityRenderSubmissionSize) {
+        return false;
+    }
+
+    const MilestroUnityRenderTargetPayload& target = submission->target;
+    return target.abiVersion == kMilestroUnityRenderPayloadAbiVersion &&
+           target.structSize == kMilestroUnityRenderTargetPayloadSize && std::isfinite(target.effectiveScale) &&
+           target.effectiveScale > 0.0f && target.deviceEpoch == expectedDeviceEpoch;
+}
 
 #endif // MILESTRO_UNITY_RENDER_SUBMISSION_H

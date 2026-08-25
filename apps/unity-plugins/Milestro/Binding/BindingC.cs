@@ -38,6 +38,35 @@ namespace Milestro.Binding
         internal static extern unsafe long UnityRenderEnqueueSubmission(int graphicsBackend, IntPtr submission);
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetPayloadAbiInfo")]
+        internal static extern unsafe long UnityRenderGetPayloadAbiInfo(out uint abiVersion,
+                                                                        out ulong layoutFingerprint,
+                                                                        out uint targetSize,
+                                                                        out uint submissionSize,
+                                                                        out uint targetEffectiveScaleOffset,
+                                                                        out uint targetDeviceEpochOffset,
+                                                                        out uint submissionTargetOffset,
+                                                                        out uint submissionCompletedOffset);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetDeviceEpoch")]
+        internal static extern unsafe long UnityRenderGetDeviceEpoch(out ulong deviceEpoch);
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderGetDiagnosticsSnapshot")]
+        internal static extern unsafe long UnityRenderGetDiagnosticsSnapshot(out uint abiVersion,
+                                                                             out uint structSize,
+                                                                             out ulong acceptedSubmissionCount,
+                                                                             out ulong rejectedSubmissionCount,
+                                                                             out int hasLastAcceptedSubmission,
+                                                                             out int lastAcceptedGraphicsBackend,
+                                                                             out int lastAcceptedRasterWidth,
+                                                                             out int lastAcceptedRasterHeight,
+                                                                             out float lastAcceptedEffectiveScale,
+                                                                             out ulong lastAcceptedDeviceEpoch,
+                                                                             out ulong currentDeviceEpoch);
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderCreateD3D12ExternalTexture")]
         internal static extern unsafe long UnityRenderCreateD3D12ExternalTexture(int width,
                                                                                  int height,

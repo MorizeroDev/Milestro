@@ -132,6 +132,7 @@ namespace Milestro.Components
         private void ApplyPresenterSettings(RenderTextureMeshPresenter presenter,
             TextBoxRenderTextureProducer producer)
         {
+            producer.screenSpaceRasterization = false;
             presenter.Producer = producer;
             presenter.TexturePropertyName = string.IsNullOrEmpty(m_texturePropertyName)
                 ? DefaultTexturePropertyName

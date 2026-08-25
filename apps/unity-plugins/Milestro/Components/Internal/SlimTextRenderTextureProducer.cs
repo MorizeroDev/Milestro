@@ -24,8 +24,10 @@ namespace Milestro.Components.Internal
         [SerializeField] private SlimTextHorizontalAlign m_horizontalAlign = SlimTextHorizontalAlign.Left;
         [SerializeField] private SlimTextVerticalAlign m_verticalAlign = SlimTextVerticalAlign.Top;
         [SerializeField] private bool m_fallbackToSystemFont = true;
+        [SerializeField, HideInInspector] private bool m_screenSpaceRasterization = true;
 
         [NonSerialized] private RectTransform? rectTransformCache;
+        [NonSerialized] private readonly Vector3[] worldCorners = new Vector3[4];
         [NonSerialized] private SlimTextRenderTarget? renderTarget;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
 #if UNITY_EDITOR
@@ -40,6 +42,21 @@ namespace Milestro.Components.Internal
         public override int OutputHeight => renderTarget?.OutputHeight ?? 0;
         public override bool HasOutput => renderTarget?.HasOutput ?? false;
         public override long OutputVersion => renderTarget?.OutputVersion ?? 0;
+
+        internal bool screenSpaceRasterization
+        {
+            get => m_screenSpaceRasterization;
+            set
+            {
+                if (m_screenSpaceRasterization == value)
+                {
+                    return;
+                }
+
+                m_screenSpaceRasterization = value;
+                MarkPaintChanged();
+            }
+        }
 
         public string text
         {
@@ -191,6 +208,10 @@ namespace Milestro.Components.Internal
         protected virtual void OnEnable()
         {
             rectTransformCache = GetComponent<RectTransform>();
+            if (GetComponent<Milestro.Components.WorldSpaceSlimText>() != null)
+            {
+                m_screenSpaceRasterization = false;
+            }
             RebuildResources();
         }
 
@@ -277,7 +298,14 @@ namespace Milestro.Components.Internal
             NormalizeSerializedValues();
             var target = RenderTarget;
             target.EnsureNoAllocCapacity(capacity);
-            var rebuilt = target.Rebuild(CurrentSize(), SurfaceColorSpace(), CurrentSettings());
+            var size = CurrentSize();
+            ResolveRasterization(out var useScreenSpaceRasterization, out var desiredRasterScale);
+            var rebuilt = target.Rebuild(size,
+                SurfaceColorSpace(),
+                CurrentSettings(),
+                useScreenSpaceRasterization,
+                desiredRasterScale,
+                this);
             if (!rebuilt)
             {
 #if UNITY_EDITOR
@@ -289,9 +317,14 @@ namespace Milestro.Components.Internal
         public void SetTextUtf8NoAlloc(byte[] buffer, int offset, int length)
         {
             NormalizeSerializedValues();
-            var rebuilt = RenderTarget.SetTextUtf8NoAlloc(CurrentSize(),
+            var size = CurrentSize();
+            ResolveRasterization(out var useScreenSpaceRasterization, out var desiredRasterScale);
+            var rebuilt = RenderTarget.SetTextUtf8NoAlloc(size,
                 SurfaceColorSpace(),
                 CurrentSettings(),
+                useScreenSpaceRasterization,
+                desiredRasterScale,
+                this,
                 buffer,
                 offset,
                 length);
@@ -330,9 +363,14 @@ namespace Milestro.Components.Internal
         private void RebuildResources()
         {
             NormalizeSerializedValues();
-            var rebuilt = RenderTarget.Rebuild(CurrentSize(),
+            var size = CurrentSize();
+            ResolveRasterization(out var useScreenSpaceRasterization, out var desiredRasterScale);
+            var rebuilt = RenderTarget.Rebuild(size,
                 SurfaceColorSpace(),
-                CurrentSettings());
+                CurrentSettings(),
+                useScreenSpaceRasterization,
+                desiredRasterScale,
+                this);
             if (!rebuilt)
             {
 #if UNITY_EDITOR
@@ -352,6 +390,26 @@ namespace Milestro.Components.Internal
             var rect = rectTransform.rect;
             return new Vector2Int(Mathf.Max(1, Mathf.CeilToInt(rect.width)),
                 Mathf.Max(1, Mathf.CeilToInt(rect.height)));
+        }
+
+        private void ResolveRasterization(out bool useScreenSpaceRasterization, out float desiredRasterScale)
+        {
+            useScreenSpaceRasterization = m_screenSpaceRasterization;
+            desiredRasterScale = 1f;
+            if (!useScreenSpaceRasterization)
+            {
+                return;
+            }
+
+            var rectTransform = RectTransformComponent();
+            if (rectTransform == null ||
+                !ScreenSpaceRasterMetrics.TryMeasure(rectTransform, worldCorners, out var measurement))
+            {
+                desiredRasterScale = 0f;
+                return;
+            }
+
+            desiredRasterScale = measurement.DesiredScale;
         }
 
         private ColorSpace SurfaceColorSpace()

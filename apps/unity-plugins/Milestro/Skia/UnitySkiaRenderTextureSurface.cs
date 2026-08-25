@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+using System.Runtime.ExceptionServices;
+using System.Threading;
 using Milestro.Binding;
+using Milestro.Configuration;
 using UnityEngine;
 using UnityEngine.Rendering;
 #if UNITY_EDITOR
@@ -29,6 +33,8 @@ namespace Milestro.Skia
         [StructLayout(LayoutKind.Sequential)]
         internal struct RenderTargetPayload
         {
+            public uint AbiVersion;
+            public uint StructSize;
             public int GraphicsBackend;
             public int HandleKind;
             public IntPtr ColorRenderBufferHandle;
@@ -41,6 +47,8 @@ namespace Milestro.Skia
             public int MsaaSamples;
             public int ResolveStrategy;
             public int PreferredFormat;
+            public float EffectiveScale;
+            public ulong DeviceEpoch;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -64,10 +72,43 @@ namespace Milestro.Skia
         [StructLayout(LayoutKind.Sequential)]
         private struct RenderSubmissionPayload
         {
+            public uint AbiVersion;
+            public uint StructSize;
             public RenderTargetPayload Target;
             public IntPtr Commands;
             public int CommandCount;
             public int Completed;
+        }
+
+        internal readonly struct RenderPayloadAbiInfo
+        {
+            internal RenderPayloadAbiInfo(uint abiVersion,
+                ulong layoutFingerprint,
+                uint targetSize,
+                uint submissionSize,
+                uint targetEffectiveScaleOffset,
+                uint targetDeviceEpochOffset,
+                uint submissionTargetOffset,
+                uint submissionCompletedOffset)
+            {
+                AbiVersion = abiVersion;
+                LayoutFingerprint = layoutFingerprint;
+                TargetSize = targetSize;
+                SubmissionSize = submissionSize;
+                TargetEffectiveScaleOffset = targetEffectiveScaleOffset;
+                TargetDeviceEpochOffset = targetDeviceEpochOffset;
+                SubmissionTargetOffset = submissionTargetOffset;
+                SubmissionCompletedOffset = submissionCompletedOffset;
+            }
+
+            internal uint AbiVersion { get; }
+            internal ulong LayoutFingerprint { get; }
+            internal uint TargetSize { get; }
+            internal uint SubmissionSize { get; }
+            internal uint TargetEffectiveScaleOffset { get; }
+            internal uint TargetDeviceEpochOffset { get; }
+            internal uint SubmissionTargetOffset { get; }
+            internal uint SubmissionCompletedOffset { get; }
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -125,6 +166,63 @@ namespace Milestro.Skia
             public readonly UnitySkiaRenderCommandList.ResourceOwnership Ownership;
         }
 
+        private sealed class UnityTextureTarget
+        {
+            private int released;
+
+            internal UnityTextureTarget(UnitySkiaRenderTextureDescriptor descriptor,
+                Texture texture,
+                RenderTexture? renderTexture,
+                IntPtr d3d12ExternalTexture,
+                RenderTextureHandleKind handleKind,
+                IntPtr colorRenderBufferHandle,
+                IntPtr nativeTextureHandle,
+                float effectiveScale,
+                ulong deviceEpoch)
+            {
+                Descriptor = descriptor;
+                Texture = texture;
+                RenderTexture = renderTexture;
+                D3D12ExternalTexture = d3d12ExternalTexture;
+                HandleKind = handleKind;
+                ColorRenderBufferHandle = colorRenderBufferHandle;
+                NativeTextureHandle = nativeTextureHandle;
+                EffectiveScale = effectiveScale;
+                DeviceEpoch = deviceEpoch;
+            }
+
+            internal UnitySkiaRenderTextureDescriptor Descriptor { get; }
+            internal Texture Texture { get; }
+            internal RenderTexture? RenderTexture { get; }
+            internal IntPtr D3D12ExternalTexture { get; }
+            internal RenderTextureHandleKind HandleKind { get; }
+            internal IntPtr ColorRenderBufferHandle { get; }
+            internal IntPtr NativeTextureHandle { get; }
+            internal float EffectiveScale { get; set; }
+            internal ulong DeviceEpoch { get; }
+
+            internal bool IsUsable => Texture != null &&
+                                      (RenderTexture == null || RenderTexture.IsCreated()) &&
+                                      (ColorRenderBufferHandle != IntPtr.Zero || NativeTextureHandle != IntPtr.Zero);
+
+            internal void Release()
+            {
+                if (Interlocked.Exchange(ref released, 1) != 0)
+                {
+                    return;
+                }
+
+                if (D3D12ExternalTexture != IntPtr.Zero)
+                {
+                    ReleaseD3D12Texture(Texture, D3D12ExternalTexture);
+                }
+                else if (RenderTexture != null)
+                {
+                    ReleaseRenderTexture(RenderTexture);
+                }
+            }
+        }
+
         private sealed unsafe class SlimTextRenderSlot : IDisposable
         {
             private readonly CommandBuffer commandBuffer;
@@ -180,6 +278,8 @@ namespace Milestro.Skia
                 command->VisualOffsetY = 0f;
 
                 var submission = (RenderSubmissionPayload*)SubmissionPtr;
+                submission->AbiVersion = RenderPayloadAbiVersion;
+                submission->StructSize = RenderSubmissionPayloadSize;
                 submission->Target = target;
                 submission->Commands = drawText ? CommandsPtr : IntPtr.Zero;
                 submission->CommandCount = drawText ? 1 : 0;
@@ -425,6 +525,7 @@ namespace Milestro.Skia
         }
 
         private const int RenderDrainMagic = 0x4D524451; // MRDQ
+        private const uint RenderPayloadAbiVersion = 1;
         private static readonly object PendingLock = new object();
         private static readonly List<PendingRenderEvent> PendingEvents = new List<PendingRenderEvent>();
         private static readonly List<DeferredRelease> DeferredReleases = new List<DeferredRelease>();
@@ -432,43 +533,77 @@ namespace Milestro.Skia
             new Dictionary<int, PendingRenderDrain>();
         private static readonly int CompletedOffset =
             (int)Marshal.OffsetOf<RenderSubmissionPayload>(nameof(RenderSubmissionPayload.Completed));
+        private static readonly uint RenderTargetPayloadSize = checked((uint)Marshal.SizeOf<RenderTargetPayload>());
+        private static readonly uint RenderSubmissionPayloadSize =
+            checked((uint)Marshal.SizeOf<RenderSubmissionPayload>());
         private static readonly int DrainCompletedOffset =
             (int)Marshal.OffsetOf<RenderDrainPayload>(nameof(RenderDrainPayload.Completed));
+        private static readonly RenderSurfaceBudgetLedger SharedBudgetLedger = new RenderSurfaceBudgetLedger();
+        private static readonly RenderSurfaceConfiguration LegacyUnboundedConfiguration =
+            new RenderSurfaceConfiguration
+            {
+                MaxScreenSpaceRasterScale = 1f,
+                MinimumFallbackScale = 1f,
+                ScaleQuantum = 1f,
+                ScaleHysteresis = 0f,
+                ConservativeMaxTextureEdge = int.MaxValue,
+                MaxPixelsPerSurface = long.MaxValue,
+                MaxBytesPerSurface = long.MaxValue,
+                MaxGlobalBytes = long.MaxValue,
+                MaxTransitionBytes = long.MaxValue,
+                MaxAttemptsPerRequestAndEpoch = 1
+            };
         private static long nextSerial;
         private static MilestroRenderEventLifetimePump lifetimePump;
 #if UNITY_EDITOR
         private static bool editorLifetimePumpRegistered;
 #endif
 
-        private UnitySkiaRenderTextureDescriptor descriptor;
+        private readonly RenderSurfaceReplacement<UnityTextureTarget> replacement;
+        private readonly RenderSurfaceCounters counters = new RenderSurfaceCounters();
+        private UnitySkiaRenderTextureDescriptor requestedDescriptor;
+        private RenderSurfaceConfiguration requestedConfiguration = LegacyUnboundedConfiguration;
+        private float requestedEffectiveScale = 1f;
         private IntPtr renderEventFunc;
         private int renderEventId;
-        private IntPtr d3d12ExternalTexture;
+        private ulong deviceEpoch;
 #if MILESTRO_RENDER_DEBUG_LOG
         private bool warnedMissingNativeTarget;
 #endif
         private bool disposed;
 
         internal event Action<RenderSubmissionStatus>? RenderEventCompleted;
+        internal static RenderSurfaceBudgetLedger BudgetLedger => SharedBudgetLedger;
+        internal static RenderPayloadAbiInfo ManagedPayloadAbiInfo => CreateManagedPayloadAbiInfo();
+        internal RenderSurfaceCounterSnapshot CounterSnapshot => counters.Snapshot();
+        internal RenderSurfaceDiagnosticsSnapshot DiagnosticsSnapshot => new RenderSurfaceDiagnosticsSnapshot(
+            ReadNativeDiagnostics(),
+            counters.Snapshot(),
+            SharedBudgetLedger.Snapshot(),
+            requestedEffectiveScale,
+            EffectiveRasterScale,
+            deviceEpoch);
+        internal ulong DeviceEpoch => deviceEpoch;
+        internal float EffectiveRasterScale => replacement.CurrentTarget?.EffectiveScale ?? requestedEffectiveScale;
 
         public UnitySkiaGraphicsBackend Backend { get; }
-        public UnityEngine.ColorSpace ColorSpace => descriptor.ColorSpace;
-        public bool UseSrgbStorage => descriptor.UseSrgbStorage;
+        public UnityEngine.ColorSpace ColorSpace => requestedDescriptor.ColorSpace;
+        public bool UseSrgbStorage => requestedDescriptor.UseSrgbStorage;
 
         public Rect DisplayUvRect => DisplayUvRectForBackend(Backend);
 
         /// <summary>
-        /// Assigned by Resize before construction returns, and null after Dispose or while rebuilding the target.
+        /// Assigned by Resize before construction returns and null after Dispose. A failed resize keeps the prior target.
         /// </summary>
-        public Texture? Texture { get; private set; }
+        public Texture? Texture => replacement.CurrentTarget?.Texture;
 
         /// <summary>
         /// Null on Direct3D12, which uses an external Texture2D; non-null on Metal, Vulkan, OpenGL, and OpenGLES.
         /// </summary>
-        public RenderTexture? RenderTexture { get; private set; }
+        public RenderTexture? RenderTexture => replacement.CurrentTarget?.RenderTexture;
 
-        public int Width { get; private set; }
-        public int Height { get; private set; }
+        public int Width => replacement.CurrentTarget?.Descriptor.Width ?? requestedDescriptor.Width;
+        public int Height => replacement.CurrentTarget?.Descriptor.Height ?? requestedDescriptor.Height;
 
         public UnitySkiaRenderTextureSurface(UnitySkiaGraphicsBackend backend, int width, int height)
             : this(backend, new UnitySkiaRenderTextureDescriptor(width, height))
@@ -490,58 +625,200 @@ namespace Milestro.Skia
 
         public UnitySkiaRenderTextureSurface(UnitySkiaGraphicsBackend backend,
             UnitySkiaRenderTextureDescriptor descriptor)
+            : this(backend, descriptor, true)
+        {
+        }
+
+        private UnitySkiaRenderTextureSurface(UnitySkiaGraphicsBackend backend,
+            UnitySkiaRenderTextureDescriptor descriptor,
+            bool createImmediately)
         {
             Backend = backend;
             EnsureBackendSupported(backend);
-            this.descriptor = NormalizeDescriptor(descriptor);
+            ValidateNativePayloadAbi();
+            deviceEpoch = ReadDeviceEpoch();
+            replacement = new RenderSurfaceReplacement<UnityTextureTarget>(SharedBudgetLedger);
+            requestedDescriptor = NormalizeDescriptor(descriptor);
             renderEventFunc = BindingC.UnityRenderGetRenderEventAndDataFunc();
             ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderGetRenderTextureEventId((int)Backend, out renderEventId));
-            Resize(this.descriptor.Width, this.descriptor.Height);
+            if (createImmediately)
+            {
+                Resize(requestedDescriptor.Width, requestedDescriptor.Height);
+            }
+        }
+
+        internal static bool TryCreate(UnitySkiaGraphicsBackend backend,
+            RenderSurfaceCandidate candidate,
+            UnityEngine.ColorSpace colorSpace,
+            RenderSurfaceConfiguration configuration,
+            out UnitySkiaRenderTextureSurface? surface,
+            out RenderSurfaceFailureReason failureReason)
+        {
+            surface = null;
+            UnitySkiaRenderTextureSurface? candidateSurface = null;
+            try
+            {
+                candidateSurface = new UnitySkiaRenderTextureSurface(backend,
+                    new UnitySkiaRenderTextureDescriptor(candidate.RasterWidth,
+                        candidate.RasterHeight,
+                        colorSpace),
+                    false);
+                if (!candidateSurface.TryResize(candidate, colorSpace, configuration, out failureReason))
+                {
+                    candidateSurface.Dispose();
+                    return false;
+                }
+
+                surface = candidateSurface;
+                return true;
+            }
+            catch
+            {
+                candidateSurface?.Dispose();
+                failureReason = RenderSurfaceFailureReason.Allocation;
+                return false;
+            }
+        }
+
+        internal static ulong ReadCurrentDeviceEpoch()
+        {
+            return ReadDeviceEpoch();
+        }
+
+        internal static NativeRenderDiagnosticsSnapshot ReadNativeDiagnostics()
+        {
+            ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderGetDiagnosticsSnapshot(out var abiVersion,
+                out var structSize,
+                out var acceptedSubmissionCount,
+                out var rejectedSubmissionCount,
+                out var hasLastAcceptedSubmission,
+                out var lastAcceptedGraphicsBackend,
+                out var lastAcceptedRasterWidth,
+                out var lastAcceptedRasterHeight,
+                out var lastAcceptedEffectiveScale,
+                out var lastAcceptedDeviceEpoch,
+                out var currentDeviceEpoch));
+
+            var snapshot = new NativeRenderDiagnosticsSnapshot(abiVersion,
+                structSize,
+                acceptedSubmissionCount,
+                rejectedSubmissionCount,
+                hasLastAcceptedSubmission,
+                lastAcceptedGraphicsBackend,
+                lastAcceptedRasterWidth,
+                lastAcceptedRasterHeight,
+                lastAcceptedEffectiveScale,
+                lastAcceptedDeviceEpoch,
+                currentDeviceEpoch);
+            if (!snapshot.HasExpectedAbi)
+            {
+                throw new InvalidOperationException(
+                    "Milestro Unity render diagnostics ABI does not match the loaded native plugin.");
+            }
+            return snapshot;
         }
 
         public void Resize(int width, int height)
         {
             ThrowIfDisposed();
+            RefreshDeviceEpoch();
             CollectCompletedEvents();
 
-            descriptor = NormalizeDescriptor(new UnitySkiaRenderTextureDescriptor(width, height, descriptor.ColorSpace)
+            var nextDescriptor = NormalizeDescriptor(new UnitySkiaRenderTextureDescriptor(width,
+                height,
+                requestedDescriptor.ColorSpace)
             {
-                UseSrgbStorage = descriptor.UseSrgbStorage,
-                ClearBeforeDraw = descriptor.ClearBeforeDraw,
-                MsaaSamples = descriptor.MsaaSamples,
-                ResolveStrategy = descriptor.ResolveStrategy,
-                PreferredFormat = descriptor.PreferredFormat
+                UseSrgbStorage = requestedDescriptor.UseSrgbStorage,
+                ClearBeforeDraw = requestedDescriptor.ClearBeforeDraw,
+                MsaaSamples = requestedDescriptor.MsaaSamples,
+                ResolveStrategy = requestedDescriptor.ResolveStrategy,
+                PreferredFormat = requestedDescriptor.PreferredFormat
             });
+            requestedDescriptor = nextDescriptor;
 
-            if (HasUsableTexture() && Width == descriptor.Width && Height == descriptor.Height)
+            if (!TryComputeByteCount(nextDescriptor, out var byteCount))
+            {
+                throw new InvalidOperationException("Milestro RenderTexture dimensions overflow checked byte accounting.");
+            }
+
+            requestedConfiguration = LegacyUnboundedConfiguration;
+            requestedEffectiveScale = 1f;
+            if (TryReplaceTarget(nextDescriptor,
+                    byteCount,
+                    requestedEffectiveScale,
+                    requestedConfiguration,
+                    out var failureReason))
             {
                 return;
             }
 
-            RetireCurrentTexture();
-            Width = descriptor.Width;
-            Height = descriptor.Height;
-
-            if (Backend == UnitySkiaGraphicsBackend.Direct3D12)
+            if (replacement.CurrentTarget == null)
             {
-                CreateD3D12Texture();
-                return;
+                throw new InvalidOperationException("Milestro failed to create its initial RenderTexture target: " +
+                                                    failureReason + ".");
+            }
+        }
+
+        internal bool TryResize(RenderSurfaceCandidate candidate,
+            RenderSurfaceConfiguration configuration,
+            out RenderSurfaceFailureReason failureReason)
+        {
+            return TryResize(candidate,
+                requestedDescriptor.ColorSpace,
+                configuration,
+                out failureReason);
+        }
+
+        internal bool TryResize(RenderSurfaceCandidate candidate,
+            UnityEngine.ColorSpace colorSpace,
+            RenderSurfaceConfiguration configuration,
+            out RenderSurfaceFailureReason failureReason)
+        {
+            ThrowIfDisposed();
+            RefreshDeviceEpoch();
+            CollectCompletedEvents();
+
+            if (candidate.RasterWidth <= 0 ||
+                candidate.RasterHeight <= 0 ||
+                float.IsNaN(candidate.EffectiveScale) ||
+                float.IsInfinity(candidate.EffectiveScale) ||
+                candidate.EffectiveScale <= 0f)
+            {
+                failureReason = RenderSurfaceFailureReason.InvalidRequest;
+                return false;
             }
 
-            var renderTextureDescriptor = new RenderTextureDescriptor(Width, Height, RenderTextureFormat.ARGB32, 0)
+            if (configuration == null)
             {
-                msaaSamples = 1,
-                useMipMap = false,
-                autoGenerateMips = false,
-                sRGB = descriptor.UseSrgbStorage
-            };
-            RenderTexture = new RenderTexture(renderTextureDescriptor)
+                failureReason = RenderSurfaceFailureReason.InvalidConfiguration;
+                return false;
+            }
+
+            var nextDescriptor = NormalizeDescriptor(new UnitySkiaRenderTextureDescriptor(candidate.RasterWidth,
+                candidate.RasterHeight,
+                colorSpace)
             {
-                name = "Milestro " + Backend + " RenderTexture PoC"
-            };
-            ConfigureDisplayTexture(RenderTexture);
-            RenderTexture.Create();
-            Texture = RenderTexture;
+                UseSrgbStorage = requestedDescriptor.UseSrgbStorage,
+                ClearBeforeDraw = requestedDescriptor.ClearBeforeDraw,
+                MsaaSamples = requestedDescriptor.MsaaSamples,
+                ResolveStrategy = requestedDescriptor.ResolveStrategy,
+                PreferredFormat = requestedDescriptor.PreferredFormat
+            });
+            if (!TryComputeByteCount(nextDescriptor, out var checkedByteCount) ||
+                checkedByteCount != candidate.ByteCount)
+            {
+                failureReason = RenderSurfaceFailureReason.InvalidRequest;
+                return false;
+            }
+
+            requestedDescriptor = nextDescriptor;
+            requestedConfiguration = CopyConfiguration(configuration);
+            requestedEffectiveScale = candidate.EffectiveScale;
+            return TryReplaceTarget(nextDescriptor,
+                checkedByteCount,
+                requestedEffectiveScale,
+                requestedConfiguration,
+                out failureReason);
         }
 
         /// <summary>
@@ -565,6 +842,7 @@ namespace Milestro.Skia
         public bool TrySubmit(UnitySkiaRenderCommandList commands, bool? clearBeforeDraw = null)
         {
             ThrowIfDisposed();
+            RefreshDeviceEpoch();
             CollectCompletedEvents();
 
             if (commands == null)
@@ -577,12 +855,18 @@ namespace Milestro.Skia
                 throw new InvalidOperationException("Milestro Unity render event callback is unavailable.");
             }
 
-            if (!HasUsableTexture())
+            if (!TryGetUsableTarget(out var textureTarget))
             {
-                Resize(Width, Height);
+                if (!TryRestoreRequestedTarget() || !TryGetUsableTarget(out textureTarget))
+                {
+                    return false;
+                }
             }
 
-            if (!TryGetNativeTargetHandles(out var handleKind, out var colorRenderBufferHandle, out var nativeTextureHandle))
+            if (!TryGetNativeTargetHandles(textureTarget,
+                    out var handleKind,
+                    out var colorRenderBufferHandle,
+                    out var nativeTextureHandle))
             {
                 return false;
             }
@@ -590,21 +874,11 @@ namespace Milestro.Skia
             warnedMissingNativeTarget = false;
 #endif
 
-            var target = new RenderTargetPayload
-            {
-                GraphicsBackend = (int)Backend,
-                HandleKind = (int)handleKind,
-                ColorRenderBufferHandle = colorRenderBufferHandle,
-                NativeTextureHandle = nativeTextureHandle,
-                Width = Width,
-                Height = Height,
-                ColorSpace = (int)descriptor.ColorSpace,
-                StorageSrgb = descriptor.UseSrgbStorage ? 1 : 0,
-                ClearBeforeDraw = (clearBeforeDraw ?? descriptor.ClearBeforeDraw) ? 1 : 0,
-                MsaaSamples = descriptor.MsaaSamples,
-                ResolveStrategy = (int)descriptor.ResolveStrategy,
-                PreferredFormat = (int)descriptor.PreferredFormat
-            };
+            var target = CreateRenderTargetPayload(textureTarget,
+                handleKind,
+                colorRenderBufferHandle,
+                nativeTextureHandle,
+                clearBeforeDraw);
 
             var submissionPtr = IntPtr.Zero;
             var commandsPtr = IntPtr.Zero;
@@ -618,6 +892,8 @@ namespace Milestro.Skia
                 commandsPtr = MarshalCommands(commands, out resources, out ownedResources, out nativeOwnedResources);
                 var submission = new RenderSubmissionPayload
                 {
+                    AbiVersion = RenderPayloadAbiVersion,
+                    StructSize = RenderSubmissionPayloadSize,
                     Target = target,
                     Commands = commandsPtr,
                     CommandCount = commands.Count,
@@ -627,11 +903,11 @@ namespace Milestro.Skia
                 submissionPtr = Marshal.AllocHGlobal(Marshal.SizeOf<RenderSubmissionPayload>());
                 Marshal.StructureToPtr(submission, submissionPtr, false);
 
-                // HasUsableTexture and TryGetNativeTargetHandles above guarantee a live target texture here.
+                // The target snapshot and checked handles above guarantee a live texture for this event.
                 pendingEvent = AddPendingEvent((int)Backend,
                     submissionPtr,
                     commandsPtr,
-                    Texture!,
+                    textureTarget.Texture,
                     resources,
                     ownedResources,
                     this);
@@ -665,6 +941,7 @@ namespace Milestro.Skia
             bool? clearBeforeDraw = null)
         {
             ThrowIfDisposed();
+            RefreshDeviceEpoch();
             CollectCompletedEvents();
 
             if (submission == null)
@@ -677,12 +954,18 @@ namespace Milestro.Skia
                 throw new InvalidOperationException("Milestro Unity render event callback is unavailable.");
             }
 
-            if (!HasUsableTexture())
+            if (!TryGetUsableTarget(out var textureTarget))
             {
-                Resize(Width, Height);
+                if (!TryRestoreRequestedTarget() || !TryGetUsableTarget(out textureTarget))
+                {
+                    return false;
+                }
             }
 
-            if (!TryGetNativeTargetHandles(out var handleKind, out var colorRenderBufferHandle, out var nativeTextureHandle))
+            if (!TryGetNativeTargetHandles(textureTarget,
+                    out var handleKind,
+                    out var colorRenderBufferHandle,
+                    out var nativeTextureHandle))
             {
                 return false;
             }
@@ -690,28 +973,18 @@ namespace Milestro.Skia
             warnedMissingNativeTarget = false;
 #endif
 
-            var target = new RenderTargetPayload
-            {
-                GraphicsBackend = (int)Backend,
-                HandleKind = (int)handleKind,
-                ColorRenderBufferHandle = colorRenderBufferHandle,
-                NativeTextureHandle = nativeTextureHandle,
-                Width = Width,
-                Height = Height,
-                ColorSpace = (int)descriptor.ColorSpace,
-                StorageSrgb = descriptor.UseSrgbStorage ? 1 : 0,
-                ClearBeforeDraw = (clearBeforeDraw ?? descriptor.ClearBeforeDraw) ? 1 : 0,
-                MsaaSamples = descriptor.MsaaSamples,
-                ResolveStrategy = (int)descriptor.ResolveStrategy,
-                PreferredFormat = (int)descriptor.PreferredFormat
-            };
+            var target = CreateRenderTargetPayload(textureTarget,
+                handleKind,
+                colorRenderBufferHandle,
+                nativeTextureHandle,
+                clearBeforeDraw);
 
             var queued = submission.TryPrepareAndSubmit(target,
                 baseline,
                 drawText,
                 renderEventFunc,
                 renderEventId,
-                Texture!,
+                textureTarget.Texture,
                 this);
             return queued;
         }
@@ -724,7 +997,7 @@ namespace Milestro.Skia
             }
 
             disposed = true;
-            RetireCurrentTexture();
+            replacement.Clear(RetireTarget);
             CollectCompletedEvents();
         }
 
@@ -954,14 +1227,46 @@ namespace Milestro.Skia
             return descriptor;
         }
 
+        private static RenderSurfaceConfiguration CopyConfiguration(RenderSurfaceConfiguration configuration)
+        {
+            return new RenderSurfaceConfiguration
+            {
+                MaxScreenSpaceRasterScale = configuration.MaxScreenSpaceRasterScale,
+                MinimumFallbackScale = configuration.MinimumFallbackScale,
+                ScaleQuantum = configuration.ScaleQuantum,
+                ScaleHysteresis = configuration.ScaleHysteresis,
+                ConservativeMaxTextureEdge = configuration.ConservativeMaxTextureEdge,
+                MaxPixelsPerSurface = configuration.MaxPixelsPerSurface,
+                MaxBytesPerSurface = configuration.MaxBytesPerSurface,
+                MaxGlobalBytes = configuration.MaxGlobalBytes,
+                MaxTransitionBytes = configuration.MaxTransitionBytes,
+                MaxAttemptsPerRequestAndEpoch = configuration.MaxAttemptsPerRequestAndEpoch
+            };
+        }
+
         private static Rect DisplayUvRectForBackend(UnitySkiaGraphicsBackend backend)
         {
             return new Rect(0f, 1f, 1f, -1f);
         }
 
-        private bool HasUsableTexture()
+        private bool TryGetUsableTarget([NotNullWhen(true)] out UnityTextureTarget? target)
         {
-            return Texture != null && (RenderTexture == null || RenderTexture.IsCreated());
+            target = replacement.CurrentTarget;
+            return target != null && target.IsUsable && target.DeviceEpoch == deviceEpoch;
+        }
+
+        private bool TryRestoreRequestedTarget()
+        {
+            if (!TryComputeByteCount(requestedDescriptor, out var byteCount))
+            {
+                return false;
+            }
+
+            return TryReplaceTarget(requestedDescriptor,
+                byteCount,
+                requestedEffectiveScale,
+                requestedConfiguration,
+                out _);
         }
 
         private static void ConfigureDisplayTexture(Texture texture)
@@ -974,48 +1279,177 @@ namespace Milestro.Skia
             texture.wrapMode = TextureWrapMode.Clamp;
         }
 
-        private bool TryGetNativeTargetHandles(out RenderTextureHandleKind handleKind,
+        private bool TryGetNativeTargetHandles(UnityTextureTarget target,
+            out RenderTextureHandleKind handleKind,
             out IntPtr colorRenderBufferHandle,
             out IntPtr nativeTextureHandle)
         {
-            handleKind = HandleKindForBackend(Backend);
-            colorRenderBufferHandle = IntPtr.Zero;
-            nativeTextureHandle = IntPtr.Zero;
-
-            if (handleKind == RenderTextureHandleKind.RenderBuffer)
-            {
-                if (RenderTexture != null)
-                {
-                    colorRenderBufferHandle = RenderTexture.colorBuffer.GetNativeRenderBufferPtr();
-                    if (colorRenderBufferHandle != IntPtr.Zero)
-                    {
-                        return true;
-                    }
-                }
-
-                WarnMissingNativeTarget();
-                return false;
-            }
-
-            if (Backend == UnitySkiaGraphicsBackend.Direct3D12 && d3d12ExternalTexture != IntPtr.Zero)
-            {
-                nativeTextureHandle = d3d12ExternalTexture;
-            }
-            else if (Texture != null)
-            {
-                nativeTextureHandle = Texture.GetNativeTexturePtr();
-            }
-            else
-            {
-                nativeTextureHandle = IntPtr.Zero;
-            }
-            if (nativeTextureHandle != IntPtr.Zero)
+            handleKind = target.HandleKind;
+            colorRenderBufferHandle = target.ColorRenderBufferHandle;
+            nativeTextureHandle = target.NativeTextureHandle;
+            if (target.IsUsable)
             {
                 return true;
             }
 
             WarnMissingNativeTarget();
             return false;
+        }
+
+        private RenderTargetPayload CreateRenderTargetPayload(UnityTextureTarget textureTarget,
+            RenderTextureHandleKind handleKind,
+            IntPtr colorRenderBufferHandle,
+            IntPtr nativeTextureHandle,
+            bool? clearBeforeDraw)
+        {
+            return new RenderTargetPayload
+            {
+                AbiVersion = RenderPayloadAbiVersion,
+                StructSize = RenderTargetPayloadSize,
+                GraphicsBackend = (int)Backend,
+                HandleKind = (int)handleKind,
+                ColorRenderBufferHandle = colorRenderBufferHandle,
+                NativeTextureHandle = nativeTextureHandle,
+                Width = textureTarget.Descriptor.Width,
+                Height = textureTarget.Descriptor.Height,
+                ColorSpace = (int)textureTarget.Descriptor.ColorSpace,
+                StorageSrgb = textureTarget.Descriptor.UseSrgbStorage ? 1 : 0,
+                ClearBeforeDraw = (clearBeforeDraw ?? textureTarget.Descriptor.ClearBeforeDraw) ? 1 : 0,
+                MsaaSamples = textureTarget.Descriptor.MsaaSamples,
+                ResolveStrategy = (int)textureTarget.Descriptor.ResolveStrategy,
+                PreferredFormat = (int)textureTarget.Descriptor.PreferredFormat,
+                EffectiveScale = textureTarget.EffectiveScale,
+                DeviceEpoch = textureTarget.DeviceEpoch
+            };
+        }
+
+        private static void ValidateNativePayloadAbi()
+        {
+            ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderGetPayloadAbiInfo(out var abiVersion,
+                out var layoutFingerprint,
+                out var targetSize,
+                out var submissionSize,
+                out var targetEffectiveScaleOffset,
+                out var targetDeviceEpochOffset,
+                out var submissionTargetOffset,
+                out var submissionCompletedOffset));
+
+            var nativeAbi = new RenderPayloadAbiInfo(abiVersion,
+                layoutFingerprint,
+                targetSize,
+                submissionSize,
+                targetEffectiveScaleOffset,
+                targetDeviceEpochOffset,
+                submissionTargetOffset,
+                submissionCompletedOffset);
+            if (!PayloadAbiMatches(nativeAbi))
+            {
+                throw new InvalidOperationException(
+                    "Milestro Unity render payload ABI does not match the loaded native plugin.");
+            }
+        }
+
+        internal static bool PayloadAbiMatches(RenderPayloadAbiInfo nativeAbi)
+        {
+            var managedAbi = CreateManagedPayloadAbiInfo();
+            return nativeAbi.AbiVersion == managedAbi.AbiVersion &&
+                   nativeAbi.LayoutFingerprint == managedAbi.LayoutFingerprint &&
+                   nativeAbi.TargetSize == managedAbi.TargetSize &&
+                   nativeAbi.SubmissionSize == managedAbi.SubmissionSize &&
+                   nativeAbi.TargetEffectiveScaleOffset == managedAbi.TargetEffectiveScaleOffset &&
+                   nativeAbi.TargetDeviceEpochOffset == managedAbi.TargetDeviceEpochOffset &&
+                   nativeAbi.SubmissionTargetOffset == managedAbi.SubmissionTargetOffset &&
+                   nativeAbi.SubmissionCompletedOffset == managedAbi.SubmissionCompletedOffset;
+        }
+
+        private static RenderPayloadAbiInfo CreateManagedPayloadAbiInfo()
+        {
+            var targetEffectiveScaleOffset = LayoutOffset<RenderTargetPayload>(
+                nameof(RenderTargetPayload.EffectiveScale));
+            var targetDeviceEpochOffset = LayoutOffset<RenderTargetPayload>(nameof(RenderTargetPayload.DeviceEpoch));
+            var submissionTargetOffset = LayoutOffset<RenderSubmissionPayload>(nameof(RenderSubmissionPayload.Target));
+            var submissionCompletedOffset = LayoutOffset<RenderSubmissionPayload>(
+                nameof(RenderSubmissionPayload.Completed));
+            return new RenderPayloadAbiInfo(RenderPayloadAbiVersion,
+                ComputeManagedPayloadLayoutFingerprint(),
+                RenderTargetPayloadSize,
+                RenderSubmissionPayloadSize,
+                targetEffectiveScaleOffset,
+                targetDeviceEpochOffset,
+                submissionTargetOffset,
+                submissionCompletedOffset);
+        }
+
+        private static ulong ComputeManagedPayloadLayoutFingerprint()
+        {
+            const ulong offsetBasis = 14695981039346656037UL;
+            var hash = offsetBasis;
+            hash = MixLayoutValue(hash, RenderTargetPayloadSize);
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.AbiVersion));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.StructSize));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.GraphicsBackend));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.HandleKind));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.ColorRenderBufferHandle));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.NativeTextureHandle));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.Width));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.Height));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.ColorSpace));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.StorageSrgb));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.ClearBeforeDraw));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.MsaaSamples));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.ResolveStrategy));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.PreferredFormat));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.EffectiveScale));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.DeviceEpoch));
+            hash = MixLayoutValue(hash, RenderSubmissionPayloadSize);
+            hash = MixLayoutMember<RenderSubmissionPayload>(hash, nameof(RenderSubmissionPayload.AbiVersion));
+            hash = MixLayoutMember<RenderSubmissionPayload>(hash, nameof(RenderSubmissionPayload.StructSize));
+            hash = MixLayoutMember<RenderSubmissionPayload>(hash, nameof(RenderSubmissionPayload.Target));
+            hash = MixLayoutMember<RenderSubmissionPayload>(hash, nameof(RenderSubmissionPayload.Commands));
+            hash = MixLayoutMember<RenderSubmissionPayload>(hash, nameof(RenderSubmissionPayload.CommandCount));
+            hash = MixLayoutMember<RenderSubmissionPayload>(hash, nameof(RenderSubmissionPayload.Completed));
+            return hash;
+        }
+
+        private static ulong MixLayoutMember<T>(ulong hash, string memberName) where T : struct
+        {
+            return MixLayoutValue(hash, LayoutOffset<T>(memberName));
+        }
+
+        private static ulong MixLayoutValue(ulong hash, ulong value)
+        {
+            unchecked
+            {
+                return (hash ^ value) * 1099511628211UL;
+            }
+        }
+
+        private static uint LayoutOffset<T>(string memberName) where T : struct
+        {
+            return checked((uint)Marshal.OffsetOf<T>(memberName).ToInt64());
+        }
+
+        private static ulong ReadDeviceEpoch()
+        {
+            ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderGetDeviceEpoch(out var epoch));
+            if (epoch == 0)
+            {
+                throw new InvalidOperationException("Milestro Unity render device epoch must be nonzero.");
+            }
+
+            return epoch;
+        }
+
+        private void RefreshDeviceEpoch()
+        {
+            var nextEpoch = ReadDeviceEpoch();
+            if (nextEpoch == deviceEpoch)
+            {
+                return;
+            }
+
+            deviceEpoch = nextEpoch;
+            AbandonPendingLifetimeWorkForDeviceEpochChange();
         }
 
         private void WarnMissingNativeTarget()
@@ -1032,44 +1466,203 @@ namespace Milestro.Skia
 #endif
         }
 
-        private void CreateD3D12Texture()
+        private bool TryReplaceTarget(UnitySkiaRenderTextureDescriptor nextDescriptor,
+            long byteCount,
+            float effectiveScale,
+            RenderSurfaceConfiguration configuration,
+            out RenderSurfaceFailureReason failureReason)
         {
-            d3d12ExternalTexture = CreateD3D12ExternalTextureHandle(Width,
-                Height,
-                descriptor.UseSrgbStorage ? 1 : 0,
-                (int)descriptor.PreferredFormat);
-            if (d3d12ExternalTexture == IntPtr.Zero)
+            if (float.IsNaN(effectiveScale) || float.IsInfinity(effectiveScale) || effectiveScale <= 0f)
             {
-                throw new InvalidOperationException("Milestro D3D12 external texture creation returned null.");
+                failureReason = RenderSurfaceFailureReason.InvalidRequest;
+                return false;
             }
 
+            var current = replacement.CurrentTarget;
+            if (current != null &&
+                current.IsUsable &&
+                current.DeviceEpoch == deviceEpoch &&
+                DescriptorsEqual(current.Descriptor, nextDescriptor))
+            {
+                current.EffectiveScale = effectiveScale;
+                failureReason = RenderSurfaceFailureReason.None;
+                return true;
+            }
+
+            var replaced = replacement.TryReplace(byteCount,
+                configuration,
+                () =>
+                {
+                    counters.RecordAllocationAttempt();
+                    var allocation = AllocateTarget(nextDescriptor, effectiveScale, deviceEpoch);
+                    if (allocation.Success)
+                    {
+                        counters.RecordAllocationSuccess();
+                    }
+                    else if (allocation.FailureReason == RenderSurfaceFailureReason.TextureValidation ||
+                             allocation.FailureReason == RenderSurfaceFailureReason.NativeHandle)
+                    {
+                        counters.RecordValidationFailure();
+                    }
+                    else
+                    {
+                        counters.RecordAllocationFailure();
+                    }
+
+                    return allocation;
+                },
+                target => target.Release(),
+                RetireTarget,
+                out failureReason);
+            if (replaced)
+            {
+                counters.RecordAtomicSwap();
+            }
+
+            return replaced;
+        }
+
+        private RenderSurfaceAllocationResult<UnityTextureTarget> AllocateTarget(
+            UnitySkiaRenderTextureDescriptor nextDescriptor,
+            float effectiveScale,
+            ulong targetDeviceEpoch)
+        {
+            if (Backend == UnitySkiaGraphicsBackend.Direct3D12)
+            {
+                return AllocateD3D12Target(nextDescriptor, effectiveScale, targetDeviceEpoch);
+            }
+
+            RenderTexture? renderTexture = null;
             try
             {
-                Texture = Texture2D.CreateExternalTexture(Width,
-                    Height,
-                    TextureFormatForDescriptor(descriptor),
-                    false,
-                    !descriptor.UseSrgbStorage,
-                    d3d12ExternalTexture);
-                ConfigureDisplayTexture(Texture);
+                var unityDescriptor = new RenderTextureDescriptor(nextDescriptor.Width,
+                    nextDescriptor.Height,
+                    RenderTextureFormat.ARGB32,
+                    0)
+                {
+                    msaaSamples = 1,
+                    useMipMap = false,
+                    autoGenerateMips = false,
+                    sRGB = nextDescriptor.UseSrgbStorage
+                };
+                renderTexture = new RenderTexture(unityDescriptor)
+                {
+                    name = "Milestro " + Backend + " RenderTexture PoC"
+                };
+                ConfigureDisplayTexture(renderTexture);
+                if (!renderTexture.Create() || !renderTexture.IsCreated())
+                {
+                    return RenderSurfaceAllocationResult<UnityTextureTarget>.Failed(
+                        RenderSurfaceFailureReason.TextureCreation,
+                        new UnityTextureTarget(nextDescriptor,
+                            renderTexture,
+                            renderTexture,
+                            IntPtr.Zero,
+                            HandleKindForBackend(Backend),
+                            IntPtr.Zero,
+                            IntPtr.Zero,
+                            effectiveScale,
+                            targetDeviceEpoch));
+                }
+
+                var handleKind = HandleKindForBackend(Backend);
+                var colorRenderBufferHandle = IntPtr.Zero;
+                var nativeTextureHandle = IntPtr.Zero;
+                if (handleKind == RenderTextureHandleKind.RenderBuffer)
+                {
+                    colorRenderBufferHandle = renderTexture.colorBuffer.GetNativeRenderBufferPtr();
+                }
+                else
+                {
+                    nativeTextureHandle = renderTexture.GetNativeTexturePtr();
+                }
+
+                var target = new UnityTextureTarget(nextDescriptor,
+                    renderTexture,
+                    renderTexture,
+                    IntPtr.Zero,
+                    handleKind,
+                    colorRenderBufferHandle,
+                    nativeTextureHandle,
+                    effectiveScale,
+                    targetDeviceEpoch);
+                return target.IsUsable
+                    ? RenderSurfaceAllocationResult<UnityTextureTarget>.Succeeded(target)
+                    : RenderSurfaceAllocationResult<UnityTextureTarget>.Failed(
+                        RenderSurfaceFailureReason.NativeHandle,
+                        target);
             }
             catch
             {
-                var textureToRelease = d3d12ExternalTexture;
-                d3d12ExternalTexture = IntPtr.Zero;
-                DestroyD3D12ExternalTextureHandle(textureToRelease);
-                throw;
-            }
+                if (renderTexture != null)
+                {
+                    ReleaseRenderTexture(renderTexture);
+                }
 
-            if (Texture == null)
+                return RenderSurfaceAllocationResult<UnityTextureTarget>.Failed(
+                    RenderSurfaceFailureReason.Allocation);
+            }
+        }
+
+        private RenderSurfaceAllocationResult<UnityTextureTarget> AllocateD3D12Target(
+            UnitySkiaRenderTextureDescriptor nextDescriptor,
+            float effectiveScale,
+            ulong targetDeviceEpoch)
+        {
+            var nativeTexture = IntPtr.Zero;
+            Texture? texture = null;
+            try
             {
-                var textureToRelease = d3d12ExternalTexture;
-                d3d12ExternalTexture = IntPtr.Zero;
-                DestroyD3D12ExternalTextureHandle(textureToRelease);
-                throw new InvalidOperationException("Unity failed to create Milestro D3D12 external texture.");
-            }
+                nativeTexture = CreateD3D12ExternalTextureHandle(nextDescriptor.Width,
+                    nextDescriptor.Height,
+                    nextDescriptor.UseSrgbStorage ? 1 : 0,
+                    (int)nextDescriptor.PreferredFormat);
+                if (nativeTexture == IntPtr.Zero)
+                {
+                    return RenderSurfaceAllocationResult<UnityTextureTarget>.Failed(
+                        RenderSurfaceFailureReason.TextureCreation);
+                }
 
-            Texture.name = "Milestro " + Backend + " ExternalTexture PoC";
+                texture = Texture2D.CreateExternalTexture(nextDescriptor.Width,
+                    nextDescriptor.Height,
+                    TextureFormatForDescriptor(nextDescriptor),
+                    false,
+                    !nextDescriptor.UseSrgbStorage,
+                    nativeTexture);
+                if (texture == null)
+                {
+                    DestroyD3D12ExternalTextureHandle(nativeTexture);
+                    return RenderSurfaceAllocationResult<UnityTextureTarget>.Failed(
+                        RenderSurfaceFailureReason.TextureCreation);
+                }
+
+                texture.name = "Milestro " + Backend + " ExternalTexture PoC";
+                ConfigureDisplayTexture(texture);
+                var target = new UnityTextureTarget(nextDescriptor,
+                    texture,
+                    null,
+                    nativeTexture,
+                    RenderTextureHandleKind.NativeTexture,
+                    IntPtr.Zero,
+                    nativeTexture,
+                    effectiveScale,
+                    targetDeviceEpoch);
+                return target.IsUsable
+                    ? RenderSurfaceAllocationResult<UnityTextureTarget>.Succeeded(target)
+                    : RenderSurfaceAllocationResult<UnityTextureTarget>.Failed(
+                        RenderSurfaceFailureReason.NativeHandle,
+                        target);
+            }
+            catch
+            {
+                if (nativeTexture != IntPtr.Zero)
+                {
+                    ReleaseD3D12Texture(texture, nativeTexture);
+                }
+
+                return RenderSurfaceAllocationResult<UnityTextureTarget>.Failed(
+                    RenderSurfaceFailureReason.Allocation);
+            }
         }
 
         private static IntPtr CreateD3D12ExternalTextureHandle(int width, int height, int storageSrgb, int preferredFormat)
@@ -1157,23 +1750,57 @@ namespace Milestro.Skia
             }
         }
 
-        private void RetireCurrentTexture()
+        private bool TryComputeByteCount(UnitySkiaRenderTextureDescriptor textureDescriptor, out long byteCount)
         {
-            var texture = Texture;
-            var renderTexture = RenderTexture;
-            var d3d12Texture = d3d12ExternalTexture;
-            Texture = null;
-            RenderTexture = null;
-            d3d12ExternalTexture = IntPtr.Zero;
+            byteCount = 0;
+            var surfaceDescriptor = new RenderSurfaceDescriptor(Backend, textureDescriptor, 1);
+            if (!RenderSurfaceDescriptorAccounting.TryResolveBytesPerPixel(surfaceDescriptor,
+                    out var bytesPerPixel) ||
+                textureDescriptor.Width <= 0 ||
+                textureDescriptor.Height <= 0 ||
+                textureDescriptor.Width > long.MaxValue / textureDescriptor.Height)
+            {
+                return false;
+            }
 
-            if (d3d12Texture != IntPtr.Zero)
+            var pixels = (long)textureDescriptor.Width * textureDescriptor.Height;
+            if (pixels > long.MaxValue / bytesPerPixel)
             {
-                DeferReleaseAfterCurrentEvents(() => ReleaseD3D12Texture(texture, d3d12Texture));
+                return false;
             }
-            else if (renderTexture != null)
+
+            byteCount = pixels * bytesPerPixel;
+            return byteCount > 0;
+        }
+
+        private static bool DescriptorsEqual(UnitySkiaRenderTextureDescriptor left,
+            UnitySkiaRenderTextureDescriptor right)
+        {
+            return left.Width == right.Width &&
+                   left.Height == right.Height &&
+                   left.ColorSpace == right.ColorSpace &&
+                   left.UseSrgbStorage == right.UseSrgbStorage &&
+                   left.ClearBeforeDraw == right.ClearBeforeDraw &&
+                   left.MsaaSamples == right.MsaaSamples &&
+                   left.ResolveStrategy == right.ResolveStrategy &&
+                   left.PreferredFormat == right.PreferredFormat;
+        }
+
+        private void RetireTarget(UnityTextureTarget target,
+            RenderSurfaceBudgetLedger.RenderSurfaceBudgetLease lease)
+        {
+            counters.RecordRetirement();
+            DeferReleaseAfterCurrentEvents(() =>
             {
-                DeferReleaseAfterCurrentEvents(() => ReleaseRenderTexture(renderTexture));
-            }
+                try
+                {
+                    target.Release();
+                }
+                finally
+                {
+                    lease.Dispose();
+                }
+            });
         }
 
         private static PendingRenderEvent AddPendingEvent(int graphicsBackend,
@@ -1468,6 +2095,92 @@ namespace Milestro.Skia
             foreach (var release in releases)
             {
                 release();
+            }
+        }
+
+        private static void AbandonPendingLifetimeWorkForDeviceEpochChange()
+        {
+            PendingRenderEvent[] pendingEvents;
+            PendingRenderDrain[] pendingDrains;
+            Action[] deferredReleases;
+            lock (PendingLock)
+            {
+                pendingEvents = PendingEvents.ToArray();
+                PendingEvents.Clear();
+                pendingDrains = new PendingRenderDrain[PendingDrains.Count];
+                PendingDrains.Values.CopyTo(pendingDrains, 0);
+                PendingDrains.Clear();
+                deferredReleases = new Action[DeferredReleases.Count];
+                for (var i = 0; i < DeferredReleases.Count; ++i)
+                {
+                    deferredReleases[i] = DeferredReleases[i].Release;
+                }
+                DeferredReleases.Clear();
+            }
+
+            var notifications = new List<CompletedRenderEventNotification>(pendingEvents.Length);
+            foreach (var pendingEvent in pendingEvents)
+            {
+                var owner = pendingEvent.Owner;
+                pendingEvent.InUse = false;
+                if (!pendingEvent.Reusable)
+                {
+                    FreeSubmission(pendingEvent.SubmissionPtr, pendingEvent.CommandsPtr);
+                }
+
+                pendingEvent.KeepAlive();
+                pendingEvent.Texture = null;
+                pendingEvent.DisposeOwnedResources();
+                pendingEvent.Owner = null;
+                if (owner != null)
+                {
+                    notifications.Add(new CompletedRenderEventNotification(owner,
+                        RenderSubmissionStatus.Failed));
+                }
+            }
+
+            foreach (var pendingDrain in pendingDrains)
+            {
+                if (pendingDrain.DrainPtr != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(pendingDrain.DrainPtr);
+                }
+            }
+
+            Exception? firstException = null;
+            foreach (var release in deferredReleases)
+            {
+                try
+                {
+                    release();
+                }
+                catch (Exception exception)
+                {
+                    if (firstException == null)
+                    {
+                        firstException = exception;
+                    }
+                }
+            }
+
+            foreach (var notification in notifications)
+            {
+                try
+                {
+                    notification.Owner.NotifyRenderEventCompleted(notification.Status);
+                }
+                catch (Exception exception)
+                {
+                    if (firstException == null)
+                    {
+                        firstException = exception;
+                    }
+                }
+            }
+
+            if (firstException != null)
+            {
+                ExceptionDispatchInfo.Capture(firstException).Throw();
             }
         }
 

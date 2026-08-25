@@ -55,7 +55,11 @@ namespace Milestro.Components.Internal
         [SerializeField]
         private string m_locale = "zh-Hans";
 
+        [SerializeField, HideInInspector]
+        private bool m_screenSpaceRasterization = true;
+
         [NonSerialized] private RectTransform? rectTransformCache;
+        [NonSerialized] private readonly Vector3[] worldCorners = new Vector3[4];
         [NonSerialized] private ITextBoxRenderTarget? renderTarget;
         [NonSerialized] internal Func<ITextBoxRenderTarget>? renderTargetFactory;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
@@ -91,6 +95,21 @@ namespace Milestro.Components.Internal
         public float maxScrollY => renderTarget?.MaxScrollOffset.y ?? 0f;
 
         internal event Action? LayoutChanged;
+
+        internal bool screenSpaceRasterization
+        {
+            get => m_screenSpaceRasterization;
+            set
+            {
+                if (m_screenSpaceRasterization == value)
+                {
+                    return;
+                }
+
+                m_screenSpaceRasterization = value;
+                MarkPaintChanged();
+            }
+        }
 
 #if MILESTRO_FLOW_TEXTBOX_DEBUG
         internal bool flowDiagnosticsEnabled
@@ -357,6 +376,10 @@ namespace Milestro.Components.Internal
         protected virtual void OnEnable()
         {
             rectTransformCache = GetComponent<RectTransform>();
+            if (GetComponent<Milestro.Components.WorldSpaceTextBox>() != null)
+            {
+                m_screenSpaceRasterization = false;
+            }
             RebuildResources(forceText: true);
         }
 
@@ -432,7 +455,7 @@ namespace Milestro.Components.Internal
             var hadPreviousMeasurement = TryBuildLayoutMeasurement(settings, out var previousMeasurement);
             var currentSize = CurrentSize();
 
-            var rebuilt = RenderTarget.Rebuild(CurrentViewport(currentSize),
+            var rebuilt = RenderTarget.Rebuild(CurrentViewportWithRasterization(currentSize),
                 SurfaceColorSpace(),
                 settings,
                 forceText,
@@ -766,6 +789,21 @@ namespace Milestro.Components.Internal
                 visibleSizePixels,
                 m_horizontalScrollState,
                 visibleStartY);
+        }
+
+        internal TextBoxRenderViewport CurrentViewportWithRasterization(Vector2Int layoutSizePixels)
+        {
+            var viewport = CurrentViewport(layoutSizePixels);
+            if (!m_screenSpaceRasterization)
+            {
+                return viewport;
+            }
+
+            var rectTransform = RectTransformComponent();
+            return rectTransform != null &&
+                   ScreenSpaceRasterMetrics.TryMeasure(rectTransform, worldCorners, out var measurement)
+                ? viewport.WithScreenSpaceRasterization(measurement.DesiredScale)
+                : viewport.WithScreenSpaceRasterization(0f);
         }
 
         private void MarkPaintChanged()

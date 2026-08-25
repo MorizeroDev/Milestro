@@ -1,0 +1,101 @@
+using System;
+using System.IO;
+using UnityEditor;
+using UnityEditor.Build;
+using UnityEditor.Build.Reporting;
+using UnityEditor.Compilation;
+using UnityEngine;
+
+namespace Milestro.Tests.TextInputLifecycle.Integration.Editor
+{
+    public static class TextInputLifecycleIntegrationPlayerBuilder
+    {
+        public const string OutputPath = "Build/Task159Integration/TextInputLifecycleIntegration.app";
+
+        private static readonly Type[] RequiredRuntimeTypes =
+        {
+            typeof(TextInputLifecycleIntegrationBootstrap),
+            typeof(TextInputLifecycleIntegrationReceiver),
+            typeof(TextInputLifecycleIntegrationRuntimeListener),
+            typeof(TextInputLifecycleIntegrationScenarioRunner),
+            typeof(TextInputLifecycleIntegrationStrictProvider),
+            typeof(TextInputLifecycleIntegrationInputModule)
+        };
+
+        [MenuItem("Milestro/Task 159/Build macOS IL2CPP Lifecycle Integration Player")]
+        public static void BuildMacOsIl2Cpp()
+        {
+            TextInputLifecycleIntegrationFixtureBuilder.GenerateFromEnvironment();
+
+            var namedTarget = NamedBuildTarget.Standalone;
+            var previousBackend = PlayerSettings.GetScriptingBackend(namedTarget);
+            var previousStripping = PlayerSettings.GetManagedStrippingLevel(namedTarget);
+            var buildOptions = BuildOptions.Development;
+            ValidatePlayerAssemblyBoundary();
+
+            Directory.CreateDirectory(Path.GetDirectoryName(OutputPath)!);
+            BuildReport report;
+            try
+            {
+                PlayerSettings.SetScriptingBackend(namedTarget, ScriptingImplementation.IL2CPP);
+                PlayerSettings.SetManagedStrippingLevel(namedTarget, ManagedStrippingLevel.Medium);
+                report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+                {
+                    scenes = new[]
+                    {
+                        TextInputLifecycleIntegrationFixtureBuilder.BootstrapScenePath,
+                        TextInputLifecycleIntegrationFixtureBuilder.ScenePath
+                    },
+                    locationPathName = OutputPath,
+                    target = BuildTarget.StandaloneOSX,
+                    targetGroup = BuildTargetGroup.Standalone,
+                    options = buildOptions
+                });
+            }
+            finally
+            {
+                PlayerSettings.SetScriptingBackend(namedTarget, previousBackend);
+                PlayerSettings.SetManagedStrippingLevel(namedTarget, previousStripping);
+            }
+
+            Debug.Log($"Task 159 Integration player build result: {report.summary.result}");
+            if (report.summary.result != BuildResult.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Task 159 Integration player build failed: {report.summary.result}.");
+            }
+        }
+
+        private static void ValidatePlayerAssemblyBoundary()
+        {
+            var runtimeFound = false;
+            foreach (var assembly in CompilationPipeline.GetAssemblies(
+                         AssembliesType.PlayerWithoutTestAssemblies))
+            {
+                if (assembly.name == "Milestro.Tests.Support")
+                {
+                    runtimeFound = true;
+                }
+                if (assembly.name == "Milestro.Tests.EditorMode" ||
+                    assembly.name == "Milestro.Tests.PlayMode")
+                {
+                    throw new InvalidOperationException(
+                        $"Milestro test assembly leaked into the player: {assembly.name}");
+                }
+            }
+            if (!runtimeFound)
+            {
+                throw new InvalidOperationException(
+                    "Milestro test support is missing from player assemblies.");
+            }
+            foreach (var runtimeType in RequiredRuntimeTypes)
+            {
+                if (runtimeType.Assembly.GetName().Name != "Milestro.Tests.Support")
+                {
+                    throw new InvalidOperationException(
+                        $"Task 159 Integration runtime type has the wrong assembly: {runtimeType.FullName}");
+                }
+            }
+        }
+    }
+}

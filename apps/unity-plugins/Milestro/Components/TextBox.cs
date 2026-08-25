@@ -197,6 +197,7 @@ namespace Milestro.Components
         private void EnsureConfigured(bool forceText, bool forceApply)
         {
             var producer = ProducerComponent();
+            producer.screenSpaceRasterization = true;
             producer.RebuildOutput(forceText);
             ApplyProducerOutput(producer, forceApply);
         }

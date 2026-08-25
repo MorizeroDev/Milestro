@@ -11,7 +11,7 @@ namespace Milestro.Components.Internal
     {
         private static readonly Rect DefaultUvRect = new Rect(0f, 0f, 1f, 1f);
 
-        private UnityAutoRenderTextureSurface? surface;
+        private ManagedRenderTextureSurface? surface;
         private SkFont? font;
         private string resolvedFontFamily = "";
         private int resolvedFontWeight = FontWeight.Normal;
@@ -28,6 +28,7 @@ namespace Milestro.Components.Internal
         private UnitySkiaRenderTextureSurface.SlimTextNoAllocSubmission? retiredNoAllocSubmission;
         private UnitySkiaRenderTextureSurface.SlimTextNoAllocSubmission? noAllocSubmission;
         private long outputVersion;
+        private Vector2Int logicalSizePixels = Vector2Int.one;
 
         public Texture? OutputTexture => surface?.Texture;
         public Rect OutputUvRect => surface?.DisplayUvRect ?? DefaultUvRect;
@@ -89,6 +90,9 @@ namespace Milestro.Components.Internal
         public bool SetTextUtf8NoAlloc(Vector2Int sizePixels,
             ColorSpace colorSpace,
             SlimTextRenderTargetSettings settings,
+            bool useScreenSpaceRasterization,
+            float desiredRasterScale,
+            UnityEngine.Object? logContext,
             byte[] buffer,
             int offset,
             int length)
@@ -99,7 +103,14 @@ namespace Milestro.Components.Internal
             noAllocTextLength = length;
             noAllocTextChanged = true;
 
-            var needsDraw = EnsureSurface(sizePixels, colorSpace);
+            logicalSizePixels = NormalizeSize(sizePixels);
+            var surfaceReady = EnsureSurface(logicalSizePixels,
+                colorSpace,
+                useScreenSpaceRasterization,
+                desiredRasterScale,
+                logContext,
+                out var surfaceChanged);
+            var needsDraw = surfaceChanged;
             needsDraw |= EnsureFont(settings);
             needsDraw |= paintChanged;
             needsDraw |= noAllocTextChanged;
@@ -110,20 +121,44 @@ namespace Milestro.Components.Internal
                 noAllocSubmission!.UpdateText(buffer, offset, length);
             }
 
+            if (!surfaceReady)
+            {
+                styleChanged = false;
+                paintChanged = true;
+                return false;
+            }
+
             return RebuildNoAlloc(settings, needsDraw);
         }
 
         public bool Rebuild(Vector2Int sizePixels,
             ColorSpace colorSpace,
-            SlimTextRenderTargetSettings settings)
+            SlimTextRenderTargetSettings settings,
+            bool useScreenSpaceRasterization,
+            float desiredRasterScale,
+            UnityEngine.Object? logContext)
         {
-            var needsDraw = EnsureSurface(sizePixels, colorSpace);
+            logicalSizePixels = NormalizeSize(sizePixels);
+            var surfaceReady = EnsureSurface(logicalSizePixels,
+                colorSpace,
+                useScreenSpaceRasterization,
+                desiredRasterScale,
+                logContext,
+                out var surfaceChanged);
+            var needsDraw = surfaceChanged;
             needsDraw |= EnsureFont(settings);
             needsDraw |= paintChanged;
             needsDraw |= noAllocMode && noAllocTextChanged;
             if (!needsDraw)
             {
                 return true;
+            }
+
+            if (!surfaceReady)
+            {
+                styleChanged = false;
+                paintChanged = true;
+                return false;
             }
 
             if (noAllocMode)
@@ -155,28 +190,38 @@ namespace Milestro.Components.Internal
             noAllocTextLength = 0;
             noAllocCapacity = 0;
             noAllocCapacityConfigured = false;
+            logicalSizePixels = Vector2Int.one;
             MarkOutputChanged();
         }
 
-        private bool EnsureSurface(Vector2Int sizePixels, ColorSpace colorSpace)
+        private bool EnsureSurface(Vector2Int sizePixels,
+            ColorSpace colorSpace,
+            bool useScreenSpaceRasterization,
+            float desiredRasterScale,
+            UnityEngine.Object? logContext,
+            out bool changed)
         {
             sizePixels = NormalizeSize(sizePixels);
-            if (surface == null || surface.ColorSpace != colorSpace)
+            var currentSurface = surface;
+            if (currentSurface == null)
             {
-                DisposeSurface();
-                SetSurface(new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, colorSpace));
+                currentSurface = new ManagedRenderTextureSurface();
+                SetSurface(currentSurface);
+            }
+
+            var ready = useScreenSpaceRasterization
+                ? currentSurface.TryEnsureScreenSpace(sizePixels,
+                    desiredRasterScale,
+                    colorSpace,
+                    logContext,
+                    out changed)
+                : currentSurface.EnsureExact(sizePixels, colorSpace, out changed);
+            if (changed)
+            {
                 MarkOutputChanged();
-                return true;
             }
 
-            if (surface.Width == sizePixels.x && surface.Height == sizePixels.y)
-            {
-                return false;
-            }
-
-            surface.Resize(sizePixels.x, sizePixels.y);
-            MarkOutputChanged();
-            return true;
+            return ready;
         }
 
         private bool EnsureFont(SlimTextRenderTargetSettings settings)
@@ -335,7 +380,7 @@ namespace Milestro.Components.Internal
             return true;
         }
 
-        private void SetSurface(UnityAutoRenderTextureSurface nextSurface)
+        private void SetSurface(ManagedRenderTextureSurface nextSurface)
         {
             surface = nextSurface;
             surface.RenderEventCompleted += HandleRenderEventCompleted;
@@ -426,12 +471,12 @@ namespace Milestro.Components.Internal
         {
             var bounds = measurement.Bounds;
             var contentLeft = ResolveContentStart(settings.HorizontalAlign,
-                OutputWidth,
+                logicalSizePixels.x,
                 settings.RectOffsetLeft,
                 settings.RectOffsetRight,
                 MeasureContentWidth(measurement));
             var contentTop = ResolveContentStart(settings.VerticalAlign,
-                OutputHeight,
+                logicalSizePixels.y,
                 settings.RectOffsetTop,
                 settings.RectOffsetBottom,
                 MeasureContentHeight(measurement));
