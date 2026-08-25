@@ -1,16 +1,22 @@
 #include "../../../include/Milestro/skia/FontRegistry.h"
 #include "../../../include/Milestro/skia/textlayout/FontCollection.h"
 
+#include "include/core/SkData.h"
 #include "include/core/SkFont.h"
 #include "include/core/SkFontArguments.h"
 #include "include/core/SkFontStyle.h"
 #include "include/core/SkPath.h"
 #include "include/core/SkSpan.h"
+#include "include/core/SkStream.h"
 #include "include/core/SkString.h"
+#include "include/ports/SkFontMgr_data.h"
 #include <algorithm>
+#include <barrier>
 #include <cstdint>
 #include <gtest/gtest.h>
 #include <optional>
+#include <set>
+#include <thread>
 #include <vector>
 
 namespace milestro_skia = milestro::skia;
@@ -213,6 +219,143 @@ TEST(SkiaVariableFontWeightTest, IndependentVariableFontAndFallbackStateStayIsol
         ASSERT_TRUE(coordinate.has_value());
         EXPECT_FLOAT_EQ(*coordinate, static_cast<SkScalar>(std::clamp(requested, 300, 700)));
     }
+}
+
+TEST(SkiaVariableFontWeightTest, ColdConcurrentRequestsConvergeAndKeepCacheKeysIsolated) {
+    struct Request {
+        const char* familyName;
+        SkFontStyle style;
+    };
+
+    constexpr int kRounds = 4;
+    constexpr int kSameKeyRequests = 8;
+    const auto widthAxis = SkSetFourByteTag('w', 'd', 't', 'h');
+    for (int round = 0; round < kRounds; ++round) {
+        SCOPED_TRACE(round);
+        auto registeredFontMgr = sk_make_sp<milestro_skia::MilestroRegisteredFontMgr>();
+        {
+            milestro_skia::FontRegistry registry(registeredFontMgr, nullptr);
+            ASSERT_EQ(registry.RegisterFontFromFile(MILESTRO_TEST_FONT_PATH),
+                      milestro_skia::MilestroRegisteredFontMgr::RegisterResult::Succeed);
+            ASSERT_EQ(registry.RegisterFontFromFile(MILESTRO_TEST_FIRA_FONT_PATH),
+                      milestro_skia::MilestroRegisteredFontMgr::RegisterResult::Succeed);
+            ASSERT_EQ(registry.RegisterFontFromFile(MILESTRO_TEST_MULTI_AXIS_FONT_PATH),
+                      milestro_skia::MilestroRegisteredFontMgr::RegisterResult::Succeed);
+            ASSERT_EQ(registry.RegisterFontFromFile(MILESTRO_TEST_VARIABLE_TTC_PATH),
+                      milestro_skia::MilestroRegisteredFontMgr::RegisterResult::Succeed);
+        }
+
+        std::vector<Request> requests;
+        requests.reserve(kSameKeyRequests + 6);
+        for (int index = 0; index < kSameKeyRequests; ++index) {
+            requests.push_back(
+                    {"Source Han Sans VF", SkFontStyle(401, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant)});
+        }
+        requests.push_back(
+                {"Source Han Sans VF", SkFontStyle(402, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant)});
+        requests.push_back({"Fira Code", SkFontStyle(401, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant)});
+        requests.push_back(
+                {"Noto Sans CJK JP", SkFontStyle(401, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant)});
+        requests.push_back(
+                {"Noto Sans CJK KR", SkFontStyle(401, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant)});
+        requests.push_back(
+                {"Variable", SkFontStyle(401, SkFontStyle::kUltraCondensed_Width, SkFontStyle::kUpright_Slant)});
+        requests.push_back(
+                {"Variable", SkFontStyle(401, SkFontStyle::kUltraExpanded_Width, SkFontStyle::kUpright_Slant)});
+
+        std::barrier start(static_cast<std::ptrdiff_t>(requests.size()));
+        std::vector<sk_sp<SkTypeface>> results(requests.size());
+        std::vector<std::thread> workers;
+        workers.reserve(requests.size());
+        for (size_t index = 0; index < requests.size(); ++index) {
+            workers.emplace_back([&, index, manager = registeredFontMgr] {
+                auto skCollection = sk_make_sp<::skia::textlayout::FontCollection>();
+                milestro_textlayout::FontCollection collection(skCollection, manager, nullptr);
+                start.arrive_and_wait();
+                results[index] = FindTypefaceForStyle(&collection, requests[index].familyName, requests[index].style);
+            });
+        }
+        for (auto& worker: workers) {
+            worker.join();
+        }
+
+        for (const auto& result: results) {
+            ASSERT_NE(result, nullptr);
+        }
+        const auto sourceHan401Id = results.front()->uniqueID();
+        for (int index = 1; index < kSameKeyRequests; ++index) {
+            EXPECT_EQ(results[index]->uniqueID(), sourceHan401Id);
+        }
+
+        const auto sourceHan402 = results[kSameKeyRequests];
+        const auto fira401 = results[kSameKeyRequests + 1];
+        const auto japanese401 = results[kSameKeyRequests + 2];
+        const auto korean401 = results[kSameKeyRequests + 3];
+        const auto condensed401 = results[kSameKeyRequests + 4];
+        const auto expanded401 = results[kSameKeyRequests + 5];
+        const std::set<SkTypefaceID> distinctKeyIds{
+                sourceHan401Id,
+                sourceHan402->uniqueID(),
+                fira401->uniqueID(),
+                japanese401->uniqueID(),
+                korean401->uniqueID(),
+                condensed401->uniqueID(),
+                expanded401->uniqueID(),
+        };
+        EXPECT_EQ(distinctKeyIds.size(), 7u);
+
+        registeredFontMgr.reset();
+        for (int index = 0; index < kSameKeyRequests; ++index) {
+            ExpectVariationCoordinate(results[index], SkFontArguments::VariationPosition::Coordinate::wght, 401.0f);
+        }
+        ExpectVariationCoordinate(sourceHan402, SkFontArguments::VariationPosition::Coordinate::wght, 402.0f);
+        ExpectVariationCoordinate(fira401, SkFontArguments::VariationPosition::Coordinate::wght, 401.0f);
+        ExpectVariationCoordinate(japanese401, SkFontArguments::VariationPosition::Coordinate::wght, 401.0f);
+        ExpectVariationCoordinate(korean401, SkFontArguments::VariationPosition::Coordinate::wght, 401.0f);
+        EXPECT_EQ(GetStreamIndex(japanese401), 0);
+        EXPECT_EQ(GetStreamIndex(korean401), 1);
+        ExpectVariationCoordinate(condensed401, SkFontArguments::VariationPosition::Coordinate::wght, 401.0f);
+        ExpectVariationCoordinate(condensed401, widthAxis, 50.0f);
+        ExpectVariationCoordinate(expanded401, SkFontArguments::VariationPosition::Coordinate::wght, 401.0f);
+        ExpectVariationCoordinate(expanded401, widthAxis, 200.0f);
+    }
+}
+
+TEST(SkiaVariableFontWeightTest, MissingFamilyUsesInjectedSystemFallbackOnlyWhenEnabled) {
+    auto registeredFontMgr = sk_make_sp<milestro_skia::MilestroRegisteredFontMgr>();
+    {
+        milestro_skia::FontRegistry registry(registeredFontMgr, nullptr);
+        ASSERT_EQ(registry.RegisterFontFromFile(MILESTRO_TEST_FONT_PATH),
+                  milestro_skia::MilestroRegisteredFontMgr::RegisterResult::Succeed);
+    }
+
+    auto fallbackData = SkData::MakeFromFileName(MILESTRO_TEST_EMOJI_FONT_PATH);
+    ASSERT_NE(fallbackData, nullptr);
+    std::vector<sk_sp<SkData>> fallbackFonts{fallbackData};
+    auto systemFontMgr = SkFontMgr_New_Custom_Data(SkSpan(fallbackFonts));
+    ASSERT_NE(systemFontMgr, nullptr);
+    const auto fallbackTypeface = systemFontMgr->legacyMakeTypeface(nullptr, SkFontStyle());
+    ASSERT_NE(fallbackTypeface, nullptr);
+
+    auto skCollection = sk_make_sp<::skia::textlayout::FontCollection>();
+    milestro_textlayout::FontCollection collection(skCollection, registeredFontMgr, systemFontMgr);
+    const std::vector<SkString> missingFamily{SkString("Milestro Definitely Missing Family")};
+    const auto missingSystemStyleSet = systemFontMgr->matchFamily(missingFamily.front().c_str());
+    EXPECT_TRUE(missingSystemStyleSet == nullptr || missingSystemStyleSet->count() == 0);
+
+    collection.setFontFallbackEnabled(false);
+    collection.clearCaches();
+    EXPECT_TRUE(skCollection->findTypefaces(missingFamily, SkFontStyle()).empty());
+
+    collection.setFontFallbackEnabled(true);
+    collection.clearCaches();
+    const auto withFallback = skCollection->findTypefaces(missingFamily, SkFontStyle());
+    ASSERT_EQ(withFallback.size(), 1u);
+    ASSERT_NE(withFallback.front(), nullptr);
+    EXPECT_EQ(withFallback.front()->uniqueID(), fallbackTypeface->uniqueID());
+    SkString resolvedFamily;
+    withFallback.front()->getFamilyName(&resolvedFamily);
+    EXPECT_STREQ(resolvedFamily.c_str(), "Noto Color Emoji");
 }
 
 TEST(SkiaVariableFontWeightTest, MultiAxisFontPreservesSelectedWidthCoordinate) {
