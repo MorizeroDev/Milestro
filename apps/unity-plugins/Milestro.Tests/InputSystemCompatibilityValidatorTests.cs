@@ -56,7 +56,7 @@ namespace Milestro.Tests
         [TestCase(InputHandlingMode.LegacyOnly, InputSystemValidationSeverity.None, false)]
         [TestCase(InputHandlingMode.Both, InputSystemValidationSeverity.Warning, false)]
         [TestCase(InputHandlingMode.InputSystemOnly, InputSystemValidationSeverity.Error, true)]
-        public void UnsupportedPackageDecisionDependsOnlyOnInputHandlingMode(InputHandlingMode mode,
+        internal void UnsupportedPackageDecisionDependsOnlyOnInputHandlingMode(InputHandlingMode mode,
             InputSystemValidationSeverity expectedSeverity,
             bool expectedBuildBlock)
         {

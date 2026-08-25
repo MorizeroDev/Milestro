@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Milestro.RichTextParser;
+using Milestro.Skia;
 using Milestro.Skia.TextLayout;
 using UnityEngine;
 
