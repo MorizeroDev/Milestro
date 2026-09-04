@@ -64,6 +64,7 @@ public:
 
 VulkanRenderBackend& DirectBackend();
 VulkanRenderBackend& StagingCopyBackend();
+PFN_vkVoidFunction ResolveInstanceProcWithVulkan10Fallback(const UnityVulkanInstance& instance, const char* name);
 
 inline VulkanRenderBackend& BackendForKind(VulkanBackendKind kind) {
     return kind == VulkanBackendKind::StagingCopy ? StagingCopyBackend() : DirectBackend();

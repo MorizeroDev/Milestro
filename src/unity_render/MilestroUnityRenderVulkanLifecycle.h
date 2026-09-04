@@ -9,6 +9,13 @@
 
 namespace milestro::unity_render::vulkan {
 
+constexpr bool SafeFrameHasReached(uint64_t lastUsedFrame, uint64_t safeFrame) noexcept {
+    // Serial ordering is defined while Unity's producer/safe-frame distance is below half
+    // the sequence space. The bounded ring stops accepting work when safe-frame progress stalls.
+    constexpr uint64_t kMaximumOrderedFrameSpan = UINT64_MAX / 2;
+    return safeFrame - lastUsedFrame <= kMaximumOrderedFrameSpan;
+}
+
 constexpr bool VulkanBackendKindFromRaw(int32_t raw, VulkanBackendKind& kind) noexcept {
     switch (static_cast<VulkanBackendKind>(raw)) {
         case VulkanBackendKind::Direct:
@@ -140,7 +147,7 @@ public:
     std::size_t Collect(uint64_t safeFrame) noexcept {
         std::size_t retired = 0;
         for (Slot& slot: slots_) {
-            if (slot.phase == StagingSlotPhase::InFlight && slot.lastUsedFrame <= safeFrame) {
+            if (slot.phase == StagingSlotPhase::InFlight && SafeFrameHasReached(slot.lastUsedFrame, safeFrame)) {
                 slot.phase = StagingSlotPhase::Ready;
                 ++retired;
             }

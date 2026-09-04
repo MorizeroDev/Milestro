@@ -31,13 +31,21 @@ int64_t CreateTarget(void* nativeTexture,
                      uint64_t deviceEpoch,
                      void*& target,
                      uint64_t& generation);
-int64_t DestroyTarget(void*& target, int32_t& retirementPending);
+int64_t DestroyTarget(void*& target, uint64_t generation, uint64_t deviceEpoch, int32_t& retirementPending);
 
 bool IsSubmissionTargetValid(const MilestroUnityRenderSubmission& submission);
 VulkanSubmissionResult RenderStaging(MilestroUnityRenderSubmission* submission);
-VulkanSubmissionResult PrepareDirect(MilestroUnityRenderSubmission* submission);
-void SubmitDirectPrepared(VulkanSubmissionCompletion complete);
+bool BeginDirectBatch(uint64_t batchToken);
+VulkanSubmissionResult PrepareDirect(uint64_t batchToken, MilestroUnityRenderSubmission* submission);
+bool FinishDirectBatchPrepare(uint64_t batchToken);
+bool SubmitDirectPrepared(uint64_t batchToken, VulkanSubmissionCompletion complete);
+bool FailDirectPrepared(uint64_t batchToken, VulkanSubmissionCompletion complete);
 void FailDirectPrepared(VulkanSubmissionCompletion complete);
+void FailDirectPreparedForTarget(void* target,
+                                 uint64_t generation,
+                                 uint64_t deviceEpoch,
+                                 VulkanSubmissionCompletion complete);
+std::size_t PendingDirectBatchCount();
 
 bool CollectRetiredTargets();
 bool HasPendingRetirements();

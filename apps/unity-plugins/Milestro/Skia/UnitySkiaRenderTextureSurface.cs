@@ -121,6 +121,9 @@ namespace Milestro.Skia
             public int GraphicsBackend;
             public int VulkanBackend;
             public int Completed;
+            public ulong BatchToken;
+            public int Phase;
+            public int Reserved;
         }
 
         internal sealed class PendingRenderEvent
@@ -233,7 +236,7 @@ namespace Milestro.Skia
                     {
                         if (VulkanTarget != IntPtr.Zero)
                         {
-                            ReleaseVulkanTarget(VulkanTarget);
+                            ReleaseVulkanTarget(VulkanTarget, VulkanTargetGeneration, DeviceEpoch);
                         }
                     }
                     finally
@@ -560,6 +563,7 @@ namespace Milestro.Skia
                 MaxAttemptsPerRequestAndEpoch = 1
             };
         private static long nextSerial;
+        private static long nextDirectBatchToken;
         private static MilestroRenderEventLifetimePump lifetimePump;
 #if UNITY_EDITOR
         private static bool editorLifetimePumpRegistered;
@@ -1666,7 +1670,7 @@ namespace Milestro.Skia
             {
                 if (vulkanTarget != IntPtr.Zero)
                 {
-                    ReleaseVulkanTarget(vulkanTarget);
+                    ReleaseVulkanTarget(vulkanTarget, vulkanTargetGeneration, targetDeviceEpoch);
                 }
                 if (renderTexture != null)
                 {
@@ -1784,7 +1788,7 @@ namespace Milestro.Skia
             return target;
         }
 
-        private static void ReleaseVulkanTarget(IntPtr target)
+        private static void ReleaseVulkanTarget(IntPtr target, ulong generation, ulong targetDeviceEpoch)
         {
             if (target == IntPtr.Zero)
             {
@@ -1793,6 +1797,8 @@ namespace Milestro.Skia
 
             var targetToRelease = target;
             ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderDestroyVulkanTarget(ref targetToRelease,
+                generation,
+                targetDeviceEpoch,
                 out var retirementPending));
             if (retirementPending == 0)
             {
@@ -1989,7 +1995,13 @@ namespace Milestro.Skia
                     Magic = RenderDrainMagic,
                     GraphicsBackend = graphicsBackend,
                     VulkanBackend = vulkanBackend,
-                    Completed = 0
+                    Completed = 0,
+                    BatchToken = backend == UnitySkiaGraphicsBackend.Vulkan &&
+                                 vulkanBackend == (int)UnitySkiaVulkanBackend.Direct
+                        ? unchecked((ulong)Interlocked.Increment(ref nextDirectBatchToken))
+                        : 0,
+                    Phase = 0,
+                    Reserved = 0
                 };
                 var drainPtr = Marshal.AllocHGlobal(Marshal.SizeOf<RenderDrainPayload>());
                 Marshal.StructureToPtr(drain, drainPtr, false);

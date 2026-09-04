@@ -56,6 +56,8 @@ namespace Milestro.Binding
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderDestroyVulkanTarget")]
         internal static extern unsafe long UnityRenderDestroyVulkanTarget(ref IntPtr target,
+                                                                           ulong generation,
+                                                                           ulong deviceEpoch,
                                                                            out int retirementPending);
 
 

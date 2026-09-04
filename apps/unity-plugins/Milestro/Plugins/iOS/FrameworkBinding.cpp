@@ -56,8 +56,10 @@ int64_t FrameworkBindingMilestroUnityRenderCreateVulkanTarget([[milize::CSharpTy
 
 int64_t FrameworkBindingMilestroUnityRenderDestroyVulkanTarget(
         [[milize::RefType("ref")]] [[milize::CSharpType("IntPtr")]] void*& target,
+        uint64_t generation,
+        uint64_t deviceEpoch,
         int32_t& retirementPending) {
-    return MilestroUnityRenderDestroyVulkanTarget(target, retirementPending);
+    return MilestroUnityRenderDestroyVulkanTarget(target, generation, deviceEpoch, retirementPending);
 }
 
 int64_t FrameworkBindingMilestroUnityRenderGetPayloadAbiInfo(uint32_t& abiVersion,

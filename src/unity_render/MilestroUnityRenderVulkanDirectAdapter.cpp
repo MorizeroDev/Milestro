@@ -25,6 +25,31 @@ namespace milestro::unity_render::vulkan {
 
 namespace {
 
+VkResult VKAPI_PTR EnumerateVulkan10InstanceVersion(uint32_t* apiVersion) {
+    if (apiVersion != nullptr) {
+        *apiVersion = VK_API_VERSION_1_0;
+    }
+    return VK_SUCCESS;
+}
+
+} // namespace
+
+PFN_vkVoidFunction ResolveInstanceProcWithVulkan10Fallback(const UnityVulkanInstance& instance, const char* name) {
+    if (instance.getInstanceProcAddr == nullptr || name == nullptr) {
+        return nullptr;
+    }
+    PFN_vkVoidFunction result = instance.getInstanceProcAddr(instance.instance, name);
+    if (result == nullptr) {
+        result = instance.getInstanceProcAddr(VK_NULL_HANDLE, name);
+    }
+    if (result == nullptr && std::strcmp(name, "vkEnumerateInstanceVersion") == 0) {
+        return reinterpret_cast<PFN_vkVoidFunction>(&EnumerateVulkan10InstanceVersion);
+    }
+    return result;
+}
+
+namespace {
+
 class DirectTargetState final : public VulkanTargetState {};
 
 class DirectVulkanBackend final : public VulkanRenderBackend {
@@ -197,12 +222,6 @@ private:
                 reinterpret_cast<PFN_vkGetDeviceProcAddr>(getInstanceProc(instance_.instance, "vkGetDeviceProcAddr"));
         const VkInstance cachedInstance = instance_.instance;
         const VkDevice cachedDevice = instance_.device;
-        static auto FallbackEnumerateInstanceVersion = [](uint32_t* apiVersion) -> VkResult {
-            if (apiVersion != nullptr) {
-                *apiVersion = VK_API_VERSION_1_1;
-            }
-            return VK_SUCCESS;
-        };
         context.fGetProc = [getInstanceProc, getDeviceProc, cachedInstance, cachedDevice](
                                    const char* name,
                                    VkInstance requestedInstance,
@@ -220,8 +239,11 @@ private:
             if (result == nullptr) {
                 result = getInstanceProc(cachedInstance, name);
             }
-            if (result == nullptr && name != nullptr && std::strcmp(name, "vkEnumerateInstanceVersion") == 0) {
-                return reinterpret_cast<PFN_vkVoidFunction>(+FallbackEnumerateInstanceVersion);
+            if (result == nullptr) {
+                UnityVulkanInstance fallbackInstance{};
+                fallbackInstance.instance = cachedInstance;
+                fallbackInstance.getInstanceProcAddr = getInstanceProc;
+                return ResolveInstanceProcWithVulkan10Fallback(fallbackInstance, name);
             }
             return result;
         };

@@ -82,6 +82,26 @@ TEST(UnityRenderVulkanLifecycle, SafeFrameBoundaryRetiresExactlyOnce) {
     EXPECT_FALSE(needsAllocation);
 }
 
+TEST(UnityRenderVulkanLifecycle, SafeFrameOrderingSurvivesUint64Wrap) {
+    StagingRingLifecycle<1> ring;
+    ASSERT_TRUE(ring.BeginGeneration(24, 2048));
+
+    std::size_t slot = 99;
+    bool needsAllocation = false;
+    ASSERT_EQ(ring.Acquire(24, UINT64_MAX - 1, slot, needsAllocation), StagingAcquireResult::Acquired);
+    ASSERT_TRUE(ring.MarkAllocated(slot, 24, 2048));
+    ASSERT_TRUE(ring.Commit(slot, 24, 0));
+
+    EXPECT_EQ(ring.Collect(UINT64_MAX - 1), 0U) << "a safe frame before wrap must not retire frame zero";
+    EXPECT_EQ(ring.Collect(0), 1U) << "the exact wrapped frame must retire";
+    EXPECT_EQ(ring.Collect(1), 0U) << "retirement remains exact-once when the safe frame skips ahead";
+
+    ASSERT_EQ(ring.Acquire(24, 1, slot, needsAllocation), StagingAcquireResult::Acquired);
+    ASSERT_TRUE(ring.Commit(slot, 24, UINT64_MAX));
+    EXPECT_EQ(ring.Collect(UINT64_MAX - 1), 0U) << "a stalled safe frame must not retire newer work";
+    EXPECT_EQ(ring.Collect(0), 1U) << "MAX must retire after the safe frame wraps to zero";
+}
+
 TEST(UnityRenderVulkanLifecycle, ReservedSlotCannotBeCollectedOrCommittedTwice) {
     StagingRingLifecycle<1> ring;
     ASSERT_TRUE(ring.BeginGeneration(29, 1024));

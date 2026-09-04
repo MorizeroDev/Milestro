@@ -46,6 +46,8 @@ MILESTRO_API int64_t MilestroUnityRenderCreateVulkanTarget([[milize::CSharpType(
                                                            uint64_t& generation);
 MILESTRO_API int64_t
 MilestroUnityRenderDestroyVulkanTarget([[milize::RefType("ref")]] [[milize::CSharpType("IntPtr")]] void*& target,
+                                       uint64_t generation,
+                                       uint64_t deviceEpoch,
                                        int32_t& retirementPending);
 MILESTRO_API int64_t MilestroUnityRenderGetPayloadAbiInfo(uint32_t& abiVersion,
                                                           uint64_t& layoutFingerprint,

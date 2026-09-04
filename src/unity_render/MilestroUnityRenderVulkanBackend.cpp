@@ -26,7 +26,17 @@ constexpr std::size_t kMaximumRegisteredTargets = 256;
 IUnityGraphicsVulkan* gVulkan = nullptr;
 UnityVulkanInstance gInstance{};
 std::vector<std::unique_ptr<VulkanTarget>> gTargets;
-std::vector<PreparedVulkanSubmission> gPreparedDirect;
+enum class DirectBatchPhase : uint8_t {
+    Preparing,
+    Prepared,
+};
+struct DirectPreparedBatch {
+    uint64_t token = 0;
+    DirectBatchPhase phase = DirectBatchPhase::Preparing;
+    std::vector<PreparedVulkanSubmission> submissions;
+};
+std::vector<DirectPreparedBatch> gPreparedDirectBatches;
+std::size_t gPreparedDirectSubmissionCount = 0;
 uint64_t gNextTargetGeneration = 0;
 
 bool ConfigureEvent(int eventId, UnityVulkanGraphicsQueueAccess queueAccess, uint32_t flags) {
@@ -47,6 +57,33 @@ VulkanTarget* FindTarget(void* handle) {
         return target.get() == handle;
     });
     return found == gTargets.end() ? nullptr : found->get();
+}
+
+auto FindDirectBatch(uint64_t token) {
+    return std::find_if(gPreparedDirectBatches.begin(),
+                        gPreparedDirectBatches.end(),
+                        [token](const DirectPreparedBatch& batch) {
+                            return batch.token == token;
+                        });
+}
+
+VulkanTarget* ValidatedTarget(const MilestroUnityRenderSubmission& submission);
+
+void CompleteDirectBatch(std::vector<DirectPreparedBatch>::iterator batch,
+                         VulkanSubmissionCompletion complete,
+                         bool submit) {
+    for (PreparedVulkanSubmission& prepared: batch->submissions) {
+        MilestroUnityRenderSubmissionStatus status = MilestroUnityRenderSubmissionStatus::Failed;
+        if (submit && prepared.target != nullptr && prepared.submission != nullptr &&
+            ValidatedTarget(*prepared.submission) == prepared.target) {
+            status = DirectBackend().Submit(prepared);
+        }
+        if (complete != nullptr) {
+            complete(prepared.submission, status);
+        }
+    }
+    gPreparedDirectSubmissionCount -= batch->submissions.size();
+    gPreparedDirectBatches.erase(batch);
 }
 
 bool TryPixelBytes(int32_t width, int32_t height, std::size_t& bytes) {
@@ -113,15 +150,7 @@ VulkanSubmissionResult PrepareWithBackend(MilestroUnityRenderSubmission* submiss
 
     PreparedVulkanSubmission prepared;
     VulkanPrepareResult result = BackendForKind(expectedKind).Prepare(*target, *submission, prepared);
-    if (!result.requiresSubmit) {
-        return {submission, result.status};
-    }
-
-    if (gPreparedDirect.size() >= kMaximumRegisteredTargets) {
-        return {submission, MilestroUnityRenderSubmissionStatus::Failed};
-    }
-    gPreparedDirect.push_back(prepared);
-    return {nullptr, MilestroUnityRenderSubmissionStatus::Pending};
+    return {submission, result.status};
 }
 
 } // namespace
@@ -142,17 +171,19 @@ void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
         DestroyAllTargetsImmediately();
         DirectBackend().Shutdown();
         StagingCopyBackend().Shutdown();
-        gPreparedDirect.clear();
+        gPreparedDirectBatches.clear();
+        gPreparedDirectSubmissionCount = 0;
         gVulkan = nullptr;
         gInstance = {};
         return;
     }
 
-    if (gVulkan != nullptr || !gTargets.empty() || !gPreparedDirect.empty()) {
+    if (gVulkan != nullptr || !gTargets.empty() || !gPreparedDirectBatches.empty()) {
         DestroyAllTargetsImmediately();
         DirectBackend().Shutdown();
         StagingCopyBackend().Shutdown();
-        gPreparedDirect.clear();
+        gPreparedDirectBatches.clear();
+        gPreparedDirectSubmissionCount = 0;
         gVulkan = nullptr;
         gInstance = {};
     }
@@ -175,7 +206,7 @@ void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
 
     try {
         gTargets.reserve(kMaximumRegisteredTargets);
-        gPreparedDirect.reserve(kMaximumRegisteredTargets);
+        gPreparedDirectBatches.reserve(kMaximumRegisteredTargets);
     } catch (const std::bad_alloc&) {
         MILESTROLOG_ERROR("Milestro Vulkan target registry allocation failed.");
         gVulkan = nullptr;
@@ -247,7 +278,7 @@ int64_t CreateTarget(void* nativeTexture,
     return MILESTRO_API_RET_OK;
 }
 
-int64_t DestroyTarget(void*& target, int32_t& retirementPending) {
+int64_t DestroyTarget(void*& target, uint64_t generation, uint64_t deviceEpoch, int32_t& retirementPending) {
     retirementPending = 0;
     if (target == nullptr) {
         return MILESTRO_API_RET_OK;
@@ -256,7 +287,7 @@ int64_t DestroyTarget(void*& target, int32_t& retirementPending) {
     const auto found = std::find_if(gTargets.begin(), gTargets.end(), [handle = target](const auto& candidate) {
         return candidate.get() == handle;
     });
-    if (found == gTargets.end()) {
+    if (found == gTargets.end() || (*found)->generation != generation || (*found)->deviceEpoch != deviceEpoch) {
         target = nullptr;
         return MILESTRO_API_RET_OK;
     }
@@ -280,31 +311,114 @@ VulkanSubmissionResult RenderStaging(MilestroUnityRenderSubmission* submission) 
     return PrepareWithBackend(submission, VulkanBackendKind::StagingCopy);
 }
 
-VulkanSubmissionResult PrepareDirect(MilestroUnityRenderSubmission* submission) {
-    return PrepareWithBackend(submission, VulkanBackendKind::Direct);
+bool BeginDirectBatch(uint64_t batchToken) {
+    if (batchToken == 0 || gPreparedDirectBatches.size() >= kMaximumRegisteredTargets ||
+        FindDirectBatch(batchToken) != gPreparedDirectBatches.end()) {
+        return false;
+    }
+    try {
+        DirectPreparedBatch batch;
+        batch.token = batchToken;
+        gPreparedDirectBatches.push_back(std::move(batch));
+        return true;
+    } catch (const std::bad_alloc&) {
+        return false;
+    }
 }
 
-void SubmitDirectPrepared(VulkanSubmissionCompletion complete) {
-    for (PreparedVulkanSubmission& prepared: gPreparedDirect) {
-        MilestroUnityRenderSubmissionStatus status = MilestroUnityRenderSubmissionStatus::Failed;
-        if (prepared.target != nullptr && prepared.submission != nullptr &&
-            ValidatedTarget(*prepared.submission) == prepared.target) {
-            status = DirectBackend().Submit(prepared);
-        }
-        if (complete != nullptr) {
-            complete(prepared.submission, status);
-        }
+VulkanSubmissionResult PrepareDirect(uint64_t batchToken, MilestroUnityRenderSubmission* submission) {
+    if (submission == nullptr) {
+        return {};
     }
-    gPreparedDirect.clear();
+    const auto batch = FindDirectBatch(batchToken);
+    if (batch == gPreparedDirectBatches.end() || batch->phase != DirectBatchPhase::Preparing ||
+        gPreparedDirectSubmissionCount >= kMaximumRegisteredTargets) {
+        return {submission, MilestroUnityRenderSubmissionStatus::Failed};
+    }
+
+    VulkanTarget* target = ValidatedTarget(*submission);
+    if (target == nullptr || !target->backend.Matches(VulkanBackendKind::Direct)) {
+        return {submission, MilestroUnityRenderSubmissionStatus::Failed};
+    }
+    PreparedVulkanSubmission prepared;
+    VulkanPrepareResult result = DirectBackend().Prepare(*target, *submission, prepared);
+    if (!result.requiresSubmit) {
+        return {submission, result.status};
+    }
+    try {
+        batch->submissions.push_back(prepared);
+        ++gPreparedDirectSubmissionCount;
+    } catch (const std::bad_alloc&) {
+        return {submission, MilestroUnityRenderSubmissionStatus::Failed};
+    }
+    return {nullptr, MilestroUnityRenderSubmissionStatus::Pending};
+}
+
+bool FinishDirectBatchPrepare(uint64_t batchToken) {
+    const auto batch = FindDirectBatch(batchToken);
+    if (batch == gPreparedDirectBatches.end() || batch->phase != DirectBatchPhase::Preparing) {
+        return false;
+    }
+    batch->phase = DirectBatchPhase::Prepared;
+    return true;
+}
+
+bool SubmitDirectPrepared(uint64_t batchToken, VulkanSubmissionCompletion complete) {
+    const auto batch = FindDirectBatch(batchToken);
+    if (batch == gPreparedDirectBatches.end() || batch->phase != DirectBatchPhase::Prepared) {
+        return false;
+    }
+    CompleteDirectBatch(batch, complete, true);
+    return true;
+}
+
+bool FailDirectPrepared(uint64_t batchToken, VulkanSubmissionCompletion complete) {
+    const auto batch = FindDirectBatch(batchToken);
+    if (batch == gPreparedDirectBatches.end()) {
+        return false;
+    }
+    CompleteDirectBatch(batch, complete, false);
+    return true;
 }
 
 void FailDirectPrepared(VulkanSubmissionCompletion complete) {
-    for (PreparedVulkanSubmission& prepared: gPreparedDirect) {
-        if (complete != nullptr) {
-            complete(prepared.submission, MilestroUnityRenderSubmissionStatus::Failed);
+    while (!gPreparedDirectBatches.empty()) {
+        CompleteDirectBatch(gPreparedDirectBatches.begin(), complete, false);
+    }
+}
+
+void FailDirectPreparedForTarget(void* target,
+                                 uint64_t generation,
+                                 uint64_t deviceEpoch,
+                                 VulkanSubmissionCompletion complete) {
+    VulkanTarget* registered = FindTarget(target);
+    if (registered == nullptr || registered->generation != generation || registered->deviceEpoch != deviceEpoch) {
+        return;
+    }
+    auto batch = gPreparedDirectBatches.begin();
+    while (batch != gPreparedDirectBatches.end()) {
+        auto prepared = batch->submissions.begin();
+        while (prepared != batch->submissions.end()) {
+            if (prepared->target != registered) {
+                ++prepared;
+                continue;
+            }
+            if (complete != nullptr) {
+                complete(prepared->submission, MilestroUnityRenderSubmissionStatus::Failed);
+            }
+            prepared = batch->submissions.erase(prepared);
+            --gPreparedDirectSubmissionCount;
+        }
+        if (batch->submissions.empty()) {
+            batch = gPreparedDirectBatches.erase(batch);
+        } else {
+            ++batch;
         }
     }
-    gPreparedDirect.clear();
+}
+
+std::size_t PendingDirectBatchCount() {
+    return gPreparedDirectBatches.size();
 }
 
 bool CollectRetiredTargets() {

@@ -111,6 +111,25 @@ constexpr uint64_t MilestroUnityRenderPayloadLayoutFingerprint() noexcept {
 inline constexpr uint64_t kMilestroUnityRenderPayloadLayoutFingerprint = MilestroUnityRenderPayloadLayoutFingerprint();
 static_assert(kMilestroUnityRenderPayloadLayoutFingerprint != 0);
 
+#if INTPTR_MAX == INT64_MAX
+static_assert(kMilestroUnityRenderTargetPayloadSize == 104);
+static_assert(kMilestroUnityRenderSubmissionSize == 128);
+static_assert(kMilestroUnityRenderTargetEffectiveScaleOffset == 88);
+static_assert(kMilestroUnityRenderTargetDeviceEpochOffset == 96);
+static_assert(kMilestroUnityRenderSubmissionTargetOffset == 8);
+static_assert(kMilestroUnityRenderSubmissionCompletedOffset == 124);
+static_assert(kMilestroUnityRenderPayloadLayoutFingerprint == 11249664113689606655ULL);
+#elif defined(__arm__) && !defined(__aarch64__)
+// Android armeabi-v7a uses the AAPCS eight-byte alignment for uint64_t.
+static_assert(kMilestroUnityRenderTargetPayloadSize == 88);
+static_assert(kMilestroUnityRenderSubmissionSize == 108);
+static_assert(kMilestroUnityRenderTargetEffectiveScaleOffset == 72);
+static_assert(kMilestroUnityRenderTargetDeviceEpochOffset == 80);
+static_assert(kMilestroUnityRenderSubmissionTargetOffset == 8);
+static_assert(kMilestroUnityRenderSubmissionCompletedOffset == 104);
+static_assert(kMilestroUnityRenderPayloadLayoutFingerprint == 15803143509196474059ULL);
+#endif
+
 inline bool MilestroUnityRenderSubmissionHasCurrentAbi(const MilestroUnityRenderSubmission* submission,
                                                        uint64_t expectedDeviceEpoch) noexcept {
     if (submission == nullptr || expectedDeviceEpoch == 0 ||

@@ -58,8 +58,11 @@ MILESTRO_API int64_t MilestroUnityRenderCreateVulkanTarget(void* nativeTexture,
                                                                generation);
 }
 
-MILESTRO_API int64_t MilestroUnityRenderDestroyVulkanTarget(void*& target, int32_t& retirementPending) {
-    return milestro::unity_render::DestroyVulkanTargetForExport(target, retirementPending);
+MILESTRO_API int64_t MilestroUnityRenderDestroyVulkanTarget(void*& target,
+                                                            uint64_t generation,
+                                                            uint64_t deviceEpoch,
+                                                            int32_t& retirementPending) {
+    return milestro::unity_render::DestroyVulkanTargetForExport(target, generation, deviceEpoch, retirementPending);
 }
 
 MILESTRO_API int64_t MilestroUnityRenderGetPayloadAbiInfo(uint32_t& abiVersion,
