@@ -37,3 +37,10 @@ else ()
             COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/../data" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/data"
     )
 endif ()
+
+# Code generation runs on the host and is also checked without loading ICU.
+if (NOT ANDROID)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_test(NAME MilestroTest_IcuCodegen
+            COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_make_data_cpp.py")
+endif ()

@@ -4,12 +4,9 @@
 #include "unity_render/MilestroUnityRenderSubmissionDraw.h"
 #include "unity_render/MilestroUnityRenderTextureHandleKind.h"
 
-#include <algorithm>
-#include <array>
 #include <cstdint>
 #include <limits>
 #include <utility>
-#include <vector>
 
 #include "unity_render/MilestroUnityRenderLog.h"
 
@@ -46,6 +43,8 @@
 #ifndef GL_VERTEX_ARRAY_BINDING
 #define GL_VERTEX_ARRAY_BINDING 0x85B5
 #endif
+
+#include "unity_render/MilestroUnityRenderGLState.h"
 
 namespace milestro::unity_render::gl {
 
@@ -213,109 +212,6 @@ sk_sp<SkColorSpace> ColorSpaceForPayload(const MilestroUnityRenderTargetPayload&
     return SkColorSpace::MakeSRGB();
 }
 
-class GLStateGuard {
-public:
-    GLStateGuard() {
-        glGetIntegerv(GL_VIEWPORT, viewport_.data());
-        glGetIntegerv(GL_SCISSOR_BOX, scissorBox_.data());
-        glGetIntegerv(GL_CURRENT_PROGRAM, &program_);
-        glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &arrayBuffer_);
-        glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &elementArrayBuffer_);
-        glGetIntegerv(GL_ACTIVE_TEXTURE, &activeTexture_);
-        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray_);
-
-#if defined(GL_DRAW_FRAMEBUFFER_BINDING) && defined(GL_READ_FRAMEBUFFER_BINDING)
-        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawFramebuffer_);
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &readFramebuffer_);
-#else
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &framebuffer_);
-#endif
-
-        scissorEnabled_ = glIsEnabled(GL_SCISSOR_TEST);
-        blendEnabled_ = glIsEnabled(GL_BLEND);
-        cullFaceEnabled_ = glIsEnabled(GL_CULL_FACE);
-        depthTestEnabled_ = glIsEnabled(GL_DEPTH_TEST);
-        stencilTestEnabled_ = glIsEnabled(GL_STENCIL_TEST);
-        glGetBooleanv(GL_COLOR_WRITEMASK, colorMask_.data());
-        glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMask_);
-
-        GLint maxTextureUnits = 0;
-        glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &maxTextureUnits);
-        textureUnitCount_ = std::max(0, maxTextureUnits);
-        textureBindings2D_.resize(static_cast<size_t>(textureUnitCount_));
-        for (int i = 0; i < textureUnitCount_; ++i) {
-            glActiveTexture(static_cast<GLenum>(GL_TEXTURE0 + i));
-            glGetIntegerv(GL_TEXTURE_BINDING_2D, &textureBindings2D_[static_cast<size_t>(i)]);
-        }
-        glActiveTexture(static_cast<GLenum>(activeTexture_));
-    }
-
-    ~GLStateGuard() {
-        Restore();
-    }
-
-    GLStateGuard(const GLStateGuard&) = delete;
-    GLStateGuard& operator=(const GLStateGuard&) = delete;
-
-    void Restore() const {
-        for (int i = 0; i < textureUnitCount_; ++i) {
-            glActiveTexture(static_cast<GLenum>(GL_TEXTURE0 + i));
-            glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(textureBindings2D_[static_cast<size_t>(i)]));
-        }
-        glActiveTexture(static_cast<GLenum>(activeTexture_));
-
-        glUseProgram(static_cast<GLuint>(program_));
-        glBindBuffer(GL_ARRAY_BUFFER, static_cast<GLuint>(arrayBuffer_));
-        glBindVertexArray(static_cast<GLuint>(vertexArray_));
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLuint>(elementArrayBuffer_));
-
-#if defined(GL_DRAW_FRAMEBUFFER) && defined(GL_READ_FRAMEBUFFER)
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(drawFramebuffer_));
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(readFramebuffer_));
-#else
-        glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(framebuffer_));
-#endif
-
-        glViewport(viewport_[0], viewport_[1], viewport_[2], viewport_[3]);
-        glScissor(scissorBox_[0], scissorBox_[1], scissorBox_[2], scissorBox_[3]);
-        SetEnabled(GL_SCISSOR_TEST, scissorEnabled_);
-        SetEnabled(GL_BLEND, blendEnabled_);
-        SetEnabled(GL_CULL_FACE, cullFaceEnabled_);
-        SetEnabled(GL_DEPTH_TEST, depthTestEnabled_);
-        SetEnabled(GL_STENCIL_TEST, stencilTestEnabled_);
-        glColorMask(colorMask_[0], colorMask_[1], colorMask_[2], colorMask_[3]);
-        glDepthMask(depthMask_);
-    }
-
-private:
-    static void SetEnabled(GLenum cap, GLboolean enabled) {
-        if (enabled == GL_TRUE) {
-            glEnable(cap);
-        } else {
-            glDisable(cap);
-        }
-    }
-
-    std::array<GLint, 4> viewport_ = {0, 0, 0, 0};
-    std::array<GLint, 4> scissorBox_ = {0, 0, 0, 0};
-    std::array<GLboolean, 4> colorMask_ = {GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE};
-    std::vector<GLint> textureBindings2D_;
-    GLint textureUnitCount_ = 0;
-    GLint program_ = 0;
-    GLint arrayBuffer_ = 0;
-    GLint elementArrayBuffer_ = 0;
-    GLint activeTexture_ = GL_TEXTURE0;
-    GLint vertexArray_ = 0;
-    GLint framebuffer_ = 0;
-    GLint drawFramebuffer_ = 0;
-    GLint readFramebuffer_ = 0;
-    GLboolean scissorEnabled_ = GL_FALSE;
-    GLboolean blendEnabled_ = GL_FALSE;
-    GLboolean cullFaceEnabled_ = GL_FALSE;
-    GLboolean depthTestEnabled_ = GL_FALSE;
-    GLboolean stencilTestEnabled_ = GL_FALSE;
-    GLboolean depthMask_ = GL_TRUE;
-};
 
 class ScopedFramebuffer {
 public:

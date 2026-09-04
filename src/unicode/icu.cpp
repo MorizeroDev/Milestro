@@ -293,8 +293,15 @@ bool LoadIcuImpl(void* dataPtr, std::string& path) {
 #if MILESTRO_PLATFORM_IOS
         IcuLoaded = init_icu(dataPtr) || load_from(path);
 #else
+        // Android's working directory is not a reliable asset location. A missing
+        // or inaccessible cwd must not prevent the environment fallback from running.
+        const auto loadFromWorkingDirectory = [] {
+            std::error_code error;
+            const auto directory = std::filesystem::current_path(error);
+            return !error && load_from(directory.string());
+        };
         IcuLoaded = init_icu(dataPtr) || load_from(path) || load_from(library_icudtl_path()) ||
-                    load_from(std::filesystem::current_path().string()) ||
+                    loadFromWorkingDirectory() ||
                     load_from(milestro::util::env::getenv("MILESTRO_UNICODE_ICUDAL_PATH"));
 #endif
         if (IcuLoaded) {

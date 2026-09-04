@@ -41,11 +41,51 @@ namespace Milestro.Tests
             Assert.That(UnitySkiaRenderTextureSurface.PayloadAbiMatches(new RenderPayloadAbiInfo(
                     current.AbiVersion,
                     current.LayoutFingerprint,
+                    current.TargetSize + 1,
+                    current.SubmissionSize,
+                    current.TargetEffectiveScaleOffset,
+                    current.TargetDeviceEpochOffset,
+                    current.SubmissionTargetOffset,
+                    current.SubmissionCompletedOffset)),
+                Is.False);
+            Assert.That(UnitySkiaRenderTextureSurface.PayloadAbiMatches(new RenderPayloadAbiInfo(
+                    current.AbiVersion,
+                    current.LayoutFingerprint,
                     current.TargetSize,
                     current.SubmissionSize + 1,
                     current.TargetEffectiveScaleOffset,
                     current.TargetDeviceEpochOffset,
                     current.SubmissionTargetOffset,
+                    current.SubmissionCompletedOffset)),
+                Is.False);
+            Assert.That(UnitySkiaRenderTextureSurface.PayloadAbiMatches(new RenderPayloadAbiInfo(
+                    current.AbiVersion,
+                    current.LayoutFingerprint,
+                    current.TargetSize,
+                    current.SubmissionSize,
+                    current.TargetEffectiveScaleOffset + 1,
+                    current.TargetDeviceEpochOffset,
+                    current.SubmissionTargetOffset,
+                    current.SubmissionCompletedOffset)),
+                Is.False);
+            Assert.That(UnitySkiaRenderTextureSurface.PayloadAbiMatches(new RenderPayloadAbiInfo(
+                    current.AbiVersion,
+                    current.LayoutFingerprint,
+                    current.TargetSize,
+                    current.SubmissionSize,
+                    current.TargetEffectiveScaleOffset,
+                    current.TargetDeviceEpochOffset + 1,
+                    current.SubmissionTargetOffset,
+                    current.SubmissionCompletedOffset)),
+                Is.False);
+            Assert.That(UnitySkiaRenderTextureSurface.PayloadAbiMatches(new RenderPayloadAbiInfo(
+                    current.AbiVersion,
+                    current.LayoutFingerprint,
+                    current.TargetSize,
+                    current.SubmissionSize,
+                    current.TargetEffectiveScaleOffset,
+                    current.TargetDeviceEpochOffset,
+                    current.SubmissionTargetOffset + 1,
                     current.SubmissionCompletedOffset)),
                 Is.False);
             Assert.That(UnitySkiaRenderTextureSurface.PayloadAbiMatches(new RenderPayloadAbiInfo(

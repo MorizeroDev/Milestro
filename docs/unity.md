@@ -375,23 +375,35 @@ returned as visible error text; in player builds the fallback text is
 
 ## Render Texture Backends
 
-`UnityAutoRenderTextureSurface` selects a backend from Unity's active graphics
-device:
+`UnityAutoRenderTextureSurface` selects Metal, Direct3D12, Vulkan, OpenGLES3, or
+OpenGLCore from Unity's active graphics device. It does not change Unity's graphics
+API or fall back from Vulkan to GLES when a native backend is unavailable.
 
-- Metal
-- Direct3D12
-- OpenGLES3
-- OpenGLCore
+Vulkan has two per-target implementations:
 
-`UnitySkiaRenderTextureSurface` also has a Vulkan backend enum path, but native
-Vulkan support depends on the platform build:
+- `UnitySkiaVulkanBackend.Direct` (default): Skia Vulkan draws directly into the
+  Unity target using paired Prepare/Submit events. Queue and shutdown lifetime
+  risks still require device validation; the implementation abandons its Skia
+  context without a CPU wait during shutdown.
+- `UnitySkiaVulkanBackend.StagingCopy`: Skia rasterizes on the CPU and records a
+  buffer-to-image upload in Unity's command buffer. A bounded three-slot ring
+  uses Unity safe-frame progress to retire storage. This is not GPU text
+  rasterization and includes full-surface CPU copies/uploads.
 
-- Android enables Vulkan when the NDK Vulkan library is found.
-- Desktop Vulkan is behind `MILESTRO_ENABLE_DESKTOP_VULKAN_RENDER`.
+Set `MilestroConfiguration.Configuration.RenderSurface.VulkanBackend` before
+creating component render surfaces, or set `VulkanBackend` on an explicit
+`UnitySkiaRenderTextureDescriptor`. Selection is fixed for each target's lifetime;
+changing the configuration is not a live switch for existing surfaces.
 
-Desktop OpenGL support is behind `MILESTRO_ENABLE_DESKTOP_OPENGL_RENDER`.
+Android Vulkan requires `MILESTRO_ENABLE_ANDROID_VULKAN_RENDER=ON` (the default),
+an API 24+ target, and the NDK Vulkan library. An API 23 GLES-only build explicitly
+disables that option. Desktop Vulkan and desktop OpenGL remain behind
+`MILESTRO_ENABLE_DESKTOP_VULKAN_RENDER` and `MILESTRO_ENABLE_DESKTOP_OPENGL_RENDER`.
+See [Android](android.md) for build and acceptance details.
 
-MSAA render textures are rejected by the current descriptor normalization code.
+MSAA render targets are rejected by descriptor normalization. The GLES backend
+also rejects BGRA32; use Auto/RGBA32. Deploy managed bindings and the native
+plugin from the same build: the Vulkan target fields use render payload ABI 2.
 
 ## Troubleshooting
 

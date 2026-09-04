@@ -2,6 +2,7 @@
 #include "unity_render/MilestroUnityGraphicsBackend.h"
 #include "unity_render/MilestroUnityRenderDiagnostics.h"
 #include "unity_render/MilestroUnityRenderSubmission.h"
+#include "unity_render/MilestroUnityVulkanBackendKind.h"
 
 #include <gtest/gtest.h>
 
@@ -71,6 +72,10 @@ MilestroUnityRenderSubmission& KeepAliveSubmission(int32_t graphicsBackend,
     submission->target.abiVersion = kMilestroUnityRenderPayloadAbiVersion;
     submission->target.structSize = kMilestroUnityRenderTargetPayloadSize;
     submission->target.graphicsBackend = graphicsBackend;
+    if (graphicsBackend == static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan)) {
+        submission->target.vulkanBackend =
+                static_cast<int32_t>(milestro::unity_render::vulkan::VulkanBackendKind::Direct);
+    }
     submission->target.width = width;
     submission->target.height = height;
     submission->target.effectiveScale = effectiveScale;
@@ -151,7 +156,7 @@ TEST(UnityRenderDiagnostics, AcceptedAndRejectedCountsRemainIndependent) {
 TEST(UnityRenderDiagnostics, RejectionNeverOverwritesLastAcceptedSubmission) {
     const MilestroUnityRenderDiagnosticsSnapshot before = ReadProductionSnapshot();
     MilestroUnityRenderSubmission& accepted = KeepAliveSubmission(
-            static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan), 2560, 1440, 1.5f, before.currentDeviceEpoch);
+            static_cast<int32_t>(MilestroUnityGraphicsBackend::OpenGLES), 2560, 1440, 1.5f, before.currentDeviceEpoch);
     EXPECT_EQ(Enqueue(accepted.target.graphicsBackend, &accepted), MILESTRO_API_RET_OK);
     const MilestroUnityRenderDiagnosticsSnapshot acceptedSnapshot = ReadProductionSnapshot();
 

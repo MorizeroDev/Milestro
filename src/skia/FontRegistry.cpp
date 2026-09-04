@@ -4,6 +4,7 @@
 #include "Milestro/util/milestro_encoding.h"
 #include "Milestro/util/milestro_env.h"
 #include <cassert>
+#include <exception>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -12,6 +13,9 @@
 #include "include/ports/SkFontMgr_mac_ct.h"
 #elif MILESTRO_PLATFORM_WINDOWS
 #include "include/ports/SkTypeface_win.h"
+#elif defined(__ANDROID__)
+#include "include/ports/SkFontMgr_android.h"
+#include "include/ports/SkFontScanner_FreeType.h"
 #endif
 
 namespace fs = std::filesystem;
@@ -25,6 +29,14 @@ sk_sp<SkFontMgr> MakePlatformSystemFontMgr() {
     return SkFontMgr_New_CoreText(nullptr);
 #elif MILESTRO_PLATFORM_WINDOWS
     return SkFontMgr_New_DirectWrite();
+#elif defined(__ANDROID__)
+    // Registered asset fonts remain usable if the device font configuration fails.
+    try {
+        return SkFontMgr_New_Android(nullptr, SkFontScanner_Make_FreeType());
+    } catch (const std::exception& error) {
+        MILESTROLOG_WARN("Android system FontMgr initialization failed: {}", error.what());
+        return nullptr;
+    }
 #else
     return nullptr;
 #endif

@@ -2,17 +2,21 @@
 
 #include "game/milestro_game_retcode.h"
 #include "unity_render/MilestroUnityGraphicsBackend.h"
+#include "unity_render/MilestroUnityRenderAtomic.h"
 #include "unity_render/MilestroUnityRenderDiagnostics.h"
 #include "unity_render/MilestroUnityRenderSubmission.h"
 #include "unity_render/MilestroUnityRenderSubmissionDraw.h"
+#include "unity_render/MilestroUnityVulkanBackendKind.h"
 
 #include <IUnityGraphics.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstring>
 #include <limits>
 #include <mutex>
+#include <new>
 #include <vector>
 
 #include "unity_render/MilestroUnityRenderLog.h"
@@ -31,6 +35,7 @@
 
 #if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
 #include "unity_render/MilestroUnityRenderVulkanBackend.h"
+#include "unity_render/MilestroUnityRenderVulkanLifecycle.h"
 #endif
 
 namespace milestro::unity_render {
@@ -40,10 +45,13 @@ namespace {
 constexpr int kMetalDrawEventOffset = 0;
 constexpr int kD3D12DrawEventOffset = 1;
 constexpr int kGLDrawEventOffset = 2;
-constexpr int kVulkanDrawEventOffset = 3;
-constexpr int kReservedEventCount = 4;
+constexpr int kVulkanStagingEventOffset = 3;
+constexpr int kVulkanDirectPrepareEventOffset = 4;
+constexpr int kVulkanDirectSubmitEventOffset = 5;
+constexpr int kReservedEventCount = 6;
 constexpr int32_t kRenderDrainMagic = 0x4D524451; // MRDQ
-constexpr int kSubmissionQueueCount = 6;
+constexpr int kSubmissionQueueCount = 5;
+constexpr std::size_t kMaximumQueuedSubmissionsPerRoute = 256;
 
 IUnityInterfaces* gUnityInterfaces = nullptr;
 IUnityGraphics* gUnityGraphics = nullptr;
@@ -58,8 +66,44 @@ MilestroUnityRenderDiagnostics gDiagnostics;
 struct MilestroUnityRenderDrain {
     int32_t magic = 0;
     int32_t graphicsBackend = 0;
+    int32_t vulkanBackend = 0;
     int32_t completed = 0;
+    uint64_t batchToken = 0;
+    int32_t phase = 0;
+    int32_t reserved = 0;
 };
+
+constexpr int32_t kDirectDrainPhaseCreated = 0;
+constexpr int32_t kDirectDrainPhasePreparing = 1;
+constexpr int32_t kDirectDrainPhasePrepared = 2;
+constexpr int32_t kDirectDrainPhaseCompleted = 3;
+
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+// Managed lifetime polling issues the collector event while a direct drain is pending.
+// Two render frames normally bound a missing submit; the sweep limit also bounds a stalled frame counter.
+constexpr uint64_t kDirectDrainExpiryFrameDistance = 2;
+constexpr uint32_t kDirectDrainMaximumSweepCount = 3;
+constexpr std::size_t kMaximumDirectDrainRegistrations = 256;
+
+struct DirectDrainRegistration {
+    uint64_t batchToken = 0;
+    uint64_t deviceEpoch = 0;
+    uint64_t deadlineFrame = 0;
+    uint32_t sweepCount = 0;
+    bool hasFrameDeadline = false;
+    MilestroUnityRenderDrain* drain = nullptr;
+};
+
+struct DirectSubmitTokenHistoryEntry {
+    uint64_t batchToken = 0;
+    uint64_t sequence = 0;
+};
+
+std::array<DirectDrainRegistration, kMaximumDirectDrainRegistrations> gDirectDrainRegistrations;
+std::array<DirectSubmitTokenHistoryEntry, kMaximumDirectDrainRegistrations> gEarlyDirectSubmitTokens;
+std::array<DirectSubmitTokenHistoryEntry, kMaximumDirectDrainRegistrations> gRetiredDirectSubmitTokens;
+uint64_t gDirectSubmitTokenSequence = 0;
+#endif
 
 uint64_t CurrentDeviceEpoch() {
     return gDeviceEpoch.load(std::memory_order_acquire);
@@ -86,8 +130,7 @@ void MarkSubmissionCompleted(MilestroUnityRenderSubmission* submission,
     }
 
     ReleaseSubmissionOwnedResources(submission);
-    std::atomic_ref<int32_t> completed(submission->completed);
-    completed.store(static_cast<int32_t>(status), std::memory_order_release);
+    AtomicStoreRelease(submission->completed, static_cast<int32_t>(status));
 }
 
 bool IsSameRenderTarget(const MilestroUnityRenderSubmission* lhs, const MilestroUnityRenderSubmission* rhs) {
@@ -99,6 +142,11 @@ bool IsSameRenderTarget(const MilestroUnityRenderSubmission* lhs, const Milestro
     const MilestroUnityRenderTargetPayload& right = rhs->target;
     if (left.graphicsBackend != right.graphicsBackend || left.handleKind != right.handleKind) {
         return false;
+    }
+
+    if (left.graphicsBackend == static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan)) {
+        return left.vulkanBackend == right.vulkanBackend && left.vulkanTarget != nullptr &&
+               left.vulkanTarget == right.vulkanTarget && left.vulkanTargetGeneration == right.vulkanTargetGeneration;
     }
 
     if (left.colorRenderBufferHandle != nullptr || right.colorRenderBufferHandle != nullptr) {
@@ -125,14 +173,206 @@ void DropSupersededQueuedSubmissionsLocked(int queueIndex,
     queue.erase(write, queue.end());
 }
 
-void MarkDrainCompleted(MilestroUnityRenderDrain* drain) {
+void MarkDrainCompleted(MilestroUnityRenderDrain* drain, int32_t value = 1) {
     if (drain == nullptr) {
         return;
     }
 
-    std::atomic_ref<int32_t> completed(drain->completed);
-    completed.store(1, std::memory_order_release);
+    AtomicStoreRelease(drain->completed, value);
 }
+
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+DirectDrainRegistration* FindDirectDrainRegistration(uint64_t batchToken) {
+    const auto found = std::find_if(gDirectDrainRegistrations.begin(),
+                                    gDirectDrainRegistrations.end(),
+                                    [batchToken](const DirectDrainRegistration& registration) {
+                                        return registration.batchToken == batchToken;
+                                    });
+    return found == gDirectDrainRegistrations.end() ? nullptr : &*found;
+}
+
+bool HasDirectSubmitToken(const std::array<DirectSubmitTokenHistoryEntry, kMaximumDirectDrainRegistrations>& history,
+                          uint64_t batchToken) {
+    return std::any_of(history.begin(), history.end(), [batchToken](const DirectSubmitTokenHistoryEntry& entry) {
+        return entry.batchToken == batchToken;
+    });
+}
+
+void ForgetDirectSubmitToken(std::array<DirectSubmitTokenHistoryEntry, kMaximumDirectDrainRegistrations>& history,
+                             uint64_t batchToken) {
+    for (DirectSubmitTokenHistoryEntry& entry: history) {
+        if (entry.batchToken == batchToken) {
+            entry = {};
+        }
+    }
+}
+
+void RememberDirectSubmitToken(std::array<DirectSubmitTokenHistoryEntry, kMaximumDirectDrainRegistrations>& history,
+                               uint64_t batchToken) {
+    if (batchToken == 0 || HasDirectSubmitToken(history, batchToken)) {
+        return;
+    }
+    DirectSubmitTokenHistoryEntry* destination = nullptr;
+    for (DirectSubmitTokenHistoryEntry& entry: history) {
+        if (entry.batchToken == 0) {
+            destination = &entry;
+            break;
+        }
+        if (destination == nullptr || entry.sequence < destination->sequence) {
+            destination = &entry;
+        }
+    }
+    if (gDirectSubmitTokenSequence == std::numeric_limits<uint64_t>::max()) {
+        gDirectSubmitTokenSequence = 0;
+        for (DirectSubmitTokenHistoryEntry& entry: gEarlyDirectSubmitTokens) {
+            entry.sequence = entry.batchToken == 0 ? 0 : ++gDirectSubmitTokenSequence;
+        }
+        for (DirectSubmitTokenHistoryEntry& entry: gRetiredDirectSubmitTokens) {
+            entry.sequence = entry.batchToken == 0 ? 0 : ++gDirectSubmitTokenSequence;
+        }
+    }
+    *destination = {batchToken, ++gDirectSubmitTokenSequence};
+}
+
+void RememberRetiredDirectSubmitToken(uint64_t batchToken) {
+    ForgetDirectSubmitToken(gEarlyDirectSubmitTokens, batchToken);
+    RememberDirectSubmitToken(gRetiredDirectSubmitTokens, batchToken);
+}
+
+bool ConsumeEarlyDirectSubmitToken(uint64_t batchToken) {
+    if (!HasDirectSubmitToken(gEarlyDirectSubmitTokens, batchToken)) {
+        return false;
+    }
+    ForgetDirectSubmitToken(gEarlyDirectSubmitTokens, batchToken);
+    return true;
+}
+
+bool RegisterDirectDrain(MilestroUnityRenderDrain* drain) {
+    if (drain == nullptr || drain->batchToken == 0 || FindDirectDrainRegistration(drain->batchToken) != nullptr) {
+        return false;
+    }
+    const auto available = std::find_if(gDirectDrainRegistrations.begin(),
+                                        gDirectDrainRegistrations.end(),
+                                        [](const DirectDrainRegistration& registration) {
+                                            return registration.batchToken == 0;
+                                        });
+    if (available == gDirectDrainRegistrations.end()) {
+        return false;
+    }
+
+    uint64_t currentFrame = 0;
+    available->batchToken = drain->batchToken;
+    available->deviceEpoch = CurrentDeviceEpoch();
+    available->drain = drain;
+    available->hasFrameDeadline = vulkan::TryGetCurrentFrame(currentFrame);
+    available->deadlineFrame = currentFrame + kDirectDrainExpiryFrameDistance;
+    available->sweepCount = 0;
+    return true;
+}
+
+void ForgetDirectDrain(DirectDrainRegistration& registration) {
+    registration = {};
+}
+
+void CompleteDirectDrain(DirectDrainRegistration& registration, bool submit) {
+    MilestroUnityRenderDrain* drain = registration.drain;
+    const uint64_t batchToken = registration.batchToken;
+    if (drain == nullptr) {
+        RememberRetiredDirectSubmitToken(batchToken);
+        ForgetDirectDrain(registration);
+        return;
+    }
+
+    int32_t expected = kDirectDrainPhasePrepared;
+    if (!AtomicCompareExchangeAcquireRelease(drain->phase, expected, kDirectDrainPhaseCompleted)) {
+        vulkan::FailDirectPrepared(batchToken, MarkSubmissionCompleted);
+        RememberRetiredDirectSubmitToken(batchToken);
+        ForgetDirectDrain(registration);
+        MarkDrainCompleted(drain);
+        return;
+    }
+
+    if (submit) {
+        if (!vulkan::SubmitDirectPrepared(batchToken, MarkSubmissionCompleted)) {
+            vulkan::FailDirectPrepared(batchToken, MarkSubmissionCompleted);
+        }
+    } else {
+        vulkan::FailDirectPrepared(batchToken, MarkSubmissionCompleted);
+    }
+    RememberRetiredDirectSubmitToken(batchToken);
+    ForgetDirectDrain(registration);
+    MarkDrainCompleted(drain);
+}
+
+bool SweepExpiredDirectDrains() {
+    uint64_t currentFrame = 0;
+    const bool hasCurrentFrame = vulkan::TryGetCurrentFrame(currentFrame);
+    const uint64_t currentEpoch = CurrentDeviceEpoch();
+    for (DirectDrainRegistration& registration: gDirectDrainRegistrations) {
+        if (registration.batchToken == 0) {
+            continue;
+        }
+        ++registration.sweepCount;
+        const bool epochChanged = registration.deviceEpoch != currentEpoch;
+        const bool deadlineReached = registration.hasFrameDeadline && hasCurrentFrame &&
+                                     vulkan::SafeFrameHasReached(registration.deadlineFrame, currentFrame);
+        const bool sweepLimitReached = registration.sweepCount >= kDirectDrainMaximumSweepCount;
+        if (epochChanged || deadlineReached || sweepLimitReached) {
+            CompleteDirectDrain(registration, false);
+        }
+    }
+
+    return std::any_of(gDirectDrainRegistrations.begin(),
+                       gDirectDrainRegistrations.end(),
+                       [](const DirectDrainRegistration& registration) {
+                           return registration.batchToken != 0;
+                       });
+}
+
+void CancelAllDirectDrains() {
+    for (DirectDrainRegistration& registration: gDirectDrainRegistrations) {
+        if (registration.batchToken != 0) {
+            CompleteDirectDrain(registration, false);
+        }
+    }
+}
+
+void CompleteOrphanedDirectDrains() {
+    for (DirectDrainRegistration& registration: gDirectDrainRegistrations) {
+        if (registration.batchToken != 0 && !vulkan::HasDirectBatch(registration.batchToken)) {
+            MilestroUnityRenderDrain* drain = registration.drain;
+            if (drain != nullptr) {
+                int32_t expected = kDirectDrainPhasePrepared;
+                AtomicCompareExchangeAcquireRelease(drain->phase, expected, kDirectDrainPhaseCompleted);
+            }
+            RememberRetiredDirectSubmitToken(registration.batchToken);
+            ForgetDirectDrain(registration);
+            MarkDrainCompleted(drain);
+        }
+    }
+}
+
+void SubmitDirectTicket(uint64_t batchToken) {
+    if (batchToken == 0) {
+        return;
+    }
+    DirectDrainRegistration* registration = FindDirectDrainRegistration(batchToken);
+    if (registration != nullptr) {
+        CompleteDirectDrain(*registration, registration->deviceEpoch == CurrentDeviceEpoch());
+        return;
+    }
+    if (HasDirectSubmitToken(gRetiredDirectSubmitTokens, batchToken)) {
+        return;
+    }
+    if (HasDirectSubmitToken(gEarlyDirectSubmitTokens, batchToken)) {
+        return;
+    }
+    // An unknown ticket may be early, or retired and evicted from the bounded history.
+    // It owns no queued submissions: only a matching prepare may consume the early
+    // marker and fail its batch. Never let a stale submit drain another batch's work.
+    RememberDirectSubmitToken(gEarlyDirectSubmitTokens, batchToken);
+}
+#endif
 
 bool IsRenderDrainPayload(void* data) {
     if (data == nullptr) {
@@ -144,23 +384,32 @@ bool IsRenderDrainPayload(void* data) {
     return magic == kRenderDrainMagic;
 }
 
-int SubmissionQueueIndex(int32_t graphicsBackend) {
+int SubmissionQueueIndex(int32_t graphicsBackend, int32_t vulkanBackend = 0) {
     switch (static_cast<MilestroUnityGraphicsBackend>(graphicsBackend)) {
         case MilestroUnityGraphicsBackend::Metal:
+            return 0;
         case MilestroUnityGraphicsBackend::Direct3D12:
-        case MilestroUnityGraphicsBackend::Vulkan:
+            return 1;
         case MilestroUnityGraphicsBackend::OpenGL:
         case MilestroUnityGraphicsBackend::OpenGLES:
-            return graphicsBackend;
+            return 2;
+        case MilestroUnityGraphicsBackend::Vulkan:
+            if (vulkanBackend == static_cast<int32_t>(vulkan::VulkanBackendKind::Direct)) {
+                return 3;
+            }
+            if (vulkanBackend == static_cast<int32_t>(vulkan::VulkanBackendKind::StagingCopy)) {
+                return 4;
+            }
+            return -1;
         default:
             return -1;
     }
 }
 
-std::vector<MilestroUnityRenderSubmission*> DrainQueuedSubmissions(int32_t graphicsBackend) {
+std::vector<MilestroUnityRenderSubmission*> DrainQueuedSubmissions(int32_t graphicsBackend, int32_t vulkanBackend) {
     std::lock_guard lock(gSubmissionQueueMutex);
 
-    const int queueIndex = SubmissionQueueIndex(graphicsBackend);
+    const int queueIndex = SubmissionQueueIndex(graphicsBackend, vulkanBackend);
     if (queueIndex < 0) {
         MILESTROLOG_ERROR("Milestro Unity render drain received unknown backend {}.", graphicsBackend);
         return {};
@@ -171,19 +420,44 @@ std::vector<MilestroUnityRenderSubmission*> DrainQueuedSubmissions(int32_t graph
     return drained;
 }
 
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+void CancelQueuedSubmissionsForVulkanTarget(void* target, uint64_t generation, uint64_t deviceEpoch) {
+    std::lock_guard lock(gSubmissionQueueMutex);
+    for (std::vector<MilestroUnityRenderSubmission*>& queue: gSubmissionQueues) {
+        auto write = queue.begin();
+        for (auto read = queue.begin(); read != queue.end(); ++read) {
+            MilestroUnityRenderSubmission* submission = *read;
+            const MilestroUnityRenderTargetPayload& payload = submission->target;
+            if (payload.graphicsBackend == static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan) &&
+                payload.vulkanTarget == target && payload.vulkanTargetGeneration == generation &&
+                payload.deviceEpoch == deviceEpoch) {
+                MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
+                continue;
+            }
+            *write = submission;
+            ++write;
+        }
+        queue.erase(write, queue.end());
+    }
+}
+#endif
+
 void CompleteQueuedSubmissions() {
     std::vector<MilestroUnityRenderSubmission*> submissions;
-    {
-        std::lock_guard lock(gSubmissionQueueMutex);
-        for (std::vector<MilestroUnityRenderSubmission*>& queue: gSubmissionQueues) {
-            submissions.insert(submissions.end(), queue.begin(), queue.end());
-            queue.clear();
+    for (std::vector<MilestroUnityRenderSubmission*>& queue: gSubmissionQueues) {
+        {
+            std::lock_guard lock(gSubmissionQueueMutex);
+            submissions.swap(queue);
         }
+        for (MilestroUnityRenderSubmission* submission: submissions) {
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
+        }
+        submissions.clear();
     }
-
-    for (MilestroUnityRenderSubmission* submission: submissions) {
-        MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
-    }
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    CancelAllDirectDrains();
+    vulkan::FailDirectPrepared(MarkSubmissionCompleted);
+#endif
 }
 
 int64_t EnqueueSubmission(int32_t graphicsBackend, MilestroUnityRenderSubmission* submission) {
@@ -209,7 +483,16 @@ int64_t EnqueueSubmission(int32_t graphicsBackend, MilestroUnityRenderSubmission
         return MILESTRO_API_RET_FAILED;
     }
 
-    const int queueIndex = SubmissionQueueIndex(graphicsBackend);
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    if (static_cast<MilestroUnityGraphicsBackend>(graphicsBackend) == MilestroUnityGraphicsBackend::Vulkan &&
+        !vulkan::IsSubmissionTargetValid(*submission)) {
+        gDiagnostics.RecordRejectedSubmission();
+        MILESTROLOG_ERROR("Milestro Unity render enqueue rejected an invalid Vulkan target registration.");
+        return MILESTRO_API_RET_FAILED;
+    }
+#endif
+
+    const int queueIndex = SubmissionQueueIndex(graphicsBackend, submission->target.vulkanBackend);
     if (queueIndex < 0) {
         gDiagnostics.RecordRejectedSubmission();
         MILESTROLOG_ERROR("Milestro Unity render enqueue received unknown backend {}.", graphicsBackend);
@@ -217,18 +500,47 @@ int64_t EnqueueSubmission(int32_t graphicsBackend, MilestroUnityRenderSubmission
     }
 
     std::vector<MilestroUnityRenderSubmission*> supersededSubmissions;
-    {
+    try {
+        supersededSubmissions.reserve(kMaximumQueuedSubmissionsPerRoute);
+    } catch (const std::bad_alloc&) {
+        gDiagnostics.RecordRejectedSubmission();
+        return MILESTRO_API_RET_FAILED;
+    }
+    bool queueRejected = false;
+    try {
         std::lock_guard lock(gSubmissionQueueMutex);
+        const bool isMetal =
+                static_cast<MilestroUnityGraphicsBackend>(graphicsBackend) == MilestroUnityGraphicsBackend::Metal;
+        const bool isVulkanStaging =
+                static_cast<MilestroUnityGraphicsBackend>(graphicsBackend) == MilestroUnityGraphicsBackend::Vulkan &&
+                submission->target.vulkanBackend == static_cast<int32_t>(vulkan::VulkanBackendKind::StagingCopy);
 #if defined(__APPLE__)
-        if (static_cast<MilestroUnityGraphicsBackend>(graphicsBackend) == MilestroUnityGraphicsBackend::Metal) {
+        if (isMetal) {
             DropSupersededQueuedSubmissionsLocked(queueIndex, submission, supersededSubmissions);
         }
+#else
+        (void) isMetal;
 #endif
-        gSubmissionQueues[queueIndex].push_back(submission);
+        if (isVulkanStaging && MilestroUnityRenderSubmissionCanReplaceQueuedContent(submission)) {
+            DropSupersededQueuedSubmissionsLocked(queueIndex, submission, supersededSubmissions);
+        }
+        if (gSubmissionQueues[queueIndex].size() >= kMaximumQueuedSubmissionsPerRoute) {
+            gDiagnostics.RecordRejectedSubmission();
+            MILESTROLOG_ERROR("Milestro Unity render queue {} reached its fixed capacity.", queueIndex);
+            queueRejected = true;
+        } else {
+            gSubmissionQueues[queueIndex].push_back(submission);
+        }
+    } catch (const std::bad_alloc&) {
+        gDiagnostics.RecordRejectedSubmission();
+        queueRejected = true;
     }
     for (MilestroUnityRenderSubmission* superseded: supersededSubmissions) {
-        MILESTRO_RENDER_LOG_WARN("Dropping superseded Milestro Metal render submission before queue drain.");
+        MILESTRO_RENDER_LOG_WARN("Dropping superseded Milestro render submission before queue drain.");
         MarkSubmissionCompleted(superseded, MilestroUnityRenderSubmissionStatus::Failed);
+    }
+    if (queueRejected) {
+        return MILESTRO_API_RET_FAILED;
     }
     const MilestroUnityRenderTargetPayload& target = submission->target;
     gDiagnostics.RecordAcceptedSubmission(graphicsBackend,
@@ -239,7 +551,10 @@ int64_t EnqueueSubmission(int32_t graphicsBackend, MilestroUnityRenderSubmission
     return MILESTRO_API_RET_OK;
 }
 
-void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* submission) {
+void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* submission, uint64_t directBatchToken = 0) {
+#if !defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    (void) directBatchToken;
+#endif
     if (submission == nullptr) {
         return;
     }
@@ -355,7 +670,7 @@ void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* subm
         return;
     }
 
-    if (eventOffset == kVulkanDrawEventOffset) {
+    if (eventOffset == kVulkanStagingEventOffset) {
         if (target.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan)) {
             MILESTROLOG_ERROR("Milestro Vulkan render event received backend {}.", target.graphicsBackend);
             MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
@@ -370,15 +685,29 @@ void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* subm
         }
 
 #if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
-        const auto status = vulkan::Render(*submission);
-        if (status < 0) {
-            MILESTROLOG_ERROR("Milestro Vulkan render event failed: {}", status);
+        const vulkan::VulkanSubmissionResult result = vulkan::RenderStaging(submission);
+        MarkSubmissionCompleted(result.submission, result.status);
+#else
+        MILESTROLOG_ERROR("Milestro Vulkan render backend is not enabled in this Milestro build.");
+        MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
+#endif
+        return;
+    }
+
+    if (eventOffset == kVulkanDirectPrepareEventOffset) {
+        if (target.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan) ||
+            target.vulkanBackend != static_cast<int32_t>(vulkan::VulkanBackendKind::Direct) ||
+            gRenderer != kUnityGfxRendererVulkan) {
+            MILESTROLOG_ERROR("Milestro Vulkan direct prepare event received a mismatched target or renderer.");
             MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
             return;
         }
-        MarkSubmissionCompleted(submission);
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+        const vulkan::VulkanSubmissionResult result = vulkan::PrepareDirect(directBatchToken, submission);
+        if (result.submission != nullptr) {
+            MarkSubmissionCompleted(result.submission, result.status);
+        }
 #else
-        MILESTROLOG_ERROR("Milestro Vulkan render backend is not enabled in this Milestro build.");
         MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
 #endif
         return;
@@ -394,7 +723,66 @@ void DrainRenderQueue(int eventOffset, MilestroUnityRenderDrain* drain) {
     }
 
     std::lock_guard renderLock(gRenderSystemMutex);
-    std::vector<MilestroUnityRenderSubmission*> submissions = DrainQueuedSubmissions(drain->graphicsBackend);
+
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    if (eventOffset == kVulkanDirectPrepareEventOffset) {
+        int32_t expected = kDirectDrainPhaseCreated;
+        if (!AtomicCompareExchangeAcquireRelease(drain->phase, expected, kDirectDrainPhasePreparing)) {
+            return;
+        }
+
+        std::vector<MilestroUnityRenderSubmission*> submissions =
+                DrainQueuedSubmissions(drain->graphicsBackend, drain->vulkanBackend);
+        const bool validRoute = drain->graphicsBackend == static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan) &&
+                                drain->vulkanBackend == static_cast<int32_t>(vulkan::VulkanBackendKind::Direct) &&
+                                drain->batchToken != 0 &&
+                                drain->batchToken <= static_cast<uint64_t>(std::numeric_limits<uintptr_t>::max());
+        const bool submittedBeforePrepare = validRoute && ConsumeEarlyDirectSubmitToken(drain->batchToken);
+        if (!validRoute || submittedBeforePrepare ||
+            HasDirectSubmitToken(gRetiredDirectSubmitTokens, drain->batchToken) ||
+            !vulkan::BeginDirectBatch(drain->batchToken)) {
+            for (MilestroUnityRenderSubmission* submission: submissions) {
+                MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
+            }
+            if (drain->batchToken != 0) {
+                RememberRetiredDirectSubmitToken(drain->batchToken);
+            }
+            AtomicStoreRelease(drain->phase, kDirectDrainPhaseCompleted);
+            MarkDrainCompleted(drain);
+            return;
+        }
+        for (MilestroUnityRenderSubmission* submission: submissions) {
+            RenderQueuedSubmission(eventOffset, submission, drain->batchToken);
+        }
+        if (!vulkan::FinishDirectBatchPrepare(drain->batchToken)) {
+            vulkan::FailDirectPrepared(drain->batchToken, MarkSubmissionCompleted);
+            AtomicStoreRelease(drain->phase, kDirectDrainPhaseCompleted);
+            MarkDrainCompleted(drain);
+            return;
+        }
+        if (!RegisterDirectDrain(drain)) {
+            vulkan::FailDirectPrepared(drain->batchToken, MarkSubmissionCompleted);
+            AtomicStoreRelease(drain->phase, kDirectDrainPhaseCompleted);
+            MarkDrainCompleted(drain);
+            return;
+        }
+        AtomicStoreRelease(drain->phase, kDirectDrainPhasePrepared);
+        return;
+    }
+
+    if (eventOffset == kVulkanStagingEventOffset &&
+        drain->graphicsBackend == static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan) &&
+        drain->vulkanBackend == 0) {
+        const bool directPending = SweepExpiredDirectDrains();
+        const bool retirementPending = vulkan::CollectRetiredTargets();
+        const bool pending = directPending || retirementPending;
+        MarkDrainCompleted(drain, pending ? 2 : 1);
+        return;
+    }
+#endif
+
+    std::vector<MilestroUnityRenderSubmission*> submissions =
+            DrainQueuedSubmissions(drain->graphicsBackend, drain->vulkanBackend);
     for (MilestroUnityRenderSubmission* submission: submissions) {
         RenderQueuedSubmission(eventOffset, submission);
     }
@@ -404,7 +792,8 @@ void DrainRenderQueue(int eventOffset, MilestroUnityRenderDrain* drain) {
 void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType) {
     std::lock_guard renderLock(gRenderSystemMutex);
 
-    if (eventType == kUnityGfxDeviceEventInitialize || eventType == kUnityGfxDeviceEventShutdown) {
+    if (eventType == kUnityGfxDeviceEventInitialize || eventType == kUnityGfxDeviceEventBeforeReset ||
+        eventType == kUnityGfxDeviceEventShutdown) {
         CompleteQueuedSubmissions();
     }
 
@@ -435,10 +824,13 @@ void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType
     vulkan::OnGraphicsDeviceEvent(eventType,
                                   gUnityInterfaces,
                                   gRenderer,
-                                  gEventBase >= 0 ? gEventBase + kVulkanDrawEventOffset : -1);
+                                  gEventBase >= 0 ? gEventBase + kVulkanStagingEventOffset : -1,
+                                  gEventBase >= 0 ? gEventBase + kVulkanDirectPrepareEventOffset : -1,
+                                  gEventBase >= 0 ? gEventBase + kVulkanDirectSubmitEventOffset : -1);
 #endif
 
-    if (eventType == kUnityGfxDeviceEventInitialize || eventType == kUnityGfxDeviceEventShutdown) {
+    if (eventType == kUnityGfxDeviceEventInitialize || eventType == kUnityGfxDeviceEventBeforeReset ||
+        eventType == kUnityGfxDeviceEventShutdown) {
         AdvanceDeviceEpoch();
     }
 }
@@ -446,7 +838,6 @@ void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType
 void UNITY_INTERFACE_API OnRenderEvent(int eventId, void* data) {
     if (gEventBase < 0) {
         MILESTRO_RENDER_LOG_WARN("Ignoring unknown Milestro Unity render event: {}", eventId);
-        MarkDrainCompleted(static_cast<MilestroUnityRenderDrain*>(data));
         return;
     }
 
@@ -456,6 +847,13 @@ void UNITY_INTERFACE_API OnRenderEvent(int eventId, void* data) {
     }
 
     const int eventOffset = eventId - gEventBase;
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    if (eventOffset == kVulkanDirectSubmitEventOffset) {
+        std::lock_guard renderLock(gRenderSystemMutex);
+        SubmitDirectTicket(static_cast<uint64_t>(reinterpret_cast<uintptr_t>(data)));
+        return;
+    }
+#endif
     if (!IsRenderDrainPayload(data)) {
         MILESTROLOG_ERROR("Milestro Unity render event received non-drain payload.");
         return;
@@ -503,7 +901,7 @@ int64_t RenderTextureEventId(int32_t graphicsBackend, int32_t& eventId) {
 #endif
         case MilestroUnityGraphicsBackend::Vulkan:
 #if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
-            eventId = gEventBase + kVulkanDrawEventOffset;
+            eventId = gEventBase + kVulkanDirectPrepareEventOffset;
             return MILESTRO_API_RET_OK;
 #else
             eventId = -1;
@@ -515,6 +913,35 @@ int64_t RenderTextureEventId(int32_t graphicsBackend, int32_t& eventId) {
             MILESTROLOG_ERROR("Milestro Unity render backend {} is unknown.", graphicsBackend);
             return MILESTRO_API_RET_FAILED;
     }
+}
+
+int64_t VulkanRenderEventIds(int32_t vulkanBackend, int32_t& firstEventId, int32_t& secondEventId) {
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    if (gEventBase < 0) {
+        firstEventId = -1;
+        secondEventId = -1;
+        return MILESTRO_API_RET_FAILED;
+    }
+    switch (static_cast<vulkan::VulkanBackendKind>(vulkanBackend)) {
+        case vulkan::VulkanBackendKind::Direct:
+            firstEventId = gEventBase + kVulkanDirectPrepareEventOffset;
+            secondEventId = gEventBase + kVulkanDirectSubmitEventOffset;
+            return MILESTRO_API_RET_OK;
+        case vulkan::VulkanBackendKind::StagingCopy:
+            firstEventId = gEventBase + kVulkanStagingEventOffset;
+            secondEventId = -1;
+            return MILESTRO_API_RET_OK;
+        default:
+            firstEventId = -1;
+            secondEventId = -1;
+            return MILESTRO_API_RET_FAILED;
+    }
+#else
+    (void) vulkanBackend;
+    firstEventId = -1;
+    secondEventId = -1;
+    return MILESTRO_API_RET_FAILED;
+#endif
 }
 
 } // namespace
@@ -531,8 +958,56 @@ int64_t GetRenderTextureEventIdForExport(int32_t graphicsBackend, int32_t& event
     return RenderTextureEventId(graphicsBackend, eventId);
 }
 
+int64_t GetVulkanRenderEventIdsForExport(int32_t vulkanBackend, int32_t& firstEventId, int32_t& secondEventId) {
+    return VulkanRenderEventIds(vulkanBackend, firstEventId, secondEventId);
+}
+
 int64_t EnqueueSubmissionForExport(int32_t graphicsBackend, void* submission) {
     return EnqueueSubmission(graphicsBackend, static_cast<MilestroUnityRenderSubmission*>(submission));
+}
+
+int64_t CreateVulkanTargetForExport(void* nativeTexture,
+                                    int32_t width,
+                                    int32_t height,
+                                    int32_t vulkanBackend,
+                                    uint64_t deviceEpoch,
+                                    void*& target,
+                                    uint64_t& generation) {
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    std::lock_guard renderLock(gRenderSystemMutex);
+    if (gRenderer != kUnityGfxRendererVulkan || deviceEpoch != CurrentDeviceEpoch()) {
+        target = nullptr;
+        generation = 0;
+        return MILESTRO_API_RET_FAILED;
+    }
+    return vulkan::CreateTarget(nativeTexture, width, height, vulkanBackend, deviceEpoch, target, generation);
+#else
+    (void) nativeTexture;
+    (void) width;
+    (void) height;
+    (void) vulkanBackend;
+    (void) deviceEpoch;
+    target = nullptr;
+    generation = 0;
+    return MILESTRO_API_RET_FAILED;
+#endif
+}
+
+int64_t
+DestroyVulkanTargetForExport(void*& target, uint64_t generation, uint64_t deviceEpoch, int32_t& retirementPending) {
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    std::lock_guard renderLock(gRenderSystemMutex);
+    CancelQueuedSubmissionsForVulkanTarget(target, generation, deviceEpoch);
+    vulkan::FailDirectPreparedForTarget(target, generation, deviceEpoch, MarkSubmissionCompleted);
+    CompleteOrphanedDirectDrains();
+    return vulkan::DestroyTarget(target, generation, deviceEpoch, retirementPending);
+#else
+    (void) generation;
+    (void) deviceEpoch;
+    target = nullptr;
+    retirementPending = 0;
+    return MILESTRO_API_RET_OK;
+#endif
 }
 
 int64_t GetPayloadAbiInfoForExport(uint32_t& abiVersion,

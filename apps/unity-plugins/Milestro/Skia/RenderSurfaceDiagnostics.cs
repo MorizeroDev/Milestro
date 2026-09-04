@@ -246,6 +246,7 @@ namespace Milestro.Skia
                 hash = Mix(hash, (ulong)configuration.MaxGlobalBytes);
                 hash = Mix(hash, (ulong)configuration.MaxTransitionBytes);
                 hash = Mix(hash, (ulong)configuration.MaxAttemptsPerRequestAndEpoch);
+                hash = Mix(hash, (ulong)configuration.VulkanBackend);
                 return hash;
             }
         }

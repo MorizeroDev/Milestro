@@ -8,6 +8,7 @@ option(MILESTRO_ENABLE_TESTS "Enable tests" ON)
 option(MILESTRO_WITH_ADDRESS_SANITIZER "Build with clang address sanitizer" OFF)
 option(MILESTRO_ENABLE_RELEASE_SYMBOLS "Build release binaries with debug info for split symbol packages" ON)
 option(MILESTRO_REMAP_SOURCE_PATHS "Remap absolute source and build paths in release debug info" ON)
+option(MILESTRO_ENABLE_ANDROID_VULKAN_RENDER "Build the Android Unity Vulkan backends (requires API 24+)" ON)
 option(MILESTRO_ENABLE_DESKTOP_OPENGL_RENDER "Enable experimental Unity OpenGLCore RenderTexture backend" OFF)
 option(MILESTRO_ENABLE_DESKTOP_VULKAN_RENDER "Enable experimental Unity Vulkan RenderTexture backend" OFF)
 option(MILESTRO_RENDER_DEBUG_LOG "Enable Unity render-flow debug logs" OFF)
@@ -181,27 +182,19 @@ if (ANDROID)
 
     # 输出设置的架构
     message(STATUS "MILESTRO_TARGET_ARCH: ${MILESTRO_TARGET_ARCH}")
-
-    # 提取版本号
-    if (NOT DEFINED ANDROID_PLATFORM)
-        set(ANDROID_PLATFORM "android-23")
-    endif ()
-    message(STATUS "ANDROID_PLATFORM: ${ANDROID_PLATFORM}")
-    string(REGEX REPLACE ".*android-([0-9]+).*" "\\1" ANDROID_SDK_VERSION ${ANDROID_PLATFORM})
-    message(STATUS "ANDROID_SDK_VERSION: ${ANDROID_SDK_VERSION}")
-
-    if (CMAKE_HOST_WIN32)
-        set(NDK_SCRIPT_SUFFIX ".cmd")
-        set(NDK_SCRIPT_SUFFIX_EXE ".exe")
-    else ()
-        set(NDK_SCRIPT_SUFFIX "")
-        set(NDK_SCRIPT_SUFFIX_EXE "")
-    endif ()
-    message(STATUS "NDK_SCRIPT_SUFFIX: ${NDK_SCRIPT_SUFFIX}")
 endif ()
 
 #############################################################
 set(PROJECT_PLATFORM_LIBRARIES)
+
+# Resolve Android backends before downloading/building Skia and ICU. An explicitly
+# enabled backend must never disappear silently from an otherwise successful build.
+set(MILESTRO_ENABLE_UNITY_GL_RENDER OFF)
+set(MILESTRO_ENABLE_UNITY_VULKAN_RENDER OFF)
+if (ANDROID)
+    include(MilestroAndroidGraphics)
+    set(ANDROID_SDK_VERSION "${MILESTRO_ANDROID_API_LEVEL}")
+endif ()
 set(PROJECT_PLATFORM_INCLUDES)
 
 # Setup external libraries
@@ -328,28 +321,7 @@ elseif (CMAKE_DL_LIBS)
     set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} ${CMAKE_DL_LIBS})
 endif ()
 
-set(MILESTRO_ENABLE_UNITY_GL_RENDER OFF)
-set(MILESTRO_ENABLE_UNITY_VULKAN_RENDER OFF)
-if (ANDROID)
-    find_library(MILESTRO_ANDROID_GLESV3_LIBRARY GLESv3)
-    find_library(MILESTRO_ANDROID_EGL_LIBRARY EGL)
-    find_library(MILESTRO_ANDROID_VULKAN_LIBRARY vulkan)
-    if (MILESTRO_ANDROID_GLESV3_LIBRARY AND MILESTRO_ANDROID_EGL_LIBRARY)
-        set(MILESTRO_ENABLE_UNITY_GL_RENDER ON)
-        set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES}
-                ${MILESTRO_ANDROID_GLESV3_LIBRARY}
-                ${MILESTRO_ANDROID_EGL_LIBRARY})
-    else ()
-        message(WARNING "Milestro Unity GL render backend disabled: Android GLESv3/EGL libraries not found")
-    endif ()
-    if (MILESTRO_ANDROID_VULKAN_LIBRARY)
-        set(MILESTRO_ENABLE_UNITY_VULKAN_RENDER ON)
-        set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES}
-                ${MILESTRO_ANDROID_VULKAN_LIBRARY})
-    else ()
-        message(WARNING "Milestro Unity Vulkan render backend disabled: Android vulkan library not found")
-    endif ()
-elseif (MILESTRO_ENABLE_DESKTOP_OPENGL_RENDER AND UNIX AND NOT APPLE)
+if (MILESTRO_ENABLE_DESKTOP_OPENGL_RENDER AND UNIX AND NOT APPLE AND NOT ANDROID)
     find_package(OpenGL QUIET)
     if (OpenGL_FOUND)
         set(MILESTRO_ENABLE_UNITY_GL_RENDER ON)
@@ -488,7 +460,9 @@ endif ()
 if (MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
     set(MILESTRO_DEFINITIONS ${MILESTRO_DEFINITIONS} "MILESTRO_ENABLE_UNITY_VULKAN_RENDER")
     list(APPEND MILESTRO_APPLICATION_FILE
-            src/unity_render/MilestroUnityRenderVulkanBackend.cpp)
+            src/unity_render/MilestroUnityRenderVulkanBackend.cpp
+            src/unity_render/MilestroUnityRenderVulkanDirectAdapter.cpp
+            src/unity_render/MilestroUnityRenderVulkanStagingCopyAdapter.cpp)
 endif ()
 
 if (MILESTRO_RENDER_DEBUG_LOG)

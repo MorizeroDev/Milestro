@@ -58,6 +58,7 @@ third-party dependencies to static libraries.
 | `MILESTRO_WITH_ADDRESS_SANITIZER` | `OFF` | Adds ASan flags for Clang builds. |
 | `MILESTRO_ENABLE_RELEASE_SYMBOLS` | `ON` | Keeps debug info in release-style builds for split symbol packages. |
 | `MILESTRO_REMAP_SOURCE_PATHS` | `ON` | Remaps absolute source/build paths in debug info. |
+| `MILESTRO_ENABLE_ANDROID_VULKAN_RENDER` | `ON` | Android only: requires API 24+ and Vulkan. Set `OFF` for an API 23 GLES-only build. |
 | `MILESTRO_ENABLE_DESKTOP_OPENGL_RENDER` | `OFF` | Enables the experimental Unity OpenGLCore RenderTexture backend on desktop Linux. |
 | `MILESTRO_ENABLE_DESKTOP_VULKAN_RENDER` | `OFF` | Enables the experimental Unity Vulkan RenderTexture backend on desktop. |
 | `MILESTRO_UNITY_PLUGIN_OUTPUT_DIR` | unset | Optional output directory for the `milestro_unity_plugin` target. Defaults to `<build-dir>/unity-plugin`. |
@@ -74,8 +75,24 @@ ctest --test-dir cmake-build-relwithdebinfo --output-on-failure
 The non-Android tests copy `tests/data` into the runtime output directory.
 ICU-related tests use `ext/icu-cmake/common/icudtl.dat`.
 
-Android test execution is currently left as a manual workflow in the CMake test
-files.
+Full Android device test execution is still manual. The Android build workflow
+runs dependency-free backend configuration checks, NDK header/ABI compilation for
+arm64 and ARMv7, and host-side platform contract tests. These do not validate GPU
+rendering. See [Android](android.md) for commands and the device acceptance matrix.
+
+## Android with Unity's bundled tools (Windows)
+
+```powershell
+./scripts/build-android-unity.ps1 `
+  -UnityRoot 'D:\UnityHub\Editor\6000.3.7f1' -RunContractTests -PackageUnity
+```
+
+This selects that installation's SDK/NDK/JDK, defaults to ARM64 / API 26 with
+Vulkan and GLES, enables flexible page-size linking, and packages matching
+native/C#/ICU files. See `docs/android.md` for toolchain results and
+`tests/android_unity/README.md` for isolated Demo APK validation. The helper
+restores its process environment and supports `-GlesOnly -ApiLevel 23` and
+`-ConfigureOnly` for separate native GLES-only configurations.
 
 ## Binding Generation
 

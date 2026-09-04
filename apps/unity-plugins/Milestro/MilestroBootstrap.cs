@@ -17,7 +17,16 @@ namespace Milestro
             if (System.Threading.Interlocked.Exchange(ref _initialized, 1) == 1)
                 return;
 
-            IcuInitializer.Init();
+            try
+            {
+                IcuInitializer.Init();
+            }
+            catch
+            {
+                // A failed editor load must not suppress a later runtime attempt.
+                System.Threading.Interlocked.Exchange(ref _initialized, 0);
+                throw;
+            }
 #endif
         }
 
@@ -26,7 +35,7 @@ namespace Milestro
             InitIcu();
         }
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void RuntimeBoot()
         {
             Boot();
@@ -37,7 +46,18 @@ namespace Milestro
         [InitializeOnLoadMethod]
         private static void EditorBoot()
         {
-            Boot();
+            try
+            {
+                Boot();
+            }
+            catch (System.DllNotFoundException) when (Application.isBatchMode)
+            {
+                // Cross-compiling a player does not require a host-editor native
+                // binary. RuntimeBoot still fails normally if that player cannot
+                // load its own library; do not silently skip player initialization.
+                Debug.LogWarning("Milestro: host native library unavailable during batch import. " +
+                                 "ICU initialization is deferred until runtime; editor previews require a host plugin.");
+            }
         }
 #endif
     }

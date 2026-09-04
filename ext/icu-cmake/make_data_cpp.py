@@ -25,7 +25,8 @@ import sys
 import mmap
 
 def get_version_number(path):
-    input_data = open(path, 'rb').read()
+    with open(path, 'rb') as source:
+        input_data = source.read()
     n = input_data.find(b'icudt')
     if n == -1:
         exit("Cannot find a version number in %s." % path)
@@ -62,11 +63,14 @@ def convert(fmt, src_path, dst_path):
             if not line:
                 break
             o.write('%s%s%s\n' % (line_begin, line, line_end))
+        if not export_data:
+            # A portable placeholder: MSVC rejects an inferred zero-length array.
+            o.write('0,\n')
         o.write(footer.format(name))
 
 
-cpp = ('#include <cstdint>\nextern "C" uint32_t {0}[] __attribute__((aligned(16))) = {{\n',
-       '', ',', '}};\n')
+cpp = ('#include <cstdint>\nextern "C" {{\nalignas(16) uint32_t {0}[] = {{\n',
+       '', ',', '}};\n}}\n')
 
 if __name__ == '__main__':
     convert(cpp, sys.argv[1], sys.argv[2])

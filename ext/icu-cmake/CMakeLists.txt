@@ -55,7 +55,11 @@ target_compile_definitions(icu PUBLIC
         >
 )
 
-target_compile_options(icu PRIVATE -Wno-deprecated-declarations)
+if (MSVC)
+    target_compile_options(icu PRIVATE /wd4996)
+else ()
+    target_compile_options(icu PRIVATE -Wno-deprecated-declarations)
+endif ()
 
 target_include_directories(icu PUBLIC ${icu_includes})
 target_link_libraries(icu PUBLIC icu_data_assembly)

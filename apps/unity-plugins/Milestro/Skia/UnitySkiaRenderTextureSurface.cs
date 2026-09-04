@@ -47,6 +47,9 @@ namespace Milestro.Skia
             public int MsaaSamples;
             public int ResolveStrategy;
             public int PreferredFormat;
+            public int VulkanBackend;
+            public IntPtr VulkanTarget;
+            public ulong VulkanTargetGeneration;
             public float EffectiveScale;
             public ulong DeviceEpoch;
         }
@@ -116,13 +119,18 @@ namespace Milestro.Skia
         {
             public int Magic;
             public int GraphicsBackend;
+            public int VulkanBackend;
             public int Completed;
+            public ulong BatchToken;
+            public int Phase;
+            public int Reserved;
         }
 
         internal sealed class PendingRenderEvent
         {
             public long Serial;
             public int GraphicsBackend;
+            public int VulkanBackend;
             public IntPtr SubmissionPtr;
             public IntPtr CommandsPtr;
             public Texture? Texture;
@@ -169,6 +177,7 @@ namespace Milestro.Skia
         private sealed class UnityTextureTarget
         {
             private int released;
+            private int vulkanTargetRetired;
 
             internal UnityTextureTarget(UnitySkiaRenderTextureDescriptor descriptor,
                 Texture texture,
@@ -177,6 +186,8 @@ namespace Milestro.Skia
                 RenderTextureHandleKind handleKind,
                 IntPtr colorRenderBufferHandle,
                 IntPtr nativeTextureHandle,
+                IntPtr vulkanTarget,
+                ulong vulkanTargetGeneration,
                 float effectiveScale,
                 ulong deviceEpoch)
             {
@@ -187,6 +198,8 @@ namespace Milestro.Skia
                 HandleKind = handleKind;
                 ColorRenderBufferHandle = colorRenderBufferHandle;
                 NativeTextureHandle = nativeTextureHandle;
+                VulkanTarget = vulkanTarget;
+                VulkanTargetGeneration = vulkanTargetGeneration;
                 EffectiveScale = effectiveScale;
                 DeviceEpoch = deviceEpoch;
             }
@@ -198,6 +211,8 @@ namespace Milestro.Skia
             internal RenderTextureHandleKind HandleKind { get; }
             internal IntPtr ColorRenderBufferHandle { get; }
             internal IntPtr NativeTextureHandle { get; }
+            internal IntPtr VulkanTarget { get; }
+            internal ulong VulkanTargetGeneration { get; }
             internal float EffectiveScale { get; set; }
             internal ulong DeviceEpoch { get; }
 
@@ -218,14 +233,30 @@ namespace Milestro.Skia
                 }
                 else if (RenderTexture != null)
                 {
-                    ReleaseRenderTexture(RenderTexture);
+                    try
+                    {
+                        RetireNativeVulkanTarget();
+                    }
+                    finally
+                    {
+                        ReleaseRenderTexture(RenderTexture);
+                    }
                 }
+            }
+
+            internal void RetireNativeVulkanTarget()
+            {
+                if (VulkanTarget == IntPtr.Zero || Interlocked.Exchange(ref vulkanTargetRetired, 1) != 0)
+                {
+                    return;
+                }
+
+                ReleaseVulkanTarget(VulkanTarget, VulkanTargetGeneration, DeviceEpoch);
             }
         }
 
         private sealed unsafe class SlimTextRenderSlot : IDisposable
         {
-            private readonly CommandBuffer commandBuffer;
             private bool disposed;
 
             public readonly ReusableTextDrawSnapshot Snapshot;
@@ -245,10 +276,6 @@ namespace Milestro.Skia
                     Resources = new object[] { Snapshot },
                     OwnedResources = Array.Empty<IDisposable>(),
                     Reusable = true
-                };
-                commandBuffer = new CommandBuffer
-                {
-                    name = "Milestro Slim Text Native Plugin Pass " + slotIndex
                 };
             }
 
@@ -286,14 +313,6 @@ namespace Milestro.Skia
                 submission->Completed = 0;
             }
 
-            public void Submit(IntPtr renderEventFunc, int renderEventId)
-            {
-                ThrowIfDisposed();
-                commandBuffer.Clear();
-                commandBuffer.IssuePluginEventAndData(renderEventFunc, renderEventId, SubmissionPtr);
-                Graphics.ExecuteCommandBuffer(commandBuffer);
-            }
-
             public void Dispose()
             {
                 if (disposed)
@@ -302,7 +321,6 @@ namespace Milestro.Skia
                 }
 
                 disposed = true;
-                commandBuffer.Release();
                 Snapshot.Dispose();
                 if (CommandsPtr != IntPtr.Zero)
                 {
@@ -432,26 +450,12 @@ namespace Milestro.Skia
                 return true;
             }
 
-            private void SubmitPrepared(PendingRenderEvent pendingEvent, IntPtr renderEventFunc, int renderEventId)
-            {
-                for (var i = 0; i < slots.Length; ++i)
-                {
-                    var slot = slots[i];
-                    if (slot.PendingEvent == pendingEvent)
-                    {
-                        slot.Submit(renderEventFunc, renderEventId);
-                        return;
-                    }
-                }
-
-                throw new InvalidOperationException("Milestro slim text render slot is not owned by this submission.");
-            }
-
             internal bool TryPrepareAndSubmit(RenderTargetPayload target,
                 Vector2 baseline,
                 bool drawText,
                 IntPtr renderEventFunc,
-                int renderEventId,
+                int firstRenderEventId,
+                int secondRenderEventId,
                 Texture texture,
                 UnitySkiaRenderTextureSurface owner)
             {
@@ -460,14 +464,25 @@ namespace Milestro.Skia
                     return false;
                 }
 
+                var enqueued = false;
                 try
                 {
                     AddReusablePendingEvent(pendingEvent, texture, owner);
-                    SubmitPrepared(pendingEvent, renderEventFunc, renderEventId);
+                    ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderEnqueueSubmission(target.GraphicsBackend,
+                        pendingEvent.SubmissionPtr));
+                    enqueued = true;
+                    ScheduleRenderDrain((UnitySkiaGraphicsBackend)target.GraphicsBackend,
+                        target.VulkanBackend,
+                        renderEventFunc,
+                        firstRenderEventId,
+                        secondRenderEventId);
                 }
                 catch
                 {
-                    CancelPendingEvent(pendingEvent);
+                    if (!enqueued)
+                    {
+                        CancelPendingEvent(pendingEvent);
+                    }
                     throw;
                 }
 
@@ -507,9 +522,12 @@ namespace Milestro.Skia
         private sealed class PendingRenderDrain
         {
             public int GraphicsBackend;
+            public int VulkanBackend;
+            public ulong BatchToken;
             public IntPtr DrainPtr;
             public IntPtr RenderEventFunc;
-            public int RenderEventId;
+            public int FirstRenderEventId;
+            public int SecondRenderEventId;
         }
 
         private readonly struct CompletedRenderEventNotification
@@ -525,12 +543,12 @@ namespace Milestro.Skia
         }
 
         private const int RenderDrainMagic = 0x4D524451; // MRDQ
-        private const uint RenderPayloadAbiVersion = 1;
+        private const uint RenderPayloadAbiVersion = 2;
         private static readonly object PendingLock = new object();
         private static readonly List<PendingRenderEvent> PendingEvents = new List<PendingRenderEvent>();
         private static readonly List<DeferredRelease> DeferredReleases = new List<DeferredRelease>();
-        private static readonly Dictionary<int, PendingRenderDrain> PendingDrains =
-            new Dictionary<int, PendingRenderDrain>();
+        private static readonly Dictionary<long, PendingRenderDrain> PendingDrains =
+            new Dictionary<long, PendingRenderDrain>();
         private static readonly int CompletedOffset =
             (int)Marshal.OffsetOf<RenderSubmissionPayload>(nameof(RenderSubmissionPayload.Completed));
         private static readonly uint RenderTargetPayloadSize = checked((uint)Marshal.SizeOf<RenderTargetPayload>());
@@ -554,6 +572,7 @@ namespace Milestro.Skia
                 MaxAttemptsPerRequestAndEpoch = 1
             };
         private static long nextSerial;
+        private static long nextDirectBatchToken;
         private static MilestroRenderEventLifetimePump lifetimePump;
 #if UNITY_EDITOR
         private static bool editorLifetimePumpRegistered;
@@ -566,6 +585,7 @@ namespace Milestro.Skia
         private float requestedEffectiveScale = 1f;
         private IntPtr renderEventFunc;
         private int renderEventId;
+        private int secondRenderEventId = -1;
         private ulong deviceEpoch;
 #if MILESTRO_RENDER_DEBUG_LOG
         private bool warnedMissingNativeTarget;
@@ -587,6 +607,7 @@ namespace Milestro.Skia
         internal float EffectiveRasterScale => replacement.CurrentTarget?.EffectiveScale ?? requestedEffectiveScale;
 
         public UnitySkiaGraphicsBackend Backend { get; }
+        public UnitySkiaVulkanBackend VulkanBackend => requestedDescriptor.VulkanBackend;
         public UnityEngine.ColorSpace ColorSpace => requestedDescriptor.ColorSpace;
         public bool UseSrgbStorage => requestedDescriptor.UseSrgbStorage;
 
@@ -640,7 +661,18 @@ namespace Milestro.Skia
             replacement = new RenderSurfaceReplacement<UnityTextureTarget>(SharedBudgetLedger);
             requestedDescriptor = NormalizeDescriptor(descriptor);
             renderEventFunc = BindingC.UnityRenderGetRenderEventAndDataFunc();
-            ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderGetRenderTextureEventId((int)Backend, out renderEventId));
+            if (Backend == UnitySkiaGraphicsBackend.Vulkan)
+            {
+                ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderGetVulkanRenderEventIds(
+                    (int)requestedDescriptor.VulkanBackend,
+                    out renderEventId,
+                    out secondRenderEventId));
+            }
+            else
+            {
+                ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderGetRenderTextureEventId((int)Backend,
+                    out renderEventId));
+            }
             if (createImmediately)
             {
                 Resize(requestedDescriptor.Width, requestedDescriptor.Height);
@@ -661,7 +693,10 @@ namespace Milestro.Skia
                 candidateSurface = new UnitySkiaRenderTextureSurface(backend,
                     new UnitySkiaRenderTextureDescriptor(candidate.RasterWidth,
                         candidate.RasterHeight,
-                        colorSpace),
+                        colorSpace)
+                    {
+                        VulkanBackend = configuration.VulkanBackend
+                    },
                     false);
                 if (!candidateSurface.TryResize(candidate, colorSpace, configuration, out failureReason))
                 {
@@ -732,7 +767,8 @@ namespace Milestro.Skia
                 ClearBeforeDraw = requestedDescriptor.ClearBeforeDraw,
                 MsaaSamples = requestedDescriptor.MsaaSamples,
                 ResolveStrategy = requestedDescriptor.ResolveStrategy,
-                PreferredFormat = requestedDescriptor.PreferredFormat
+                PreferredFormat = requestedDescriptor.PreferredFormat,
+                VulkanBackend = requestedDescriptor.VulkanBackend
             });
             requestedDescriptor = nextDescriptor;
 
@@ -802,7 +838,8 @@ namespace Milestro.Skia
                 ClearBeforeDraw = requestedDescriptor.ClearBeforeDraw,
                 MsaaSamples = requestedDescriptor.MsaaSamples,
                 ResolveStrategy = requestedDescriptor.ResolveStrategy,
-                PreferredFormat = requestedDescriptor.PreferredFormat
+                PreferredFormat = requestedDescriptor.PreferredFormat,
+                VulkanBackend = requestedDescriptor.VulkanBackend
             });
             if (!TryComputeByteCount(nextDescriptor, out var checkedByteCount) ||
                 checkedByteCount != candidate.ByteCount)
@@ -905,6 +942,7 @@ namespace Milestro.Skia
 
                 // The target snapshot and checked handles above guarantee a live texture for this event.
                 pendingEvent = AddPendingEvent((int)Backend,
+                    target.VulkanBackend,
                     submissionPtr,
                     commandsPtr,
                     textureTarget.Texture,
@@ -913,7 +951,11 @@ namespace Milestro.Skia
                     this);
                 ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderEnqueueSubmission((int)Backend, submissionPtr));
                 enqueued = true;
-                ScheduleRenderDrain(Backend, renderEventFunc, renderEventId);
+                ScheduleRenderDrain(Backend,
+                    target.VulkanBackend,
+                    renderEventFunc,
+                    renderEventId,
+                    secondRenderEventId);
             }
             catch
             {
@@ -984,6 +1026,7 @@ namespace Milestro.Skia
                 drawText,
                 renderEventFunc,
                 renderEventId,
+                secondRenderEventId,
                 textureTarget.Texture,
                 this);
             return queued;
@@ -1224,6 +1267,17 @@ namespace Milestro.Skia
             {
                 throw new NotSupportedException("Milestro Unity RenderTexture surface does not support MSAA yet.");
             }
+            if ((int)descriptor.VulkanBackend == 0)
+            {
+                descriptor.VulkanBackend = UnitySkiaVulkanBackend.Direct;
+            }
+            if (descriptor.VulkanBackend != UnitySkiaVulkanBackend.Direct &&
+                descriptor.VulkanBackend != UnitySkiaVulkanBackend.StagingCopy)
+            {
+                throw new ArgumentOutOfRangeException(nameof(descriptor.VulkanBackend),
+                    descriptor.VulkanBackend,
+                    "Unknown Milestro Unity Vulkan backend.");
+            }
             return descriptor;
         }
 
@@ -1240,7 +1294,8 @@ namespace Milestro.Skia
                 MaxBytesPerSurface = configuration.MaxBytesPerSurface,
                 MaxGlobalBytes = configuration.MaxGlobalBytes,
                 MaxTransitionBytes = configuration.MaxTransitionBytes,
-                MaxAttemptsPerRequestAndEpoch = configuration.MaxAttemptsPerRequestAndEpoch
+                MaxAttemptsPerRequestAndEpoch = configuration.MaxAttemptsPerRequestAndEpoch,
+                VulkanBackend = configuration.VulkanBackend
             };
         }
 
@@ -1318,6 +1373,15 @@ namespace Milestro.Skia
                 MsaaSamples = textureTarget.Descriptor.MsaaSamples,
                 ResolveStrategy = (int)textureTarget.Descriptor.ResolveStrategy,
                 PreferredFormat = (int)textureTarget.Descriptor.PreferredFormat,
+                VulkanBackend = Backend == UnitySkiaGraphicsBackend.Vulkan
+                    ? (int)textureTarget.Descriptor.VulkanBackend
+                    : 0,
+                VulkanTarget = Backend == UnitySkiaGraphicsBackend.Vulkan
+                    ? textureTarget.VulkanTarget
+                    : IntPtr.Zero,
+                VulkanTargetGeneration = Backend == UnitySkiaGraphicsBackend.Vulkan
+                    ? textureTarget.VulkanTargetGeneration
+                    : 0,
                 EffectiveScale = textureTarget.EffectiveScale,
                 DeviceEpoch = textureTarget.DeviceEpoch
             };
@@ -1399,6 +1463,9 @@ namespace Milestro.Skia
             hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.MsaaSamples));
             hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.ResolveStrategy));
             hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.PreferredFormat));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.VulkanBackend));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.VulkanTarget));
+            hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.VulkanTargetGeneration));
             hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.EffectiveScale));
             hash = MixLayoutMember<RenderTargetPayload>(hash, nameof(RenderTargetPayload.DeviceEpoch));
             hash = MixLayoutValue(hash, RenderSubmissionPayloadSize);
@@ -1533,6 +1600,8 @@ namespace Milestro.Skia
             }
 
             RenderTexture? renderTexture = null;
+            var vulkanTarget = IntPtr.Zero;
+            ulong vulkanTargetGeneration = 0;
             try
             {
                 var unityDescriptor = new RenderTextureDescriptor(nextDescriptor.Width,
@@ -1561,6 +1630,8 @@ namespace Milestro.Skia
                             HandleKindForBackend(Backend),
                             IntPtr.Zero,
                             IntPtr.Zero,
+                            IntPtr.Zero,
+                            0,
                             effectiveScale,
                             targetDeviceEpoch));
                 }
@@ -1577,6 +1648,16 @@ namespace Milestro.Skia
                     nativeTextureHandle = renderTexture.GetNativeTexturePtr();
                 }
 
+                if (Backend == UnitySkiaGraphicsBackend.Vulkan && nativeTextureHandle != IntPtr.Zero)
+                {
+                    vulkanTarget = CreateVulkanTargetHandle(nativeTextureHandle,
+                        nextDescriptor.Width,
+                        nextDescriptor.Height,
+                        nextDescriptor.VulkanBackend,
+                        targetDeviceEpoch,
+                        out vulkanTargetGeneration);
+                }
+
                 var target = new UnityTextureTarget(nextDescriptor,
                     renderTexture,
                     renderTexture,
@@ -1584,6 +1665,8 @@ namespace Milestro.Skia
                     handleKind,
                     colorRenderBufferHandle,
                     nativeTextureHandle,
+                    vulkanTarget,
+                    vulkanTargetGeneration,
                     effectiveScale,
                     targetDeviceEpoch);
                 return target.IsUsable
@@ -1594,6 +1677,10 @@ namespace Milestro.Skia
             }
             catch
             {
+                if (vulkanTarget != IntPtr.Zero)
+                {
+                    ReleaseVulkanTarget(vulkanTarget, vulkanTargetGeneration, targetDeviceEpoch);
+                }
                 if (renderTexture != null)
                 {
                     ReleaseRenderTexture(renderTexture);
@@ -1645,6 +1732,8 @@ namespace Milestro.Skia
                     RenderTextureHandleKind.NativeTexture,
                     IntPtr.Zero,
                     nativeTexture,
+                    IntPtr.Zero,
+                    0,
                     effectiveScale,
                     targetDeviceEpoch);
                 return target.IsUsable
@@ -1685,6 +1774,56 @@ namespace Milestro.Skia
 
             var textureToRelease = texture;
             BindingC.UnityRenderDestroyD3D12ExternalTexture(ref textureToRelease);
+        }
+
+        private static IntPtr CreateVulkanTargetHandle(IntPtr nativeTexture,
+            int width,
+            int height,
+            UnitySkiaVulkanBackend backend,
+            ulong targetDeviceEpoch,
+            out ulong generation)
+        {
+            ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderCreateVulkanTarget(nativeTexture,
+                width,
+                height,
+                (int)backend,
+                targetDeviceEpoch,
+                out var target,
+                out generation));
+            if (target == IntPtr.Zero || generation == 0)
+            {
+                throw new InvalidOperationException("Milestro failed to register its Vulkan texture target.");
+            }
+            return target;
+        }
+
+        private static void ReleaseVulkanTarget(IntPtr target, ulong generation, ulong targetDeviceEpoch)
+        {
+            if (target == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var targetToRelease = target;
+            ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderDestroyVulkanTarget(ref targetToRelease,
+                generation,
+                targetDeviceEpoch,
+                out var retirementPending));
+            if (retirementPending == 0)
+            {
+                return;
+            }
+
+            var callback = BindingC.UnityRenderGetRenderEventAndDataFunc();
+            ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderGetVulkanRenderEventIds(
+                (int)UnitySkiaVulkanBackend.StagingCopy,
+                out var collectorEventId,
+                out _));
+            ScheduleRenderDrain(UnitySkiaGraphicsBackend.Vulkan,
+                0,
+                callback,
+                collectorEventId,
+                -1);
         }
 
         private static TextureFormat TextureFormatForDescriptor(UnitySkiaRenderTextureDescriptor descriptor)
@@ -1783,13 +1922,31 @@ namespace Milestro.Skia
                    left.ClearBeforeDraw == right.ClearBeforeDraw &&
                    left.MsaaSamples == right.MsaaSamples &&
                    left.ResolveStrategy == right.ResolveStrategy &&
-                   left.PreferredFormat == right.PreferredFormat;
+                   left.PreferredFormat == right.PreferredFormat &&
+                   left.VulkanBackend == right.VulkanBackend;
         }
 
         private void RetireTarget(UnityTextureTarget target,
             RenderSurfaceBudgetLedger.RenderSurfaceBudgetLease lease)
         {
             counters.RecordRetirement();
+            // Native cancellation must not wait behind a render event that Unity may never deliver.
+            try
+            {
+                target.RetireNativeVulkanTarget();
+            }
+            catch
+            {
+                try
+                {
+                    target.Release();
+                }
+                catch
+                {
+                    // Keep the native retirement failure as the primary exception.
+                }
+                throw;
+            }
             DeferReleaseAfterCurrentEvents(() =>
             {
                 try
@@ -1804,6 +1961,7 @@ namespace Milestro.Skia
         }
 
         private static PendingRenderEvent AddPendingEvent(int graphicsBackend,
+            int vulkanBackend,
             IntPtr submissionPtr,
             IntPtr commandsPtr,
             Texture texture,
@@ -1818,6 +1976,7 @@ namespace Milestro.Skia
                 {
                     Serial = ++nextSerial,
                     GraphicsBackend = graphicsBackend,
+                    VulkanBackend = vulkanBackend,
                     SubmissionPtr = submissionPtr,
                     CommandsPtr = commandsPtr,
                     Texture = texture,
@@ -1831,24 +1990,27 @@ namespace Milestro.Skia
         }
 
         private static void ScheduleRenderDrain(UnitySkiaGraphicsBackend backend,
+            int vulkanBackend,
             IntPtr renderEventFunc,
-            int renderEventId)
+            int firstRenderEventId,
+            int secondRenderEventId)
         {
             if (renderEventFunc == IntPtr.Zero)
             {
                 throw new InvalidOperationException("Milestro Unity render event callback is unavailable.");
             }
 
-            if (renderEventId < 0)
+            if (firstRenderEventId < 0)
             {
                 throw new InvalidOperationException("Milestro Unity render event id is unavailable.");
             }
 
             PendingRenderDrain? pendingDrain = null;
             var graphicsBackend = (int)backend;
+            var routeKey = RenderRouteKey(graphicsBackend, vulkanBackend);
             lock (PendingLock)
             {
-                if (PendingDrains.ContainsKey(graphicsBackend))
+                if (PendingDrains.ContainsKey(routeKey))
                 {
                     return;
                 }
@@ -1858,18 +2020,28 @@ namespace Milestro.Skia
                 {
                     Magic = RenderDrainMagic,
                     GraphicsBackend = graphicsBackend,
-                    Completed = 0
+                    VulkanBackend = vulkanBackend,
+                    Completed = 0,
+                    BatchToken = backend == UnitySkiaGraphicsBackend.Vulkan &&
+                                 vulkanBackend == (int)UnitySkiaVulkanBackend.Direct
+                        ? NextDirectBatchToken()
+                        : 0,
+                    Phase = 0,
+                    Reserved = 0
                 };
                 var drainPtr = Marshal.AllocHGlobal(Marshal.SizeOf<RenderDrainPayload>());
                 Marshal.StructureToPtr(drain, drainPtr, false);
                 pendingDrain = new PendingRenderDrain
                 {
                     GraphicsBackend = graphicsBackend,
+                    VulkanBackend = vulkanBackend,
+                    BatchToken = drain.BatchToken,
                     DrainPtr = drainPtr,
                     RenderEventFunc = renderEventFunc,
-                    RenderEventId = renderEventId
+                    FirstRenderEventId = firstRenderEventId,
+                    SecondRenderEventId = secondRenderEventId
                 };
-                PendingDrains.Add(graphicsBackend, pendingDrain);
+                PendingDrains.Add(routeKey, pendingDrain);
             }
 
             try
@@ -1880,15 +2052,25 @@ namespace Milestro.Skia
             {
                 lock (PendingLock)
                 {
-                    if (PendingDrains.TryGetValue(graphicsBackend, out var current) && current == pendingDrain)
+                    if (PendingDrains.TryGetValue(routeKey, out var current) && current == pendingDrain)
                     {
-                        PendingDrains.Remove(graphicsBackend);
+                        PendingDrains.Remove(routeKey);
                     }
                 }
 
                 Marshal.FreeHGlobal(pendingDrain.DrainPtr);
                 throw;
             }
+        }
+
+        private static ulong NextDirectBatchToken()
+        {
+            long token;
+            do
+            {
+                token = Interlocked.Increment(ref nextDirectBatchToken) & int.MaxValue;
+            } while (token == 0);
+            return unchecked((ulong)token);
         }
 
         private static void IssueRenderDrain(PendingRenderDrain pendingDrain)
@@ -1899,14 +2081,33 @@ namespace Milestro.Skia
                 cmd = new CommandBuffer();
                 cmd.name = "Milestro Queued Native Render Drain";
                 cmd.IssuePluginEventAndData(pendingDrain.RenderEventFunc,
-                    pendingDrain.RenderEventId,
+                    pendingDrain.FirstRenderEventId,
                     pendingDrain.DrainPtr);
+                if (pendingDrain.SecondRenderEventId >= 0)
+                {
+                    cmd.IssuePluginEventAndData(pendingDrain.RenderEventFunc,
+                        pendingDrain.SecondRenderEventId,
+                        new IntPtr(unchecked((long)pendingDrain.BatchToken)));
+                }
                 Graphics.ExecuteCommandBuffer(cmd);
             }
             finally
             {
                 cmd?.Release();
             }
+        }
+
+        private static void ScheduleVulkanLifetimeSweep(IntPtr renderEventFunc)
+        {
+            ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderGetVulkanRenderEventIds(
+                (int)UnitySkiaVulkanBackend.StagingCopy,
+                out var sweepEventId,
+                out _));
+            ScheduleRenderDrain(UnitySkiaGraphicsBackend.Vulkan,
+                0,
+                renderEventFunc,
+                sweepEventId,
+                -1);
         }
 
         private static void AddReusablePendingEvent(PendingRenderEvent pendingEvent,
@@ -1922,6 +2123,10 @@ namespace Milestro.Skia
                 }
 
                 pendingEvent.Serial = ++nextSerial;
+                pendingEvent.GraphicsBackend = (int)owner.Backend;
+                pendingEvent.VulkanBackend = owner.Backend == UnitySkiaGraphicsBackend.Vulkan
+                    ? (int)owner.VulkanBackend
+                    : 0;
                 pendingEvent.Texture = texture;
                 pendingEvent.Owner = owner;
                 pendingEvent.InUse = true;
@@ -1987,6 +2192,7 @@ namespace Milestro.Skia
             List<PendingRenderDrain>? completedDrains = null;
             List<PendingRenderDrain>? drainsToReschedule = null;
             List<CompletedRenderEventNotification>? notifications = null;
+            PendingRenderDrain? directDrainNeedingSweep = null;
 
             lock (PendingLock)
             {
@@ -2023,7 +2229,8 @@ namespace Milestro.Skia
 
                 foreach (var pendingDrain in PendingDrains.Values)
                 {
-                    if (Marshal.ReadInt32(pendingDrain.DrainPtr, DrainCompletedOffset) == 0)
+                    var completed = Marshal.ReadInt32(pendingDrain.DrainPtr, DrainCompletedOffset);
+                    if (completed == 0)
                     {
                         continue;
                     }
@@ -2034,7 +2241,8 @@ namespace Milestro.Skia
                         completedDrains = new List<PendingRenderDrain>();
                     }
                     completedDrains.Add(pendingDrain);
-                    if (HasPendingEventForBackend(pendingDrain.GraphicsBackend))
+                    if (completed == 2 || HasPendingEventForRoute(pendingDrain.GraphicsBackend,
+                            pendingDrain.VulkanBackend))
                     {
                         if (drainsToReschedule == null)
                         {
@@ -2048,7 +2256,21 @@ namespace Milestro.Skia
                 {
                     foreach (var pendingDrain in completedDrains)
                     {
-                        PendingDrains.Remove(pendingDrain.GraphicsBackend);
+                        PendingDrains.Remove(RenderRouteKey(pendingDrain.GraphicsBackend,
+                            pendingDrain.VulkanBackend));
+                    }
+                }
+
+                if (!PendingDrains.ContainsKey(RenderRouteKey((int)UnitySkiaGraphicsBackend.Vulkan, 0)))
+                {
+                    foreach (var pendingDrain in PendingDrains.Values)
+                    {
+                        if (pendingDrain.GraphicsBackend == (int)UnitySkiaGraphicsBackend.Vulkan &&
+                            pendingDrain.VulkanBackend == (int)UnitySkiaVulkanBackend.Direct)
+                        {
+                            directDrainNeedingSweep = pendingDrain;
+                            break;
+                        }
                     }
                 }
 
@@ -2074,9 +2296,16 @@ namespace Milestro.Skia
                 foreach (var pendingDrain in drainsToReschedule)
                 {
                     ScheduleRenderDrain((UnitySkiaGraphicsBackend)pendingDrain.GraphicsBackend,
+                        pendingDrain.VulkanBackend,
                         pendingDrain.RenderEventFunc,
-                        pendingDrain.RenderEventId);
+                        pendingDrain.FirstRenderEventId,
+                        pendingDrain.SecondRenderEventId);
                 }
+            }
+
+            if (directDrainNeedingSweep != null)
+            {
+                ScheduleVulkanLifetimeSweep(directDrainNeedingSweep.RenderEventFunc);
             }
 
             if (notifications != null)
@@ -2224,17 +2453,23 @@ namespace Milestro.Skia
             }
         }
 
-        private static bool HasPendingEventForBackend(int graphicsBackend)
+        private static bool HasPendingEventForRoute(int graphicsBackend, int vulkanBackend)
         {
             foreach (var pendingEvent in PendingEvents)
             {
-                if (pendingEvent.GraphicsBackend == graphicsBackend)
+                if (pendingEvent.GraphicsBackend == graphicsBackend &&
+                    pendingEvent.VulkanBackend == vulkanBackend)
                 {
                     return true;
                 }
             }
 
             return false;
+        }
+
+        private static long RenderRouteKey(int graphicsBackend, int vulkanBackend)
+        {
+            return ((long)(uint)graphicsBackend << 32) | (uint)vulkanBackend;
         }
 
         private static RenderSubmissionStatus CompletedStatus(IntPtr submissionPtr)

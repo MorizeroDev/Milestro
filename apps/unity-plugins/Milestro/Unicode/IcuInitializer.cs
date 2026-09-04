@@ -50,13 +50,14 @@ namespace Milestro.Unicode
 
         private static bool MobileLoad(TextAsset db)
         {
-            var icudtlPath = MilestroConfiguration.Configuration.Icu.IcudtlPath;
-            System.IO.File.WriteAllBytes(icudtlPath, db.bytes);
-
-            Debug.Log($"loading ICU from {icudtlPath}");
+            // Avoid the early Android filesystem/mmap path. On some Unity IL2CPP
+            // and vendor Android combinations it can crash during startup before
+            // the native entrypoint is reached. The native implementation owns a
+            // copy of the data, so this is safe after the TextAsset is released.
+            Debug.Log("loading ICU from memory (Android)");
             try
             {
-                Icu.LoadIcuFronPath(icudtlPath);
+                Icu.LoadIcuFronMemory(db.bytes);
             }
             catch (Exception e)
             {

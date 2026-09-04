@@ -158,14 +158,18 @@ The render-target path is platform-dependent:
 
 - Apple builds compile the Metal backend.
 - Windows builds compile the Direct3D 12 backend.
-- Android enables OpenGLES3 and Vulkan backends when the platform libraries are found.
+- Android builds OpenGLES3 and, by default, Vulkan Direct/StagingCopy backends.
+  Vulkan requires an API 24+ NDK target; missing required libraries fail configuration.
+  API 23 GLES-only builds explicitly set `MILESTRO_ENABLE_ANDROID_VULKAN_RENDER=OFF`.
 - Desktop OpenGL and desktop Vulkan are experimental CMake options:
   `MILESTRO_ENABLE_DESKTOP_OPENGL_RENDER` and
   `MILESTRO_ENABLE_DESKTOP_VULKAN_RENDER`.
 
 `UnityAutoRenderTextureSurface` currently auto-selects Metal, Direct3D 12,
-OpenGLES3, or OpenGLCore from Unity's active graphics device. MSAA render targets
-are not supported yet.
+Vulkan, OpenGLES3, or OpenGLCore from Unity's active graphics device. Vulkan defaults
+to Direct; StagingCopy uses CPU rasterization followed by a Vulkan upload. MSAA
+render targets are not supported yet. See [docs/android.md](docs/android.md) for
+build commands, backend selection, and the outstanding device acceptance matrix.
 
 ## Repository Layout
 
