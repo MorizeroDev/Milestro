@@ -32,8 +32,21 @@ MILESTRO_API int64_t MilestroImeCancelComposition(int32_t& result);
 [[milize::CSharpType("IntPtr")]] MILESTRO_API void* MilestroUnityRenderGetRenderEventAndDataFunc();
 MILESTRO_API int64_t MilestroUnityRenderGetMetalRenderEventId(int32_t& eventId);
 MILESTRO_API int64_t MilestroUnityRenderGetRenderTextureEventId(int32_t graphicsBackend, int32_t& eventId);
+MILESTRO_API int64_t MilestroUnityRenderGetVulkanRenderEventIds(int32_t vulkanBackend,
+                                                                int32_t& firstEventId,
+                                                                int32_t& secondEventId);
 MILESTRO_API int64_t MilestroUnityRenderEnqueueSubmission(int32_t graphicsBackend,
                                                           [[milize::CSharpType("IntPtr")]] void* submission);
+MILESTRO_API int64_t MilestroUnityRenderCreateVulkanTarget([[milize::CSharpType("IntPtr")]] void* nativeTexture,
+                                                           int32_t width,
+                                                           int32_t height,
+                                                           int32_t vulkanBackend,
+                                                           uint64_t deviceEpoch,
+                                                           [[milize::CSharpType("IntPtr")]] void*& target,
+                                                           uint64_t& generation);
+MILESTRO_API int64_t
+MilestroUnityRenderDestroyVulkanTarget([[milize::RefType("ref")]] [[milize::CSharpType("IntPtr")]] void*& target,
+                                       int32_t& retirementPending);
 MILESTRO_API int64_t MilestroUnityRenderGetPayloadAbiInfo(uint32_t& abiVersion,
                                                           uint64_t& layoutFingerprint,
                                                           uint32_t& targetSize,

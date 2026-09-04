@@ -410,7 +410,9 @@ namespace Milestro.Skia
                    configuration.MaxBytesPerSurface > 0 &&
                    configuration.MaxGlobalBytes > 0 &&
                    configuration.MaxTransitionBytes > 0 &&
-                   configuration.MaxAttemptsPerRequestAndEpoch > 0;
+                   configuration.MaxAttemptsPerRequestAndEpoch > 0 &&
+                   (configuration.VulkanBackend == UnitySkiaVulkanBackend.Direct ||
+                    configuration.VulkanBackend == UnitySkiaVulkanBackend.StagingCopy);
         }
 
         private static bool TryCeilProduct(int value, double scale, out int result)

@@ -91,6 +91,9 @@ constexpr uint64_t MilestroUnityRenderPayloadLayoutFingerprint() noexcept {
     MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, msaaSamples);
     MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, resolveStrategy);
     MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, preferredFormat);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, vulkanBackend);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, vulkanTarget);
+    MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, vulkanTargetGeneration);
     MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, effectiveScale);
     MILESTRO_MIX_MEMBER(MilestroUnityRenderTargetPayload, deviceEpoch);
     MILESTRO_MIX_LAYOUT_VALUE(kMilestroUnityRenderSubmissionSize);
@@ -120,6 +123,11 @@ inline bool MilestroUnityRenderSubmissionHasCurrentAbi(const MilestroUnityRender
     return target.abiVersion == kMilestroUnityRenderPayloadAbiVersion &&
            target.structSize == kMilestroUnityRenderTargetPayloadSize && std::isfinite(target.effectiveScale) &&
            target.effectiveScale > 0.0f && target.deviceEpoch == expectedDeviceEpoch;
+}
+
+inline bool
+MilestroUnityRenderSubmissionCanReplaceQueuedContent(const MilestroUnityRenderSubmission* submission) noexcept {
+    return submission != nullptr && submission->target.clearBeforeDraw != 0;
 }
 
 #endif // MILESTRO_UNITY_RENDER_SUBMISSION_H

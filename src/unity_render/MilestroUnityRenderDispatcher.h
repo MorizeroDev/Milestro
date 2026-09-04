@@ -13,7 +13,16 @@ void Unload();
 void *GetRenderEventFuncForExport();
 int64_t GetMetalRenderEventIdForExport(int32_t &eventId);
 int64_t GetRenderTextureEventIdForExport(int32_t graphicsBackend, int32_t &eventId);
+int64_t GetVulkanRenderEventIdsForExport(int32_t vulkanBackend, int32_t &firstEventId, int32_t &secondEventId);
 int64_t EnqueueSubmissionForExport(int32_t graphicsBackend, void *submission);
+int64_t CreateVulkanTargetForExport(void *nativeTexture,
+                                    int32_t width,
+                                    int32_t height,
+                                    int32_t vulkanBackend,
+                                    uint64_t deviceEpoch,
+                                    void *&target,
+                                    uint64_t &generation);
+int64_t DestroyVulkanTargetForExport(void *&target, int32_t &retirementPending);
 int64_t GetPayloadAbiInfoForExport(uint32_t& abiVersion,
                                    uint64_t& layoutFingerprint,
                                    uint32_t& targetSize,

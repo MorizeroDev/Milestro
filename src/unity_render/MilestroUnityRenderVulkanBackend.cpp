@@ -1,11 +1,19 @@
 #include "unity_render/MilestroUnityRenderVulkanBackend.h"
 
 #include "game/milestro_game_retcode.h"
+#include "unity_render/MilestroUnityGraphicsBackend.h"
 #include "unity_render/MilestroUnityRenderTextureHandleKind.h"
+#include "unity_render/MilestroUnityRenderVulkanAdapter.h"
 
 #include <IUnityGraphicsVulkan.h>
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <memory>
+#include <new>
+#include <vector>
 
 #include "unity_render/MilestroUnityRenderLog.h"
 
@@ -13,157 +21,107 @@ namespace milestro::unity_render::vulkan {
 
 namespace {
 
+constexpr std::size_t kMaximumRegisteredTargets = 256;
+
 IUnityGraphicsVulkan* gVulkan = nullptr;
-bool gLoggedHeaderContract = false;
-uint64_t gRenderSerial = 0;
+UnityVulkanInstance gInstance{};
+std::vector<std::unique_ptr<VulkanTarget>> gTargets;
+std::vector<PreparedVulkanSubmission> gPreparedDirect;
+uint64_t gNextTargetGeneration = 0;
 
-struct StageAccess {
-    VkPipelineStageFlags stage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-    VkAccessFlags access = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-};
-
-template <typename T>
-unsigned long long NonDispatchableHandle(T handle) {
-#if defined(VK_USE_64_BIT_PTR_DEFINES) && VK_USE_64_BIT_PTR_DEFINES
-    return static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(handle));
-#else
-    return static_cast<unsigned long long>(handle);
-#endif
-}
-
-StageAccess StageAccessForLayout(VkImageLayout layout) {
-    switch (layout) {
-        case VK_IMAGE_LAYOUT_UNDEFINED:
-            return {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0};
-        case VK_IMAGE_LAYOUT_GENERAL:
-            return {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT};
-        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-            return {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                    VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT};
-        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-            return {VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT};
-        case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-            return {VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT};
-        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-            return {VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT};
-        case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
-            return {VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0};
-        default:
-            return {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT};
-    }
-}
-
-const char* AccessName(UnityVulkanResourceAccessMode mode) {
-    switch (mode) {
-        case kUnityVulkanResourceAccess_ObserveOnly:
-            return "ObserveOnly";
-        case kUnityVulkanResourceAccess_PipelineBarrier:
-            return "PipelineBarrier";
-        case kUnityVulkanResourceAccess_Recreate:
-            return "Recreate";
-        default:
-            return "Unknown";
-    }
-}
-
-bool AccessNativeTexture(void* nativeTexture,
-                         VkImageLayout layout,
-                         VkPipelineStageFlags stage,
-                         VkAccessFlags access,
-                         UnityVulkanResourceAccessMode mode,
-                         UnityVulkanImage& image,
-                         uint64_t renderSerial,
-                         const char* label) {
-    if (gVulkan == nullptr || gVulkan->AccessTexture == nullptr) {
-        MILESTROLOG_ERROR("Milestro Vulkan AccessTexture is unavailable during {} on event {}.",
-                          label,
-                          renderSerial);
+bool ConfigureEvent(int eventId, UnityVulkanGraphicsQueueAccess queueAccess, uint32_t flags) {
+    if (gVulkan == nullptr || gVulkan->ConfigureEvent == nullptr || eventId < 0) {
         return false;
     }
 
-    image = {};
-    const bool ok = gVulkan->AccessTexture(nativeTexture,
-                                           UnityVulkanWholeImage,
-                                           layout,
-                                           stage,
-                                           access,
-                                           mode,
-                                           &image);
-    MILESTRO_RENDER_LOG_INFO("Milestro Vulkan {} AccessTexture event={} ok={} mode={} requestedLayout={} "
-                     "requestedStage=0x{:x} requestedAccess=0x{:x} image=0x{:x} returnedLayout={} "
-                     "format={} extent={}x{}x{} samples={} mipCount={} layers={}.",
-                     label,
-                     renderSerial,
-                     ok ? 1 : 0,
-                     AccessName(mode),
-                     static_cast<int>(layout),
-                     static_cast<unsigned int>(stage),
-                     static_cast<unsigned int>(access),
-                     NonDispatchableHandle(image.image),
-                     static_cast<int>(image.layout),
-                     static_cast<int>(image.format),
-                     static_cast<unsigned int>(image.extent.width),
-                     static_cast<unsigned int>(image.extent.height),
-                     static_cast<unsigned int>(image.extent.depth),
-                     static_cast<int>(image.samples),
-                     image.mipCount,
-                     image.layers);
-    return ok;
-}
-
-bool LogRecordingState(uint64_t renderSerial, const char* label) {
-    if (gVulkan == nullptr || gVulkan->CommandRecordingState == nullptr) {
-        MILESTROLOG_ERROR("Milestro Vulkan CommandRecordingState is unavailable during {} on event {}.",
-                          label,
-                          renderSerial);
-        return false;
-    }
-
-    UnityVulkanRecordingState state = {};
-    const bool ok = gVulkan->CommandRecordingState(&state, kUnityVulkanGraphicsQueueAccess_DontCare);
-    MILESTRO_RENDER_LOG_INFO("Milestro Vulkan {} CommandRecordingState event={} ok={} commandBuffer={} level={} "
-                     "renderPass={} framebuffer={} subPass={} frame={} safeFrame={}.",
-                     label,
-                     renderSerial,
-                     ok ? 1 : 0,
-                     static_cast<void*>(state.commandBuffer),
-                     static_cast<int>(state.commandBufferLevel),
-                     NonDispatchableHandle(state.renderPass),
-                     NonDispatchableHandle(state.framebuffer),
-                     state.subPassIndex,
-                     static_cast<unsigned long long>(state.currentFrameNumber),
-                     static_cast<unsigned long long>(state.safeFrameNumber));
-    return ok;
-}
-
-void ConfigureEvent(int renderEventId) {
-    if (gVulkan == nullptr || renderEventId < 0) {
-        return;
-    }
-
-    UnityVulkanPluginEventConfig config = {};
+    UnityVulkanPluginEventConfig config{};
     config.renderPassPrecondition = kUnityVulkanRenderPass_EnsureOutside;
-    config.graphicsQueueAccess = kUnityVulkanGraphicsQueueAccess_DontCare;
-    config.flags = kUnityVulkanEventConfigFlag_EnsurePreviousFrameSubmission |
-                   kUnityVulkanEventConfigFlag_ModifiesCommandBuffersState;
-    gVulkan->ConfigureEvent(renderEventId, &config);
-    MILESTRO_RENDER_LOG_INFO("Configured Milestro Vulkan render event {}: renderPassPrecondition=EnsureOutside, "
-                     "graphicsQueueAccess=DontCare, flags=0x{:x}.",
-                     renderEventId,
-                     static_cast<unsigned int>(config.flags));
+    config.graphicsQueueAccess = queueAccess;
+    config.flags = flags;
+    gVulkan->ConfigureEvent(eventId, &config);
+    return true;
 }
 
-void LogHeaderContract() {
-    if (gLoggedHeaderContract) {
-        return;
+VulkanTarget* FindTarget(void* handle) {
+    const auto found = std::find_if(gTargets.begin(), gTargets.end(), [handle](const auto& target) {
+        return target.get() == handle;
+    });
+    return found == gTargets.end() ? nullptr : found->get();
+}
+
+bool TryPixelBytes(int32_t width, int32_t height, std::size_t& bytes) {
+    bytes = 0;
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+    const auto unsignedWidth = static_cast<std::size_t>(width);
+    const auto unsignedHeight = static_cast<std::size_t>(height);
+    if (unsignedWidth > std::numeric_limits<std::size_t>::max() / unsignedHeight) {
+        return false;
+    }
+    const std::size_t pixels = unsignedWidth * unsignedHeight;
+    if (pixels > std::numeric_limits<std::size_t>::max() / 4U) {
+        return false;
+    }
+    bytes = pixels * 4U;
+    return bytes != 0;
+}
+
+VulkanTarget* ValidatedTarget(const MilestroUnityRenderSubmission& submission) {
+    const MilestroUnityRenderTargetPayload& payload = submission.target;
+    if (payload.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan) ||
+        payload.handleKind != static_cast<int32_t>(MilestroUnityRenderTextureHandleKind::NativeTexture) ||
+        payload.nativeTextureHandle == nullptr || payload.vulkanTarget == nullptr ||
+        payload.vulkanTargetGeneration == 0 || payload.width <= 0 || payload.height <= 0 || payload.msaaSamples != 1) {
+        return nullptr;
     }
 
-    MILESTRO_RENDER_LOG_INFO("Milestro Vulkan PluginAPI contract: IUnityGraphicsVulkan::Instance() returns "
-                     "UnityVulkanInstance with instance/physicalDevice/device/graphicsQueue/queueFamilyIndex; "
-                     "AccessTexture requires desired layout/stage/access/mode and invalidates "
-                     "CommandRecordingState; resource access must not run in graphicsQueueAccess=Allow or "
-                     "AccessQueue callbacks.");
-    gLoggedHeaderContract = true;
+    VulkanBackendKind kind = VulkanBackendKind::Direct;
+    if (!VulkanBackendKindFromRaw(payload.vulkanBackend, kind)) {
+        return nullptr;
+    }
+
+    VulkanTarget* target = FindTarget(payload.vulkanTarget);
+    if (target == nullptr || target->generation != payload.vulkanTargetGeneration ||
+        target->deviceEpoch != payload.deviceEpoch || target->nativeTexture != payload.nativeTextureHandle ||
+        target->width != payload.width || target->height != payload.height || !target->backend.Matches(kind)) {
+        return nullptr;
+    }
+    return target;
+}
+
+void DestroyAllTargetsImmediately() {
+    for (auto& target: gTargets) {
+        VulkanBackendKind kind = VulkanBackendKind::Direct;
+        if (target->backend.Matches(VulkanBackendKind::StagingCopy)) {
+            kind = VulkanBackendKind::StagingCopy;
+        }
+        BackendForKind(kind).DestroyTargetImmediately(std::move(target->state));
+    }
+    gTargets.clear();
+}
+
+VulkanSubmissionResult PrepareWithBackend(MilestroUnityRenderSubmission* submission, VulkanBackendKind expectedKind) {
+    if (submission == nullptr) {
+        return {};
+    }
+    VulkanTarget* target = ValidatedTarget(*submission);
+    if (target == nullptr || !target->backend.Matches(expectedKind)) {
+        MILESTROLOG_ERROR("Milestro Vulkan rejected a stale, mismatched, or invalid target registration.");
+        return {submission, MilestroUnityRenderSubmissionStatus::Failed};
+    }
+
+    PreparedVulkanSubmission prepared;
+    VulkanPrepareResult result = BackendForKind(expectedKind).Prepare(*target, *submission, prepared);
+    if (!result.requiresSubmit) {
+        return {submission, result.status};
+    }
+
+    if (gPreparedDirect.size() >= kMaximumRegisteredTargets) {
+        return {submission, MilestroUnityRenderSubmissionStatus::Failed};
+    }
+    gPreparedDirect.push_back(prepared);
+    return {nullptr, MilestroUnityRenderSubmissionStatus::Pending};
 }
 
 } // namespace
@@ -171,124 +129,199 @@ void LogHeaderContract() {
 void OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType,
                            IUnityInterfaces* unityInterfaces,
                            UnityGfxRenderer renderer,
-                           int renderEventId) {
-    if (eventType == kUnityGfxDeviceEventShutdown || renderer != kUnityGfxRendererVulkan) {
-        gVulkan = nullptr;
+                           int stagingEventId,
+                           int directPrepareEventId,
+                           int directSubmitEventId) {
+    const bool shutdown = eventType == kUnityGfxDeviceEventShutdown || eventType == kUnityGfxDeviceEventBeforeReset;
+    const bool initialize = eventType == kUnityGfxDeviceEventInitialize || eventType == kUnityGfxDeviceEventAfterReset;
+    if (!shutdown && !initialize) {
         return;
     }
 
-    if (eventType != kUnityGfxDeviceEventInitialize) {
+    if (shutdown || renderer != kUnityGfxRendererVulkan) {
+        DestroyAllTargetsImmediately();
+        DirectBackend().Shutdown();
+        StagingCopyBackend().Shutdown();
+        gPreparedDirect.clear();
+        gVulkan = nullptr;
+        gInstance = {};
         return;
+    }
+
+    if (gVulkan != nullptr || !gTargets.empty() || !gPreparedDirect.empty()) {
+        DestroyAllTargetsImmediately();
+        DirectBackend().Shutdown();
+        StagingCopyBackend().Shutdown();
+        gPreparedDirect.clear();
+        gVulkan = nullptr;
+        gInstance = {};
     }
 
     gVulkan = unityInterfaces != nullptr ? unityInterfaces->Get<IUnityGraphicsVulkan>() : nullptr;
-    if (gVulkan == nullptr) {
+    if (gVulkan == nullptr || gVulkan->Instance == nullptr) {
         MILESTROLOG_ERROR("Unity Vulkan graphics interface is unavailable.");
         return;
     }
 
-    LogHeaderContract();
-    UnityVulkanInstance instance = gVulkan->Instance();
-    MILESTRO_RENDER_LOG_INFO("Milestro Vulkan instance identity: instance={}, physicalDevice={}, device={}, queue={}, "
-                     "queueFamilyIndex={}, hasGetInstanceProcAddr={}.",
-                     static_cast<void*>(instance.instance),
-                     static_cast<void*>(instance.physicalDevice),
-                     static_cast<void*>(instance.device),
-                     static_cast<void*>(instance.graphicsQueue),
-                     instance.queueFamilyIndex,
-                     instance.getInstanceProcAddr != nullptr ? 1 : 0);
-    ConfigureEvent(renderEventId);
+    gInstance = gVulkan->Instance();
+    if (gInstance.instance == VK_NULL_HANDLE || gInstance.physicalDevice == VK_NULL_HANDLE ||
+        gInstance.device == VK_NULL_HANDLE || gInstance.graphicsQueue == VK_NULL_HANDLE ||
+        gInstance.getInstanceProcAddr == nullptr) {
+        MILESTROLOG_ERROR("Unity Vulkan instance is incomplete.");
+        gVulkan = nullptr;
+        gInstance = {};
+        return;
+    }
+
+    try {
+        gTargets.reserve(kMaximumRegisteredTargets);
+        gPreparedDirect.reserve(kMaximumRegisteredTargets);
+    } catch (const std::bad_alloc&) {
+        MILESTROLOG_ERROR("Milestro Vulkan target registry allocation failed.");
+        gVulkan = nullptr;
+        gInstance = {};
+        return;
+    }
+
+    const uint32_t prepareFlags = kUnityVulkanEventConfigFlag_EnsurePreviousFrameSubmission |
+                                  kUnityVulkanEventConfigFlag_ModifiesCommandBuffersState;
+    const uint32_t submitFlags = kUnityVulkanEventConfigFlag_EnsurePreviousFrameSubmission |
+                                 kUnityVulkanEventConfigFlag_FlushCommandBuffers |
+                                 kUnityVulkanEventConfigFlag_SyncWorkerThreads;
+    if (!ConfigureEvent(stagingEventId, kUnityVulkanGraphicsQueueAccess_DontCare, prepareFlags) ||
+        !ConfigureEvent(directPrepareEventId, kUnityVulkanGraphicsQueueAccess_DontCare, prepareFlags) ||
+        !ConfigureEvent(directSubmitEventId, kUnityVulkanGraphicsQueueAccess_Allow, submitFlags)) {
+        MILESTROLOG_ERROR("Milestro Vulkan event configuration failed.");
+        gVulkan = nullptr;
+        gInstance = {};
+        return;
+    }
+
+    DirectBackend().Initialize(gVulkan, gInstance);
+    StagingCopyBackend().Initialize(gVulkan, gInstance);
 }
 
-int64_t Render(const MilestroUnityRenderSubmission& submission) {
-    const auto& payload = submission.target;
-    const uint64_t renderSerial = ++gRenderSerial;
-
-    if (payload.width <= 0 || payload.height <= 0) {
-        MILESTROLOG_ERROR("Invalid Milestro Vulkan render payload size on event {}.", renderSerial);
+int64_t CreateTarget(void* nativeTexture,
+                     int32_t width,
+                     int32_t height,
+                     int32_t backend,
+                     uint64_t deviceEpoch,
+                     void*& target,
+                     uint64_t& generation) {
+    target = nullptr;
+    generation = 0;
+    VulkanBackendKind kind = VulkanBackendKind::Direct;
+    std::size_t pixelBytes = 0;
+    if (gVulkan == nullptr || nativeTexture == nullptr || deviceEpoch == 0 ||
+        !VulkanBackendKindFromRaw(backend, kind) || !TryPixelBytes(width, height, pixelBytes) ||
+        gTargets.size() + DirectBackend().PendingRetirementCount() + StagingCopyBackend().PendingRetirementCount() >=
+                kMaximumRegisteredTargets ||
+        gNextTargetGeneration == std::numeric_limits<uint64_t>::max()) {
         return MILESTRO_API_RET_FAILED;
     }
 
-    if (payload.msaaSamples != 1) {
-        MILESTROLOG_ERROR("Milestro Vulkan RenderTexture MSAA is not implemented yet: {} samples.",
-                          payload.msaaSamples);
+    std::unique_ptr<VulkanTarget> registered;
+    try {
+        registered = std::make_unique<VulkanTarget>();
+        if (!registered->backend.Bind(kind)) {
+            return MILESTRO_API_RET_FAILED;
+        }
+        registered->nativeTexture = nativeTexture;
+        registered->width = width;
+        registered->height = height;
+        registered->deviceEpoch = deviceEpoch;
+        registered->generation = gNextTargetGeneration + 1;
+        registered->state = BackendForKind(kind).CreateTarget(registered->generation, pixelBytes);
+        if (registered->state == nullptr) {
+            return MILESTRO_API_RET_FAILED;
+        }
+        gTargets.push_back(std::move(registered));
+    } catch (const std::bad_alloc&) {
         return MILESTRO_API_RET_FAILED;
     }
 
-    if (payload.handleKind != static_cast<int32_t>(MilestroUnityRenderTextureHandleKind::NativeTexture)) {
-        MILESTROLOG_ERROR("Milestro Vulkan render target requires NativeTexture handleKind, got {}.",
-                          payload.handleKind);
-        return MILESTRO_API_RET_FAILED;
-    }
-
-    if (payload.nativeTextureHandle == nullptr) {
-        MILESTROLOG_ERROR("Milestro Vulkan render target native texture handle is null.");
-        return MILESTRO_API_RET_FAILED;
-    }
-
-    LogHeaderContract();
-    UnityVulkanInstance instance = gVulkan != nullptr ? gVulkan->Instance() : UnityVulkanInstance {};
-    MILESTRO_RENDER_LOG_INFO("Milestro Vulkan contract spike event={} payloadSize={}x{}, nativeTexture={}, device={}, "
-                     "queue={}, queueFamilyIndex={}.",
-                     renderSerial,
-                     payload.width,
-                     payload.height,
-                     payload.nativeTextureHandle,
-                     static_cast<void*>(instance.device),
-                     static_cast<void*>(instance.graphicsQueue),
-                     instance.queueFamilyIndex);
-
-    UnityVulkanImage observed = {};
-    if (!AccessNativeTexture(payload.nativeTextureHandle,
-                             VK_IMAGE_LAYOUT_UNDEFINED,
-                             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                             0,
-                             kUnityVulkanResourceAccess_ObserveOnly,
-                             observed,
-                             renderSerial,
-                             "observe")) {
-        return MILESTRO_API_RET_FAILED;
-    }
-
-    UnityVulkanImage transferTarget = {};
-    if (!AccessNativeTexture(payload.nativeTextureHandle,
-                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                             VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             VK_ACCESS_TRANSFER_WRITE_BIT,
-                             kUnityVulkanResourceAccess_PipelineBarrier,
-                             transferTarget,
-                             renderSerial,
-                             "transfer-dst")) {
-        return MILESTRO_API_RET_FAILED;
-    }
-
-    if (!LogRecordingState(renderSerial, "after-transfer-dst-access")) {
-        return MILESTRO_API_RET_FAILED;
-    }
-
-    const VkImageLayout restoreLayout = observed.layout == VK_IMAGE_LAYOUT_UNDEFINED
-                                            ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-                                            : observed.layout;
-    StageAccess restoreAccess = StageAccessForLayout(restoreLayout);
-    UnityVulkanImage restored = {};
-    if (!AccessNativeTexture(payload.nativeTextureHandle,
-                             restoreLayout,
-                             restoreAccess.stage,
-                             restoreAccess.access,
-                             kUnityVulkanResourceAccess_PipelineBarrier,
-                             restored,
-                             renderSerial,
-                             "restore-observed-layout")) {
-        return MILESTRO_API_RET_FAILED;
-    }
-
-    if (!LogRecordingState(renderSerial, "after-restore-access")) {
-        return MILESTRO_API_RET_FAILED;
-    }
-
-    MILESTRO_RENDER_LOG_WARN("Milestro Vulkan contract spike completed without Skia drawing or vkCmdCopyImage on event {}.",
-                     renderSerial);
+    VulkanTarget* created = gTargets.back().get();
+    gNextTargetGeneration = created->generation;
+    target = created;
+    generation = created->generation;
     return MILESTRO_API_RET_OK;
+}
+
+int64_t DestroyTarget(void*& target, int32_t& retirementPending) {
+    retirementPending = 0;
+    if (target == nullptr) {
+        return MILESTRO_API_RET_OK;
+    }
+
+    const auto found = std::find_if(gTargets.begin(), gTargets.end(), [handle = target](const auto& candidate) {
+        return candidate.get() == handle;
+    });
+    if (found == gTargets.end()) {
+        target = nullptr;
+        return MILESTRO_API_RET_OK;
+    }
+
+    VulkanBackendKind kind = (*found)->backend.Matches(VulkanBackendKind::StagingCopy) ? VulkanBackendKind::StagingCopy
+                                                                                       : VulkanBackendKind::Direct;
+    if (!BackendForKind(kind).RetireTarget((*found)->state)) {
+        return MILESTRO_API_RET_FAILED;
+    }
+    gTargets.erase(found);
+    target = nullptr;
+    retirementPending = HasPendingRetirements() ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+}
+
+bool IsSubmissionTargetValid(const MilestroUnityRenderSubmission& submission) {
+    return ValidatedTarget(submission) != nullptr;
+}
+
+VulkanSubmissionResult RenderStaging(MilestroUnityRenderSubmission* submission) {
+    return PrepareWithBackend(submission, VulkanBackendKind::StagingCopy);
+}
+
+VulkanSubmissionResult PrepareDirect(MilestroUnityRenderSubmission* submission) {
+    return PrepareWithBackend(submission, VulkanBackendKind::Direct);
+}
+
+void SubmitDirectPrepared(VulkanSubmissionCompletion complete) {
+    for (PreparedVulkanSubmission& prepared: gPreparedDirect) {
+        MilestroUnityRenderSubmissionStatus status = MilestroUnityRenderSubmissionStatus::Failed;
+        if (prepared.target != nullptr && prepared.submission != nullptr &&
+            ValidatedTarget(*prepared.submission) == prepared.target) {
+            status = DirectBackend().Submit(prepared);
+        }
+        if (complete != nullptr) {
+            complete(prepared.submission, status);
+        }
+    }
+    gPreparedDirect.clear();
+}
+
+void FailDirectPrepared(VulkanSubmissionCompletion complete) {
+    for (PreparedVulkanSubmission& prepared: gPreparedDirect) {
+        if (complete != nullptr) {
+            complete(prepared.submission, MilestroUnityRenderSubmissionStatus::Failed);
+        }
+    }
+    gPreparedDirect.clear();
+}
+
+bool CollectRetiredTargets() {
+    if (gVulkan == nullptr || gVulkan->CommandRecordingState == nullptr) {
+        return HasPendingRetirements();
+    }
+    UnityVulkanRecordingState recording{};
+    if (!gVulkan->CommandRecordingState(&recording, kUnityVulkanGraphicsQueueAccess_DontCare)) {
+        return HasPendingRetirements();
+    }
+    DirectBackend().CollectRetired(recording.safeFrameNumber, false);
+    StagingCopyBackend().CollectRetired(recording.safeFrameNumber, false);
+    return HasPendingRetirements();
+}
+
+bool HasPendingRetirements() {
+    return DirectBackend().HasPendingRetirements() || StagingCopyBackend().HasPendingRetirements();
 }
 
 } // namespace milestro::unity_render::vulkan

@@ -32,8 +32,34 @@ MILESTRO_API int64_t MilestroUnityRenderGetRenderTextureEventId(int32_t graphics
     return milestro::unity_render::GetRenderTextureEventIdForExport(graphicsBackend, eventId);
 }
 
+MILESTRO_API int64_t MilestroUnityRenderGetVulkanRenderEventIds(int32_t vulkanBackend,
+                                                                int32_t& firstEventId,
+                                                                int32_t& secondEventId) {
+    return milestro::unity_render::GetVulkanRenderEventIdsForExport(vulkanBackend, firstEventId, secondEventId);
+}
+
 MILESTRO_API int64_t MilestroUnityRenderEnqueueSubmission(int32_t graphicsBackend, void *submission) {
     return milestro::unity_render::EnqueueSubmissionForExport(graphicsBackend, submission);
+}
+
+MILESTRO_API int64_t MilestroUnityRenderCreateVulkanTarget(void* nativeTexture,
+                                                           int32_t width,
+                                                           int32_t height,
+                                                           int32_t vulkanBackend,
+                                                           uint64_t deviceEpoch,
+                                                           void*& target,
+                                                           uint64_t& generation) {
+    return milestro::unity_render::CreateVulkanTargetForExport(nativeTexture,
+                                                               width,
+                                                               height,
+                                                               vulkanBackend,
+                                                               deviceEpoch,
+                                                               target,
+                                                               generation);
+}
+
+MILESTRO_API int64_t MilestroUnityRenderDestroyVulkanTarget(void*& target, int32_t& retirementPending) {
+    return milestro::unity_render::DestroyVulkanTargetForExport(target, retirementPending);
 }
 
 MILESTRO_API int64_t MilestroUnityRenderGetPayloadAbiInfo(uint32_t& abiVersion,

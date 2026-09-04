@@ -488,7 +488,9 @@ endif ()
 if (MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
     set(MILESTRO_DEFINITIONS ${MILESTRO_DEFINITIONS} "MILESTRO_ENABLE_UNITY_VULKAN_RENDER")
     list(APPEND MILESTRO_APPLICATION_FILE
-            src/unity_render/MilestroUnityRenderVulkanBackend.cpp)
+            src/unity_render/MilestroUnityRenderVulkanBackend.cpp
+            src/unity_render/MilestroUnityRenderVulkanDirectAdapter.cpp
+            src/unity_render/MilestroUnityRenderVulkanStagingCopyAdapter.cpp)
 endif ()
 
 if (MILESTRO_RENDER_DEBUG_LOG)

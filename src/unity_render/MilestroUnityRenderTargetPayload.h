@@ -20,11 +20,14 @@ struct MilestroUnityRenderTargetPayload {
     int32_t msaaSamples = 1;
     int32_t resolveStrategy = 0;
     int32_t preferredFormat = 0;
+    int32_t vulkanBackend = 0;
+    void* vulkanTarget = nullptr;
+    uint64_t vulkanTargetGeneration = 0;
     float effectiveScale = 1.0f;
     uint64_t deviceEpoch = 0;
 };
 
-inline constexpr uint32_t kMilestroUnityRenderPayloadAbiVersion = 1;
+inline constexpr uint32_t kMilestroUnityRenderPayloadAbiVersion = 2;
 static_assert(sizeof(MilestroUnityRenderTargetPayload) <= std::numeric_limits<uint32_t>::max());
 inline constexpr uint32_t kMilestroUnityRenderTargetPayloadSize =
         static_cast<uint32_t>(sizeof(MilestroUnityRenderTargetPayload));

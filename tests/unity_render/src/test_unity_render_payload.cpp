@@ -63,6 +63,16 @@ TEST(UnityRenderPayload, InvalidScaleAndStaleOrZeroEpochFailClosed) {
     EXPECT_FALSE(MilestroUnityRenderSubmissionHasCurrentAbi(&submission, 0));
 }
 
+TEST(UnityRenderPayload, OnlyClearingSubmissionCanReplaceQueuedContent) {
+    MilestroUnityRenderSubmission submission = CurrentSubmission();
+    submission.target.clearBeforeDraw = 1;
+    EXPECT_TRUE(MilestroUnityRenderSubmissionCanReplaceQueuedContent(&submission));
+
+    submission.target.clearBeforeDraw = 0;
+    EXPECT_FALSE(MilestroUnityRenderSubmissionCanReplaceQueuedContent(&submission));
+    EXPECT_FALSE(MilestroUnityRenderSubmissionCanReplaceQueuedContent(nullptr));
+}
+
 TEST(UnityRenderPayload, LayoutOffsetsAndEpochSaturationAreStable) {
     EXPECT_NE(kMilestroUnityRenderPayloadLayoutFingerprint, 0U);
     EXPECT_EQ(kMilestroUnityRenderPayloadLayoutFingerprint, MilestroUnityRenderPayloadLayoutFingerprint());

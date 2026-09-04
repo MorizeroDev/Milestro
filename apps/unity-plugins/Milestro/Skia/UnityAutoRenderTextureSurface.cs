@@ -10,6 +10,7 @@ namespace Milestro.Skia
         private readonly UnitySkiaRenderTextureSurface surface;
 
         public UnitySkiaGraphicsBackend Backend => surface.Backend;
+        public UnitySkiaVulkanBackend VulkanBackend => surface.VulkanBackend;
         public UnityEngine.ColorSpace ColorSpace => surface.ColorSpace;
         public bool UseSrgbStorage => surface.UseSrgbStorage;
 
@@ -43,6 +44,11 @@ namespace Milestro.Skia
         public UnityAutoRenderTextureSurface(int width, int height, UnityEngine.ColorSpace colorSpace)
         {
             surface = new UnitySkiaRenderTextureSurface(SelectBackendForCurrentGraphicsDevice(), width, height, colorSpace);
+        }
+
+        public UnityAutoRenderTextureSurface(UnitySkiaRenderTextureDescriptor descriptor)
+        {
+            surface = new UnitySkiaRenderTextureSurface(SelectBackendForCurrentGraphicsDevice(), descriptor);
         }
 
         private UnityAutoRenderTextureSurface(UnitySkiaRenderTextureSurface surface)
@@ -84,13 +90,15 @@ namespace Milestro.Skia
                     return UnitySkiaGraphicsBackend.Metal;
                 case GraphicsDeviceType.Direct3D12:
                     return UnitySkiaGraphicsBackend.Direct3D12;
+                case GraphicsDeviceType.Vulkan:
+                    return UnitySkiaGraphicsBackend.Vulkan;
                 case GraphicsDeviceType.OpenGLES3:
                     return UnitySkiaGraphicsBackend.OpenGLES;
                 case GraphicsDeviceType.OpenGLCore:
                     return UnitySkiaGraphicsBackend.OpenGL;
                 default:
                     throw new NotSupportedException(
-                        "Milestro automatic RenderTexture surface supports Metal, Direct3D12, OpenGLES3, and OpenGLCore. Current Unity graphics device is " +
+                        "Milestro automatic RenderTexture surface supports Metal, Direct3D12, Vulkan, OpenGLES3, and OpenGLCore. Current Unity graphics device is " +
                         SystemInfo.graphicsDeviceType + ".");
             }
         }

@@ -27,9 +27,37 @@ int64_t FrameworkBindingMilestroUnityRenderGetRenderTextureEventId(int32_t graph
     return MilestroUnityRenderGetRenderTextureEventId(graphicsBackend, eventId);
 }
 
+int64_t FrameworkBindingMilestroUnityRenderGetVulkanRenderEventIds(int32_t vulkanBackend,
+                                                                   int32_t& firstEventId,
+                                                                   int32_t& secondEventId) {
+    return MilestroUnityRenderGetVulkanRenderEventIds(vulkanBackend, firstEventId, secondEventId);
+}
+
 int64_t FrameworkBindingMilestroUnityRenderEnqueueSubmission(int32_t graphicsBackend,
                                                              [[milize::CSharpType("IntPtr")]] void* submission) {
     return MilestroUnityRenderEnqueueSubmission(graphicsBackend, submission);
+}
+
+int64_t FrameworkBindingMilestroUnityRenderCreateVulkanTarget([[milize::CSharpType("IntPtr")]] void* nativeTexture,
+                                                              int32_t width,
+                                                              int32_t height,
+                                                              int32_t vulkanBackend,
+                                                              uint64_t deviceEpoch,
+                                                              [[milize::CSharpType("IntPtr")]] void*& target,
+                                                              uint64_t& generation) {
+    return MilestroUnityRenderCreateVulkanTarget(nativeTexture,
+                                                 width,
+                                                 height,
+                                                 vulkanBackend,
+                                                 deviceEpoch,
+                                                 target,
+                                                 generation);
+}
+
+int64_t FrameworkBindingMilestroUnityRenderDestroyVulkanTarget(
+        [[milize::RefType("ref")]] [[milize::CSharpType("IntPtr")]] void*& target,
+        int32_t& retirementPending) {
+    return MilestroUnityRenderDestroyVulkanTarget(target, retirementPending);
 }
 
 int64_t FrameworkBindingMilestroUnityRenderGetPayloadAbiInfo(uint32_t& abiVersion,

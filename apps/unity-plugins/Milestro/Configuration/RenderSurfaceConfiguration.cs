@@ -1,3 +1,5 @@
+using Milestro.Skia;
+
 namespace Milestro.Configuration
 {
     public class RenderSurfaceConfiguration
@@ -32,5 +34,7 @@ namespace Milestro.Configuration
         public long MaxTransitionBytes { get; set; } = DefaultMaxTransitionBytes;
 
         public int MaxAttemptsPerRequestAndEpoch { get; set; } = DefaultMaxAttemptsPerRequestAndEpoch;
+
+        public UnitySkiaVulkanBackend VulkanBackend { get; set; } = UnitySkiaVulkanBackend.Direct;
     }
 }

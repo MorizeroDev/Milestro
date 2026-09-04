@@ -2,6 +2,7 @@
 #include "unity_render/MilestroUnityGraphicsBackend.h"
 #include "unity_render/MilestroUnityRenderDiagnostics.h"
 #include "unity_render/MilestroUnityRenderSubmission.h"
+#include "unity_render/MilestroUnityVulkanBackendKind.h"
 
 #include <gtest/gtest.h>
 
@@ -71,6 +72,10 @@ MilestroUnityRenderSubmission& KeepAliveSubmission(int32_t graphicsBackend,
     submission->target.abiVersion = kMilestroUnityRenderPayloadAbiVersion;
     submission->target.structSize = kMilestroUnityRenderTargetPayloadSize;
     submission->target.graphicsBackend = graphicsBackend;
+    if (graphicsBackend == static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan)) {
+        submission->target.vulkanBackend =
+                static_cast<int32_t>(milestro::unity_render::vulkan::VulkanBackendKind::Direct);
+    }
     submission->target.width = width;
     submission->target.height = height;
     submission->target.effectiveScale = effectiveScale;
@@ -219,6 +224,60 @@ TEST(UnityRenderDiagnostics, NewAcceptanceAtomicallyReplacesLastAcceptedSubmissi
     EXPECT_EQ(after.lastAcceptedRasterHeight, 2000);
     EXPECT_FLOAT_EQ(after.lastAcceptedEffectiveScale, 1.25f);
     EXPECT_EQ(after.lastAcceptedDeviceEpoch, before.currentDeviceEpoch);
+}
+
+TEST(UnityRenderDiagnostics, StagingQueuePreservesCumulativeDrawsUntilAFullClear) {
+    const MilestroUnityRenderDiagnosticsSnapshot snapshot = ReadProductionSnapshot();
+    constexpr auto staging = milestro::unity_render::vulkan::VulkanBackendKind::StagingCopy;
+    auto configureTarget = [&](MilestroUnityRenderSubmission& submission, int32_t clearBeforeDraw) {
+        submission.target.vulkanBackend = static_cast<int32_t>(staging);
+        submission.target.vulkanTarget = reinterpret_cast<void*>(0x1234);
+        submission.target.vulkanTargetGeneration = 17;
+        submission.target.nativeTextureHandle = reinterpret_cast<void*>(0x5678);
+        submission.target.clearBeforeDraw = clearBeforeDraw;
+    };
+
+    MilestroUnityRenderSubmission& first =
+            KeepAliveSubmission(static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan),
+                                64,
+                                64,
+                                1.0f,
+                                snapshot.currentDeviceEpoch);
+    MilestroUnityRenderSubmission& second =
+            KeepAliveSubmission(static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan),
+                                64,
+                                64,
+                                1.0f,
+                                snapshot.currentDeviceEpoch);
+    configureTarget(first, 0);
+    configureTarget(second, 0);
+    ASSERT_EQ(Enqueue(first.target.graphicsBackend, &first), MILESTRO_API_RET_OK);
+    ASSERT_EQ(Enqueue(second.target.graphicsBackend, &second), MILESTRO_API_RET_OK);
+    EXPECT_EQ(first.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Pending));
+    EXPECT_EQ(second.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Pending));
+
+    MilestroUnityRenderSubmission& clearing =
+            KeepAliveSubmission(static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan),
+                                64,
+                                64,
+                                1.0f,
+                                snapshot.currentDeviceEpoch);
+    configureTarget(clearing, 1);
+    ASSERT_EQ(Enqueue(clearing.target.graphicsBackend, &clearing), MILESTRO_API_RET_OK);
+    EXPECT_EQ(first.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Failed));
+    EXPECT_EQ(second.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Failed));
+    EXPECT_EQ(clearing.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Pending));
+
+    MilestroUnityRenderSubmission& cumulativeAfterClear =
+            KeepAliveSubmission(static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan),
+                                64,
+                                64,
+                                1.0f,
+                                snapshot.currentDeviceEpoch);
+    configureTarget(cumulativeAfterClear, 0);
+    ASSERT_EQ(Enqueue(cumulativeAfterClear.target.graphicsBackend, &cumulativeAfterClear), MILESTRO_API_RET_OK);
+    EXPECT_EQ(clearing.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Pending));
+    EXPECT_EQ(cumulativeAfterClear.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Pending));
 }
 
 } // namespace

@@ -33,7 +33,12 @@ namespace Milestro.Components.Internal
             stableDesiredScale = 0f;
             if (surface == null || surface.ColorSpace != colorSpace)
             {
-                var next = new UnityAutoRenderTextureSurface(sizePixels.x, sizePixels.y, colorSpace);
+                var descriptor = new UnitySkiaRenderTextureDescriptor(sizePixels.x, sizePixels.y, colorSpace)
+                {
+                    VulkanBackend = MilestroConfiguration.Configuration?.RenderSurface?.VulkanBackend ??
+                                    UnitySkiaVulkanBackend.Direct
+                };
+                var next = new UnityAutoRenderTextureSurface(descriptor);
                 SwapSurface(next);
                 changed = true;
                 return true;
@@ -107,7 +112,10 @@ namespace Milestro.Components.Internal
             var request = new RenderSurfaceRasterRequest(logicalSize.x, logicalSize.y, quantizedScale);
             var textureDescriptor = new UnitySkiaRenderTextureDescriptor(logicalSize.x,
                 logicalSize.y,
-                colorSpace);
+                colorSpace)
+            {
+                VulkanBackend = configuration.VulkanBackend
+            };
             var descriptor = new RenderSurfaceDescriptor(backend, textureDescriptor, 1);
             if (!RenderSurfacePolicy.TryBuildCandidatePlan(request,
                     ResolveRuntimeCaps(backend),

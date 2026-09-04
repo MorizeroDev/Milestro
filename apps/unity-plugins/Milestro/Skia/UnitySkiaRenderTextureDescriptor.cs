@@ -12,6 +12,7 @@ namespace Milestro.Skia
         public int MsaaSamples;
         public UnitySkiaRenderTextureResolveStrategy ResolveStrategy;
         public UnitySkiaRenderTextureFormat PreferredFormat;
+        public UnitySkiaVulkanBackend VulkanBackend;
 
         public static UnityEngine.ColorSpace DefaultColorSpace =>
             QualitySettings.activeColorSpace == UnityEngine.ColorSpace.Linear
@@ -33,6 +34,7 @@ namespace Milestro.Skia
             MsaaSamples = 1;
             ResolveStrategy = UnitySkiaRenderTextureResolveStrategy.None;
             PreferredFormat = UnitySkiaRenderTextureFormat.Auto;
+            VulkanBackend = UnitySkiaVulkanBackend.Direct;
         }
 
         public UnitySkiaRenderTextureDescriptor(int width, int height, bool srgb)
