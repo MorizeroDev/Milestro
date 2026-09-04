@@ -122,12 +122,12 @@ static_assert(kMilestroUnityRenderPayloadLayoutFingerprint == 112496641136896066
 #elif defined(__arm__) && !defined(__aarch64__)
 // Android armeabi-v7a uses the AAPCS eight-byte alignment for uint64_t.
 static_assert(kMilestroUnityRenderTargetPayloadSize == 88);
-static_assert(kMilestroUnityRenderSubmissionSize == 108);
+static_assert(kMilestroUnityRenderSubmissionSize == 112);
 static_assert(kMilestroUnityRenderTargetEffectiveScaleOffset == 72);
 static_assert(kMilestroUnityRenderTargetDeviceEpochOffset == 80);
 static_assert(kMilestroUnityRenderSubmissionTargetOffset == 8);
 static_assert(kMilestroUnityRenderSubmissionCompletedOffset == 104);
-static_assert(kMilestroUnityRenderPayloadLayoutFingerprint == 15803143509196474059ULL);
+static_assert(kMilestroUnityRenderPayloadLayoutFingerprint == 13162786353327360783ULL);
 #endif
 
 inline bool MilestroUnityRenderSubmissionHasCurrentAbi(const MilestroUnityRenderSubmission* submission,
