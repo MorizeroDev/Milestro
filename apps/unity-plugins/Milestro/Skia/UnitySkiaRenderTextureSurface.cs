@@ -177,6 +177,7 @@ namespace Milestro.Skia
         private sealed class UnityTextureTarget
         {
             private int released;
+            private int vulkanTargetRetired;
 
             internal UnityTextureTarget(UnitySkiaRenderTextureDescriptor descriptor,
                 Texture texture,
@@ -234,16 +235,23 @@ namespace Milestro.Skia
                 {
                     try
                     {
-                        if (VulkanTarget != IntPtr.Zero)
-                        {
-                            ReleaseVulkanTarget(VulkanTarget, VulkanTargetGeneration, DeviceEpoch);
-                        }
+                        RetireNativeVulkanTarget();
                     }
                     finally
                     {
                         ReleaseRenderTexture(RenderTexture);
                     }
                 }
+            }
+
+            internal void RetireNativeVulkanTarget()
+            {
+                if (VulkanTarget == IntPtr.Zero || Interlocked.Exchange(ref vulkanTargetRetired, 1) != 0)
+                {
+                    return;
+                }
+
+                ReleaseVulkanTarget(VulkanTarget, VulkanTargetGeneration, DeviceEpoch);
             }
         }
 
@@ -1921,6 +1929,23 @@ namespace Milestro.Skia
             RenderSurfaceBudgetLedger.RenderSurfaceBudgetLease lease)
         {
             counters.RecordRetirement();
+            // Native cancellation must not wait behind a render event that Unity may never deliver.
+            try
+            {
+                target.RetireNativeVulkanTarget();
+            }
+            catch
+            {
+                try
+                {
+                    target.Release();
+                }
+                catch
+                {
+                    // Keep the native retirement failure as the primary exception.
+                }
+                throw;
+            }
             DeferReleaseAfterCurrentEvents(() =>
             {
                 try
@@ -2060,6 +2085,19 @@ namespace Milestro.Skia
             }
         }
 
+        private static void ScheduleVulkanLifetimeSweep(IntPtr renderEventFunc)
+        {
+            ExitCodeUtil.ThrowIfFailed(BindingC.UnityRenderGetVulkanRenderEventIds(
+                (int)UnitySkiaVulkanBackend.StagingCopy,
+                out var sweepEventId,
+                out _));
+            ScheduleRenderDrain(UnitySkiaGraphicsBackend.Vulkan,
+                0,
+                renderEventFunc,
+                sweepEventId,
+                -1);
+        }
+
         private static void AddReusablePendingEvent(PendingRenderEvent pendingEvent,
             Texture texture,
             UnitySkiaRenderTextureSurface owner)
@@ -2142,6 +2180,7 @@ namespace Milestro.Skia
             List<PendingRenderDrain>? completedDrains = null;
             List<PendingRenderDrain>? drainsToReschedule = null;
             List<CompletedRenderEventNotification>? notifications = null;
+            PendingRenderDrain? directDrainNeedingSweep = null;
 
             lock (PendingLock)
             {
@@ -2210,6 +2249,19 @@ namespace Milestro.Skia
                     }
                 }
 
+                if (!PendingDrains.ContainsKey(RenderRouteKey((int)UnitySkiaGraphicsBackend.Vulkan, 0)))
+                {
+                    foreach (var pendingDrain in PendingDrains.Values)
+                    {
+                        if (pendingDrain.GraphicsBackend == (int)UnitySkiaGraphicsBackend.Vulkan &&
+                            pendingDrain.VulkanBackend == (int)UnitySkiaVulkanBackend.Direct)
+                        {
+                            directDrainNeedingSweep = pendingDrain;
+                            break;
+                        }
+                    }
+                }
+
                 for (var i = DeferredReleases.Count - 1; i >= 0; i--)
                 {
                     var deferredRelease = DeferredReleases[i];
@@ -2237,6 +2289,11 @@ namespace Milestro.Skia
                         pendingDrain.FirstRenderEventId,
                         pendingDrain.SecondRenderEventId);
                 }
+            }
+
+            if (directDrainNeedingSweep != null)
+            {
+                ScheduleVulkanLifetimeSweep(directDrainNeedingSweep.RenderEventFunc);
             }
 
             if (notifications != null)

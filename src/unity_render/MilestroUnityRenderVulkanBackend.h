@@ -45,8 +45,10 @@ void FailDirectPreparedForTarget(void* target,
                                  uint64_t generation,
                                  uint64_t deviceEpoch,
                                  VulkanSubmissionCompletion complete);
+bool HasDirectBatch(uint64_t batchToken);
 std::size_t PendingDirectBatchCount();
 
+bool TryGetCurrentFrame(uint64_t& currentFrame);
 bool CollectRetiredTargets();
 bool HasPendingRetirements();
 

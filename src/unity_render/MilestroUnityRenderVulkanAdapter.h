@@ -66,6 +66,15 @@ VulkanRenderBackend& DirectBackend();
 VulkanRenderBackend& StagingCopyBackend();
 PFN_vkVoidFunction ResolveInstanceProcWithVulkan10Fallback(const UnityVulkanInstance& instance, const char* name);
 
+#if defined(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST)
+void EnableDirectAdapterTestContext(bool enabled);
+void ResetDirectAdapterTestTrace();
+int DirectAdapterTestWrapCount();
+int DirectAdapterTestDrawCount();
+int DirectAdapterTestFlushCount();
+int DirectAdapterTestSubmitCount();
+#endif
+
 inline VulkanRenderBackend& BackendForKind(VulkanBackendKind kind) {
     return kind == VulkanBackendKind::StagingCopy ? StagingCopyBackend() : DirectBackend();
 }

@@ -25,6 +25,14 @@ namespace milestro::unity_render::vulkan {
 
 namespace {
 
+#if defined(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST)
+bool gDirectAdapterTestContextEnabled = false;
+int gDirectAdapterTestWrapCount = 0;
+int gDirectAdapterTestDrawCount = 0;
+int gDirectAdapterTestFlushCount = 0;
+int gDirectAdapterTestSubmitCount = 0;
+#endif
+
 VkResult VKAPI_PTR EnumerateVulkan10InstanceVersion(uint32_t* apiVersion) {
     if (apiVersion != nullptr) {
         *apiVersion = VK_API_VERSION_1_0;
@@ -141,7 +149,12 @@ public:
         }
 
         const MilestroUnityRenderTargetPayload& target = prepared.submission->target;
-        directContext_->resetContext();
+#if defined(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST)
+        if (!gDirectAdapterTestContextEnabled)
+#endif
+        {
+            directContext_->resetContext();
+        }
         GrVkImageInfo imageInfo{};
         imageInfo.fImage = prepared.image.image;
         imageInfo.fAlloc = {};
@@ -154,21 +167,41 @@ public:
         imageInfo.fCurrentQueueFamily = prepared.instance.queueFamilyIndex;
         imageInfo.fSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-        const GrBackendRenderTarget backendTarget =
-                GrBackendRenderTargets::MakeVk(target.width, target.height, imageInfo);
-        sk_sp<SkSurface> surface =
-                SkSurfaces::WrapBackendRenderTarget(directContext_.get(),
-                                                    backendTarget,
-                                                    kTopLeft_GrSurfaceOrigin,
-                                                    ColorTypeForFormat(prepared.image.format),
-                                                    ColorSpaceForTarget(target, prepared.image.format),
-                                                    nullptr);
+        sk_sp<SkSurface> surface;
+#if defined(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST)
+        if (gDirectAdapterTestContextEnabled) {
+            ++gDirectAdapterTestWrapCount;
+            surface = SkSurfaces::Raster(SkImageInfo::Make(target.width,
+                                                           target.height,
+                                                           ColorTypeForFormat(prepared.image.format),
+                                                           kPremul_SkAlphaType,
+                                                           ColorSpaceForTarget(target, prepared.image.format)));
+        } else
+#endif
+        {
+            const GrBackendRenderTarget backendTarget =
+                    GrBackendRenderTargets::MakeVk(target.width, target.height, imageInfo);
+            surface = SkSurfaces::WrapBackendRenderTarget(directContext_.get(),
+                                                          backendTarget,
+                                                          kTopLeft_GrSurfaceOrigin,
+                                                          ColorTypeForFormat(prepared.image.format),
+                                                          ColorSpaceForTarget(target, prepared.image.format),
+                                                          nullptr);
+        }
         if (surface == nullptr) {
             MILESTROLOG_ERROR("Milestro failed to wrap a Unity Vulkan direct target.");
             return MilestroUnityRenderSubmissionStatus::Failed;
         }
 
         DrawSubmission(surface->getCanvas(), *prepared.submission);
+#if defined(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST)
+        if (gDirectAdapterTestContextEnabled) {
+            ++gDirectAdapterTestDrawCount;
+            ++gDirectAdapterTestFlushCount;
+            ++gDirectAdapterTestSubmitCount;
+            return MilestroUnityRenderSubmissionStatus::Drawn;
+        }
+#endif
         directContext_->flush(surface.get());
         if (!directContext_->submit(GrSyncCpu::kNo)) {
             MILESTROLOG_ERROR("Milestro Vulkan direct queue submission failed.");
@@ -202,6 +235,11 @@ private:
     }
 
     bool EnsureContext() {
+#if defined(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST)
+        if (gDirectAdapterTestContextEnabled) {
+            return true;
+        }
+#endif
         if (directContext_ != nullptr && !directContext_->abandoned()) {
             return true;
         }
@@ -277,5 +315,34 @@ DirectVulkanBackend gDirectBackend;
 VulkanRenderBackend& DirectBackend() {
     return gDirectBackend;
 }
+
+#if defined(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST)
+void EnableDirectAdapterTestContext(bool enabled) {
+    gDirectAdapterTestContextEnabled = enabled;
+}
+
+void ResetDirectAdapterTestTrace() {
+    gDirectAdapterTestWrapCount = 0;
+    gDirectAdapterTestDrawCount = 0;
+    gDirectAdapterTestFlushCount = 0;
+    gDirectAdapterTestSubmitCount = 0;
+}
+
+int DirectAdapterTestWrapCount() {
+    return gDirectAdapterTestWrapCount;
+}
+
+int DirectAdapterTestDrawCount() {
+    return gDirectAdapterTestDrawCount;
+}
+
+int DirectAdapterTestFlushCount() {
+    return gDirectAdapterTestFlushCount;
+}
+
+int DirectAdapterTestSubmitCount() {
+    return gDirectAdapterTestSubmitCount;
+}
+#endif
 
 } // namespace milestro::unity_render::vulkan

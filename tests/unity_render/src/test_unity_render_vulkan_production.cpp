@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -59,6 +60,8 @@ struct FakeVulkanState {
     int copyCount = 0;
     uint64_t currentFrame = 50;
     uint64_t safeFrame = 49;
+    uint32_t imageWidth = 16;
+    uint32_t imageHeight = 16;
     alignas(16) uint8_t mapped[4096]{};
 };
 
@@ -212,7 +215,7 @@ bool UNITY_INTERFACE_API FakeAccessTexture(void*,
     image->aspect = VK_IMAGE_ASPECT_COLOR_BIT;
     image->usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     image->format = VK_FORMAT_R8G8B8A8_UNORM;
-    image->extent = {16, 16, 1};
+    image->extent = {gVulkanState.imageWidth, gVulkanState.imageHeight, 1};
     image->tiling = VK_IMAGE_TILING_OPTIMAL;
     image->type = VK_IMAGE_TYPE_2D;
     image->samples = VK_SAMPLE_COUNT_1_BIT;
@@ -347,6 +350,8 @@ static_assert(sizeof(TestRenderDrainPayload) == 32);
 class VulkanDispatcherProductionTest : public testing::Test {
 protected:
     void SetUp() override {
+        milestro::unity_render::vulkan::EnableDirectAdapterTestContext(true);
+        milestro::unity_render::vulkan::ResetDirectAdapterTestTrace();
         gFakeVulkan = {};
         gFakeVulkan.ConfigureEvent = FakeConfigureEvent;
         gFakeVulkan.Instance = FakeInstance;
@@ -378,6 +383,7 @@ protected:
 
     void TearDown() override {
         milestro::unity_render::Unload();
+        milestro::unity_render::vulkan::EnableDirectAdapterTestContext(false);
         EXPECT_EQ(gDeviceEventCallback, nullptr);
     }
 
@@ -943,6 +949,377 @@ TEST_F(VulkanDispatcherProductionTest, DeviceResetFailsPreparedBatchAndRejectsLa
     EXPECT_EQ(MilestroUnityRenderDestroyVulkanTarget(target, generation, deviceEpoch_, retirementPending),
               MILESTRO_API_RET_OK);
     EXPECT_EQ(target, nullptr);
+}
+
+TEST_F(VulkanDispatcherProductionTest, MissingDirectSubmitExpiresAndTheRouteCanRenderAgain) {
+    void* nativeTexture = reinterpret_cast<void*>(0x2801);
+    void* target = nullptr;
+    uint64_t generation = 0;
+    ASSERT_EQ(MilestroUnityRenderCreateVulkanTarget(nativeTexture,
+                                                    16,
+                                                    16,
+                                                    static_cast<int32_t>(VulkanBackendKind::Direct),
+                                                    deviceEpoch_,
+                                                    target,
+                                                    generation),
+              MILESTRO_API_RET_OK);
+
+    int32_t prepareEventId = -1;
+    int32_t submitEventId = -1;
+    int32_t sweepEventId = -1;
+    int32_t unusedEventId = -1;
+    ASSERT_EQ(milestro::unity_render::GetVulkanRenderEventIdsForExport(static_cast<int32_t>(VulkanBackendKind::Direct),
+                                                                       prepareEventId,
+                                                                       submitEventId),
+              MILESTRO_API_RET_OK);
+    ASSERT_EQ(milestro::unity_render::GetVulkanRenderEventIdsForExport(
+                      static_cast<int32_t>(VulkanBackendKind::StagingCopy),
+                      sweepEventId,
+                      unusedEventId),
+              MILESTRO_API_RET_OK);
+    auto renderEvent =
+            reinterpret_cast<UnityRenderingEventAndData>(milestro::unity_render::GetRenderEventFuncForExport());
+
+    auto first = DirectSubmission(nativeTexture, target, generation, deviceEpoch_);
+    SetCurrentPayloadAbi(first);
+    ASSERT_EQ(milestro::unity_render::EnqueueSubmissionForExport(
+                      static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan),
+                      &first),
+              MILESTRO_API_RET_OK);
+    TestRenderDrainPayload firstDrain;
+    firstDrain.batchToken = 601;
+    renderEvent(prepareEventId, &firstDrain);
+    ASSERT_EQ(firstDrain.phase, 2);
+    ASSERT_EQ(firstDrain.completed, 0);
+
+    TestRenderDrainPayload sweepDrain;
+    sweepDrain.vulkanBackend = 0;
+    gVulkanState.currentFrame = 51;
+    renderEvent(sweepEventId, &sweepDrain);
+    EXPECT_EQ(sweepDrain.completed, 2);
+    EXPECT_EQ(firstDrain.completed, 0);
+    sweepDrain.completed = 0;
+    gVulkanState.currentFrame = 52;
+    renderEvent(sweepEventId, &sweepDrain);
+
+    EXPECT_EQ(first.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Failed));
+    EXPECT_EQ(firstDrain.phase, 3);
+    EXPECT_EQ(firstDrain.completed, 1);
+    EXPECT_EQ(milestro::unity_render::vulkan::PendingDirectBatchCount(), 0U);
+
+    renderEvent(submitEventId, &firstDrain);
+    renderEvent(sweepEventId, &sweepDrain);
+    EXPECT_EQ(first.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Failed));
+    EXPECT_EQ(firstDrain.completed, 1);
+
+    auto second = DirectSubmission(nativeTexture, target, generation, deviceEpoch_);
+    SetCurrentPayloadAbi(second);
+    ASSERT_EQ(milestro::unity_render::EnqueueSubmissionForExport(
+                      static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan),
+                      &second),
+              MILESTRO_API_RET_OK);
+    TestRenderDrainPayload secondDrain;
+    secondDrain.batchToken = 602;
+    renderEvent(prepareEventId, &secondDrain);
+    ASSERT_EQ(secondDrain.phase, 2);
+    renderEvent(submitEventId, &secondDrain);
+    EXPECT_EQ(secondDrain.completed, 1);
+    EXPECT_EQ(second.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Drawn));
+    EXPECT_EQ(milestro::unity_render::vulkan::DirectAdapterTestWrapCount(), 1);
+    EXPECT_EQ(milestro::unity_render::vulkan::DirectAdapterTestDrawCount(), 1);
+    EXPECT_EQ(milestro::unity_render::vulkan::DirectAdapterTestFlushCount(), 1);
+    EXPECT_EQ(milestro::unity_render::vulkan::DirectAdapterTestSubmitCount(), 1);
+    EXPECT_EQ(gVulkanState.accessCount, 2);
+    for (int sweep = 0; sweep < 3; ++sweep) {
+        TestRenderDrainPayload postSubmitSweep;
+        postSubmitSweep.vulkanBackend = 0;
+        renderEvent(sweepEventId, &postSubmitSweep);
+        EXPECT_EQ(postSubmitSweep.completed, 1);
+    }
+    EXPECT_EQ(second.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Drawn));
+    EXPECT_EQ(milestro::unity_render::vulkan::DirectAdapterTestSubmitCount(), 1);
+
+    int32_t retirementPending = -1;
+    EXPECT_EQ(MilestroUnityRenderDestroyVulkanTarget(target, generation, deviceEpoch_, retirementPending),
+              MILESTRO_API_RET_OK);
+}
+
+TEST_F(VulkanDispatcherProductionTest, DirectExpiryDeadlineOrdersAcrossFrameWrap) {
+    void* nativeTexture = reinterpret_cast<void*>(0x2901);
+    void* target = nullptr;
+    uint64_t generation = 0;
+    ASSERT_EQ(MilestroUnityRenderCreateVulkanTarget(nativeTexture,
+                                                    16,
+                                                    16,
+                                                    static_cast<int32_t>(VulkanBackendKind::Direct),
+                                                    deviceEpoch_,
+                                                    target,
+                                                    generation),
+              MILESTRO_API_RET_OK);
+    auto submission = DirectSubmission(nativeTexture, target, generation, deviceEpoch_);
+    SetCurrentPayloadAbi(submission);
+    ASSERT_EQ(milestro::unity_render::EnqueueSubmissionForExport(
+                      static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan),
+                      &submission),
+              MILESTRO_API_RET_OK);
+
+    int32_t prepareEventId = -1;
+    int32_t submitEventId = -1;
+    int32_t sweepEventId = -1;
+    int32_t unusedEventId = -1;
+    ASSERT_EQ(milestro::unity_render::GetVulkanRenderEventIdsForExport(static_cast<int32_t>(VulkanBackendKind::Direct),
+                                                                       prepareEventId,
+                                                                       submitEventId),
+              MILESTRO_API_RET_OK);
+    ASSERT_EQ(milestro::unity_render::GetVulkanRenderEventIdsForExport(
+                      static_cast<int32_t>(VulkanBackendKind::StagingCopy),
+                      sweepEventId,
+                      unusedEventId),
+              MILESTRO_API_RET_OK);
+    auto renderEvent =
+            reinterpret_cast<UnityRenderingEventAndData>(milestro::unity_render::GetRenderEventFuncForExport());
+
+    gVulkanState.currentFrame = std::numeric_limits<uint64_t>::max() - 1U;
+    TestRenderDrainPayload drain;
+    drain.batchToken = 701;
+    renderEvent(prepareEventId, &drain);
+    ASSERT_EQ(drain.phase, 2);
+
+    TestRenderDrainPayload sweepDrain;
+    sweepDrain.vulkanBackend = 0;
+    gVulkanState.currentFrame = std::numeric_limits<uint64_t>::max();
+    renderEvent(sweepEventId, &sweepDrain);
+    EXPECT_EQ(drain.completed, 0);
+    EXPECT_EQ(sweepDrain.completed, 2);
+
+    sweepDrain.completed = 0;
+    gVulkanState.currentFrame = 0;
+    renderEvent(sweepEventId, &sweepDrain);
+    EXPECT_EQ(drain.phase, 3);
+    EXPECT_EQ(drain.completed, 1);
+    EXPECT_EQ(submission.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Failed));
+
+    int32_t retirementPending = -1;
+    EXPECT_EQ(MilestroUnityRenderDestroyVulkanTarget(target, generation, deviceEpoch_, retirementPending),
+              MILESTRO_API_RET_OK);
+}
+
+TEST_F(VulkanDispatcherProductionTest, DirectExpiryHasABoundedSweepFallbackWhenTheFrameStalls) {
+    void* nativeTexture = reinterpret_cast<void*>(0x2981);
+    void* target = nullptr;
+    uint64_t generation = 0;
+    ASSERT_EQ(MilestroUnityRenderCreateVulkanTarget(nativeTexture,
+                                                    16,
+                                                    16,
+                                                    static_cast<int32_t>(VulkanBackendKind::Direct),
+                                                    deviceEpoch_,
+                                                    target,
+                                                    generation),
+              MILESTRO_API_RET_OK);
+    auto submission = DirectSubmission(nativeTexture, target, generation, deviceEpoch_);
+    SetCurrentPayloadAbi(submission);
+    ASSERT_EQ(milestro::unity_render::EnqueueSubmissionForExport(
+                      static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan),
+                      &submission),
+              MILESTRO_API_RET_OK);
+
+    int32_t prepareEventId = -1;
+    int32_t submitEventId = -1;
+    int32_t sweepEventId = -1;
+    int32_t unusedEventId = -1;
+    ASSERT_EQ(milestro::unity_render::GetVulkanRenderEventIdsForExport(static_cast<int32_t>(VulkanBackendKind::Direct),
+                                                                       prepareEventId,
+                                                                       submitEventId),
+              MILESTRO_API_RET_OK);
+    ASSERT_EQ(milestro::unity_render::GetVulkanRenderEventIdsForExport(
+                      static_cast<int32_t>(VulkanBackendKind::StagingCopy),
+                      sweepEventId,
+                      unusedEventId),
+              MILESTRO_API_RET_OK);
+    auto renderEvent =
+            reinterpret_cast<UnityRenderingEventAndData>(milestro::unity_render::GetRenderEventFuncForExport());
+    TestRenderDrainPayload drain;
+    drain.batchToken = 751;
+    renderEvent(prepareEventId, &drain);
+    ASSERT_EQ(drain.phase, 2);
+
+    for (int sweep = 0; sweep < 2; ++sweep) {
+        TestRenderDrainPayload sweepDrain;
+        sweepDrain.vulkanBackend = 0;
+        renderEvent(sweepEventId, &sweepDrain);
+        EXPECT_EQ(sweepDrain.completed, 2);
+        EXPECT_EQ(drain.completed, 0);
+    }
+    TestRenderDrainPayload finalSweepDrain;
+    finalSweepDrain.vulkanBackend = 0;
+    renderEvent(sweepEventId, &finalSweepDrain);
+    EXPECT_EQ(finalSweepDrain.completed, 1);
+    EXPECT_EQ(drain.phase, 3);
+    EXPECT_EQ(drain.completed, 1);
+    EXPECT_EQ(submission.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Failed));
+
+    int32_t retirementPending = -1;
+    EXPECT_EQ(MilestroUnityRenderDestroyVulkanTarget(target, generation, deviceEpoch_, retirementPending),
+              MILESTRO_API_RET_OK);
+}
+
+TEST_F(VulkanDispatcherProductionTest, TargetCloseCompletesPreparedDrainWithoutAClosingRenderEvent) {
+    void* nativeTexture = reinterpret_cast<void*>(0x2A01);
+    void* target = nullptr;
+    uint64_t generation = 0;
+    ASSERT_EQ(MilestroUnityRenderCreateVulkanTarget(nativeTexture,
+                                                    16,
+                                                    16,
+                                                    static_cast<int32_t>(VulkanBackendKind::Direct),
+                                                    deviceEpoch_,
+                                                    target,
+                                                    generation),
+              MILESTRO_API_RET_OK);
+    auto submission = DirectSubmission(nativeTexture, target, generation, deviceEpoch_);
+    SetCurrentPayloadAbi(submission);
+    ASSERT_EQ(milestro::unity_render::EnqueueSubmissionForExport(
+                      static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan),
+                      &submission),
+              MILESTRO_API_RET_OK);
+
+    int32_t prepareEventId = -1;
+    int32_t submitEventId = -1;
+    ASSERT_EQ(milestro::unity_render::GetVulkanRenderEventIdsForExport(static_cast<int32_t>(VulkanBackendKind::Direct),
+                                                                       prepareEventId,
+                                                                       submitEventId),
+              MILESTRO_API_RET_OK);
+    auto renderEvent =
+            reinterpret_cast<UnityRenderingEventAndData>(milestro::unity_render::GetRenderEventFuncForExport());
+    TestRenderDrainPayload drain;
+    drain.batchToken = 801;
+    renderEvent(prepareEventId, &drain);
+    ASSERT_EQ(drain.phase, 2);
+
+    int32_t retirementPending = -1;
+    ASSERT_EQ(MilestroUnityRenderDestroyVulkanTarget(target, generation, deviceEpoch_, retirementPending),
+              MILESTRO_API_RET_OK);
+    EXPECT_EQ(target, nullptr);
+    EXPECT_EQ(submission.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Failed));
+    EXPECT_EQ(drain.phase, 3);
+    EXPECT_EQ(drain.completed, 1);
+
+    renderEvent(submitEventId, &drain);
+    EXPECT_EQ(drain.completed, 1);
+}
+
+TEST_F(VulkanDispatcherProductionTest, ResizeReplacementCancelsTheOldDrainAndRendersTheNewTarget) {
+    void* nativeTexture = reinterpret_cast<void*>(0x2A81);
+    void* oldTarget = nullptr;
+    uint64_t oldGeneration = 0;
+    ASSERT_EQ(MilestroUnityRenderCreateVulkanTarget(nativeTexture,
+                                                    16,
+                                                    16,
+                                                    static_cast<int32_t>(VulkanBackendKind::Direct),
+                                                    deviceEpoch_,
+                                                    oldTarget,
+                                                    oldGeneration),
+              MILESTRO_API_RET_OK);
+    auto oldSubmission = DirectSubmission(nativeTexture, oldTarget, oldGeneration, deviceEpoch_);
+    SetCurrentPayloadAbi(oldSubmission);
+    ASSERT_EQ(milestro::unity_render::EnqueueSubmissionForExport(
+                      static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan),
+                      &oldSubmission),
+              MILESTRO_API_RET_OK);
+
+    int32_t prepareEventId = -1;
+    int32_t submitEventId = -1;
+    ASSERT_EQ(milestro::unity_render::GetVulkanRenderEventIdsForExport(static_cast<int32_t>(VulkanBackendKind::Direct),
+                                                                       prepareEventId,
+                                                                       submitEventId),
+              MILESTRO_API_RET_OK);
+    auto renderEvent =
+            reinterpret_cast<UnityRenderingEventAndData>(milestro::unity_render::GetRenderEventFuncForExport());
+    TestRenderDrainPayload oldDrain;
+    oldDrain.batchToken = 851;
+    renderEvent(prepareEventId, &oldDrain);
+    ASSERT_EQ(oldDrain.phase, 2);
+
+    int32_t retirementPending = -1;
+    ASSERT_EQ(MilestroUnityRenderDestroyVulkanTarget(oldTarget, oldGeneration, deviceEpoch_, retirementPending),
+              MILESTRO_API_RET_OK);
+    EXPECT_EQ(oldDrain.completed, 1);
+    EXPECT_EQ(oldSubmission.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Failed));
+
+    void* replacementTarget = nullptr;
+    uint64_t replacementGeneration = 0;
+    gVulkanState.imageWidth = 24;
+    gVulkanState.imageHeight = 24;
+    ASSERT_EQ(MilestroUnityRenderCreateVulkanTarget(nativeTexture,
+                                                    24,
+                                                    24,
+                                                    static_cast<int32_t>(VulkanBackendKind::Direct),
+                                                    deviceEpoch_,
+                                                    replacementTarget,
+                                                    replacementGeneration),
+              MILESTRO_API_RET_OK);
+    auto replacementSubmission =
+            DirectSubmission(nativeTexture, replacementTarget, replacementGeneration, deviceEpoch_);
+    replacementSubmission.target.width = 24;
+    replacementSubmission.target.height = 24;
+    SetCurrentPayloadAbi(replacementSubmission);
+    ASSERT_EQ(milestro::unity_render::EnqueueSubmissionForExport(
+                      static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan),
+                      &replacementSubmission),
+              MILESTRO_API_RET_OK);
+    TestRenderDrainPayload replacementDrain;
+    replacementDrain.batchToken = 852;
+    renderEvent(prepareEventId, &replacementDrain);
+    renderEvent(submitEventId, &replacementDrain);
+    EXPECT_EQ(replacementDrain.completed, 1);
+    EXPECT_EQ(replacementSubmission.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Drawn));
+
+    EXPECT_EQ(MilestroUnityRenderDestroyVulkanTarget(replacementTarget,
+                                                     replacementGeneration,
+                                                     deviceEpoch_,
+                                                     retirementPending),
+              MILESTRO_API_RET_OK);
+}
+
+TEST_F(VulkanDispatcherProductionTest, StagingPublicQueueAndDispatcherCompleteSuccessfully) {
+    void* nativeTexture = reinterpret_cast<void*>(0x2B01);
+    void* target = nullptr;
+    uint64_t generation = 0;
+    ASSERT_EQ(MilestroUnityRenderCreateVulkanTarget(nativeTexture,
+                                                    16,
+                                                    16,
+                                                    static_cast<int32_t>(VulkanBackendKind::StagingCopy),
+                                                    deviceEpoch_,
+                                                    target,
+                                                    generation),
+              MILESTRO_API_RET_OK);
+    auto submission = StagingSubmission(nativeTexture, target, generation, deviceEpoch_);
+    SetCurrentPayloadAbi(submission);
+    ASSERT_EQ(milestro::unity_render::EnqueueSubmissionForExport(
+                      static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan),
+                      &submission),
+              MILESTRO_API_RET_OK);
+
+    int32_t stagingEventId = -1;
+    int32_t unusedEventId = -1;
+    ASSERT_EQ(milestro::unity_render::GetVulkanRenderEventIdsForExport(
+                      static_cast<int32_t>(VulkanBackendKind::StagingCopy),
+                      stagingEventId,
+                      unusedEventId),
+              MILESTRO_API_RET_OK);
+    auto renderEvent =
+            reinterpret_cast<UnityRenderingEventAndData>(milestro::unity_render::GetRenderEventFuncForExport());
+    TestRenderDrainPayload drain;
+    drain.vulkanBackend = static_cast<int32_t>(VulkanBackendKind::StagingCopy);
+    renderEvent(stagingEventId, &drain);
+
+    EXPECT_EQ(drain.completed, 1);
+    EXPECT_EQ(submission.completed, static_cast<int32_t>(MilestroUnityRenderSubmissionStatus::Drawn));
+    EXPECT_EQ(gVulkanState.copyCount, 1);
+    EXPECT_EQ(gVulkanState.accessCount, 3);
+
+    int32_t retirementPending = -1;
+    EXPECT_EQ(MilestroUnityRenderDestroyVulkanTarget(target, generation, deviceEpoch_, retirementPending),
+              MILESTRO_API_RET_OK);
 }
 
 } // namespace

@@ -417,8 +417,25 @@ void FailDirectPreparedForTarget(void* target,
     }
 }
 
+bool HasDirectBatch(uint64_t batchToken) {
+    return FindDirectBatch(batchToken) != gPreparedDirectBatches.end();
+}
+
 std::size_t PendingDirectBatchCount() {
     return gPreparedDirectBatches.size();
+}
+
+bool TryGetCurrentFrame(uint64_t& currentFrame) {
+    currentFrame = 0;
+    if (gVulkan == nullptr || gVulkan->CommandRecordingState == nullptr) {
+        return false;
+    }
+    UnityVulkanRecordingState recording{};
+    if (!gVulkan->CommandRecordingState(&recording, kUnityVulkanGraphicsQueueAccess_DontCare)) {
+        return false;
+    }
+    currentFrame = recording.currentFrameNumber;
+    return true;
 }
 
 bool CollectRetiredTargets() {
