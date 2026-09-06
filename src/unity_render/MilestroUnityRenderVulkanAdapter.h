@@ -73,6 +73,7 @@ int DirectAdapterTestWrapCount();
 int DirectAdapterTestDrawCount();
 int DirectAdapterTestFlushCount();
 int DirectAdapterTestSubmitCount();
+int DirectAdapterTestProductionCallMask();
 #endif
 
 inline VulkanRenderBackend& BackendForKind(VulkanBackendKind kind) {

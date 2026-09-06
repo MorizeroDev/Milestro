@@ -13,6 +13,10 @@
 #include "include/gpu/ganesh/GrBackendSurface.h"
 #include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
+#if defined(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST)
+#include "include/gpu/ganesh/mock/GrMockBackendSurface.h"
+#include "include/gpu/ganesh/mock/GrMockTypes.h"
+#endif
 #include "include/gpu/ganesh/vk/GrVkBackendSurface.h"
 #include "include/gpu/ganesh/vk/GrVkDirectContext.h"
 #include "include/gpu/ganesh/vk/GrVkTypes.h"
@@ -31,6 +35,8 @@ int gDirectAdapterTestWrapCount = 0;
 int gDirectAdapterTestDrawCount = 0;
 int gDirectAdapterTestFlushCount = 0;
 int gDirectAdapterTestSubmitCount = 0;
+int gDirectAdapterTestProductionCallMask = 0;
+int gDirectAdapterTestRenderTargetId = 0;
 #endif
 
 VkResult VKAPI_PTR EnumerateVulkan10InstanceVersion(uint32_t* apiVersion) {
@@ -134,6 +140,11 @@ public:
             MILESTROLOG_ERROR("Milestro Vulkan device changed while preparing a direct submission.");
             return {};
         }
+#if defined(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST)
+        if (gDirectAdapterTestContextEnabled) {
+            gDirectAdapterTestProductionCallMask |= 0x01;
+        }
+#endif
 
         prepared.target = &target;
         prepared.submission = &submission;
@@ -149,12 +160,7 @@ public:
         }
 
         const MilestroUnityRenderTargetPayload& target = prepared.submission->target;
-#if defined(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST)
-        if (!gDirectAdapterTestContextEnabled)
-#endif
-        {
-            directContext_->resetContext();
-        }
+        directContext_->resetContext();
         GrVkImageInfo imageInfo{};
         imageInfo.fImage = prepared.image.image;
         imageInfo.fAlloc = {};
@@ -171,11 +177,16 @@ public:
 #if defined(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST)
         if (gDirectAdapterTestContextEnabled) {
             ++gDirectAdapterTestWrapCount;
-            surface = SkSurfaces::Raster(SkImageInfo::Make(target.width,
-                                                           target.height,
-                                                           ColorTypeForFormat(prepared.image.format),
-                                                           kPremul_SkAlphaType,
-                                                           ColorSpaceForTarget(target, prepared.image.format)));
+            gDirectAdapterTestProductionCallMask |= 0x04;
+            const GrMockRenderTargetInfo mockInfo(GrColorType::kRGBA_8888, ++gDirectAdapterTestRenderTargetId);
+            const GrBackendRenderTarget backendTarget =
+                    GrBackendRenderTargets::MakeMock(target.width, target.height, 1, 0, mockInfo);
+            surface = SkSurfaces::WrapBackendRenderTarget(directContext_.get(),
+                                                          backendTarget,
+                                                          kTopLeft_GrSurfaceOrigin,
+                                                          kRGBA_8888_SkColorType,
+                                                          ColorSpaceForTarget(target, prepared.image.format),
+                                                          nullptr);
         } else
 #endif
         {
@@ -197,13 +208,24 @@ public:
 #if defined(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST)
         if (gDirectAdapterTestContextEnabled) {
             ++gDirectAdapterTestDrawCount;
-            ++gDirectAdapterTestFlushCount;
-            ++gDirectAdapterTestSubmitCount;
-            return MilestroUnityRenderSubmissionStatus::Drawn;
+            gDirectAdapterTestProductionCallMask |= 0x08;
         }
 #endif
         directContext_->flush(surface.get());
-        if (!directContext_->submit(GrSyncCpu::kNo)) {
+#if defined(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST)
+        if (gDirectAdapterTestContextEnabled) {
+            ++gDirectAdapterTestFlushCount;
+            gDirectAdapterTestProductionCallMask |= 0x10;
+        }
+#endif
+        const bool submitted = directContext_->submit(GrSyncCpu::kNo);
+#if defined(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST)
+        if (gDirectAdapterTestContextEnabled) {
+            ++gDirectAdapterTestSubmitCount;
+            gDirectAdapterTestProductionCallMask |= 0x20;
+        }
+#endif
+        if (!submitted) {
             MILESTROLOG_ERROR("Milestro Vulkan direct queue submission failed.");
             return MilestroUnityRenderSubmissionStatus::Failed;
         }
@@ -237,7 +259,14 @@ private:
     bool EnsureContext() {
 #if defined(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST)
         if (gDirectAdapterTestContextEnabled) {
-            return true;
+            if (directContext_ == nullptr || directContext_->abandoned()) {
+                directContext_ = GrDirectContext::MakeMock(nullptr);
+            }
+            if (directContext_ != nullptr) {
+                gDirectAdapterTestProductionCallMask |= 0x02;
+                return true;
+            }
+            return false;
         }
 #endif
         if (directContext_ != nullptr && !directContext_->abandoned()) {
@@ -326,6 +355,8 @@ void ResetDirectAdapterTestTrace() {
     gDirectAdapterTestDrawCount = 0;
     gDirectAdapterTestFlushCount = 0;
     gDirectAdapterTestSubmitCount = 0;
+    gDirectAdapterTestProductionCallMask = 0;
+    gDirectAdapterTestRenderTargetId = 0;
 }
 
 int DirectAdapterTestWrapCount() {
@@ -342,6 +373,10 @@ int DirectAdapterTestFlushCount() {
 
 int DirectAdapterTestSubmitCount() {
     return gDirectAdapterTestSubmitCount;
+}
+
+int DirectAdapterTestProductionCallMask() {
+    return gDirectAdapterTestProductionCallMask;
 }
 #endif
 

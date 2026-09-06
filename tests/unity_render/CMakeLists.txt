@@ -34,13 +34,13 @@ endif ()
 if (MILESTRO_ENABLE_DESKTOP_VULKAN_RENDER AND NOT MILESTRO_BUILD_SHARED_LIBS)
     set(MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST_NAME "MilestroTest_UnityRenderVulkanProduction")
     add_executable(${MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST_NAME}
-            src/test_unity_render_vulkan_production.cpp)
+            src/test_unity_render_vulkan_production.cpp
+            ${PROJECT_SOURCE_DIR}/src/unity_render/MilestroUnityRenderVulkanDirectAdapter.cpp)
     if (NOT MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
         target_sources(${MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST_NAME}
                 PRIVATE
                 ${PROJECT_SOURCE_DIR}/src/unity_render/MilestroUnityRenderDispatcher.cpp
                 ${PROJECT_SOURCE_DIR}/src/unity_render/MilestroUnityRenderVulkanBackend.cpp
-                ${PROJECT_SOURCE_DIR}/src/unity_render/MilestroUnityRenderVulkanDirectAdapter.cpp
                 ${PROJECT_SOURCE_DIR}/src/unity_render/MilestroUnityRenderVulkanStagingCopyAdapter.cpp)
     endif ()
     target_include_directories(${MILESTRO_UNITY_RENDER_VULKAN_PRODUCTION_TEST_NAME}

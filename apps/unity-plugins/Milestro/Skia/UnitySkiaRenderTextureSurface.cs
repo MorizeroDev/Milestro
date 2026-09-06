@@ -523,6 +523,7 @@ namespace Milestro.Skia
         {
             public int GraphicsBackend;
             public int VulkanBackend;
+            public ulong BatchToken;
             public IntPtr DrainPtr;
             public IntPtr RenderEventFunc;
             public int FirstRenderEventId;
@@ -2023,7 +2024,7 @@ namespace Milestro.Skia
                     Completed = 0,
                     BatchToken = backend == UnitySkiaGraphicsBackend.Vulkan &&
                                  vulkanBackend == (int)UnitySkiaVulkanBackend.Direct
-                        ? unchecked((ulong)Interlocked.Increment(ref nextDirectBatchToken))
+                        ? NextDirectBatchToken()
                         : 0,
                     Phase = 0,
                     Reserved = 0
@@ -2034,6 +2035,7 @@ namespace Milestro.Skia
                 {
                     GraphicsBackend = graphicsBackend,
                     VulkanBackend = vulkanBackend,
+                    BatchToken = drain.BatchToken,
                     DrainPtr = drainPtr,
                     RenderEventFunc = renderEventFunc,
                     FirstRenderEventId = firstRenderEventId,
@@ -2061,6 +2063,16 @@ namespace Milestro.Skia
             }
         }
 
+        private static ulong NextDirectBatchToken()
+        {
+            long token;
+            do
+            {
+                token = Interlocked.Increment(ref nextDirectBatchToken) & int.MaxValue;
+            } while (token == 0);
+            return unchecked((ulong)token);
+        }
+
         private static void IssueRenderDrain(PendingRenderDrain pendingDrain)
         {
             CommandBuffer? cmd = null;
@@ -2075,7 +2087,7 @@ namespace Milestro.Skia
                 {
                     cmd.IssuePluginEventAndData(pendingDrain.RenderEventFunc,
                         pendingDrain.SecondRenderEventId,
-                        pendingDrain.DrainPtr);
+                        new IntPtr(unchecked((long)pendingDrain.BatchToken)));
                 }
                 Graphics.ExecuteCommandBuffer(cmd);
             }

@@ -93,7 +93,15 @@ struct DirectDrainRegistration {
     MilestroUnityRenderDrain* drain = nullptr;
 };
 
+struct DirectSubmitTokenHistoryEntry {
+    uint64_t batchToken = 0;
+    uint64_t sequence = 0;
+};
+
 std::array<DirectDrainRegistration, kMaximumDirectDrainRegistrations> gDirectDrainRegistrations;
+std::array<DirectSubmitTokenHistoryEntry, kMaximumDirectDrainRegistrations> gEarlyDirectSubmitTokens;
+std::array<DirectSubmitTokenHistoryEntry, kMaximumDirectDrainRegistrations> gRetiredDirectSubmitTokens;
+uint64_t gDirectSubmitTokenSequence = 0;
 #endif
 
 uint64_t CurrentDeviceEpoch() {
@@ -184,6 +192,62 @@ DirectDrainRegistration* FindDirectDrainRegistration(uint64_t batchToken) {
     return found == gDirectDrainRegistrations.end() ? nullptr : &*found;
 }
 
+bool HasDirectSubmitToken(const std::array<DirectSubmitTokenHistoryEntry, kMaximumDirectDrainRegistrations>& history,
+                          uint64_t batchToken) {
+    return std::any_of(history.begin(), history.end(), [batchToken](const DirectSubmitTokenHistoryEntry& entry) {
+        return entry.batchToken == batchToken;
+    });
+}
+
+void ForgetDirectSubmitToken(std::array<DirectSubmitTokenHistoryEntry, kMaximumDirectDrainRegistrations>& history,
+                             uint64_t batchToken) {
+    for (DirectSubmitTokenHistoryEntry& entry: history) {
+        if (entry.batchToken == batchToken) {
+            entry = {};
+        }
+    }
+}
+
+void RememberDirectSubmitToken(std::array<DirectSubmitTokenHistoryEntry, kMaximumDirectDrainRegistrations>& history,
+                               uint64_t batchToken) {
+    if (batchToken == 0 || HasDirectSubmitToken(history, batchToken)) {
+        return;
+    }
+    DirectSubmitTokenHistoryEntry* destination = nullptr;
+    for (DirectSubmitTokenHistoryEntry& entry: history) {
+        if (entry.batchToken == 0) {
+            destination = &entry;
+            break;
+        }
+        if (destination == nullptr || entry.sequence < destination->sequence) {
+            destination = &entry;
+        }
+    }
+    if (gDirectSubmitTokenSequence == std::numeric_limits<uint64_t>::max()) {
+        gDirectSubmitTokenSequence = 0;
+        for (DirectSubmitTokenHistoryEntry& entry: gEarlyDirectSubmitTokens) {
+            entry.sequence = entry.batchToken == 0 ? 0 : ++gDirectSubmitTokenSequence;
+        }
+        for (DirectSubmitTokenHistoryEntry& entry: gRetiredDirectSubmitTokens) {
+            entry.sequence = entry.batchToken == 0 ? 0 : ++gDirectSubmitTokenSequence;
+        }
+    }
+    *destination = {batchToken, ++gDirectSubmitTokenSequence};
+}
+
+void RememberRetiredDirectSubmitToken(uint64_t batchToken) {
+    ForgetDirectSubmitToken(gEarlyDirectSubmitTokens, batchToken);
+    RememberDirectSubmitToken(gRetiredDirectSubmitTokens, batchToken);
+}
+
+bool ConsumeEarlyDirectSubmitToken(uint64_t batchToken) {
+    if (!HasDirectSubmitToken(gEarlyDirectSubmitTokens, batchToken)) {
+        return false;
+    }
+    ForgetDirectSubmitToken(gEarlyDirectSubmitTokens, batchToken);
+    return true;
+}
+
 bool RegisterDirectDrain(MilestroUnityRenderDrain* drain) {
     if (drain == nullptr || drain->batchToken == 0 || FindDirectDrainRegistration(drain->batchToken) != nullptr) {
         return false;
@@ -213,7 +277,9 @@ void ForgetDirectDrain(DirectDrainRegistration& registration) {
 
 void CompleteDirectDrain(DirectDrainRegistration& registration, bool submit) {
     MilestroUnityRenderDrain* drain = registration.drain;
+    const uint64_t batchToken = registration.batchToken;
     if (drain == nullptr) {
+        RememberRetiredDirectSubmitToken(batchToken);
         ForgetDirectDrain(registration);
         return;
     }
@@ -224,21 +290,23 @@ void CompleteDirectDrain(DirectDrainRegistration& registration, bool submit) {
                                        kDirectDrainPhaseCompleted,
                                        std::memory_order_acq_rel,
                                        std::memory_order_acquire)) {
-        vulkan::FailDirectPrepared(registration.batchToken, MarkSubmissionCompleted);
-        MarkDrainCompleted(drain);
+        vulkan::FailDirectPrepared(batchToken, MarkSubmissionCompleted);
+        RememberRetiredDirectSubmitToken(batchToken);
         ForgetDirectDrain(registration);
+        MarkDrainCompleted(drain);
         return;
     }
 
     if (submit) {
-        if (!vulkan::SubmitDirectPrepared(registration.batchToken, MarkSubmissionCompleted)) {
-            vulkan::FailDirectPrepared(registration.batchToken, MarkSubmissionCompleted);
+        if (!vulkan::SubmitDirectPrepared(batchToken, MarkSubmissionCompleted)) {
+            vulkan::FailDirectPrepared(batchToken, MarkSubmissionCompleted);
         }
     } else {
-        vulkan::FailDirectPrepared(registration.batchToken, MarkSubmissionCompleted);
+        vulkan::FailDirectPrepared(batchToken, MarkSubmissionCompleted);
     }
-    MarkDrainCompleted(drain);
+    RememberRetiredDirectSubmitToken(batchToken);
     ForgetDirectDrain(registration);
+    MarkDrainCompleted(drain);
 }
 
 bool SweepExpiredDirectDrains() {
@@ -285,10 +353,37 @@ void CompleteOrphanedDirectDrains() {
                                               kDirectDrainPhaseCompleted,
                                               std::memory_order_acq_rel,
                                               std::memory_order_acquire);
-                MarkDrainCompleted(drain);
             }
+            RememberRetiredDirectSubmitToken(registration.batchToken);
             ForgetDirectDrain(registration);
+            MarkDrainCompleted(drain);
         }
+    }
+}
+
+std::vector<MilestroUnityRenderSubmission*> DrainQueuedSubmissions(int32_t graphicsBackend, int32_t vulkanBackend);
+
+void SubmitDirectTicket(uint64_t batchToken) {
+    if (batchToken == 0) {
+        return;
+    }
+    DirectDrainRegistration* registration = FindDirectDrainRegistration(batchToken);
+    if (registration != nullptr) {
+        CompleteDirectDrain(*registration, registration->deviceEpoch == CurrentDeviceEpoch());
+        return;
+    }
+    if (HasDirectSubmitToken(gRetiredDirectSubmitTokens, batchToken)) {
+        return;
+    }
+    if (HasDirectSubmitToken(gEarlyDirectSubmitTokens, batchToken)) {
+        return;
+    }
+    RememberDirectSubmitToken(gEarlyDirectSubmitTokens, batchToken);
+    std::vector<MilestroUnityRenderSubmission*> submissions =
+            DrainQueuedSubmissions(static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan),
+                                   static_cast<int32_t>(vulkan::VulkanBackendKind::Direct));
+    for (MilestroUnityRenderSubmission* submission: submissions) {
+        MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
     }
 }
 #endif
@@ -658,10 +753,17 @@ void DrainRenderQueue(int eventOffset, MilestroUnityRenderDrain* drain) {
                 DrainQueuedSubmissions(drain->graphicsBackend, drain->vulkanBackend);
         const bool validRoute = drain->graphicsBackend == static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan) &&
                                 drain->vulkanBackend == static_cast<int32_t>(vulkan::VulkanBackendKind::Direct) &&
-                                drain->batchToken != 0;
-        if (!validRoute || !vulkan::BeginDirectBatch(drain->batchToken)) {
+                                drain->batchToken != 0 &&
+                                drain->batchToken <= static_cast<uint64_t>(std::numeric_limits<uintptr_t>::max());
+        const bool submittedBeforePrepare = validRoute && ConsumeEarlyDirectSubmitToken(drain->batchToken);
+        if (!validRoute || submittedBeforePrepare ||
+            HasDirectSubmitToken(gRetiredDirectSubmitTokens, drain->batchToken) ||
+            !vulkan::BeginDirectBatch(drain->batchToken)) {
             for (MilestroUnityRenderSubmission* submission: submissions) {
                 MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
+            }
+            if (drain->batchToken != 0) {
+                RememberRetiredDirectSubmitToken(drain->batchToken);
             }
             phase.store(kDirectDrainPhaseCompleted, std::memory_order_release);
             MarkDrainCompleted(drain);
@@ -683,47 +785,6 @@ void DrainRenderQueue(int eventOffset, MilestroUnityRenderDrain* drain) {
             return;
         }
         phase.store(kDirectDrainPhasePrepared, std::memory_order_release);
-        return;
-    }
-
-    if (eventOffset == kVulkanDirectSubmitEventOffset) {
-        DirectDrainRegistration* registration = FindDirectDrainRegistration(drain->batchToken);
-        if (registration != nullptr) {
-            if (registration->drain == drain && registration->deviceEpoch == CurrentDeviceEpoch()) {
-                const bool validRoute =
-                        drain->graphicsBackend == static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan) &&
-                        drain->vulkanBackend == static_cast<int32_t>(vulkan::VulkanBackendKind::Direct);
-                CompleteDirectDrain(*registration, validRoute);
-            } else {
-                MarkDrainCompleted(drain);
-            }
-            return;
-        }
-
-        std::atomic_ref<int32_t> phase(drain->phase);
-        int32_t expected = kDirectDrainPhasePrepared;
-        if (!phase.compare_exchange_strong(expected,
-                                           kDirectDrainPhaseCompleted,
-                                           std::memory_order_acq_rel,
-                                           std::memory_order_acquire)) {
-            if (expected == kDirectDrainPhaseCreated || expected == kDirectDrainPhasePreparing) {
-                phase.store(kDirectDrainPhaseCompleted, std::memory_order_release);
-                vulkan::FailDirectPrepared(drain->batchToken, MarkSubmissionCompleted);
-                std::vector<MilestroUnityRenderSubmission*> submissions =
-                        DrainQueuedSubmissions(drain->graphicsBackend, drain->vulkanBackend);
-                for (MilestroUnityRenderSubmission* submission: submissions) {
-                    MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
-                }
-            }
-            MarkDrainCompleted(drain);
-            return;
-        }
-        if (drain->graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::Vulkan) ||
-            drain->vulkanBackend != static_cast<int32_t>(vulkan::VulkanBackendKind::Direct) ||
-            !vulkan::SubmitDirectPrepared(drain->batchToken, MarkSubmissionCompleted)) {
-            vulkan::FailDirectPrepared(drain->batchToken, MarkSubmissionCompleted);
-        }
-        MarkDrainCompleted(drain);
         return;
     }
 
@@ -795,7 +856,6 @@ void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType
 void UNITY_INTERFACE_API OnRenderEvent(int eventId, void* data) {
     if (gEventBase < 0) {
         MILESTRO_RENDER_LOG_WARN("Ignoring unknown Milestro Unity render event: {}", eventId);
-        MarkDrainCompleted(static_cast<MilestroUnityRenderDrain*>(data));
         return;
     }
 
@@ -805,6 +865,13 @@ void UNITY_INTERFACE_API OnRenderEvent(int eventId, void* data) {
     }
 
     const int eventOffset = eventId - gEventBase;
+#if defined(MILESTRO_ENABLE_UNITY_VULKAN_RENDER)
+    if (eventOffset == kVulkanDirectSubmitEventOffset) {
+        std::lock_guard renderLock(gRenderSystemMutex);
+        SubmitDirectTicket(static_cast<uint64_t>(reinterpret_cast<uintptr_t>(data)));
+        return;
+    }
+#endif
     if (!IsRenderDrainPayload(data)) {
         MILESTROLOG_ERROR("Milestro Unity render event received non-drain payload.");
         return;
