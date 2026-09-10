@@ -139,11 +139,25 @@ inline void glGetIntegerv(GLenum name, GLint* out) {
     std::copy(values.begin(), values.end(), out);
 }
 inline void glGetBooleanv(GLenum name, GLboolean* out) {
-    auto& values = fake_gl::Values(name, name == GL_COLOR_WRITEMASK ? 4 : 1);
-    for (size_t i = 0; i < values.size(); ++i) {
-        values[i] &= 1;
-        out[i] = static_cast<GLboolean>(values[i]);
+    if (name == GL_COLOR_WRITEMASK) {
+        auto& values = fake_gl::Values(name, 4);
+        if (values.size() != 4)
+            throw std::logic_error("unexpected color write mask size");
+        for (size_t i = 0; i < 4; ++i) {
+            values[i] &= 1;
+            out[i] = static_cast<GLboolean>(values[i]);
+        }
+        return;
     }
+    if (name == GL_DEPTH_WRITEMASK) {
+        auto& values = fake_gl::Values(name, 1);
+        if (values.size() != 1)
+            throw std::logic_error("unexpected depth write mask size");
+        values[0] &= 1;
+        out[0] = static_cast<GLboolean>(values[0]);
+        return;
+    }
+    throw std::logic_error("unexpected boolean query");
 }
 inline void glGetFloatv(GLenum name, GLfloat* out) {
     if (name != GL_BLEND_COLOR)
