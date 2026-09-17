@@ -1642,6 +1642,14 @@ namespace Milestro.Skia
                 if (handleKind == RenderTextureHandleKind.RenderBuffer)
                 {
                     colorRenderBufferHandle = renderTexture.colorBuffer.GetNativeRenderBufferPtr();
+                    if (colorRenderBufferHandle == IntPtr.Zero)
+                    {
+                        nativeTextureHandle = renderTexture.GetNativeTexturePtr();
+                        if (nativeTextureHandle != IntPtr.Zero)
+                        {
+                            handleKind = RenderTextureHandleKind.NativeTexture;
+                        }
+                    }
                 }
                 else
                 {

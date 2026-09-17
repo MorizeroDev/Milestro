@@ -77,7 +77,7 @@ namespace Milestro.Components.Internal
         {
             vh.Clear();
 
-            var targetTexture = mainTexture;
+            var targetTexture = Texture;
             if (targetTexture == null)
             {
                 return;

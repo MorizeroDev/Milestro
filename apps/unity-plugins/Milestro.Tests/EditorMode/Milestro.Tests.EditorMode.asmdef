@@ -5,7 +5,8 @@
         "Milestro",
         "Milestro.Editor",
         "Milestro.Tests.Support",
-        "party.para.util.unitynative"
+        "party.para.util.unitynative",
+        "Unity.UGUI"
     ],
     "includePlatforms": [
         "Editor"

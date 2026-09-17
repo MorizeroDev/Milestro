@@ -213,7 +213,7 @@ namespace Milestro.Components.Internal
             : DefaultUvRect;
         public int OutputWidth => surface?.Width ?? 0;
         public int OutputHeight => surface?.Height ?? 0;
-        public bool HasOutput => surface?.Texture != null;
+        public bool HasOutput => surface?.HasCompletedOutput ?? false;
         public long OutputVersion => outputVersion;
         public Vector2 ScrollOffset => scrollOffset;
         public Vector2 ContentSize => contentSize;

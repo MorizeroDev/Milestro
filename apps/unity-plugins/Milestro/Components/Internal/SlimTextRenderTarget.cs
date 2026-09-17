@@ -34,7 +34,7 @@ namespace Milestro.Components.Internal
         public Rect OutputUvRect => surface?.DisplayUvRect ?? DefaultUvRect;
         public int OutputWidth => surface?.Width ?? 0;
         public int OutputHeight => surface?.Height ?? 0;
-        public bool HasOutput => surface?.Texture != null;
+        public bool HasOutput => surface?.HasCompletedOutput ?? false;
         public long OutputVersion => outputVersion;
 
         public event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus>? RenderEventCompleted;

@@ -14,10 +14,40 @@ namespace Milestro.Tests.ScreenSpaceHiDpi.Integration.PlayMode
         private const int RasterHeight = 48;
         private const int MaxSubmitFrames = 120;
         private const int MaxCompletionFrames = 300;
+        private const int ConcurrentSurfaceCount = 16;
 
         private static readonly byte[] PngBytes = Convert.FromBase64String(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ" +
             "AAAADUlEQVR42mP8z8BQDwAFgwJ/lmD3WQAAAABJRU5ErkJggg==");
+
+        [UnityTest]
+        public IEnumerator ConcurrentMetalTargetsExposeUsableTextures()
+        {
+            Assert.That(SystemInfo.graphicsDeviceType,
+                Is.EqualTo(GraphicsDeviceType.Metal),
+                "SCREEN_SPACE_HIDPI_METAL_REQUIRED: PlayMode smoke must run with Unity's Metal graphics device.");
+
+            var surfaces = new UnityAutoRenderTextureSurface[ConcurrentSurfaceCount];
+            try
+            {
+                for (var index = 0; index < surfaces.Length; ++index)
+                {
+                    surfaces[index] = new UnityAutoRenderTextureSurface(RasterWidth + index, RasterHeight);
+                    Assert.That(surfaces[index].Backend, Is.EqualTo(UnitySkiaGraphicsBackend.Metal));
+                    Assert.That(surfaces[index].Texture, Is.Not.Null,
+                        $"SCREEN_SPACE_HIDPI_CONCURRENT_TEXTURE_MISSING: surface={index}");
+                }
+            }
+            finally
+            {
+                foreach (var surface in surfaces)
+                {
+                    surface?.Dispose();
+                }
+            }
+
+            yield return null;
+        }
 
         [UnityTest]
         public IEnumerator RealMetalSubmissionMatchesNativeAndManagedDiagnostics()

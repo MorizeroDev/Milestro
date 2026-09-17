@@ -13,6 +13,7 @@ namespace Milestro.Components.Internal
         private UnityAutoRenderTextureSurface? surface;
         private float stableDesiredScale;
         private ulong attemptTick;
+        private bool hasCompletedOutput;
 
         internal event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus>? RenderEventCompleted;
 
@@ -21,6 +22,7 @@ namespace Milestro.Components.Internal
         internal ColorSpace ColorSpace => surface?.ColorSpace ?? UnitySkiaRenderTextureDescriptor.DefaultColorSpace;
         internal Rect DisplayUvRect => surface?.DisplayUvRect ?? new Rect(0f, 0f, 1f, 1f);
         internal Texture? Texture => surface?.Texture;
+        internal bool HasCompletedOutput => hasCompletedOutput && surface?.Texture != null;
         internal int Width => surface?.Width ?? 0;
         internal int Height => surface?.Height ?? 0;
         internal float EffectiveRasterScale => surface?.EffectiveRasterScale ?? 1f;
@@ -55,6 +57,10 @@ namespace Milestro.Components.Internal
                       previousHeight != surface.Height ||
                       !Mathf.Approximately(previousScale, surface.EffectiveRasterScale) ||
                       previousEpoch != surface.DeviceEpoch;
+            if (changed)
+            {
+                hasCompletedOutput = false;
+            }
             return true;
         }
 
@@ -228,6 +234,7 @@ namespace Milestro.Components.Internal
             surface.Dispose();
             surface = null;
             stableDesiredScale = 0f;
+            hasCompletedOutput = false;
         }
 
         private bool TryApplyCandidate(RenderSurfaceCandidate candidate,
@@ -268,6 +275,10 @@ namespace Milestro.Components.Internal
                       previousHeight != surface.Height ||
                       !Mathf.Approximately(previousScale, surface.EffectiveRasterScale) ||
                       previousEpoch != surface.DeviceEpoch;
+            if (changed)
+            {
+                hasCompletedOutput = false;
+            }
             return true;
         }
 
@@ -281,11 +292,17 @@ namespace Milestro.Components.Internal
 
             surface = next;
             surface.RenderEventCompleted += HandleRenderEventCompleted;
+            hasCompletedOutput = false;
             previous?.Dispose();
         }
 
         private void HandleRenderEventCompleted(UnitySkiaRenderTextureSurface.RenderSubmissionStatus status)
         {
+            if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn)
+            {
+                hasCompletedOutput = true;
+            }
+
             RenderEventCompleted?.Invoke(status);
         }
 
