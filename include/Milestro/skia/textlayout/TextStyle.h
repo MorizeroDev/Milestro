@@ -13,12 +13,14 @@ namespace milestro::skia::textlayout {
 
 class MILESTRO_API TextStyle {
 public:
-    TextStyle() {}
+    TextStyle();
 
-    explicit TextStyle(::skia::textlayout::TextStyle textStyle) {
-        this->textStyle = std::move(textStyle);
-        setFontFamilyDeclarationFromSkiaFamilies(this->textStyle.getFontFamilies(), false);
-    }
+    explicit TextStyle(::skia::textlayout::TextStyle textStyle);
+    TextStyle(const TextStyle &other);
+    TextStyle(TextStyle &&other);
+    TextStyle &operator=(const TextStyle &other);
+    TextStyle &operator=(TextStyle &&other);
+    ~TextStyle();
 
     SkColor getColor() const { return textStyle.getColor(); }
     void setColor(SkColor color) { textStyle.setColor(color); }
@@ -90,8 +92,11 @@ public:
     sk_sp<SkTypeface> refTypeface() const { return textStyle.refTypeface(); }
     void setTypeface(sk_sp<SkTypeface> typeface) { textStyle.setTypeface(std::move(typeface)); }
 
-    SkString getLocale() const { return textStyle.getLocale(); }
-    void setLocale(const SkString &locale) { textStyle.setLocale(locale); }
+    SkString getLocale() const {
+        const auto locale = getLocaleUtf8();
+        return SkString(locale.data(), locale.size());
+    }
+    void setLocale(const SkString &locale);
 
     ::skia::textlayout::TextBaseline getTextBaseline() const { return textStyle.getTextBaseline(); }
     void setTextBaseline(::skia::textlayout::TextBaseline baseline) { textStyle.setTextBaseline(baseline); }
@@ -103,10 +108,10 @@ public:
     bool isPlaceholder() const { return textStyle.isPlaceholder(); }
     void setPlaceholder() { textStyle.setPlaceholder(); }
 
-    const ::skia::textlayout::TextStyle spawn() const {
-        return textStyle;
-    }
+    const ::skia::textlayout::TextStyle spawn() const;
 private:
+    std::string getLocaleUtf8() const;
+
     static std::vector<SkString> toSkiaFamilies(const std::vector<FontFamilyToken> &families) {
         std::vector<SkString> ret;
         ret.reserve(families.size());

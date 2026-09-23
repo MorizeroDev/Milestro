@@ -121,6 +121,10 @@ TextLine::TextLine(ParagraphImpl* owner,
         , fAscentStyle(LineMetricStyle::CSS)
         , fDescentStyle(LineMetricStyle::CSS)
         , fTextBlobCachePopulated(false) {
+    if (fGhostClusterRange.width() == 0) {
+        fMaxRunMetrics = fSizes;
+        return;
+    }
     // Reorder visual runs
     auto& start = owner->cluster(fGhostClusterRange.start);
     auto& end = owner->cluster(fGhostClusterRange.end - 1);
@@ -144,19 +148,12 @@ TextLine::TextLine(ParagraphImpl* owner,
     // This is just chosen to catch the common/fast cases. Feel free to tweak.
     constexpr int kPreallocCount = 4;
     AutoSTArray<kPreallocCount, SkUnicode::BidiLevel> runLevels(numRuns);
-    std::vector<RunIndex> placeholdersInOriginalOrder;
     size_t runLevelsIndex = 0;
-    // Placeholders must be laid out using the original order in which they were added
-    // in the input. The API does not provide a way to indicate that a placeholder
-    // position was moved due to bidi reordering.
     for (auto runIndex = start.runIndex(); runIndex <= end.runIndex(); ++runIndex) {
         auto& run = fOwner->run(runIndex);
         runLevels[runLevelsIndex++] = run.fBidiLevel;
         fMaxRunMetrics.add(
             InternalLineMetrics(run.correctAscent(), run.correctDescent(), run.fFontMetrics.fLeading));
-        if (run.isPlaceholder()) {
-            placeholdersInOriginalOrder.push_back(runIndex);
-        }
     }
     SkASSERT(runLevelsIndex == numRuns);
 
@@ -165,14 +162,8 @@ TextLine::TextLine(ParagraphImpl* owner,
     // TODO: hide all these logic in SkUnicode?
     fOwner->getUnicode()->reorderVisual(runLevels.data(), numRuns, logicalOrder.data());
     auto firstRunIndex = start.runIndex();
-    auto placeholderIter = placeholdersInOriginalOrder.begin();
     for (auto index : logicalOrder) {
-        auto runIndex = firstRunIndex + index;
-        if (fOwner->run(runIndex).isPlaceholder()) {
-            fRunsInVisualOrder.push_back(*placeholderIter++);
-        } else {
-            fRunsInVisualOrder.push_back(runIndex);
-        }
+        fRunsInVisualOrder.push_back(firstRunIndex + index);
     }
 
     // TODO: This is the fix for flutter. Must be removed...
@@ -230,6 +221,9 @@ void TextLine::paint(ParagraphPainter* painter, SkScalar x, SkScalar y) {
                 });
                 return true;
         });
+    }
+    for (const auto& placement : fOwner->rubyPlacements(*this)) {
+        placement.span->annotation->paint(painter, x + placement.origin.x(), y + placement.origin.y());
     }
 }
 
@@ -454,6 +448,21 @@ void TextLine::justify(SkScalar maxWidth) {
     bool leadingWhitespaces = false;
     this->iterateThroughClustersInGlyphsOrder(false, false,
         [&](const Cluster* cluster, ClusterIndex index, bool ghost) {
+            if (const auto* ruby = fOwner->rubySpanAt(cluster->textRange().start)) {
+                auto visualFirst = cluster->run().leftToRight() ? ruby->clusters.start : ruby->clusters.end - 1;
+                if (cluster == &fOwner->cluster(visualFirst)) {
+                    if (ruby->ideographic) {
+                        if (!whitespacePatch && index != 0) ++whitespacePatches;
+                        whitespacePatch = true;
+                        ++whitespacePatches;
+                    } else {
+                        whitespacePatch = false;
+                    }
+                    leadingWhitespaces = false;
+                }
+                textLen += cluster->width();
+                return true;
+            }
             if (cluster->isWhitespaceBreak()) {
                 if (index == 0) {
                     leadingWhitespaces = true;
@@ -507,6 +516,27 @@ void TextLine::justify(SkScalar maxWidth) {
         if (ghost) {
             if (cluster->run().leftToRight()) {
                 this->shiftCluster(cluster, ghostShift, ghostShift);
+            }
+            return true;
+        }
+
+        if (const auto* ruby = fOwner->rubySpanAt(cluster->textRange().start)) {
+            auto visualFirst = cluster->run().leftToRight() ? ruby->clusters.start : ruby->clusters.end - 1;
+            auto visualLast = cluster->run().leftToRight() ? ruby->clusters.end - 1 : ruby->clusters.start;
+            if (cluster == &fOwner->cluster(visualFirst)) {
+                if (ruby->ideographic && !whitespacePatch && index != 0) {
+                    shift += step;
+                    --whitespacePatches;
+                }
+                whitespacePatch = false;
+                leadingWhitespaces = false;
+            }
+            this->shiftCluster(cluster, shift, prevShift);
+            prevShift = shift;
+            if (ruby->ideographic && cluster == &fOwner->cluster(visualLast)) {
+                shift += step;
+                whitespacePatch = true;
+                --whitespacePatches;
             }
             return true;
         }
@@ -598,7 +628,8 @@ void TextLine::createEllipsis(SkScalar maxWidth, const SkString& ellipsis, bool)
             }
         }
         // See if it fits
-        if (width + ellipsisRun->advance().fX > maxWidth) {
+        if (width + ellipsisRun->advance().fX > maxWidth ||
+            (fOwner->hasRuby() && !fOwner->rubyBoundary(clusterIndex))) {
             width -= cluster.width();
             // Continue if the ellipsis does not fit
             continue;
@@ -616,6 +647,18 @@ void TextLine::createEllipsis(SkScalar maxWidth, const SkString& ellipsis, bool)
         fTextIncludingNewlines.end = cluster.textRange().end;
         fTextExcludingSpaces.end = cluster.textRange().end;
         break;
+    }
+
+    if (!fEllipsis && fOwner->hasRuby() && ellipsisRun && ellipsisRun->advance().fX <= maxWidth) {
+        fEllipsis = std::move(ellipsisRun);
+        fEllipsis->setOwner(fOwner);
+        fEllipsis->fClusterStart = fText.start;
+        fClusterRange.end = fClusterRange.start;
+        fGhostClusterRange.end = fClusterRange.start;
+        fText.end = fText.start;
+        fTextIncludingNewlines.end = fTextIncludingNewlines.start;
+        fTextExcludingSpaces.end = fTextExcludingSpaces.start;
+        fAdvance.fX = 0;
     }
 
     if (!fEllipsis) {
@@ -817,7 +860,9 @@ TextLine::ClipContext TextLine::measureTextInsideOneRun(TextRange textRange,
                                        run->calculateHeight(this->fAscentStyle,this->fDescentStyle));
         return result;
     } else if (run->isPlaceholder()) {
-        result.fTextShift = runOffsetInLine;
+        // Placeholder glyph positions retain their origin from shaping. Translate
+        // that origin to the visual run position, just as for regular text runs.
+        result.fTextShift = runOffsetInLine - run->positionX(0);
         if (SkIsFinite(run->fFontMetrics.fAscent)) {
           result.clip = SkRect::MakeXYWH(runOffsetInLine,
                                          sizes().runTop(run, this->fAscentStyle),
@@ -1570,33 +1615,44 @@ PositionWithAffinity TextLine::getGlyphPositionAtCoordinate(SkScalar dx) {
 }
 
 void TextLine::getRectsForPlaceholders(std::vector<TextBox>& boxes) {
+    std::vector<std::pair<TextIndex, TextBox>> placeholders;
     this->iterateThroughVisualRuns(
-        true,
-        [&boxes, this](const Run* run, SkScalar runOffset, TextRange textRange,
-                        SkScalar* width) {
+            true,
+            [&placeholders, this](
+                    const Run* run, SkScalar runOffset, TextRange textRange, SkScalar* width) {
                 auto context = this->measureTextInsideOneRun(
                         textRange, run, runOffset, 0, true, TextAdjustment::GraphemeGluster);
                 *width = context.clip.width();
 
-            if (textRange.width() == 0) {
-                return true;
-            }
-            if (!run->isPlaceholder()) {
-                return true;
-            }
+                if (textRange.width() == 0) {
+                    return true;
+                }
+                if (!run->isPlaceholder()) {
+                    return true;
+                }
 
-            SkRect clip = context.clip;
-            clip.offset(this->offset());
+                SkRect clip = context.clip;
+                clip.offset(this->offset());
 
-            if (fOwner->getApplyRoundingHack()) {
-                clip.fLeft = littleRound(clip.fLeft);
-                clip.fRight = littleRound(clip.fRight);
-                clip.fTop = littleRound(clip.fTop);
-                clip.fBottom = littleRound(clip.fBottom);
-            }
-            boxes.emplace_back(clip, run->getTextDirection());
-            return true;
-        });
+                if (fOwner->getApplyRoundingHack()) {
+                    clip.fLeft = littleRound(clip.fLeft);
+                    clip.fRight = littleRound(clip.fRight);
+                    clip.fTop = littleRound(clip.fTop);
+                    clip.fBottom = littleRound(clip.fBottom);
+                }
+                placeholders.emplace_back(run->textRange().start,
+                                          TextBox(clip, run->getTextDirection()));
+                return true;
+            });
+
+    // Measure in visual order, but return boxes in the order placeholders were added.
+    // Sorting by their text offsets also handles mixed-direction runs within a line.
+    std::sort(placeholders.begin(), placeholders.end(), [](const auto& a, const auto& b) {
+        return a.first < b.first;
+    });
+    for (const auto& placeholder : placeholders) {
+        boxes.push_back(placeholder.second);
+    }
 }
 }  // namespace textlayout
 }  // namespace skia

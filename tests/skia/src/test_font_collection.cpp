@@ -130,12 +130,12 @@ TEST_F(SkiaFontCollectionTest, ParagraphAndStrutStylesResolveAtCollectionBoundar
     paragraphStyle.setStrutStyle(&strutStyle);
 
     const auto resolved = collection->ResolveParagraphStyle(paragraphStyle);
-    const auto textFamilies = resolved.getTextStyle().getFontFamilies();
+    const auto textFamilies = resolved->getTextStyle().getFontFamilies();
     ASSERT_GE(textFamilies.size(), 2u);
     EXPECT_STREQ(textFamilies[0].c_str(), "Sarasa Mono SC");
     EXPECT_STREQ(textFamilies[1].c_str(), "Source Han Sans VF");
 
-    const auto strutFamilies = resolved.getStrutStyle().getFontFamilies();
+    const auto strutFamilies = resolved->getStrutStyle().getFontFamilies();
     ASSERT_EQ(strutFamilies.size(), 1u);
     EXPECT_STREQ(strutFamilies.front().c_str(), "Strut Literal");
 }
@@ -155,16 +155,16 @@ TEST_F(SkiaFontCollectionTest, ResolvedStyleUsesParagraphFontCollectionLookupPat
             milestro_skia::FontFamilyToken::Bare("Source Han Sans VF"),
     });
     const auto resolvedStyle = collection->ResolveTextStyle(style);
-    ASSERT_EQ(resolvedStyle.getFontFamilies().size(), 1u);
-    EXPECT_STREQ(resolvedStyle.getFontFamilies().front().c_str(), "Source Han Sans VF");
+    ASSERT_EQ(resolvedStyle->getFontFamilies().size(), 1u);
+    EXPECT_STREQ(resolvedStyle->getFontFamilies().front().c_str(), "Source Han Sans VF");
 
     const auto faces = collection->unwrap()->findTypefaces(
-            resolvedStyle.getFontFamilies(),
+            resolvedStyle->getFontFamilies(),
             SkFontStyle());
     ASSERT_FALSE(faces.empty());
     ASSERT_NE(faces.front(), nullptr);
 
-    SkString family;
+    SkString family(" ");
     faces.front()->getFamilyName(&family);
     EXPECT_STREQ(family.c_str(), "Source Han Sans VF");
 }
@@ -193,17 +193,17 @@ TEST_F(SkiaFontCollectionTest, SarasaMonoSystemFaceUsesParagraphFontCollectionLo
             milestro_skia::FontFamilyToken::Bare("Sarasa Mono SC"),
     });
     const auto resolvedStyle = collection->ResolveTextStyle(style);
-    ASSERT_EQ(resolvedStyle.getFontFamilies().size(), 1u);
-    EXPECT_STREQ(resolvedStyle.getFontFamilies().front().c_str(), "Sarasa Mono SC");
+    ASSERT_EQ(resolvedStyle->getFontFamilies().size(), 1u);
+    EXPECT_STREQ(resolvedStyle->getFontFamilies().front().c_str(), "Sarasa Mono SC");
 
     const auto faces = collection->unwrap()->findTypefaces(
-            resolvedStyle.getFontFamilies(),
+            resolvedStyle->getFontFamilies(),
             fontStyle);
     ASSERT_FALSE(faces.empty());
     ASSERT_NE(faces.front(), nullptr);
     EXPECT_EQ(faces.front()->uniqueID(), expected->uniqueID());
 
-    SkString family;
+    SkString family(" ");
     faces.front()->getFamilyName(&family);
     EXPECT_STREQ(family.c_str(), "Sarasa Mono SC");
 }

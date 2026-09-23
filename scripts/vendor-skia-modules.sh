@@ -8,10 +8,11 @@ readonly REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
 skia_source="${REPO_ROOT}/ext/skia"
 skia_base=""
 dry_run=false
+merged_overlays=false
 
 usage() {
     cat <<'EOF'
-Usage: scripts/vendor-skia-modules.sh [--source PATH] [--base COMMIT] [--dry-run]
+Usage: scripts/vendor-skia-modules.sh [--source PATH] [--base COMMIT] [--dry-run] [--merged-overlays]
 
 Vendor Skia's committed modules/skunicode and modules/skparagraph trees into
 ext/skmodules/modules.
@@ -20,6 +21,7 @@ Options:
   --source PATH  Skia checkout to read (default: ext/skia)
   --base COMMIT  Compatible Skia core commit (default: existing metadata or HEAD)
   --dry-run      Show changes without updating vendored files
+  --merged-overlays  Confirm local overlays were merged with upstream changes
   -h, --help     Show this help
 EOF
 }
@@ -36,6 +38,10 @@ while (($# > 0)); do
             ;;
         --dry-run)
             dry_run=true
+            shift
+            ;;
+        --merged-overlays)
+            merged_overlays=true
             shift
             ;;
         --base)
@@ -72,6 +78,10 @@ fi
 
 readonly skia_commit="$(git -C "${skia_source}" rev-parse --verify HEAD)"
 readonly metadata_path="${REPO_ROOT}/ext/skmodules/vendor-meta"
+previous_source=""
+if [[ -f "${metadata_path}" ]]; then
+    previous_source="$(sed -n 's/^source-commit: //p' "${metadata_path}")"
+fi
 
 if [[ -z "${skia_base}" && -f "${metadata_path}" ]]; then
     skia_base="$(sed -n 's/^skia-base: //p' "${metadata_path}")"
@@ -108,6 +118,30 @@ if [[ -n "$(git -C "${skia_source}" status --porcelain --untracked-files=all -- 
     exit 1
 fi
 
+overlay_paths=(
+    modules/skparagraph/include/Paragraph.h
+    modules/skparagraph/include/ParagraphBuilder.h
+    modules/skparagraph/include/Ruby.h
+    modules/skparagraph/src/ParagraphBuilderImpl.cpp
+    modules/skparagraph/src/ParagraphBuilderImpl.h
+    modules/skparagraph/src/ParagraphImpl.cpp
+    modules/skparagraph/src/ParagraphImpl.h
+    modules/skparagraph/src/Run.cpp
+    modules/skparagraph/src/Run.h
+    modules/skparagraph/src/RubyLayout.cpp
+    modules/skparagraph/src/RubyLayout.h
+    modules/skparagraph/src/TextLine.cpp
+    modules/skparagraph/src/TextWrapper.cpp
+    modules/skparagraph/src/TextWrapper.h
+    modules/skparagraph/tests/SkParagraphTest.cpp
+)
+if [[ -n "${previous_source}" && "${previous_source}" != "${skia_commit}" && "${merged_overlays}" != true ]]; then
+    if ! git -C "${skia_source}" diff --quiet "${previous_source}" "${skia_commit}" -- "${overlay_paths[@]}"; then
+        echo "error: upstream changed locally overlaid files; merge them first, then pass --merged-overlays" >&2
+        exit 1
+    fi
+fi
+
 readonly temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/milestro-skia-vendor.XXXXXX")"
 trap 'rm -rf "${temporary_dir}"' EXIT
 
@@ -124,6 +158,16 @@ printf 'skia-base: %s\nsource-commit: %s\n' "${skia_base}" "${skia_commit}" \
 sync_module() {
     local module="$1"
     local destination="$2"
+    local overlay
+    local -a excludes=()
+    if [[ "${module}" == skparagraph ]]; then
+        excludes=(
+            --exclude=/src/experimental/
+        )
+        for overlay in "${overlay_paths[@]}"; do
+            excludes+=("--exclude=/${overlay#modules/skparagraph/}")
+        done
+    fi
 
     if [[ "${dry_run}" == true ]]; then
         if [[ ! -d "${destination}" ]]; then
@@ -131,13 +175,13 @@ sync_module() {
         else
             # Apple openrsync itemizes unchanged checksummed files as a
             # timestamp-only difference even without -t; filter only that row.
-            rsync -rlpcni --delete \
+            rsync -rlpcni --delete "${excludes[@]}" \
                 "${temporary_dir}/modules/${module}/" \
                 "${destination}/" | sed '/^\.f\.\.T\.\.\.\. /d'
         fi
     else
         mkdir -p "${destination}"
-        rsync -rlpc --delete \
+        rsync -rlpc --delete "${excludes[@]}" \
             "${temporary_dir}/modules/${module}/" \
             "${destination}/"
     fi

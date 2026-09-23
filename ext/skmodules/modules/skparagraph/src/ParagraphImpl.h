@@ -23,6 +23,7 @@
 #include "modules/skparagraph/include/TextShadow.h"
 #include "modules/skparagraph/include/TextStyle.h"
 #include "modules/skparagraph/src/Run.h"
+#include "modules/skparagraph/src/RubyLayout.h"
 #include "modules/skparagraph/src/TextLine.h"
 #include "modules/skunicode/include/SkUnicode.h"
 #include "src/core/SkBitmaskEnum.h"
@@ -91,15 +92,15 @@ public:
 
     ParagraphImpl(const SkString& text,
                   ParagraphStyle style,
-                  skia_private::TArray<Block, true> blocks,
-                  skia_private::TArray<Placeholder, true> placeholders,
+                  skia_private::TArray<Block> blocks,
+                  skia_private::TArray<Placeholder> placeholders,
                   sk_sp<FontCollection> fonts,
                   sk_sp<SkUnicode> unicode);
 
     ParagraphImpl(const std::u16string& utf16text,
                   ParagraphStyle style,
-                  skia_private::TArray<Block, true> blocks,
-                  skia_private::TArray<Placeholder, true> placeholders,
+                  skia_private::TArray<Block> blocks,
+                  skia_private::TArray<Placeholder> placeholders,
                   sk_sp<FontCollection> fonts,
                   sk_sp<SkUnicode> unicode);
 
@@ -140,6 +141,15 @@ public:
     SkSpan<Cluster> clusters() { return SkSpan<Cluster>(fClusters.begin(), fClusters.size()); }
     sk_sp<FontCollection> fontCollection() const { return fFontCollection; }
     void formatLines(SkScalar maxWidth);
+    void setRubyAnnotations(std::vector<RubyAnnotation> annotations);
+    bool hasRuby() const { return !fRubyAnnotations.empty(); }
+    void prepareRuby();
+    void positionRuby();
+    void addRubyMetrics(ClusterRange clusters, InternalLineMetrics& metrics) const;
+    const std::vector<RubyLayoutUnit>& rubyUnits() const { return fRubyUnits; }
+    std::vector<RubyPlacement> rubyPlacements(const TextLine& line) const;
+    const RubySpan* rubySpanAt(TextIndex index) const;
+    bool rubyBoundary(ClusterIndex index) const;
     void ensureUTF16Mapping();
     skia_private::TArray<TextIndex> countSurroundingGraphemes(TextRange textRange) const;
     TextIndex findNextGraphemeBoundary(TextIndex utf8) const;
@@ -258,14 +268,19 @@ private:
     void computeEmptyMetrics();
 
     // Input
+    std::vector<RubyAnnotation> fRubyAnnotations;
+    std::vector<RubySpan> fRubySpans;
+    std::vector<RubyLayoutUnit> fRubyUnits;
+    std::vector<std::vector<SkPoint>> fRubyOffsets;
+    bool fRubyPrepared = false;
     skia_private::TArray<StyleBlock<SkScalar>> fLetterSpaceStyles;
     skia_private::TArray<StyleBlock<SkScalar>> fWordSpaceStyles;
     skia_private::TArray<StyleBlock<SkPaint>> fBackgroundStyles;
     skia_private::TArray<StyleBlock<SkPaint>> fForegroundStyles;
     skia_private::TArray<StyleBlock<std::vector<TextShadow>>> fShadowStyles;
     skia_private::TArray<StyleBlock<Decoration>> fDecorationStyles;
-    skia_private::TArray<Block, true> fTextStyles; // TODO: take out only the font stuff
-    skia_private::TArray<Placeholder, true> fPlaceholders;
+    skia_private::TArray<Block> fTextStyles; // TODO: take out only the font stuff
+    skia_private::TArray<Placeholder> fPlaceholders;
     SkString fText;
 
     // Internal structures

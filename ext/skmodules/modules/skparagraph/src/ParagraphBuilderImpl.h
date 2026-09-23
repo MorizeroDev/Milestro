@@ -17,6 +17,9 @@
 namespace skia {
 namespace textlayout {
 
+class RubyPrototype;
+struct PrototypeRubyInput;
+
 class ParagraphBuilderImpl : public ParagraphBuilder {
 public:
     ParagraphBuilderImpl(const ParagraphStyle& style,
@@ -54,8 +57,13 @@ public:
 
     void addPlaceholder(const PlaceholderStyle& placeholderStyle) override;
 
+    void addRuby(const RubyAnnotation& annotation) override;
+
     // Constructs a SkParagraph object that can be used to layout and paint the text to a SkCanvas.
     std::unique_ptr<Paragraph> Build() override;
+#if defined(MILESTRO_RUBY_PROTOTYPE)
+    std::unique_ptr<RubyPrototype> BuildRubyPrototype(std::vector<PrototypeRubyInput> inputs);
+#endif
 
     // Support for "Client" unicode
     SkSpan<char> getText() override;
@@ -98,9 +106,12 @@ protected:
     void finalize();
 
     SkString fUtf8;
-    skia_private::STArray<4, TextStyle, true> fTextStyles;
-    skia_private::STArray<4, Block, true> fStyledBlocks;
-    skia_private::STArray<4, Placeholder, true> fPlaceholders;
+    std::vector<RubyAnnotation> fRubyAnnotations;
+    // TextStyle, Block, and Placeholder contain std::vector and std::optional, which poison
+    // disengaged storage under MSVC STL ASAN and must be relocated via move constructors
+    skia_private::STArray<4, TextStyle> fTextStyles;
+    skia_private::STArray<4, Block> fStyledBlocks;
+    skia_private::STArray<4, Placeholder> fPlaceholders;
     sk_sp<FontCollection> fFontCollection;
     ParagraphStyle fParagraphStyle;
 

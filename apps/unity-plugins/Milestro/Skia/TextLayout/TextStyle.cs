@@ -192,12 +192,15 @@ namespace Milestro.Skia.TextLayout
             return ret;
         }
 
-        public void AddFontFeature(string feature, int value)
+        public unsafe void AddFontFeature(string feature, int value)
         {
             var featureCStr = feature.CStr();
-            ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutTextStyleAddFontFeature(NativePtr, featureCStr, value)
-            );
+            fixed (byte* featurePtr = featureCStr)
+            {
+                ExitCodeUtil.ThrowIfFailed(
+                    BindingC.SkiaTextlayoutTextStyleAddFontFeature(NativePtr, featurePtr, value)
+                );
+            }
         }
 
         public void ResetFontFeature()
@@ -354,14 +357,17 @@ namespace Milestro.Skia.TextLayout
 
         private string _cachedLocale = "";
 
-        public string Locale
+        public unsafe string Locale
         {
             set
             {
                 var s = value.CStr();
-                ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutTextStyleSetLocale(NativePtr, s)
-                );
+                fixed (byte* localePtr = s)
+                {
+                    ExitCodeUtil.ThrowIfFailed(
+                        BindingC.SkiaTextlayoutTextStyleSetLocale(NativePtr, localePtr)
+                    );
+                }
                 _cachedLocale = value;
             }
             get => _cachedLocale;

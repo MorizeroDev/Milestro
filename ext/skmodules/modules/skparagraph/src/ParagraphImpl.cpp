@@ -73,8 +73,8 @@ Paragraph::Paragraph(ParagraphStyle style, sk_sp<FontCollection> fonts)
 
 ParagraphImpl::ParagraphImpl(const SkString& text,
                              ParagraphStyle style,
-                             TArray<Block, true> blocks,
-                             TArray<Placeholder, true> placeholders,
+                             TArray<Block> blocks,
+                             TArray<Placeholder> placeholders,
                              sk_sp<FontCollection> fonts,
                              sk_sp<SkUnicode> unicode)
         : Paragraph(std::move(style), std::move(fonts))
@@ -97,8 +97,8 @@ ParagraphImpl::ParagraphImpl(const SkString& text,
 
 ParagraphImpl::ParagraphImpl(const std::u16string& utf16text,
                              ParagraphStyle style,
-                             TArray<Block, true> blocks,
-                             TArray<Placeholder, true> placeholders,
+                             TArray<Block> blocks,
+                             TArray<Placeholder> placeholders,
                              sk_sp<FontCollection> fonts,
                              sk_sp<SkUnicode> unicode)
         : ParagraphImpl(SkString(),
@@ -158,6 +158,7 @@ void ParagraphImpl::layout(SkScalar rawWidth) {
 
     if (fState < kShaped) {
         // Check if we have the text in the cache and don't need to shape it again
+        fRubyPrepared = false;
         if (!fFontCollection->getParagraphCache()->findParagraph(this)) {
             if (fState < kIndexed) {
                 // This only happens once at the first layout; the text is immutable
@@ -201,11 +202,20 @@ void ParagraphImpl::layout(SkScalar rawWidth) {
         fState = kShaped;
     }
 
+    if (hasRuby() && !fRubyPrepared) {
+        this->prepareRuby();
+    }
+
     if (fState == kShaped) {
         this->resetContext();
         this->resolveStrut();
         this->computeEmptyMetrics();
         this->fLines.clear();
+        if (hasRuby()) {
+            for (auto& run : fRuns) {
+                std::copy(fRubyOffsets[run.index()].begin(), fRubyOffsets[run.index()].end(), run.fOffsets.begin());
+            }
+        }
         this->breakShapedTextIntoLines(floorWidth);
         fState = kLineBroken;
     }
@@ -214,6 +224,9 @@ void ParagraphImpl::layout(SkScalar rawWidth) {
         // Build the picture lazily not until we actually have to paint (or never)
         this->resetShifts();
         this->formatLines(fWidth);
+        if (hasRuby()) {
+            this->positionRuby();
+        }
         fState = kFormatted;
     }
 
@@ -520,7 +533,8 @@ void ParagraphImpl::buildClusterTable() {
     // It's not the ideal solution and has to be revisited later
     int cluster_count = 1;
     for (auto& run : fRuns) {
-        cluster_count += run.isPlaceholder() ? 1 : run.size();
+        // A 0-glyph run still produces one 0-width cluster covering its text range
+        cluster_count += (run.isPlaceholder() || run.size() == 0) ? 1 : run.size();
         fCodeUnitProperties[run.fTextRange.start] |= SkUnicode::CodeUnitFlags::kGraphemeStart;
         fCodeUnitProperties[run.fTextRange.start] |= SkUnicode::CodeUnitFlags::kGlyphClusterStart;
     }
@@ -590,7 +604,7 @@ bool ParagraphImpl::shapeTextIntoEndlessLine() {
 
 void ParagraphImpl::breakShapedTextIntoLines(SkScalar maxWidth) {
 
-    if (!fHasLineBreaks &&
+    if (!hasRuby() && !fHasLineBreaks &&
         !fHasWhitespacesInside &&
         fPlaceholders.size() == 1 &&
         fRuns.size() == 1 && fRuns[0].fAdvance.fX <= maxWidth) {
@@ -1115,7 +1129,7 @@ void ParagraphImpl::updateTextAlign(TextAlign textAlign) {
     fParagraphStyle.setTextAlign(textAlign);
 
     if (fState >= kLineBroken) {
-        fState = kLineBroken;
+        fState = hasRuby() ? kShaped : kLineBroken;
     }
 }
 
@@ -1210,9 +1224,9 @@ void ParagraphImpl::visit(const Visitor& visitor) {
 
             STArray<128, uint32_t> clusterStorage;
             const Run* R = rec.fVisitor_Run;
-            const uint32_t* clusterPtr = &R->fClusterIndexes[0];
+            const uint32_t* clusterPtr = R->fClusterIndexes.data();
 
-            if ((R->fClusterStart > 0) and (R->fClusterIndexes.size() > 0)) {
+            if (R->fClusterStart > 0 && !R->fClusterIndexes.empty()) {
                 int count = R->fClusterIndexes.size();
                 clusterStorage.reset(count);
                 for (int i = 0; i < count; ++i) {
@@ -1236,6 +1250,18 @@ void ParagraphImpl::visit(const Visitor& visitor) {
                 visitor(lineNumber, &info);
                 clusterPtr += run.count;
             }
+        }
+        for (const auto& placement : rubyPlacements(line)) {
+            placement.span->annotation->visit([&](int, const VisitorInfo* info) {
+                if (!info) return;
+                auto mapped = *info;
+                std::vector<uint32_t> starts(info->count + 1, placement.span->input.baseRange.start);
+                starts.back() = placement.span->input.baseRange.end;
+                mapped.origin += placement.origin;
+                mapped.utf8Starts = starts.data();
+                mapped.flags |= kRubyAnnotation_VisitorFlag;
+                visitor(lineNumber, &mapped);
+            });
         }
         visitor(lineNumber, nullptr);   // signal end of line
         lineNumber += 1;
@@ -1426,6 +1452,10 @@ void ParagraphImpl::extendedVisit(const ExtendedVisitor& visitor) {
                 [&](TextRange textRange,
                     const TextStyle& style,
                     const TextLine::ClipContext& context) {
+                    // 0-glyph runs have no glyph or position entries to pass to the visitor
+                    if (context.size == 0) {
+                        return;
+                    }
                     SkScalar correctedBaseline = SkScalarFloorToScalar(
                         line.baseline() + style.getBaselineShift() + 0.5);
                     SkPoint offset =
@@ -1437,7 +1467,13 @@ void ParagraphImpl::extendedVisit(const ExtendedVisitor& visitor) {
                     run->font().getBounds(run->glyphs(), glyphBounds, nullptr);
                     STArray<128, uint32_t> clusterStorage;
                     const uint32_t* clusterPtr = run->clusterIndexes().data();
-                    if ((run->fClusterStart > 0) && (context.size > 0)) {
+                    if (hasRuby()) {
+                        clusterStorage.reset(context.size + 1);
+                        for (size_t i = 0; i <= context.size; ++i) {
+                            clusterStorage[i] = run->globalClusterIndex(context.pos + i);
+                        }
+                        clusterPtr = clusterStorage.data();
+                    } else if ((run->fClusterStart > 0) && (context.size > 0)) {
                         clusterStorage.reset(context.size);
                         for (size_t i = 0; i < context.size; ++i) {
                             clusterStorage[i] =
@@ -1445,13 +1481,21 @@ void ParagraphImpl::extendedVisit(const ExtendedVisitor& visitor) {
                         }
                         clusterPtr = &clusterStorage[0];
                     }
+                    std::vector<SkPoint> rubyPositions;
+                    if (hasRuby()) {
+                        for (size_t index = context.pos; index < context.pos + context.size; ++index) {
+                            auto position = run->positions()[index] + run->offsets()[index];
+                            if (!run->fJustificationShifts.empty()) position.fX += run->fJustificationShifts[index].fX;
+                            rubyPositions.push_back(position);
+                        }
+                    }
                     const Paragraph::ExtendedVisitorInfo info = {
                         run->font(),
                         offset,
                         SkSize::Make(rect.width(), rect.height()),
                         SkToS16(context.size),
                         &run->glyphs()[context.pos],
-                        &run->fPositions[context.pos],
+                        hasRuby() ? rubyPositions.data() : &run->fPositions[context.pos],
                         &glyphBounds[context.pos],
                         clusterPtr,
                         0,  // flags
@@ -1460,12 +1504,45 @@ void ParagraphImpl::extendedVisit(const ExtendedVisitor& visitor) {
                 });
             return true;
             });
+        for (const auto& placement : rubyPlacements(line)) {
+            placement.span->annotation->visit([&](int, const VisitorInfo* info) {
+                if (!info) return;
+                std::vector<uint32_t> starts(info->count + 1, placement.span->input.baseRange.start);
+                starts.back() = placement.span->input.baseRange.end;
+                std::vector<SkRect> bounds(info->count);
+                info->font.getBounds({info->glyphs, static_cast<size_t>(info->count)}, bounds, nullptr);
+                std::vector<SkPoint> positions(info->positions, info->positions + info->count);
+                ExtendedVisitorInfo mapped = {info->font, info->origin + placement.origin,
+                    SkSize::Make(placement.span->annotationBounds.width(), placement.span->annotationBounds.height()),
+                    info->count, info->glyphs,
+                    positions.data(), bounds.data(), starts.data(), info->flags | kRubyAnnotation_VisitorFlag};
+                visitor(lineNumber, &mapped);
+            });
+        }
         visitor(lineNumber, nullptr);   // signal end of line
         lineNumber += 1;
     }
 }
 
 int ParagraphImpl::getPath(int lineNumber, SkPath* dest) {
+    if (hasRuby()) {
+        SkPathBuilder rubyPath;
+        int missing = 0;
+        this->extendedVisit([&](int currentLine, const ExtendedVisitorInfo* info) {
+            if (currentLine != lineNumber || !info) return;
+            for (int index = 0; index < info->count; ++index) {
+                auto path = info->font.getPath(info->glyphs[index]);
+                if (path) {
+                    auto position = info->origin + info->positions[index];
+                    rubyPath.addPath(*path, position.x(), position.y());
+                } else {
+                    ++missing;
+                }
+            }
+        });
+        *dest = rubyPath.detach();
+        return missing;
+    }
     SkPathBuilder builder;
     int notConverted = 0;
     auto& line = fLines[lineNumber];
@@ -1484,6 +1561,10 @@ int ParagraphImpl::getPath(int lineNumber, SkPath* dest) {
           [&](TextRange textRange,
               const TextStyle& style,
               const TextLine::ClipContext& context) {
+              // 0-glyph runs have no glyph or position entries to convert to paths
+              if (context.size == 0) {
+                  return;
+              }
               const SkFont& font = run->font();
               SkScalar correctedBaseline = SkScalarFloorToScalar(
                 line.baseline() + style.getBaselineShift() + 0.5);

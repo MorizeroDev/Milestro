@@ -123,13 +123,16 @@ namespace Milestro.Skia.TextLayout
             );
         }
 
-        public void SetEllipsis(string s)
+        public unsafe void SetEllipsis(string s)
         {
             s = s ?? "";
             var cstr = s.CStr();
-            ExitCodeUtil.ThrowIfFailed(
-                BindingC.SkiaTextlayoutParagraphStyleSetEllipsis(NativePtr, cstr)
-            );
+            fixed (byte* ellipsisPtr = cstr)
+            {
+                ExitCodeUtil.ThrowIfFailed(
+                    BindingC.SkiaTextlayoutParagraphStyleSetEllipsis(NativePtr, ellipsisPtr)
+                );
+            }
             _cachedEllipsis = s;
         }
 

@@ -92,6 +92,13 @@ private:
 
 class MILESTRO_API ParagraphStyle {
 public:
+    ParagraphStyle();
+    ParagraphStyle(const ParagraphStyle &other);
+    ParagraphStyle(ParagraphStyle &&other);
+    ParagraphStyle &operator=(const ParagraphStyle &other);
+    ParagraphStyle &operator=(ParagraphStyle &&other);
+    ~ParagraphStyle();
+
     StrutStyle *getStrutStyle() const {
         auto ret = new StrutStyle(style.getStrutStyle());
         if (hasStrutFontFamilyDeclaration) {
@@ -105,18 +112,8 @@ public:
         hasStrutFontFamilyDeclaration = strutStyle->hasFontFamilyTokens();
     }
 
-    TextStyle *getTextStyle() const {
-        auto ret = new TextStyle(style.getTextStyle());
-        if (hasTextFontFamilyDeclaration) {
-            ret->setFontFamilyTokens(textFontFamilyTokens);
-        }
-        return ret;
-    }
-    void setTextStyle(TextStyle *textStyle) {
-        style.setTextStyle(textStyle->spawn());
-        textFontFamilyTokens = textStyle->getFontFamilyTokens();
-        hasTextFontFamilyDeclaration = textStyle->hasFontFamilyTokens();
-    }
+    TextStyle *getTextStyle() const;
+    void setTextStyle(TextStyle *textStyle);
 
     const std::vector<FontFamilyToken> &getTextFontFamilyTokens() const { return textFontFamilyTokens; }
     bool hasTextFontFamilyTokens() const { return hasTextFontFamilyDeclaration; }
@@ -133,11 +130,14 @@ public:
     void setMaxLines(size_t maxLines) { style.setMaxLines(maxLines); }
     void clearMaxLines() { style.setMaxLines(std::numeric_limits<size_t>::max()); }
 
-    SkString getEllipsis() const { return style.getEllipsis(); }
+    SkString getEllipsis() const {
+        const auto ellipsis = getEllipsisUtf8();
+        return SkString(ellipsis.data(), ellipsis.size());
+    }
 //    std::u16string getEllipsisUtf16() const { return style.getEllipsisUtf16(); }
 
 //    void setEllipsis(const std::u16string &ellipsis) { style.setEllipsis(ellipsis); }
-    void setEllipsis(const SkString &ellipsis) { style.setEllipsis(ellipsis); }
+    void setEllipsis(const SkString &ellipsis);
 
     SkScalar getHeight() const { return style.getHeight(); }
     void setHeight(SkScalar height) { style.setHeight(height); }
@@ -161,6 +161,8 @@ public:
     void setApplyRoundingHack(bool value) { style.setApplyRoundingHack(value); }
 
 private:
+    std::string getEllipsisUtf8() const;
+
     ::skia::textlayout::ParagraphStyle style;
     std::vector<FontFamilyToken> textFontFamilyTokens;
     std::vector<FontFamilyToken> strutFontFamilyTokens;
@@ -168,9 +170,7 @@ private:
     bool hasStrutFontFamilyDeclaration = false;
 
 public:
-    const ::skia::textlayout::ParagraphStyle unwrap() const {
-        return style;
-    }
+    const ::skia::textlayout::ParagraphStyle unwrap() const;
 };
 }
 

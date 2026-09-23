@@ -61,6 +61,36 @@ Run::Run(ParagraphImpl* owner,
     fPlaceholderIndex = std::numeric_limits<size_t>::max();
 }
 
+Run::Run(const Run& other, bool detachGlyphs)
+    : fOwner(other.fOwner)
+    , fTextRange(other.fTextRange)
+    , fClusterRange(other.fClusterRange)
+    , fFont(other.fFont)
+    , fPlaceholderIndex(other.fPlaceholderIndex)
+    , fIndex(other.fIndex)
+    , fAdvance(other.fAdvance)
+    , fOffset(other.fOffset)
+    , fClusterStart(other.fClusterStart)
+    , fUtf8Range(other.fUtf8Range)
+    , fGlyphData(detachGlyphs ? std::make_shared<GlyphData>(*other.fGlyphData) : other.fGlyphData)
+    , fGlyphs(fGlyphData->glyphs)
+    , fPositions(fGlyphData->positions)
+    , fOffsets(fGlyphData->offsets)
+    , fClusterIndexes(fGlyphData->clusterIndexes)
+    , fJustificationShifts(other.fJustificationShifts)
+    , fFontMetrics(other.fFontMetrics)
+    , fHeightMultiplier(other.fHeightMultiplier)
+    , fUseHalfLeading(other.fUseHalfLeading)
+    , fBaselineShift(other.fBaselineShift)
+    , fCorrectAscent(other.fCorrectAscent)
+    , fCorrectDescent(other.fCorrectDescent)
+    , fCorrectLeading(other.fCorrectLeading)
+    , fEllipsis(other.fEllipsis)
+    , fHyphen(other.fHyphen)
+    , fBidiLevel(other.fBidiLevel)
+    , fScript(other.fScript)
+    , fLanguage(other.fLanguage) {}
+
 void Run::calculateMetrics() {
     fCorrectAscent = fFontMetrics.fAscent - fFontMetrics.fLeading * 0.5;
     fCorrectDescent = fFontMetrics.fDescent + fFontMetrics.fLeading * 0.5;

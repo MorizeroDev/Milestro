@@ -137,6 +137,14 @@ namespace Milestro.Extensions
                 builder.Pop();
             }
 
+            foreach (var annotation in payload.RubyAnnotations)
+            {
+                builder.AddRubyUtf16(annotation.StartUtf16,
+                    annotation.EndUtf16,
+                    annotation.Text,
+                    annotation.Style);
+            }
+
             return builder.Build();
         }
     }

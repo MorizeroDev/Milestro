@@ -9,6 +9,9 @@
 #include "modules/skparagraph/include/ParagraphStyle.h"
 #include "modules/skparagraph/include/TextStyle.h"
 #include "modules/skparagraph/src/ParagraphImpl.h"
+#if defined(MILESTRO_RUBY_PROTOTYPE)
+#include "modules/skparagraph/src/experimental/RubyPrototype.h"
+#endif
 #include "modules/skunicode/include/SkUnicode.h"
 #include "src/core/SkStringUtils.h"
 
@@ -180,14 +183,27 @@ std::unique_ptr<Paragraph> ParagraphBuilderImpl::Build() {
     fUTF16IndexForUTF8Index.clear();
 
     SkASSERT_RELEASE(fUnicode);
-    return std::make_unique<ParagraphImpl>(
+    auto paragraph = std::make_unique<ParagraphImpl>(
             fUtf8, fParagraphStyle, fStyledBlocks, fPlaceholders, fFontCollection, fUnicode);
+    paragraph->setRubyAnnotations(fRubyAnnotations);
+    return paragraph;
+}
+
+void ParagraphBuilderImpl::addRuby(const RubyAnnotation& annotation) {
+    fRubyAnnotations.push_back(annotation);
 }
 
 SkSpan<char> ParagraphBuilderImpl::getText() {
     this->finalize();
     return SkSpan<char>(fUtf8.isEmpty() ? nullptr : fUtf8.data(), fUtf8.size());
 }
+
+#if defined(MILESTRO_RUBY_PROTOTYPE)
+std::unique_ptr<RubyPrototype> ParagraphBuilderImpl::BuildRubyPrototype(std::vector<PrototypeRubyInput> inputs) {
+    return std::make_unique<RubyPrototype>(Build(), std::move(inputs), fParagraphStyle,
+                                           fFontCollection, fUnicode);
+}
+#endif
 
 const ParagraphStyle& ParagraphBuilderImpl::getParagraphStyle() const {
     return fParagraphStyle;
@@ -249,6 +265,7 @@ void ParagraphBuilderImpl::setLineBreaksUtf16(std::vector<SkUnicode::LineBreakBe
 
 void ParagraphBuilderImpl::Reset() {
 
+    fRubyAnnotations.clear();
     fTextStyles.clear();
     fUtf8.reset();
     fStyledBlocks.clear();

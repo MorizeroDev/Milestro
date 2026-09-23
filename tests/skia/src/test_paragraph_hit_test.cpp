@@ -152,3 +152,112 @@ TEST_F(SkiaParagraphHitTest, RejectsInvalidRangesCoordinatesAndNullCAbiParagraph
               MILESTRO_API_RET_OK);
     EXPECT_EQ(hit, 1);
 }
+
+TEST_F(SkiaParagraphHitTest, RubyCAbiBuildsNativeParagraphAndReportsInvalidInput) {
+    milestro_text::TextStyle textStyle;
+    textStyle.setFontFamilies({SkString("Source Han Sans VF")});
+    textStyle.setFontSize(36);
+    milestro_text::ParagraphStyle paragraphStyle;
+    paragraphStyle.setTextStyle(&textStyle);
+    milestro_text::ParagraphBuilder builder(&paragraphStyle);
+    const std::string text = "\xE6\xBC\xA2\xE5\xAD\x97\xE5\xBE\x8C";
+    const std::string reading = "kanji";
+    const auto* payload = reinterpret_cast<const uint8_t*>(reading.data());
+    builder.addText(text.data(), text.size());
+    EXPECT_EQ(MilestroSkiaTextlayoutParagraphBuilderAddRuby(nullptr, 0, 6, payload, reading.size()),
+              MILESTRO_API_RET_FAILED);
+    EXPECT_EQ(MilestroSkiaTextlayoutParagraphBuilderAddRuby(&builder, 0, 6, nullptr, reading.size()),
+              MILESTRO_API_RET_FAILED);
+    EXPECT_EQ(MilestroSkiaTextlayoutParagraphBuilderAddRuby(&builder, 6, 0, payload, reading.size()),
+              MILESTRO_API_RET_FAILED);
+    EXPECT_EQ(MilestroSkiaTextlayoutParagraphBuilderAddRuby(&builder, 0, 6, payload, 0),
+              MILESTRO_API_RET_FAILED);
+    ASSERT_EQ(MilestroSkiaTextlayoutParagraphBuilderAddRuby(&builder, 0, 6, payload, reading.size()),
+              MILESTRO_API_RET_OK);
+    milestro_text::Paragraph* built = nullptr;
+    ASSERT_EQ(MilestroSkiaTextlayoutParagraphBuilderBuild(&builder, built), MILESTRO_API_RET_OK);
+    std::unique_ptr<milestro_text::Paragraph> paragraph(built);
+    paragraph->layout(80);
+    EXPECT_EQ(paragraph->unwrap()->getLineNumberAt(0), paragraph->unwrap()->getLineNumberAt(3));
+    auto plain = BuildParagraph(text, 80);
+    EXPECT_GT(paragraph->unwrap()->getHeight(), plain->unwrap()->getHeight());
+    auto boxes = BoxesForRange(paragraph.get(), 0, 2);
+    ASSERT_FALSE(boxes.empty());
+    const auto center = Center(boxes.front());
+    EXPECT_TRUE(paragraph->hitTestRange(0, 2, center.x(), center.y()));
+    int annotations = 0;
+    paragraph->unwrap()->visit([&](int, const skia_text::Paragraph::VisitorInfo* info) {
+        if (info && (info->flags & skia_text::Paragraph::kRubyAnnotation_VisitorFlag)) annotations += info->count;
+    });
+    EXPECT_GT(annotations, 0);
+
+    milestro_text::ParagraphBuilder invalid(&paragraphStyle);
+    invalid.addText(text.data(), text.size());
+    ASSERT_EQ(MilestroSkiaTextlayoutParagraphBuilderAddRuby(&invalid, 0, text.size() + 1, payload, reading.size()),
+              MILESTRO_API_RET_OK);
+    built = nullptr;
+    EXPECT_EQ(MilestroSkiaTextlayoutParagraphBuilderBuild(&invalid, built), MILESTRO_API_RET_FAILED);
+    EXPECT_EQ(built, nullptr);
+}
+
+TEST_F(SkiaParagraphHitTest, RubyCAbiAcceptsStyleAndRejectsInvalidEnums) {
+    milestro_text::TextStyle textStyle;
+    textStyle.setFontFamilies({SkString("Source Han Sans VF")});
+    textStyle.setFontSize(36);
+    milestro_text::ParagraphStyle paragraphStyle;
+    paragraphStyle.setTextStyle(&textStyle);
+    milestro_text::ParagraphBuilder builder(&paragraphStyle);
+    const std::string text = "\xE6\xBC\xA2";
+    const std::string reading = "kan";
+    builder.addText(text.data(), text.size());
+
+    EXPECT_EQ(MilestroSkiaTextlayoutParagraphBuilderAddRubyWithStyle(&builder,
+                                                                     0,
+                                                                     text.size(),
+                                                                     reinterpret_cast<const uint8_t*>(reading.data()),
+                                                                     reading.size(),
+                                                                     &textStyle,
+                                                                     0.5f,
+                                                                     8,
+                                                                     1,
+                                                                     1,
+                                                                     0,
+                                                                     0),
+              MILESTRO_API_RET_OK);
+    milestro_text::Paragraph* built = nullptr;
+    ASSERT_EQ(MilestroSkiaTextlayoutParagraphBuilderBuild(&builder, built), MILESTRO_API_RET_OK);
+    std::unique_ptr<milestro_text::Paragraph> paragraph(built);
+    paragraph->layout(200);
+    SkRect base = SkRect::MakeEmpty();
+    SkRect annotation = SkRect::MakeEmpty();
+    paragraph->unwrap()->visit([&](int, const skia_text::Paragraph::VisitorInfo* info) {
+        if (!info)
+            return;
+        std::vector<SkRect> bounds(info->count);
+        info->font.getBounds({info->glyphs, static_cast<size_t>(info->count)}, bounds, nullptr);
+        for (int index = 0; index < info->count; ++index) {
+            bounds[index].offset(info->origin + info->positions[index]);
+            if (info->flags & skia_text::Paragraph::kRubyAnnotation_VisitorFlag)
+                annotation.join(bounds[index]);
+            else
+                base.join(bounds[index]);
+        }
+    });
+    EXPECT_GT(annotation.top(), base.bottom());
+
+    milestro_text::ParagraphBuilder invalid(&paragraphStyle);
+    invalid.addText(text.data(), text.size());
+    EXPECT_EQ(MilestroSkiaTextlayoutParagraphBuilderAddRubyWithStyle(&invalid,
+                                                                     0,
+                                                                     text.size(),
+                                                                     reinterpret_cast<const uint8_t*>(reading.data()),
+                                                                     reading.size(),
+                                                                     nullptr,
+                                                                     0.5f,
+                                                                     2,
+                                                                     99,
+                                                                     1,
+                                                                     0,
+                                                                     0),
+              MILESTRO_API_RET_FAILED);
+}

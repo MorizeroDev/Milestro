@@ -349,6 +349,40 @@ Supported tags in the current parser:
   empty `id`, unknown or duplicate attributes, nested anchors, and malformed
   XML are rejected. Link targets are returned to the application unchanged;
   Milestro never opens or interprets them.
+- `<ruby>base<rt>annotation</rt></ruby>`: an HTML-shaped Ruby annotation.
+  One non-empty, plain-text `<rt>` is supported per `<ruby>`. Existing inline
+  tags may style the base. Optional plain-text `<rp>` children are accepted as
+  HTML fallback content and are not rendered. Nested Ruby and multiple `<rt>`
+  elements are rejected.
+
+Ruby layout styles use the element's standard HTML `style` attribute. The
+supported standard CSS Ruby properties are:
+
+- `ruby-position: over | under`
+- `ruby-align: start | center | space-around | space-between`
+- `ruby-overhang: auto | none`
+
+Milestro-specific controls use CSS custom properties:
+
+- `--milestro-ruby-size`: positive annotation font-size multiplier
+- `--milestro-ruby-gap`: non-negative gap in paragraph layout units
+- `--milestro-ruby-overflow: preserve-base | inline`
+
+For example:
+
+```xml
+<ruby style="ruby-position: under; ruby-align: space-around;
+             ruby-overhang: auto; --milestro-ruby-size: 0.5;
+             --milestro-ruby-gap: 2">
+  漢字<rt>かんじ</rt>
+</ruby>
+```
+
+The parser implements a deliberate single-base/single-annotation subset of
+HTML Ruby. Complex Ruby with multiple `<rt>` annotations, nested annotations,
+`ruby-position: inter-character`, and styled markup inside `<rt>` is not
+supported. When omitted, the standard properties use their CSS initial values:
+`ruby-position: over`, `ruby-align: space-around`, and `ruby-overhang: auto`.
 
 Read-only `TextBox` exposes the serialized, getter-only
 `onLinkClicked` event. Its `LinkClickedEventArgs` payload contains `Href` and

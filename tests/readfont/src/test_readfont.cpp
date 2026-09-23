@@ -32,7 +32,8 @@ int registerFontsInDirectory(milestro::skia::FontRegistry *fontRegistry, const s
 
     for (const auto &entry: fs::directory_iterator(fontDir)) {
         if (entry.path().extension() == ".bytes") {
-            std::string fontPath = entry.path().string();
+            const auto utf8Path = entry.path().u8string();
+            std::string fontPath(utf8Path.begin(), utf8Path.end());
             auto result = fontRegistry->RegisterFontFromFile(fontPath.c_str());
 
             switch (result) {
@@ -124,22 +125,7 @@ protected:
 };
 
 TEST_F(ReadFontTest, RegistersFontsCorrectly) {
-    // 捕获 std::cout 和 std::cerr
-    std::stringstream capturedStdout;
-    std::stringstream capturedStderr;
-    std::streambuf *oldCout = std::cout.rdbuf(capturedStdout.rdbuf());
-    std::streambuf *oldCerr = std::cerr.rdbuf(capturedStderr.rdbuf());
-
-
-
-    // 恢复 std::cout 和 std::cerr
-    std::cout.rdbuf(oldCout);
-    std::cerr.rdbuf(oldCerr);
-
-    // 验证结果
     EXPECT_GT(registeredCount, 0);
-    EXPECT_TRUE(capturedStdout.str().find("Successfully registered font:") != std::string::npos);
-    EXPECT_TRUE(capturedStderr.str().empty());
 
     // 验证字体是否真的被注册了
     auto familyNames = fontRegistry->GetRegisteredFontFamilyNames();

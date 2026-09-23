@@ -212,6 +212,22 @@ FontCollection *GetFontCollection() {
     return FontCollectionInstance.get();
 }
 
+void FontCollection::clearCaches() {
+    fontCollection->clearCaches();
+}
+
+bool FontCollection::fontFallbackEnabled() {
+    return fontCollection->fontFallbackEnabled();
+}
+
+void FontCollection::setFontFallbackEnabled(bool enabled) {
+    if (enabled) {
+        fontCollection->enableFontFallback();
+    } else {
+        fontCollection->disableFontFallback();
+    }
+}
+
 void FontCollection::ClearFontFamilyKeywordMappings() {
     fontFamilyKeywordMap.ClearUserMappings();
     fontCollection->clearCaches();
@@ -282,10 +298,10 @@ sk_sp<SkTypeface> FontCollection::ResolveTypeface(const std::vector<FontFamilyTo
     return SkTypeface::MakeEmpty();
 }
 
-::skia::textlayout::TextStyle FontCollection::ResolveTextStyle(const TextStyle &style) const {
-    auto resolved = style.spawn();
+std::shared_ptr<const ::skia::textlayout::TextStyle> FontCollection::ResolveTextStyle(const TextStyle &style) const {
+    auto resolved = std::make_shared<::skia::textlayout::TextStyle>(style.spawn());
     if (style.hasFontFamilyTokens()) {
-        resolved.setFontFamilies(ToSkiaFamilies(ResolveFontFamilyNames(style.getFontFamilyTokens())));
+        resolved->setFontFamilies(ToSkiaFamilies(ResolveFontFamilyNames(style.getFontFamilyTokens())));
     }
     return resolved;
 }
@@ -298,17 +314,17 @@ sk_sp<SkTypeface> FontCollection::ResolveTypeface(const std::vector<FontFamilyTo
     return resolved;
 }
 
-::skia::textlayout::ParagraphStyle FontCollection::ResolveParagraphStyle(const ParagraphStyle &style) const {
-    auto resolved = style.unwrap();
+std::shared_ptr<const ::skia::textlayout::ParagraphStyle> FontCollection::ResolveParagraphStyle(const ParagraphStyle &style) const {
+    auto resolved = std::make_shared<::skia::textlayout::ParagraphStyle>(style.unwrap());
     if (style.hasTextFontFamilyTokens()) {
-        auto textStyle = resolved.getTextStyle();
+        auto textStyle = resolved->getTextStyle();
         textStyle.setFontFamilies(ToSkiaFamilies(ResolveFontFamilyNames(style.getTextFontFamilyTokens())));
-        resolved.setTextStyle(textStyle);
+        resolved->setTextStyle(textStyle);
     }
     if (style.hasStrutFontFamilyTokens()) {
-        auto strutStyle = resolved.getStrutStyle();
+        auto strutStyle = resolved->getStrutStyle();
         strutStyle.setFontFamilies(ToSkiaFamilies(ResolveFontFamilyNames(style.getStrutFontFamilyTokens())));
-        resolved.setStrutStyle(strutStyle);
+        resolved->setStrutStyle(strutStyle);
     }
     return resolved;
 }
@@ -317,7 +333,7 @@ std::unique_ptr<::skia::textlayout::ParagraphBuilder> FontCollection::MakeParagr
         const ParagraphStyle &style,
         sk_sp<SkUnicode> unicode) const {
     return ::skia::textlayout::ParagraphBuilder::make(
-            ResolveParagraphStyle(style),
+            *ResolveParagraphStyle(style),
             fontCollection,
             std::move(unicode));
 }
@@ -328,24 +344,24 @@ std::unique_ptr<::skia::textlayout::ParagraphBuilder> FontCollection::MakeInputP
         sk_sp<SkUnicode> unicode) const {
     auto resolvedParagraphStyle = style;
     auto resolvedTextStyle = ResolveTextStyle(textStyle);
-    resolvedParagraphStyle.setTextStyle(resolvedTextStyle);
+    resolvedParagraphStyle.setTextStyle(*resolvedTextStyle);
 
     auto resolvedStrutStyle = resolvedParagraphStyle.getStrutStyle();
-    resolvedStrutStyle.setFontFamilies(resolvedTextStyle.getFontFamilies());
+    resolvedStrutStyle.setFontFamilies(resolvedTextStyle->getFontFamilies());
     resolvedParagraphStyle.setStrutStyle(std::move(resolvedStrutStyle));
 
     auto builder = ::skia::textlayout::ParagraphBuilder::make(
             std::move(resolvedParagraphStyle),
             fontCollection,
             std::move(unicode));
-    builder->pushStyle(std::move(resolvedTextStyle));
+    builder->pushStyle(*resolvedTextStyle);
     return builder;
 }
 
 void FontCollection::PushStyle(::skia::textlayout::ParagraphBuilder *builder,
                                const TextStyle &style) const {
     if (builder != nullptr) {
-        builder->pushStyle(ResolveTextStyle(style));
+        builder->pushStyle(*ResolveTextStyle(style));
     }
 }
 

@@ -294,6 +294,7 @@ tasks {
         sourceFilePath = h2csSourceFile.absolutePath
         csharpBindingOutputPath = h2csCsharpBindingOutputFile.absolutePath
         cppFrameworkBindingOutputPath = h2csCppFrameworkBindingOutputFile.absolutePath
+        finalizedBy("format-cs")
         addTypeMapping(
             listOf("milestro::game::model::DataEnvelop") to "IntPtr",
             listOf("milestro::game::model::BytesWrapper") to "IntPtr",
@@ -333,24 +334,20 @@ tasks {
 
         doLast {
             if (!hasClangFormat()) {
-                logger.lifecycle("clang-format not found; skipping generated binding formatting.")
-                return@doLast
+                logger.lifecycle("clang-format not found; skipping generated C++ binding formatting.")
+            } else if (h2csCppFrameworkBindingOutputFile.isFile) {
+                val exitCode = ProcessBuilder("clang-format", "-i", h2csCppFrameworkBindingOutputFile.absolutePath)
+                    .inheritIO()
+                    .start()
+                    .waitFor()
+
+                if (exitCode == 0) {
+                    logger.lifecycle("Formatted ${h2csCppFrameworkBindingOutputFile.path} with clang-format.")
+                } else {
+                    logger.warn("clang-format failed for ${h2csCppFrameworkBindingOutputFile.path} with exit code $exitCode.")
+                }
             }
 
-            listOf(h2csCsharpBindingOutputFile, h2csCppFrameworkBindingOutputFile)
-                .filter { it.isFile }
-                .forEach { outputFile ->
-                    val exitCode = ProcessBuilder("clang-format", "-i", outputFile.absolutePath)
-                        .inheritIO()
-                        .start()
-                        .waitFor()
-
-                    if (exitCode == 0) {
-                        logger.lifecycle("Formatted ${outputFile.path} with clang-format.")
-                    } else {
-                        logger.warn("clang-format failed for ${outputFile.path} with exit code $exitCode.")
-                    }
-                }
         }
     }
 }

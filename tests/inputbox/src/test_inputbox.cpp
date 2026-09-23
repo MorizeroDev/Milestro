@@ -42,7 +42,9 @@ int RegisterFontsInDirectory(const fs::path& dirPath) {
             continue;
         }
 
-        const auto result = fontRegistry->RegisterFontFromFile(entry.path().string().c_str());
+        const auto utf8Path = entry.path().u8string();
+        const std::string fontPath(utf8Path.begin(), utf8Path.end());
+        const auto result = fontRegistry->RegisterFontFromFile(fontPath.c_str());
         if (result == milestro::skia::MilestroRegisteredFontMgr::RegisterResult::Succeed ||
             result == milestro::skia::MilestroRegisteredFontMgr::RegisterResult::Duplicated) {
             ++successCount;

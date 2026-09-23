@@ -7,6 +7,7 @@ using System.Xml;
 using Milestro.Model;
 using Milestro.RichTextParser.AST;
 using Milestro.Skia;
+using Milestro.Skia.TextLayout;
 using Paraparty.Colors;
 using UnityEngine;
 using XmlNode = Milestro.RichTextParser.AST.XmlNode;
@@ -314,6 +315,19 @@ namespace Milestro.RichTextParser
                 anchorStartUtf16 = ctx.TextLengthUtf16;
                 ctx.HasActiveLink = true;
             }
+            else if (node.Tag == "ruby")
+            {
+                ConvertRuby(ctx, node, state);
+                return;
+            }
+            else if (node.Tag == "rt")
+            {
+                throw new InvalidCastException("<rt> must be a direct child of <ruby>");
+            }
+            else if (node.Tag == "rp")
+            {
+                throw new InvalidCastException("<rp> must be a direct child of <ruby>");
+            }
             else if (node.Tag == "root")
             {
                 // ignore
@@ -326,15 +340,7 @@ namespace Milestro.RichTextParser
 
             foreach (var child in node.Children)
             {
-                if (child is XmlElementNode t)
-                {
-                    ctx.TextStyleState = state;
-                    ConvertToSegments(ctx, t);
-                }
-                else if (child is XmlTextNode textNode)
-                {
-                    AddText(ctx, state, textNode.Text);
-                }
+                ConvertChild(ctx, state, child);
             }
 
             if (isAnchor)
@@ -346,6 +352,151 @@ namespace Milestro.RichTextParser
                     ctx.TextLengthUtf16,
                     ctx.Result.Links.Count));
             }
+        }
+
+        private void ConvertRuby(Context ctx, XmlElementNode node, TextStyleState state)
+        {
+            if (ctx.HasActiveRuby)
+            {
+                throw new InvalidCastException("nested <ruby> elements are not supported");
+            }
+
+            if (node.IsEmptyElement)
+            {
+                throw new InvalidCastException("<ruby> must use an explicit closing tag");
+            }
+
+            XmlElementNode? annotationNode = null;
+            var annotationIndex = -1;
+            for (var index = 0; index < node.Children.Count; index++)
+            {
+                if (node.Children[index] is not XmlElementNode element || element.Tag != "rt")
+                {
+                    continue;
+                }
+
+                if (annotationNode != null)
+                {
+                    throw new InvalidCastException("<ruby> accepts exactly one <rt> element");
+                }
+
+                annotationNode = element;
+                annotationIndex = index;
+            }
+
+            if (annotationNode == null)
+            {
+                throw new InvalidCastException("<ruby> requires one <rt> element");
+            }
+
+            for (var index = annotationIndex + 1; index < node.Children.Count; index++)
+            {
+                if (node.Children[index] is not XmlElementNode fallback || fallback.Tag != "rp")
+                {
+                    throw new InvalidCastException("only <rp> fallback content may follow <rt>");
+                }
+
+                ValidateRubyFallback(fallback);
+            }
+
+            var annotation = ReadRubyAnnotation(annotationNode);
+            var rubyStyle = ParseRubyStyle(node);
+            var startUtf16 = ctx.TextLengthUtf16;
+            ctx.HasActiveRuby = true;
+            try
+            {
+                for (var index = 0; index < annotationIndex; index++)
+                {
+                    if (node.Children[index] is XmlElementNode fallback && fallback.Tag == "rp")
+                    {
+                        ValidateRubyFallback(fallback);
+                        continue;
+                    }
+
+                    ConvertChild(ctx, state, node.Children[index]);
+                }
+            }
+            finally
+            {
+                ctx.HasActiveRuby = false;
+            }
+
+            if (startUtf16 == ctx.TextLengthUtf16)
+            {
+                throw new InvalidCastException("<ruby> requires non-empty base text");
+            }
+
+            ctx.Result.AddRuby(new RubyAnnotation(startUtf16, ctx.TextLengthUtf16, annotation, rubyStyle));
+        }
+
+        private static void ValidateRubyFallback(XmlElementNode node)
+        {
+            if (node.IsEmptyElement || node.Attributes.Count != 0 || node.Children.Count == 0)
+            {
+                throw new InvalidCastException("<rp> must be non-empty and does not accept attributes");
+            }
+
+            foreach (var child in node.Children)
+            {
+                if (child is not XmlTextNode)
+                {
+                    throw new InvalidCastException("<rp> only accepts plain text");
+                }
+            }
+        }
+
+        private void ConvertChild(Context ctx, TextStyleState state, XmlNode child)
+        {
+            if (child is XmlElementNode element)
+            {
+                ctx.TextStyleState = state;
+                ConvertToSegments(ctx, element);
+            }
+            else if (child is XmlTextNode textNode)
+            {
+                AddText(ctx, state, textNode.Text);
+            }
+        }
+
+        private static string ReadRubyAnnotation(XmlElementNode node)
+        {
+            if (node.IsEmptyElement || node.Attributes.Count != 0)
+            {
+                throw new InvalidCastException("<rt> must be non-empty and does not accept attributes");
+            }
+
+            var annotation = new StringBuilder();
+            foreach (var child in node.Children)
+            {
+                if (child is not XmlTextNode textNode)
+                {
+                    throw new InvalidCastException("<rt> only accepts plain text");
+                }
+
+                annotation.Append(textNode.Text);
+            }
+
+            if (annotation.Length == 0 || annotation.ToString().IndexOfAny(new[] { '\r', '\n', '\t' }) >= 0)
+            {
+                throw new InvalidCastException("<rt> must contain non-empty single-line text without tabs");
+            }
+
+            return annotation.ToString();
+        }
+
+        private static RubyStyle ParseRubyStyle(XmlElementNode node)
+        {
+            foreach (var attribute in node.Attributes)
+            {
+                if (attribute.Key != "style")
+                {
+                    throw new InvalidCastException($"<ruby> does not accept the '{attribute.Key}' attribute");
+                }
+            }
+
+            return RubyCssParser.Parse(node.Attributes.TryGetValue("style", out var declarations)
+                ? declarations
+                : string.Empty);
         }
 
         private static void ValidateAnchor(XmlElementNode node, out string href, out string id)

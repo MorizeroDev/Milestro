@@ -5,6 +5,7 @@
 #include "FontCollection.h"
 #include "Paragraph.h"
 #include "ParagraphStyle.h"
+#include "RubyStyle.h"
 #include "TextStyle.h"
 #include "modules/skparagraph/include/ParagraphBuilder.h"
 
@@ -30,6 +31,14 @@ public:
 
     void addText(const char *text, size_t len) {
         builder->addText(text, len);
+    }
+
+    void addRuby(size_t startUtf8, size_t endUtf8, const char* text, size_t length) {
+        builder->addRuby({{startUtf8, endUtf8}, std::string(text, length)});
+    }
+
+    void addRuby(size_t startUtf8, size_t endUtf8, const char* text, size_t length, const RubyStyle& style) {
+        builder->addRuby({{startUtf8, endUtf8}, std::string(text, length), style.spawn()});
     }
 
     Paragraph *build() {

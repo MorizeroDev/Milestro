@@ -9,5 +9,7 @@ namespace Milestro.RichTextParser
         internal int TextLengthUtf16 { get; set; }
 
         internal bool HasActiveLink { get; set; }
+
+        internal bool HasActiveRuby { get; set; }
     }
 }

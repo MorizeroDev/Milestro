@@ -1,7 +1,6 @@
 #include "Milestro/skia/FontRegistry.h"
 #include "Milestro/log/log.h"
 #include "Milestro/common/milestro_platform.h"
-#include "Milestro/util/milestro_encoding.h"
 #include "Milestro/util/milestro_env.h"
 #include <cassert>
 #include <exception>
@@ -83,13 +82,13 @@ MilestroRegisteredFontMgr::RegisterResult FontRegistry::RegisterFontFromFile(con
     fs::path homeDir(milestro::util::env::getenv("HOME"));
     fs::path filename((std::string(path)));
     fs::path filePath = homeDir / filename;
+#elif MILESTRO_PLATFORM_WINDOWS
+    std::string filePathString(path);
 #else
     fs::path filePath((std::string(path)));
 #endif
 
-#if MILESTRO_PLATFORM_WINDOWS
-    auto filePathString = milestro::util::encoding::WStringToString(filePath.wstring());
-#else
+#if !MILESTRO_PLATFORM_WINDOWS
     auto filePathString = filePath.string();
 #endif
     MILESTROLOG_DEBUG("try to register font from file, path: {}", filePathString);

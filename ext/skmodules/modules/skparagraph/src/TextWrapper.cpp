@@ -277,6 +277,10 @@ std::tuple<Cluster*, size_t, SkScalar> TextWrapper::trimStartSpaces(Cluster* end
 void TextWrapper::breakTextIntoLines(ParagraphImpl* parent,
                                      SkScalar maxWidth,
                                      const AddLineToParagraph& addLine) {
+    if (parent->hasRuby()) {
+        this->breakRubyTextIntoLines(parent, maxWidth, addLine);
+        return;
+    }
     fHeight = 0;
     fMinIntrinsicWidth = std::numeric_limits<SkScalar>::min();
     fMaxIntrinsicWidth = std::numeric_limits<SkScalar>::min();

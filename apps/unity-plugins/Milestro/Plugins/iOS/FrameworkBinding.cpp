@@ -1125,9 +1125,45 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphBuilderBuild(milestro::sk
 }
 
 int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphBuilderAddText(milestro::skia::textlayout::ParagraphBuilder* b,
-                                                                      uint8_t* text,
+                                                                      [[milize::CSharpType("byte*")]] uint8_t* text,
                                                                       size_t len) {
     return MilestroSkiaTextlayoutParagraphBuilderAddText(b, text, len);
+}
+
+int64_t
+FrameworkBindingMilestroSkiaTextlayoutParagraphBuilderAddRuby(milestro::skia::textlayout::ParagraphBuilder* b,
+                                                              size_t startUtf8,
+                                                              size_t endUtf8,
+                                                              [[milize::CSharpType("byte*")]] const uint8_t* text,
+                                                              size_t len) {
+    return MilestroSkiaTextlayoutParagraphBuilderAddRuby(b, startUtf8, endUtf8, text, len);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphBuilderAddRubyWithStyle(
+        milestro::skia::textlayout::ParagraphBuilder* b,
+        size_t startUtf8,
+        size_t endUtf8,
+        [[milize::CSharpType("byte*")]] const uint8_t* text,
+        size_t len,
+        milestro::skia::textlayout::TextStyle* rubyTextStyle,
+        float fontSizeMultiplier,
+        float gap,
+        int32_t position,
+        int32_t alignment,
+        int32_t overhang,
+        int32_t overflow) {
+    return MilestroSkiaTextlayoutParagraphBuilderAddRubyWithStyle(b,
+                                                                  startUtf8,
+                                                                  endUtf8,
+                                                                  text,
+                                                                  len,
+                                                                  rubyTextStyle,
+                                                                  fontSizeMultiplier,
+                                                                  gap,
+                                                                  position,
+                                                                  alignment,
+                                                                  overhang,
+                                                                  overflow);
 }
 
 int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphStyleCreate(milestro::skia::textlayout::ParagraphStyle*& ret) {
@@ -1199,8 +1235,9 @@ FrameworkBindingMilestroSkiaTextlayoutParagraphStyleClearMaxLines(milestro::skia
     return MilestroSkiaTextlayoutParagraphStyleClearMaxLines(s);
 }
 
-int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphStyleSetEllipsis(milestro::skia::textlayout::ParagraphStyle* s,
-                                                                        uint8_t* ellipsis) {
+int64_t
+FrameworkBindingMilestroSkiaTextlayoutParagraphStyleSetEllipsis(milestro::skia::textlayout::ParagraphStyle* s,
+                                                                [[milize::CSharpType("byte*")]] uint8_t* ellipsis) {
     return MilestroSkiaTextlayoutParagraphStyleSetEllipsis(s, ellipsis);
 }
 
@@ -1500,9 +1537,10 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutTextStyleGetFontFeatureNumber(mile
     return MilestroSkiaTextlayoutTextStyleGetFontFeatureNumber(s, num);
 }
 
-int64_t FrameworkBindingMilestroSkiaTextlayoutTextStyleAddFontFeature(milestro::skia::textlayout::TextStyle* s,
-                                                                      uint8_t* fontFeature,
-                                                                      int32_t value) {
+int64_t
+FrameworkBindingMilestroSkiaTextlayoutTextStyleAddFontFeature(milestro::skia::textlayout::TextStyle* s,
+                                                              [[milize::CSharpType("byte*")]] uint8_t* fontFeature,
+                                                              int32_t value) {
     return MilestroSkiaTextlayoutTextStyleAddFontFeature(s, fontFeature, value);
 }
 
@@ -1601,7 +1639,7 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutTextStyleSetTypeface(milestro::ski
 }
 
 int64_t FrameworkBindingMilestroSkiaTextlayoutTextStyleSetLocale(milestro::skia::textlayout::TextStyle* s,
-                                                                 uint8_t* locale) {
+                                                                 [[milize::CSharpType("byte*")]] uint8_t* locale) {
     return MilestroSkiaTextlayoutTextStyleSetLocale(s, locale);
 }
 
@@ -1624,7 +1662,8 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutTextStyleIsPlaceholder(milestro::s
     return MilestroSkiaTextlayoutTextStyleIsPlaceholder(s, isPlaceholder);
 }
 
-int64_t FrameworkBindingMilestroStringComparatorCreate(milestro::unicode::StringComparator*& ret, uint8_t* collation) {
+int64_t FrameworkBindingMilestroStringComparatorCreate(milestro::unicode::StringComparator*& ret,
+                                                       [[milize::CSharpType("byte*")]] uint8_t* collation) {
     return MilestroStringComparatorCreate(ret, collation);
 }
 
@@ -1635,8 +1674,8 @@ FrameworkBindingMilestroStringComparatorDestroy([[milize::RefType("ref")]] miles
 
 int64_t FrameworkBindingMilestroStringComparatorCompare(milestro::unicode::StringComparator* cmp,
                                                         int32_t& result,
-                                                        uint8_t* a,
-                                                        uint8_t* b) {
+                                                        [[milize::CSharpType("byte*")]] uint8_t* a,
+                                                        [[milize::CSharpType("byte*")]] uint8_t* b) {
     return MilestroStringComparatorCompare(cmp, result, a, b);
 }
 

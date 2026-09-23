@@ -15,7 +15,10 @@ namespace Milestro.Unicode
         public unsafe StringComparator(string collation)
         {
             var s = collation.CStr();
-            ExitCodeUtil.ThrowIfFailed(BindingC.StringComparatorCreate(out ptr, s));
+            fixed (byte* collationPtr = s)
+            {
+                ExitCodeUtil.ThrowIfFailed(BindingC.StringComparatorCreate(out ptr, collationPtr));
+            }
         }
 
         protected override void DisposeUnmanaged()
@@ -28,13 +31,17 @@ namespace Milestro.Unicode
             base.DisposeUnmanaged();
         }
 
-        public int Compare(string a, string b)
+        public unsafe int Compare(string a, string b)
         {
             var ap = a.CStr();
             var bp = b.CStr();
 
-            ExitCodeUtil.ThrowIfFailed(BindingC.StringComparatorCompare(NativePtr, out var result, ap, bp));
-            return result;
+            fixed (byte* firstPtr = ap)
+            fixed (byte* secondPtr = bp)
+            {
+                ExitCodeUtil.ThrowIfFailed(BindingC.StringComparatorCompare(NativePtr, out var result, firstPtr, secondPtr));
+                return result;
+            }
         }
     }
 }

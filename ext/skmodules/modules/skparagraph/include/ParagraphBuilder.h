@@ -10,6 +10,7 @@
 #include "modules/skparagraph/include/FontCollection.h"
 #include "modules/skparagraph/include/Paragraph.h"
 #include "modules/skparagraph/include/ParagraphStyle.h"
+#include "modules/skparagraph/include/Ruby.h"
 #include "modules/skparagraph/include/TextStyle.h"
 #include "modules/skunicode/include/SkUnicode.h"
 
@@ -54,6 +55,8 @@ public:
     // draw a custom placeholder into.
     // Internally, this method adds a single object replacement character (0xFFFC)
     virtual void addPlaceholder(const PlaceholderStyle& placeholderStyle) = 0;
+
+    virtual void addRuby(const RubyAnnotation& annotation) = 0;
 
     // Constructs a SkParagraph object that can be used to layout and paint the text to a SkCanvas.
     virtual std::unique_ptr<Paragraph> Build() = 0;

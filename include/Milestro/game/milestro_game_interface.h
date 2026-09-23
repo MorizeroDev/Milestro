@@ -555,8 +555,24 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderPop(milestro::skia::t
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderBuild(milestro::skia::textlayout::ParagraphBuilder* b,
                                                                  milestro::skia::textlayout::Paragraph*& paragraph);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderAddText(milestro::skia::textlayout::ParagraphBuilder* b,
-                                                                   uint8_t* text,
+                                                                   [[milize::CSharpType("byte*")]] uint8_t* text,
                                                                    size_t len);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderAddRuby(milestro::skia::textlayout::ParagraphBuilder* b,
+                                                                size_t startUtf8, size_t endUtf8,
+                                                                [[milize::CSharpType("byte*")]] const uint8_t* text, size_t len);
+MILESTRO_API int64_t
+MilestroSkiaTextlayoutParagraphBuilderAddRubyWithStyle(milestro::skia::textlayout::ParagraphBuilder* b,
+                                                       size_t startUtf8,
+                                                       size_t endUtf8,
+                                                       [[milize::CSharpType("byte*")]] const uint8_t* text,
+                                                       size_t len,
+                                                       milestro::skia::textlayout::TextStyle* rubyTextStyle,
+                                                       float fontSizeMultiplier,
+                                                       float gap,
+                                                       int32_t position,
+                                                       int32_t alignment,
+                                                       int32_t overhang,
+                                                       int32_t overflow);
 
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleCreate(milestro::skia::textlayout::ParagraphStyle*& ret);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleDestroy(milestro::skia::textlayout::ParagraphStyle*& ret);
@@ -585,7 +601,7 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetMaxLines(milestro::s
                                                                      uint64_t maxLines);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleClearMaxLines(milestro::skia::textlayout::ParagraphStyle* s);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetEllipsis(milestro::skia::textlayout::ParagraphStyle* s,
-                                                                     uint8_t* ellipsis);
+                                                                     [[milize::CSharpType("byte*")]] uint8_t* ellipsis);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetHeight(milestro::skia::textlayout::ParagraphStyle* s,
                                                                    float& height);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetHeight(milestro::skia::textlayout::ParagraphStyle* s,
@@ -722,7 +738,7 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleResetShadow(milestro::skia::
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetFontFeatureNumber(milestro::skia::textlayout::TextStyle* s,
                                                                          uint64_t& num);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleAddFontFeature(milestro::skia::textlayout::TextStyle* s,
-                                                                   uint8_t* fontFeature,
+                                                                   [[milize::CSharpType("byte*")]] uint8_t* fontFeature,
                                                                    int32_t value);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleResetFontFeatures(milestro::skia::textlayout::TextStyle* s);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetFontSize(milestro::skia::textlayout::TextStyle* s, float size);
@@ -759,7 +775,7 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetWordSpacing(milestro::ski
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetTypeface(milestro::skia::textlayout::TextStyle* s,
                                                                 milestro::skia::Typeface* typeFace);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetLocale(milestro::skia::textlayout::TextStyle* s,
-                                                              uint8_t* locale);
+                                                              [[milize::CSharpType("byte*")]] uint8_t* locale);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetTextBaseline(milestro::skia::textlayout::TextStyle* s,
                                                                     int32_t textBaseline);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetTextBaseline(milestro::skia::textlayout::TextStyle* s,
@@ -768,13 +784,14 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetPlaceholder(milestro::ski
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleIsPlaceholder(milestro::skia::textlayout::TextStyle* s,
                                                                   int32_t& isPlaceholder);
 
-MILESTRO_API int64_t MilestroStringComparatorCreate(milestro::unicode::StringComparator*& ret, uint8_t* collation);
+MILESTRO_API int64_t MilestroStringComparatorCreate(milestro::unicode::StringComparator*& ret,
+                                                   [[milize::CSharpType("byte*")]] uint8_t* collation);
 MILESTRO_API int64_t
 MilestroStringComparatorDestroy([[milize::RefType("ref")]] milestro::unicode::StringComparator*& ret);
 MILESTRO_API int64_t MilestroStringComparatorCompare(milestro::unicode::StringComparator* cmp,
                                                      int32_t& result,
-                                                     uint8_t* a,
-                                                     uint8_t* b);
+                                                     [[milize::CSharpType("byte*")]] uint8_t* a,
+                                                     [[milize::CSharpType("byte*")]] uint8_t* b);
 
 MILESTRO_API int64_t MilestroCopyAndLoadICU([[milize::CSharpType("byte*")]] uint8_t* ptr,
                                             uint64_t size,

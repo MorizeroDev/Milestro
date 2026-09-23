@@ -12,6 +12,7 @@
 #include "modules/skparagraph/include/ParagraphBuilder.h"
 #include "modules/skunicode/include/SkUnicode.h"
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -30,22 +31,11 @@ public:
         return fontCollection;
     }
 
-    void clearCaches() {
-        fontCollection->clearCaches();
-    }
+    void clearCaches();
 
-    bool fontFallbackEnabled() {
-        return fontCollection->fontFallbackEnabled();
-    }
+    bool fontFallbackEnabled();
 
-    void setFontFallbackEnabled(bool enabled) {
-        if (enabled) {
-            fontCollection->enableFontFallback();
-        } else {
-            fontCollection->disableFontFallback();
-
-        }
-    };
+    void setFontFallbackEnabled(bool enabled);
 
     void ClearFontFamilyKeywordMappings();
     void SetFontFamilyKeywordMapping(std::string keyword, std::vector<FontFamilyToken> mapping);
@@ -57,9 +47,9 @@ public:
                                       int32_t weight,
                                       bool fallbackToSystem) const;
 
-    ::skia::textlayout::TextStyle ResolveTextStyle(const TextStyle &style) const;
+    std::shared_ptr<const ::skia::textlayout::TextStyle> ResolveTextStyle(const TextStyle &style) const;
     ::skia::textlayout::StrutStyle ResolveStrutStyle(const StrutStyle &style) const;
-    ::skia::textlayout::ParagraphStyle ResolveParagraphStyle(const ParagraphStyle &style) const;
+    std::shared_ptr<const ::skia::textlayout::ParagraphStyle> ResolveParagraphStyle(const ParagraphStyle &style) const;
 
     std::unique_ptr<::skia::textlayout::ParagraphBuilder> MakeParagraphBuilder(
             const ParagraphStyle &style,

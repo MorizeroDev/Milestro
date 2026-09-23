@@ -83,6 +83,7 @@ set(MILESTRO_SKPARAGRAPH_SOURCES
         modules/skparagraph/src/ParagraphPainterImpl.cpp
         modules/skparagraph/src/ParagraphStyle.cpp
         modules/skparagraph/src/Run.cpp
+        modules/skparagraph/src/RubyLayout.cpp
         modules/skparagraph/src/TextLine.cpp
         modules/skparagraph/src/TextShadow.cpp
         modules/skparagraph/src/TextStyle.cpp
