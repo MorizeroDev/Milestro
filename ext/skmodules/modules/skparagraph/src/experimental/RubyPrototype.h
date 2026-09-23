@@ -5,9 +5,12 @@
 
 namespace skia::textlayout {
 
+enum class PrototypeOversizePlacement { InlineStart, BaseVisible };
+
 struct PrototypeRubyInput {
     TextRange baseRange;
     std::string annotation;
+    PrototypeOversizePlacement oversizePlacement = PrototypeOversizePlacement::InlineStart;
 };
 
 struct PrototypeSlice {
@@ -32,6 +35,7 @@ struct PrototypeUnit {
     PrototypeShape base;
     PrototypeShape annotation;
     bool hasRuby = false;
+    PrototypeOversizePlacement oversizePlacement = PrototypeOversizePlacement::InlineStart;
     bool breakAfter = false;
     SkScalar inlineExtent = 0;
     SkScalar before = 0;

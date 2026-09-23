@@ -113,6 +113,7 @@ RubyPrototype::RubyPrototype(std::unique_ptr<Paragraph> base,
         unit.before = -unit.base.blockStart;
         unit.after = unit.base.blockEnd;
         if (hasRuby) {
+            unit.oversizePlacement = inputs[inputIndex].oversizePlacement;
             auto annotationStyle = style;
             auto textStyle = style.getTextStyle();
             textStyle.setFontSize(textStyle.getFontSize() * 0.5f);
@@ -188,13 +189,20 @@ void RubyPrototype::layout(SkScalar inlineLimit) {
             auto shift = unit.hasRuby ? (unit.inlineExtent - unit.base.inlineEnd + unit.base.inlineStart) / 2 -
                                                 unit.base.inlineStart
                                       : 0;
-            place(unit.base, false, {position + shift, baseline});
+            SkScalar oversizeShift = 0;
+            if (unit.hasRuby && unit.inlineExtent > inlineLimit &&
+                unit.oversizePlacement == PrototypeOversizePlacement::BaseVisible) {
+                auto baseExtent = unit.base.inlineEnd - unit.base.inlineStart;
+                auto anchor = std::max(0.f, (inlineLimit - baseExtent) / 2);
+                oversizeShift = anchor - position - shift - unit.base.inlineStart;
+            }
+            place(unit.base, false, {position + shift + oversizeShift, baseline});
             if (unit.hasRuby) {
                 auto annotationShift =
                         (unit.inlineExtent - unit.annotation.inlineEnd + unit.annotation.inlineStart) / 2 -
                         unit.annotation.inlineStart;
                 auto annotationBaseline = baseline + unit.base.blockStart - 2 - unit.annotation.blockEnd;
-                place(unit.annotation, true, {position + annotationShift, annotationBaseline});
+                place(unit.annotation, true, {position + annotationShift + oversizeShift, annotationBaseline});
             }
             position += unit.inlineExtent;
         }

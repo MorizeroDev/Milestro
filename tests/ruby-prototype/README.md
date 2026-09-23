@@ -46,8 +46,15 @@ fonts or guessed cluster arrays. Roboto's actual `ffi` cluster is asserted befor
   Oversized nonbreaking groups overflow rather than taking the original emergency split path.
   At zero width the algorithm still consumes at least one such group, not necessarily one pair.
 - The extreme case uses 56 kana over one base character: the pair is 893.441 wide in a 120-wide
-  container. Centering puts the base ink at 431.721, entirely outside a 120-wide clip. Eric accepted
-  overflow without silent shrinking; preserve this visible cost, do not interpret progress as readability.
+  container. Ordinary inline positioning puts the base ink at 431.721, outside a 120-wide clip.
+  Eric accepted no silent shrinking, not automatically the disappearance of the base.
+- A temporary per-pair `PrototypeOversizePlacement` enum compares `InlineStart` and `BaseVisible`
+  on the same line-breaking path. The latter moves only an oversized pair's visual placement so
+  its base safe box is centered inside the inline limit, with annotation centered around that base.
+  It does not change allocated width, glyph size or line membership. Both modes match when the
+  pair fits. At zero width, or when the base itself cannot fit, anchoring cannot make it all visible.
+  These are experimental names; CSS naming/default policy is still under discussion. Interactions
+  with other units in an oversized unbreakable group, especially leading punctuation, need further work.
 - Whole-input shaping and original glyph offsets are reused. A separate raw Unicode pass precedes
   shaping/cache lookup, so run-added grapheme flags cannot legalize an invalid boundary.
 - Ordinary units preserve original advance (do not pad every non-ruby cluster to its ink width).

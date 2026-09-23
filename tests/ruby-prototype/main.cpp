@@ -285,6 +285,25 @@ int main() {
                   << " base_left=" << baseBoxes.front().left() << '\n';
         raster("A-extreme-full", *extreme);
         raster("A-extreme-clip120", *extreme, 120);
+        auto baseVisible = fixture.ruby("漢後", {{{0, 3}, extremeReading, PrototypeOversizePlacement::BaseVisible}});
+        checkLayout(*baseVisible, 120);
+        auto visibleBoxes = baseVisible->baseRects({0, 3});
+        require(visibleBoxes.front().left() >= 0 && visibleBoxes.front().right() <= 120,
+                "base-visible places base inside positive fitting viewport");
+        near(baseVisible->maxIntrinsic(), extreme->maxIntrinsic(), "placement does not change width allocation");
+        near(baseVisible->height(), extreme->height(), "placement does not change line height");
+        require(baseVisible->lines().size() == extreme->lines().size(), "one line breaker for both modes");
+        std::cout << "BASE_VISIBLE container=120 base_left=" << visibleBoxes.front().left()
+                  << " base_right=" << visibleBoxes.front().right() << '\n';
+        raster("A-base-visible-clip120", *baseVisible, 120);
+        extreme->layout(1000);
+        baseVisible->layout(1000);
+        require(extreme->placements().size() == baseVisible->placements().size(), "same visual glyph count");
+        for (size_t index = 0; index < extreme->placements().size(); ++index) {
+            require(extreme->placements()[index].origin == baseVisible->placements()[index].origin,
+                    "fitting pair has identical placement in both modes");
+        }
+        checkLayout(*baseVisible, 0);
 
         const std::string combining = "a\xCC\x81"
                                       "X";
