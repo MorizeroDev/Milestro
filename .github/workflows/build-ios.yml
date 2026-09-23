@@ -10,7 +10,6 @@ env:
   MILESTRO_TARGET_OS: ios
   MILESTRO_TARGET_ARCH: arm64
   MILESTRO_INSTALL_DIR: milestro-native-ios-arm64
-  DEPLOYMENT_TARGET: "15.0"
 
 jobs:
   build:
@@ -43,11 +42,9 @@ jobs:
             -DMILESTRO_BUILD_SHARED_LIBS=ON \
             -DMILESTRO_BUILD_FRAMEWORK_LIBS=ON \
             -DCMAKE_INSTALL_PREFIX="./${MILESTRO_INSTALL_DIR}" \
-            -DCMAKE_TOOLCHAIN_FILE=./ext/ios-cmake/ios.toolchain.cmake \
+            -DCMAKE_TOOLCHAIN_FILE=./cmake/MilestroIosToolchain.cmake \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DPLATFORM=OS64 \
-            -DDEPLOYMENT_TARGET="${DEPLOYMENT_TARGET}" \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET="${DEPLOYMENT_TARGET}" \
             -DXCODE_ROOT="$(xcode-select --print-path)"
 
       - name: Build and install Milestro

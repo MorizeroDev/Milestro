@@ -80,6 +80,22 @@ runs dependency-free backend configuration checks, NDK header/ABI compilation fo
 arm64 and ARMv7, and host-side platform contract tests. These do not validate GPU
 rendering. See [Android](android.md) for commands and the device acceptance matrix.
 
+## iOS
+
+Use Milestro's iOS toolchain wrapper so the project and Skia are both built for
+the repository's iOS 15.0 deployment target:
+
+```sh
+cmake -S . -B cmake-build-ios -G Ninja \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCMAKE_TOOLCHAIN_FILE=./cmake/MilestroIosToolchain.cmake \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DPLATFORM=OS64 \
+  -DMILESTRO_ENABLE_CLI=OFF
+
+cmake --build cmake-build-ios
+```
+
 ## Android with Unity's bundled tools (Windows)
 
 ```powershell

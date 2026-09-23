@@ -5,12 +5,12 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_program(MILESTRO_SKIA_NINJA_EXECUTABLE ninja REQUIRED)
 
 set(MILESTRO_SKIA_REPOSITORY_URL
-        "https://github.com/ExerciseBook/skia.git"
+        "https://github.com/google/skia.git"
         CACHE STRING
         "Skia git repository URL used when the source checkout is missing."
 )
 set(MILESTRO_SKIA_COMMIT
-        "8b136c7c44cf5f144c8edbb289890b9610cedfe2"
+        "7184e167115bf8b7000ba1582f57709aaa4b565f"
         CACHE STRING
         "Skia git commit checked out after cloning. Leave empty to use the repository default branch."
 )
@@ -363,6 +363,12 @@ endfunction()
 set(MILESTRO_SKIA_GN_ARGS)
 milestro_skia_append_gn_string(target_os "${MILESTRO_SKIA_TARGET_OS}")
 milestro_skia_append_gn_string(target_cpu "${MILESTRO_SKIA_TARGET_CPU}")
+if (IOS)
+    if (NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+        message(FATAL_ERROR "An iOS deployment target is required to build Skia.")
+    endif ()
+    milestro_skia_append_gn_string(ios_min_target "${CMAKE_OSX_DEPLOYMENT_TARGET}")
+endif ()
 if (ANDROID)
     milestro_skia_append_gn_string(ndk "${MILESTRO_SKIA_ANDROID_NDK}")
     list(APPEND MILESTRO_SKIA_GN_ARGS "ndk_api=${MILESTRO_SKIA_ANDROID_NDK_API}")
@@ -394,7 +400,10 @@ milestro_skia_append_gn_bool(skia_use_vma MILESTRO_SKIA_USE_VULKAN)
 milestro_skia_append_gn_bool(skia_use_partition_alloc MILESTRO_SKIA_USE_PARTITION_ALLOC)
 
 milestro_skia_append_gn_bool(skia_use_icu OFF)
-milestro_skia_append_gn_bool(skia_use_client_icu ON)
+milestro_skia_append_gn_bool(skia_use_client_icu OFF)
+milestro_skia_append_gn_bool(skia_enable_skunicode ON)
+milestro_skia_append_gn_bool(skia_enable_skparagraph OFF)
+milestro_skia_append_gn_bool(skia_use_harfbuzz ON)
 milestro_skia_append_gn_bool(skia_enable_tools OFF)
 
 if (WIN32 AND (MSVC OR CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC"))
@@ -504,33 +513,29 @@ function(milestro_skia_collect_static_libraries out_var target_label target_libr
 endfunction()
 
 milestro_skia_collect_static_libraries(MILESTRO_SKIA_LIBRARIES_SKIA "//:skia" skia)
-milestro_skia_collect_static_libraries(MILESTRO_SKIA_LIBRARIES_SKPARAGRAPH "//modules/skparagraph:skparagraph" skparagraph)
+milestro_skia_collect_static_libraries(MILESTRO_SKIA_LIBRARIES_SKSHAPER "//modules/skshaper:skshaper" skshaper)
 milestro_skia_collect_static_libraries(MILESTRO_SKIA_LIBRARIES_SVG "//modules/svg:svg" svg)
-
-milestro_skia_lib_path(MILESTRO_SKIA_LIB_SKIA skia)
-milestro_skia_lib_path(MILESTRO_SKIA_LIB_SKPARAGRAPH skparagraph)
-milestro_skia_lib_path(MILESTRO_SKIA_LIB_SVG svg)
 
 set(MILESTRO_SKIA_LIBRARY_FILES
         ${MILESTRO_SKIA_LIBRARIES_SKIA}
-        ${MILESTRO_SKIA_LIBRARIES_SKPARAGRAPH}
+        ${MILESTRO_SKIA_LIBRARIES_SKSHAPER}
         ${MILESTRO_SKIA_LIBRARIES_SVG}
 )
 list(REMOVE_DUPLICATES MILESTRO_SKIA_LIBRARY_FILES)
 
 set(MILESTRO_SKIA_LINK_LIBRARIES
-        ${MILESTRO_SKIA_LIB_SKPARAGRAPH}
-        ${MILESTRO_SKIA_LIB_SVG}
-        ${MILESTRO_SKIA_LIB_SKIA}
-        ${MILESTRO_SKIA_LIBRARIES_SKPARAGRAPH}
         ${MILESTRO_SKIA_LIBRARIES_SVG}
         ${MILESTRO_SKIA_LIBRARIES_SKIA}
 )
+set(MILESTRO_SKIA_SHAPER_LINK_LIBRARIES
+        ${MILESTRO_SKIA_LIBRARIES_SKSHAPER}
+)
 if (APPLE)
     list(REMOVE_DUPLICATES MILESTRO_SKIA_LINK_LIBRARIES)
+    list(REMOVE_DUPLICATES MILESTRO_SKIA_SHAPER_LINK_LIBRARIES)
 endif ()
 
-set(MILESTRO_SKIA_NINJA_TARGETS skia skparagraph svg)
+set(MILESTRO_SKIA_NINJA_TARGETS skia skshaper svg)
 add_custom_target(skia_gn_build
         COMMAND "${MILESTRO_SKIA_NINJA_EXECUTABLE}" -C "${MILESTRO_SKIA_OUT_DIR}" ${MILESTRO_SKIA_NINJA_TARGETS}
         DEPENDS "${MILESTRO_SKIA_BUILD_NINJA}"
@@ -550,14 +555,32 @@ add_library(skia INTERFACE)
 add_dependencies(skia skia_gn_build)
 target_include_directories(skia INTERFACE ${MILESTRO_SKIA_PUBLIC_INCLUDES})
 target_compile_definitions(skia INTERFACE
-        SK_UNICODE_AVAILABLE
-        SK_UNICODE_CLIENT_IMPLEMENTATION
-        SK_ENABLE_PARAGRAPH
         SK_ENABLE_SVG
 )
+if (MSVC)
+    target_compile_options(skia INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:/GR->")
+else ()
+    target_compile_options(skia INTERFACE
+            "$<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang,GNU>:-fno-rtti>"
+            "$<$<COMPILE_LANG_AND_ID:OBJCXX,Clang,AppleClang,GNU>:-fno-rtti>"
+    )
+endif ()
 # Skia's static archives do not carry GN transitive dependency metadata.
 target_link_libraries(skia INTERFACE
         ${MILESTRO_SKIA_LINK_LIBRARIES}
+)
+
+add_library(skia_shaper INTERFACE)
+add_dependencies(skia_shaper skia_gn_build)
+target_include_directories(skia_shaper INTERFACE ${MILESTRO_SKIA_PUBLIC_INCLUDES})
+target_compile_definitions(skia_shaper INTERFACE
+        SK_SHAPER_PRIMITIVE_AVAILABLE
+        SK_SHAPER_HARFBUZZ_AVAILABLE
+        SK_SHAPER_UNICODE_AVAILABLE
+)
+target_link_libraries(skia_shaper INTERFACE
+        ${MILESTRO_SKIA_SHAPER_LINK_LIBRARIES}
+        skia
 )
 
 message(STATUS "Skia source: ${MILESTRO_SKIA_SOURCE_DIR}")

@@ -214,11 +214,9 @@ set(CLI11_PRECOMPILED ON)
 add_subdirectory("ext/cli11" EXCLUDE_FROM_ALL)
 
 add_subdirectory("ext/icu-cmake")
-set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} "icu")
-set(PROJECT_PLATFORM_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${icu_includes})
 
 add_subdirectory("ext/skia-cmake" "ext/skia" EXCLUDE_FROM_ALL)
-set(SKIA_INCLUDE_PATH "${PROJECT_SOURCE_DIR}/ext/skia")
+add_subdirectory("ext/skmodules" EXCLUDE_FROM_ALL)
 
 if (APPLE AND CMAKE_GENERATOR STREQUAL "Ninja")
     if(IOS)
@@ -346,20 +344,11 @@ endif ()
 set(MILESTRO_DEFINITIONS "MILESTRO_BUILDING_ENV")
 set(MILESTRO_CLI_DEFINITIONS "MILESTRO_BUILDING_ENV")
 
-set(MILESTRO_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${SKIA_INCLUDE_PATH})
-set(MILESTRO_CLI_INCLUDES ${PROJECT_PLATFORM_INCLUDES} ${SKIA_INCLUDE_PATH} "${PROJECT_SOURCE_DIR}/ext/json/include")
+set(MILESTRO_INCLUDES ${PROJECT_PLATFORM_INCLUDES})
+set(MILESTRO_CLI_INCLUDES ${PROJECT_PLATFORM_INCLUDES} "${PROJECT_SOURCE_DIR}/ext/json/include")
 
 set(MILESTRO_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES})
 set(MILESTRO_CLI_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES})
-
-set(
-        MILESTRO_SKUNICODE_ICU_FILE
-        ext/skia-unicode/src/SkUnicode.cpp
-        ext/skia-unicode/src/SkUnicode_icu.cpp
-        ext/skia-unicode/src/SkUnicode_icu_bidi.cpp
-        ext/skia-unicode/src/SkBidiFactory_icu_full.cpp
-        ext/skia-unicode/src/SkUnicode_icu_builtin.cpp
-)
 
 if (MILESTRO_ENABLE_CLI)
     set(MILESTRO_DEFINITIONS ${MILESTRO_DEFINITIONS} "MILESTRO_USE_CLI")
@@ -485,9 +474,9 @@ set(
 
 # We will not use BUILD_SHARED_LIBS, and you can see the above comment for reasons.
 if (MILESTRO_BUILD_SHARED_LIBS)
-    add_library(Milestro SHARED ${MILESTRO_CORE_FILE} ${MILESTRO_APPLICATION_FILE} ${MILESTRO_SKUNICODE_ICU_FILE} ${PUBLIC_GAME_INTERFACE})
+    add_library(Milestro SHARED ${MILESTRO_CORE_FILE} ${MILESTRO_APPLICATION_FILE} ${PUBLIC_GAME_INTERFACE})
 else ()
-    add_library(Milestro STATIC ${MILESTRO_CORE_FILE} ${MILESTRO_APPLICATION_FILE} ${MILESTRO_SKUNICODE_ICU_FILE} ${PUBLIC_GAME_INTERFACE})
+    add_library(Milestro STATIC ${MILESTRO_CORE_FILE} ${MILESTRO_APPLICATION_FILE} ${PUBLIC_GAME_INTERFACE})
 endif ()
 
 # Only Apple Can Do
@@ -502,13 +491,6 @@ if (DEFINED APPLE AND DEFINED IOS AND MILESTRO_BUILD_FRAMEWORK_LIBS)
 endif ()
 
 target_compile_definitions(Milestro PUBLIC ${MILESTRO_DEFINITIONS})
-target_compile_definitions(Milestro PRIVATE
-        SKUNICODE_IMPLEMENTATION=1
-        SK_UNICODE_AVAILABLE
-        SK_UNICODE_ICU_IMPLEMENTATION
-        U_USING_ICU_NAMESPACE=0
-        U_DISABLE_RENAMING=1
-)
 
 if (MSVC)
     target_compile_options(Milestro PRIVATE
@@ -535,6 +517,8 @@ target_link_libraries(Milestro
         ${MILESTRO_LIBRARIES}
         PUBLIC
         spdlog::spdlog
+        Milestro::SkParagraph
+        Milestro::SkUnicode
         skia
         nlohmann_json::nlohmann_json
 )
@@ -572,7 +556,6 @@ if (MILESTRO_ENABLE_CLI)
             ${MILESTRO_CLI_LIBRARIES}
             nlohmann_json::nlohmann_json
             CLI11::CLI11
-            skia
     )
     target_include_directories(MilestroCli PRIVATE ${MILESTRO_CLI_INCLUDES})
 
