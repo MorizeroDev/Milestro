@@ -14,7 +14,9 @@ namespace Milestro.Skia
             Paragraph = 1,
             Image = 2,
             InputBoxSnapshot = 3,
-            SlimText = 4
+            SlimText = 4,
+            BeginRegion = 5,
+            EndRegion = 6
         }
 
         internal enum ResourceOwnership
@@ -198,6 +200,85 @@ namespace Milestro.Skia
         public void Clear()
         {
             commands.Clear();
+        }
+
+        internal CapturedCommands Capture()
+        {
+            var captured = new CapturedCommands();
+            try
+            {
+                foreach (var source in commands)
+                {
+                    var command = source;
+                    if (command.SnapshotParagraph)
+                    {
+                        var snapshot = command.ParagraphSnapshotFactory();
+                        captured.OwnedResources.Add(snapshot);
+                        command.Resource = snapshot.NativePtr;
+                        command.KeepAlive = snapshot;
+                    }
+                    else if (command.SnapshotInputBox)
+                    {
+                        var snapshot = ((TextLayout.InputBox)command.KeepAlive).CreateDrawSnapshot();
+                        captured.OwnedResources.Add(snapshot);
+                        command.Resource = snapshot.NativePtr;
+                        command.KeepAlive = snapshot;
+                    }
+                    else if (command.SnapshotSlimText)
+                    {
+                        var snapshot = new TextDrawSnapshot((SkFont)command.KeepAlive, command.Text, command.Color);
+                        captured.OwnedResources.Add(snapshot);
+                        command.Resource = snapshot.NativePtr;
+                        command.KeepAlive = snapshot;
+                    }
+                    command.SnapshotParagraph = false;
+                    command.SnapshotInputBox = false;
+                    command.SnapshotSlimText = false;
+                    command.ParagraphSnapshotFactory = null!;
+                    captured.Commands.Add(command);
+                }
+                return captured;
+            }
+            catch
+            {
+                captured.Dispose();
+                throw;
+            }
+        }
+
+        internal void AppendRegion(CapturedCommands captured, RectInt allocation, RectInt content, float scale)
+        {
+            commands.Add(new Command
+            {
+                Kind = CommandKind.BeginRegion,
+                X = allocation.x,
+                Y = allocation.y,
+                Width = allocation.width,
+                Height = allocation.height,
+                ClipX = content.x,
+                ClipY = content.y,
+                ClipWidth = content.width,
+                ClipHeight = content.height,
+                VisualOffsetX = scale
+            });
+            commands.AddRange(captured.Commands);
+            commands.Add(new Command { Kind = CommandKind.EndRegion });
+        }
+
+        internal sealed class CapturedCommands : IDisposable
+        {
+            internal readonly List<Command> Commands = new List<Command>();
+            internal readonly List<IDisposable> OwnedResources = new List<IDisposable>();
+
+            public void Dispose()
+            {
+                foreach (var resource in OwnedResources)
+                {
+                    resource.Dispose();
+                }
+                OwnedResources.Clear();
+                Commands.Clear();
+            }
         }
     }
 }

@@ -3,6 +3,7 @@
     "rootNamespace": "Milestro.Tests",
     "references": [
         "Milestro",
+        "Unity.UGUI",
         "party.para.util.unitynative"
     ],
     "includePlatforms": [],

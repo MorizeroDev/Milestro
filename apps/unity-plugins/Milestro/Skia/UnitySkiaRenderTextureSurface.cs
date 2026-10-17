@@ -543,7 +543,7 @@ namespace Milestro.Skia
         }
 
         private const int RenderDrainMagic = 0x4D524451; // MRDQ
-        private const uint RenderPayloadAbiVersion = 2;
+        private const uint RenderPayloadAbiVersion = 3;
         private static readonly object PendingLock = new object();
         private static readonly List<PendingRenderEvent> PendingEvents = new List<PendingRenderEvent>();
         private static readonly List<DeferredRelease> DeferredReleases = new List<DeferredRelease>();
@@ -1295,7 +1295,9 @@ namespace Milestro.Skia
                 MaxGlobalBytes = configuration.MaxGlobalBytes,
                 MaxTransitionBytes = configuration.MaxTransitionBytes,
                 MaxAttemptsPerRequestAndEpoch = configuration.MaxAttemptsPerRequestAndEpoch,
-                VulkanBackend = configuration.VulkanBackend
+                VulkanBackend = configuration.VulkanBackend,
+                EnableAtlas = configuration.EnableAtlas,
+                AtlasPageSize = configuration.AtlasPageSize
             };
         }
 

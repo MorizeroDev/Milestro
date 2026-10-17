@@ -209,6 +209,7 @@ namespace Milestro.Components.Internal
                 SetSurface(currentSurface);
             }
 
+            currentSurface.AllowAtlas = !noAllocMode;
             var ready = useScreenSpaceRasterization
                 ? currentSurface.TryEnsureScreenSpace(sizePixels,
                     desiredRasterScale,

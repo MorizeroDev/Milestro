@@ -56,7 +56,7 @@ namespace Milestro.Components
             set
             {
                 m_text = value ?? "";
-                ApplyConfiguration(useManagedStringText: true);
+                ApplyManagedStringText();
             }
         }
 
@@ -266,6 +266,28 @@ namespace Milestro.Components
             }
 
             EnsureConfigured(useManagedStringText);
+        }
+
+        private void ApplyManagedStringText()
+        {
+            if (!this || gameObject == null)
+            {
+                return;
+            }
+
+            if (!m_autoFitTexture &&
+                isActiveAndEnabled &&
+                producerCache != null && producerCache.enabled &&
+                presenterCache != null &&
+                rectTransformCache != null &&
+                meshFilterCache != null &&
+                meshRendererCache != null)
+            {
+                producerCache.SetManagedStringText(m_text);
+                return;
+            }
+
+            EnsureConfigured(useManagedStringText: true);
         }
 
         private void EnsureConfigured(bool useManagedStringText = false)

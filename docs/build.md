@@ -78,7 +78,8 @@ ICU-related tests use `ext/icu-cmake/common/icudtl.dat`.
 Full Android device test execution is still manual. The Android build workflow
 runs dependency-free backend configuration checks, NDK header/ABI compilation for
 arm64 and ARMv7, and host-side platform contract tests. These do not validate GPU
-rendering. See [Android](android.md) for commands and the device acceptance matrix.
+rendering. See `tests/android_unity/README.md` for isolated APK validation and
+manual device checks.
 
 ## iOS
 
@@ -100,15 +101,15 @@ cmake --build cmake-build-ios
 
 ```powershell
 ./scripts/build-android-unity.ps1 `
-  -UnityRoot 'D:\UnityHub\Editor\6000.3.7f1' -RunContractTests -PackageUnity
+  -UnityRoot '<UnityRoot>' -RunContractTests -PackageUnity
 ```
 
 This selects that installation's SDK/NDK/JDK, defaults to ARM64 / API 26 with
 Vulkan and GLES, enables flexible page-size linking, and packages matching
-native/C#/ICU files. See `docs/android.md` for toolchain results and
-`tests/android_unity/README.md` for isolated Demo APK validation. The helper
-restores its process environment and supports `-GlesOnly -ApiLevel 23` and
-`-ConfigureOnly` for separate native GLES-only configurations.
+native/C#/ICU files. See `tests/android_unity/README.md` for isolated Demo APK
+validation. The helper restores its process environment and supports
+`-GlesOnly -ApiLevel 23` and `-ConfigureOnly` for separate native GLES-only
+configurations.
 
 ## Binding Generation
 

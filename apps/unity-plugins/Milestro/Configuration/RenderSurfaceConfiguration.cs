@@ -36,5 +36,9 @@ namespace Milestro.Configuration
         public int MaxAttemptsPerRequestAndEpoch { get; set; } = DefaultMaxAttemptsPerRequestAndEpoch;
 
         public UnitySkiaVulkanBackend VulkanBackend { get; set; } = UnitySkiaVulkanBackend.Direct;
+
+        public bool EnableAtlas { get; set; } = true;
+
+        public int AtlasPageSize { get; set; } = 2048;
     }
 }

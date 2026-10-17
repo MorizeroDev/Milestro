@@ -168,8 +168,9 @@ The render-target path is platform-dependent:
 `UnityAutoRenderTextureSurface` currently auto-selects Metal, Direct3D 12,
 Vulkan, OpenGLES3, or OpenGLCore from Unity's active graphics device. Vulkan defaults
 to Direct; StagingCopy uses CPU rasterization followed by a Vulkan upload. MSAA
-render targets are not supported yet. See [docs/android.md](docs/android.md) for
-build commands, backend selection, and the outstanding device acceptance matrix.
+render targets are not supported yet. See [docs/build.md](docs/build.md) for
+build commands and [tests/android_unity/README.md](tests/android_unity/README.md)
+for device validation.
 
 ## Repository Layout
 

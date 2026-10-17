@@ -11,28 +11,39 @@ namespace Milestro.Components.Internal
         private readonly RenderSurfaceDiagnosticDeduplicator diagnosticDeduplicator =
             new RenderSurfaceDiagnosticDeduplicator();
         private UnityAutoRenderTextureSurface? surface;
+        private RenderTextureAtlas.Lease? atlasLease;
         private float stableDesiredScale;
         private ulong attemptTick;
         private bool hasCompletedOutput;
 
         internal event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus>? RenderEventCompleted;
 
-        internal UnitySkiaGraphicsBackend Backend => surface?.Backend ??
+        internal bool AllowAtlas { get; set; } = true;
+        internal UnitySkiaGraphicsBackend Backend => atlasLease?.Backend ?? surface?.Backend ??
                                                      UnityAutoRenderTextureSurface.SelectBackendForCurrentGraphicsDevice();
-        internal ColorSpace ColorSpace => surface?.ColorSpace ?? UnitySkiaRenderTextureDescriptor.DefaultColorSpace;
-        internal Rect DisplayUvRect => surface?.DisplayUvRect ?? new Rect(0f, 0f, 1f, 1f);
-        internal Texture? Texture => surface?.Texture;
-        internal bool HasCompletedOutput => hasCompletedOutput && surface?.Texture != null;
-        internal int Width => surface?.Width ?? 0;
-        internal int Height => surface?.Height ?? 0;
-        internal float EffectiveRasterScale => surface?.EffectiveRasterScale ?? 1f;
-        internal bool HasSurface => surface != null;
+        internal ColorSpace ColorSpace => atlasLease?.ColorSpace ?? surface?.ColorSpace ?? UnitySkiaRenderTextureDescriptor.DefaultColorSpace;
+        internal Rect DisplayUvRect => atlasLease?.DisplayUvRect ?? surface?.DisplayUvRect ?? new Rect(0f, 0f, 1f, 1f);
+        internal Texture? Texture => atlasLease?.Texture ?? surface?.Texture;
+        internal bool HasCompletedOutput => hasCompletedOutput && Texture != null;
+        internal int Width => atlasLease?.Content.width ?? surface?.Width ?? 0;
+        internal int Height => atlasLease?.Content.height ?? surface?.Height ?? 0;
+        internal float EffectiveRasterScale => atlasLease?.Scale ?? surface?.EffectiveRasterScale ?? 1f;
+        internal bool HasSurface => atlasLease?.IsLive ?? (surface != null);
 
         internal bool EnsureExact(Vector2Int sizePixels, ColorSpace colorSpace, out bool changed)
         {
             changed = false;
             sizePixels = NormalizeSize(sizePixels);
             stableDesiredScale = 0f;
+            var configuration = MilestroConfiguration.Configuration?.RenderSurface;
+            var pixels = (long)sizePixels.x * sizePixels.y;
+            var candidate = new RenderSurfaceCandidate(sizePixels.x, sizePixels.y, sizePixels.x, sizePixels.y,
+                1f, pixels, pixels * 4);
+            if (configuration != null && TryEnsureAtlas(candidate, colorSpace, configuration, out changed))
+            {
+                return true;
+            }
+            ReleaseAtlas();
             if (surface == null || surface.ColorSpace != colorSpace)
             {
                 var descriptor = new UnitySkiaRenderTextureDescriptor(sizePixels.x, sizePixels.y, colorSpace)
@@ -201,6 +212,10 @@ namespace Milestro.Components.Internal
 
         internal bool TrySubmit(UnitySkiaRenderCommandList commands)
         {
+            if (atlasLease != null)
+            {
+                return atlasLease.TrySubmit(commands);
+            }
             return surface != null && surface.TrySubmit(commands);
         }
 
@@ -213,7 +228,11 @@ namespace Milestro.Components.Internal
 
         internal void DisposeResourceAfterPendingDraws(IDisposable resource)
         {
-            if (surface != null)
+            if (atlasLease != null)
+            {
+                atlasLease.DisposeResourceAfterPendingDraws(resource);
+            }
+            else if (surface != null)
             {
                 surface.DisposeResourceAfterPendingDraws(resource);
             }
@@ -225,6 +244,7 @@ namespace Milestro.Components.Internal
 
         public void Dispose()
         {
+            ReleaseAtlas();
             if (surface == null)
             {
                 return;
@@ -244,6 +264,12 @@ namespace Milestro.Components.Internal
             out RenderSurfaceFailureReason failureReason)
         {
             changed = false;
+            failureReason = RenderSurfaceFailureReason.None;
+            if (TryEnsureAtlas(candidate, colorSpace, configuration, out changed))
+            {
+                return true;
+            }
+            ReleaseAtlas();
             if (surface == null)
             {
                 if (!UnityAutoRenderTextureSurface.TryCreate(candidate,
@@ -280,6 +306,51 @@ namespace Milestro.Components.Internal
                 hasCompletedOutput = false;
             }
             return true;
+        }
+
+        private bool TryEnsureAtlas(RenderSurfaceCandidate candidate,
+            ColorSpace colorSpace,
+            RenderSurfaceConfiguration configuration,
+            out bool changed)
+        {
+            changed = false;
+            if (!AllowAtlas || !configuration.EnableAtlas)
+            {
+                return false;
+            }
+            var epoch = UnityAutoRenderTextureSurface.ReadCurrentDeviceEpoch();
+            if (atlasLease != null && atlasLease.Matches(candidate, colorSpace, epoch, configuration))
+            {
+                return true;
+            }
+            if (!RenderTextureAtlas.TryAllocate(candidate, colorSpace, configuration, epoch, out var next))
+            {
+                return false;
+            }
+            ReleaseAtlas();
+            if (surface != null)
+            {
+                surface.RenderEventCompleted -= HandleRenderEventCompleted;
+                surface.Dispose();
+                surface = null;
+            }
+            atlasLease = next;
+            atlasLease!.Completed += HandleRenderEventCompleted;
+            hasCompletedOutput = false;
+            changed = true;
+            return true;
+        }
+
+        private void ReleaseAtlas()
+        {
+            if (atlasLease == null)
+            {
+                return;
+            }
+            atlasLease.Completed -= HandleRenderEventCompleted;
+            atlasLease.Dispose();
+            atlasLease = null;
+            hasCompletedOutput = false;
         }
 
         private void SwapSurface(UnityAutoRenderTextureSurface next)

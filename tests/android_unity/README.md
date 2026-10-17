@@ -10,7 +10,7 @@ SDK 35. A successful APK build is not evidence that GPU rendering works.
 
    ```powershell
    ./scripts/build-android-unity.ps1 `
-     -UnityRoot 'D:\UnityHub\Editor\6000.3.7f1' -RunContractTests -PackageUnity
+     -UnityRoot '<UnityRoot>' -RunContractTests -PackageUnity
    ```
 
 2. Clone the reference Demo into a **new** ignored directory. Use a clean Demo
@@ -18,11 +18,12 @@ SDK 35. A successful APK build is not evidence that GPU rendering works.
    native LFS binary since the package from step 1 replaces it.
 
    ```powershell
+   $demoSource = '<DemoRepositoryUrlOrPath>'
    # Restore GIT_LFS_SKIP_SMUDGE afterwards if it was already set in your shell.
    $savedLfs = $env:GIT_LFS_SKIP_SMUDGE
    try {
      $env:GIT_LFS_SKIP_SMUDGE = '1'
-     git clone --no-hardlinks E:/Code/MilestroDemo build/unity6000-demo-validation
+     git clone --no-hardlinks $demoSource build/unity6000-demo-validation
      if ($LASTEXITCODE -ne 0) { throw 'Demo clone failed' }
    } finally {
      $env:GIT_LFS_SKIP_SMUDGE = $savedLfs
@@ -57,7 +58,8 @@ Run from the Milestro repository. Change `VulkanDirect` to `VulkanStagingCopy` o
 `GLES3` for each additional run (one editor process at a time):
 
 ```powershell
-& 'D:\UnityHub\Editor\6000.3.7f1\Editor\Unity.exe' `
+$unity = '<UnityEditorExecutable>'
+& $unity `
   -batchmode -nographics -quit `
   -projectPath "$PWD/build/unity6000-demo-validation" -buildTarget Android `
   -executeMethod Milestro.AndroidValidation.Editor.BuildAndroidValidation.PerformBuild `
@@ -82,7 +84,7 @@ on a real device and rejects an unexpected graphics API.
 
 Use the same Unity SDK's `platform-tools/adb.exe` to install one APK at a time
 (the Demo application ID is shared between variants). Capture logcat, screenshots,
-and device/OS/GPU/driver details. Complete the matrix in `docs/android.md`,
-especially mixed Unity/Skia draws, Vulkan validation, recreation, pause/resume,
-rotation, input and memory stability. Do not equate a `SUCCESS` build log with
-correct pixels, a successful device load, or a performance pass.
+and device/OS/GPU/driver details. Cover mixed Unity/Skia draws, Vulkan
+validation, recreation, pause/resume, rotation, input and memory stability. Do
+not equate a `SUCCESS` build log with correct pixels, a successful device load,
+or a performance pass.

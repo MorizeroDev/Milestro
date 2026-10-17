@@ -108,9 +108,26 @@ void DrawSubmission(SkCanvas* canvas, const MilestroUnityRenderSubmission& submi
     }
 
     MilestroUnityRenderWithEffectiveScale(canvas, submission.target.effectiveScale, [&]() {
-        for (int32_t i = 0; i < submission.commandCount; ++i) {
-            DrawCommand(canvas, submission.commands[i]);
+        const int saveCount = canvas->getSaveCount();
+        for (int32_t index = 0; index < submission.commandCount; ++index) {
+            const auto& command = submission.commands[index];
+            const auto kind = static_cast<MilestroUnityDrawCommandKind>(command.kind);
+            if (kind == MilestroUnityDrawCommandKind::BeginRegion) {
+                canvas->restoreToCount(saveCount);
+                canvas->save();
+                canvas->clipRect(SkRect::MakeXYWH(command.x, command.y, command.width, command.height));
+                canvas->clear(SK_ColorTRANSPARENT);
+                canvas->clipRect(SkRect::MakeXYWH(command.clipX, command.clipY,
+                                                command.clipWidth, command.clipHeight));
+                canvas->translate(command.clipX, command.clipY);
+                canvas->scale(command.visualOffsetX, command.visualOffsetX);
+            } else if (kind == MilestroUnityDrawCommandKind::EndRegion) {
+                canvas->restoreToCount(saveCount);
+            } else {
+                DrawCommand(canvas, command);
+            }
         }
+        canvas->restoreToCount(saveCount);
     });
 }
 

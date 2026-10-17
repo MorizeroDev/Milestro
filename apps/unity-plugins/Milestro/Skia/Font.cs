@@ -8,6 +8,8 @@ namespace Milestro.Skia
 {
     public class Font : DisposableNativeObject
     {
+        private FontMetrics? cachedMetrics;
+
         internal Font(IntPtr font)
             : this(font, true)
         {
@@ -36,11 +38,18 @@ namespace Milestro.Skia
 
         public FontMetrics GetMetrics()
         {
+            ThrowIfDisposed();
+            if (cachedMetrics.HasValue)
+            {
+                return cachedMetrics.Value;
+            }
+
             ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontGetMetrics(NativePtr,
                 out var ascent,
                 out var descent,
                 out var leading));
-            return new FontMetrics(ascent, descent, leading);
+            cachedMetrics = new FontMetrics(ascent, descent, leading);
+            return cachedMetrics.Value;
         }
 
         public unsafe FontTextMeasurement MeasureText(string text)

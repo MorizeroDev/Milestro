@@ -234,6 +234,8 @@ namespace Milestro.Skia
             {
                 const ulong offsetBasis = 14695981039346656037UL;
                 var hash = offsetBasis;
+                hash = Mix(hash, configuration.EnableAtlas ? 1UL : 0UL);
+                hash = Mix(hash, (ulong)configuration.AtlasPageSize);
                 hash = Mix(hash, (uint)BitConverter.SingleToInt32Bits(
                     configuration.MaxScreenSpaceRasterScale));
                 hash = Mix(hash, (uint)BitConverter.SingleToInt32Bits(
