@@ -6,6 +6,7 @@ namespace Milestro.Skia
         Direct3D12 = 2,
         Vulkan = 3,
         OpenGL = 4,
-        OpenGLES = 5
+        OpenGLES = 5,
+        Direct3D11 = 6
     }
 }

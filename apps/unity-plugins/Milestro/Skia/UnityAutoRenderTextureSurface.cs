@@ -90,6 +90,8 @@ namespace Milestro.Skia
                     return UnitySkiaGraphicsBackend.Metal;
                 case GraphicsDeviceType.Direct3D12:
                     return UnitySkiaGraphicsBackend.Direct3D12;
+                case GraphicsDeviceType.Direct3D11:
+                    return UnitySkiaGraphicsBackend.Direct3D11;
                 case GraphicsDeviceType.Vulkan:
                     return UnitySkiaGraphicsBackend.Vulkan;
                 case GraphicsDeviceType.OpenGLES3:
@@ -98,7 +100,7 @@ namespace Milestro.Skia
                     return UnitySkiaGraphicsBackend.OpenGL;
                 default:
                     throw new NotSupportedException(
-                        "Milestro automatic RenderTexture surface supports Metal, Direct3D12, Vulkan, OpenGLES3, and OpenGLCore. Current Unity graphics device is " +
+                        "Milestro automatic RenderTexture surface supports Metal, Direct3D12, Direct3D11, Vulkan, OpenGLES3, and OpenGLCore. Current Unity graphics device is " +
                         SystemInfo.graphicsDeviceType + ".");
             }
         }

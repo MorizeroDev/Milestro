@@ -463,9 +463,15 @@ budget and device-epoch recovery rather than a separate texture budget.
 
 ## Render Texture Backends
 
-`UnityAutoRenderTextureSurface` selects Metal, Direct3D12, Vulkan, OpenGLES3, or
-OpenGLCore from Unity's active graphics device. It does not change Unity's graphics
+`UnityAutoRenderTextureSurface` selects Metal, Direct3D12, Direct3D11, Vulkan,
+OpenGLES3, or OpenGLCore from Unity's active graphics device. It does not change Unity's graphics
 API or fall back from Vulkan to GLES when a native backend is unavailable.
+
+Direct3D11 rasterizes on the CPU into a persistent per-target Skia surface and uploads
+the pixels to Unity's `RenderTexture` with `UpdateSubresource`. The cached surface
+preserves incremental atlas updates, and is released with its Unity target or on a
+device reset. This backend includes full-surface CPU uploads; it is not GPU text
+rasterization.
 
 Vulkan has two per-target implementations:
 

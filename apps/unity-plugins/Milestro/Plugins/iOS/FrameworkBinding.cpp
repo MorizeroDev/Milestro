@@ -121,6 +121,10 @@ int64_t FrameworkBindingMilestroUnityRenderDestroyD3D12ExternalTexture(
     return MilestroUnityRenderDestroyD3D12ExternalTexture(texture);
 }
 
+int64_t FrameworkBindingMilestroUnityRenderDestroyD3D11Target([[milize::CSharpType("IntPtr")]] void* nativeTexture) {
+    return MilestroUnityRenderDestroyD3D11Target(nativeTexture);
+}
+
 int64_t FrameworkBindingMilestroGameModelDataEnvelopDestroy(
         [[milize::RefType("ref")]] milestro::game::model::DataEnvelop*& ret) {
     return MilestroGameModelDataEnvelopDestroy(ret);

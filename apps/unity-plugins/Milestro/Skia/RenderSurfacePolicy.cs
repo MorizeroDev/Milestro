@@ -494,6 +494,7 @@ namespace Milestro.Skia
             {
                 case UnitySkiaGraphicsBackend.Metal:
                 case UnitySkiaGraphicsBackend.Direct3D12:
+                case UnitySkiaGraphicsBackend.Direct3D11:
                 case UnitySkiaGraphicsBackend.Vulkan:
                 case UnitySkiaGraphicsBackend.OpenGL:
                 case UnitySkiaGraphicsBackend.OpenGLES:

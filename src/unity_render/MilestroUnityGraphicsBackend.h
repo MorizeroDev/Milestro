@@ -9,6 +9,7 @@ enum class MilestroUnityGraphicsBackend : int32_t {
     Vulkan = 3,
     OpenGL = 4,
     OpenGLES = 5,
+    Direct3D11 = 6,
 };
 
 #endif // MILESTRO_UNITY_RENDER_GRAPHICS_BACKEND_H

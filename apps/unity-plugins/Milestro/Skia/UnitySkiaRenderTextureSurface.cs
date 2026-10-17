@@ -180,6 +180,7 @@ namespace Milestro.Skia
             private int vulkanTargetRetired;
 
             internal UnityTextureTarget(UnitySkiaRenderTextureDescriptor descriptor,
+                UnitySkiaGraphicsBackend backend,
                 Texture texture,
                 RenderTexture? renderTexture,
                 IntPtr d3d12ExternalTexture,
@@ -192,6 +193,7 @@ namespace Milestro.Skia
                 ulong deviceEpoch)
             {
                 Descriptor = descriptor;
+                Backend = backend;
                 Texture = texture;
                 RenderTexture = renderTexture;
                 D3D12ExternalTexture = d3d12ExternalTexture;
@@ -205,6 +207,7 @@ namespace Milestro.Skia
             }
 
             internal UnitySkiaRenderTextureDescriptor Descriptor { get; }
+            internal UnitySkiaGraphicsBackend Backend { get; }
             internal Texture Texture { get; }
             internal RenderTexture? RenderTexture { get; }
             internal IntPtr D3D12ExternalTexture { get; }
@@ -235,6 +238,10 @@ namespace Milestro.Skia
                 {
                     try
                     {
+                        if (Backend == UnitySkiaGraphicsBackend.Direct3D11)
+                        {
+                            DestroyD3D11Target(NativeTextureHandle);
+                        }
                         RetireNativeVulkanTarget();
                     }
                     finally
@@ -619,7 +626,7 @@ namespace Milestro.Skia
         public Texture? Texture => replacement.CurrentTarget?.Texture;
 
         /// <summary>
-        /// Null on Direct3D12, which uses an external Texture2D; non-null on Metal, Vulkan, OpenGL, and OpenGLES.
+        /// Null on Direct3D12, which uses an external Texture2D; non-null on Metal, Direct3D11, Vulkan, OpenGL, and OpenGLES.
         /// </summary>
         public RenderTexture? RenderTexture => replacement.CurrentTarget?.RenderTexture;
 
@@ -1051,6 +1058,7 @@ namespace Milestro.Skia
                 case UnitySkiaGraphicsBackend.Metal:
                     return RenderTextureHandleKind.RenderBuffer;
                 case UnitySkiaGraphicsBackend.Direct3D12:
+                case UnitySkiaGraphicsBackend.Direct3D11:
                 case UnitySkiaGraphicsBackend.Vulkan:
                 case UnitySkiaGraphicsBackend.OpenGL:
                 case UnitySkiaGraphicsBackend.OpenGLES:
@@ -1626,6 +1634,7 @@ namespace Milestro.Skia
                     return RenderSurfaceAllocationResult<UnityTextureTarget>.Failed(
                         RenderSurfaceFailureReason.TextureCreation,
                         new UnityTextureTarget(nextDescriptor,
+                            Backend,
                             renderTexture,
                             renderTexture,
                             IntPtr.Zero,
@@ -1669,6 +1678,7 @@ namespace Milestro.Skia
                 }
 
                 var target = new UnityTextureTarget(nextDescriptor,
+                    Backend,
                     renderTexture,
                     renderTexture,
                     IntPtr.Zero,
@@ -1736,6 +1746,7 @@ namespace Milestro.Skia
                 texture.name = "Milestro " + Backend + " ExternalTexture PoC";
                 ConfigureDisplayTexture(texture);
                 var target = new UnityTextureTarget(nextDescriptor,
+                    Backend,
                     texture,
                     null,
                     nativeTexture,
@@ -1784,6 +1795,14 @@ namespace Milestro.Skia
 
             var textureToRelease = texture;
             BindingC.UnityRenderDestroyD3D12ExternalTexture(ref textureToRelease);
+        }
+
+        private static void DestroyD3D11Target(IntPtr nativeTexture)
+        {
+            if (nativeTexture != IntPtr.Zero)
+            {
+                BindingC.UnityRenderDestroyD3D11Target(nativeTexture);
+            }
         }
 
         private static IntPtr CreateVulkanTargetHandle(IntPtr nativeTexture,
@@ -1866,6 +1885,12 @@ namespace Milestro.Skia
                     if (SystemInfo.graphicsDeviceType != GraphicsDeviceType.Direct3D12)
                     {
                         throw new NotSupportedException("Milestro Unity Skia RenderTexture Direct3D12 backend requires Unity D3D12.");
+                    }
+                    return;
+                case UnitySkiaGraphicsBackend.Direct3D11:
+                    if (SystemInfo.graphicsDeviceType != GraphicsDeviceType.Direct3D11)
+                    {
+                        throw new NotSupportedException("Milestro Unity Skia RenderTexture Direct3D11 backend requires Unity D3D11.");
                     }
                     return;
                 case UnitySkiaGraphicsBackend.OpenGL:

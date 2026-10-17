@@ -104,6 +104,16 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void Direct3D11UsesStandardRenderSurfaceBudgetAccounting()
+        {
+            var descriptor = new RenderSurfaceDescriptor(UnitySkiaGraphicsBackend.Direct3D11, TextureDescriptor(), 1);
+
+            Assert.That(RenderSurfaceDescriptorAccounting.TryResolveBytesPerPixel(descriptor, out var bytesPerPixel),
+                Is.True);
+            Assert.That(bytesPerPixel, Is.EqualTo(4));
+        }
+
+        [Test]
         public void UnknownBackendAndMipAssumptionsFailClosed()
         {
             Assert.That(RenderSurfaceDescriptorAccounting.TryResolveBytesPerPixel(

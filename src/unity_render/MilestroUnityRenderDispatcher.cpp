@@ -26,6 +26,7 @@
 #endif
 
 #if defined(_WIN32)
+#include "unity_render/MilestroUnityRenderD3D11Backend.h"
 #include "unity_render/MilestroUnityRenderD3D12Backend.h"
 #endif
 
@@ -48,9 +49,10 @@ constexpr int kGLDrawEventOffset = 2;
 constexpr int kVulkanStagingEventOffset = 3;
 constexpr int kVulkanDirectPrepareEventOffset = 4;
 constexpr int kVulkanDirectSubmitEventOffset = 5;
-constexpr int kReservedEventCount = 6;
+constexpr int kD3D11DrawEventOffset = 6;
+constexpr int kReservedEventCount = 7;
 constexpr int32_t kRenderDrainMagic = 0x4D524451; // MRDQ
-constexpr int kSubmissionQueueCount = 5;
+constexpr int kSubmissionQueueCount = 6;
 constexpr std::size_t kMaximumQueuedSubmissionsPerRoute = 256;
 
 IUnityInterfaces* gUnityInterfaces = nullptr;
@@ -401,6 +403,8 @@ int SubmissionQueueIndex(int32_t graphicsBackend, int32_t vulkanBackend = 0) {
                 return 4;
             }
             return -1;
+        case MilestroUnityGraphicsBackend::Direct3D11:
+            return 5;
         default:
             return -1;
     }
@@ -595,6 +599,35 @@ void RenderQueuedSubmission(int eventOffset, MilestroUnityRenderSubmission* subm
         MarkSubmissionCompleted(submission);
 #else
         MILESTROLOG_ERROR("Milestro Metal render event is only available on Apple platforms.");
+        MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
+#endif
+        return;
+    }
+
+    if (eventOffset == kD3D11DrawEventOffset) {
+        if (target.graphicsBackend != static_cast<int32_t>(MilestroUnityGraphicsBackend::Direct3D11)) {
+            MILESTROLOG_ERROR("Milestro D3D11 render event received backend {}.", target.graphicsBackend);
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
+            return;
+        }
+
+        if (gRenderer != kUnityGfxRendererD3D11) {
+            MILESTROLOG_ERROR("Milestro D3D11 render event invoked while Unity renderer is {}.",
+                              static_cast<int>(gRenderer));
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
+            return;
+        }
+
+#if defined(_WIN32)
+        const auto status = d3d11::Render(*submission);
+        if (status < 0) {
+            MILESTROLOG_ERROR("Milestro D3D11 render event failed: {}", status);
+            MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
+            return;
+        }
+        MarkSubmissionCompleted(submission);
+#else
+        MILESTROLOG_ERROR("Milestro D3D11 render event is only available on Windows.");
         MarkSubmissionCompleted(submission, MilestroUnityRenderSubmissionStatus::Failed);
 #endif
         return;
@@ -810,6 +843,7 @@ void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType
 #endif
 
 #if defined(_WIN32)
+    d3d11::OnGraphicsDeviceEvent(eventType, gUnityInterfaces, gRenderer);
     d3d12::OnGraphicsDeviceEvent(eventType,
                                  gUnityInterfaces,
                                  gRenderer,
@@ -888,6 +922,9 @@ int64_t RenderTextureEventId(int32_t graphicsBackend, int32_t& eventId) {
             return MILESTRO_API_RET_OK;
         case MilestroUnityGraphicsBackend::Direct3D12:
             eventId = gEventBase + kD3D12DrawEventOffset;
+            return MILESTRO_API_RET_OK;
+        case MilestroUnityGraphicsBackend::Direct3D11:
+            eventId = gEventBase + kD3D11DrawEventOffset;
             return MILESTRO_API_RET_OK;
         case MilestroUnityGraphicsBackend::OpenGL:
         case MilestroUnityGraphicsBackend::OpenGLES:
@@ -1096,6 +1133,16 @@ int64_t DestroyD3D12ExternalTextureForExport(void*& texture) {
     texture = nullptr;
     MILESTROLOG_ERROR("Milestro D3D12 external texture is only available on Windows.");
     return MILESTRO_API_RET_FAILED;
+#endif
+}
+
+int64_t DestroyD3D11TargetForExport(void* nativeTexture) {
+#if defined(_WIN32)
+    std::lock_guard renderLock(gRenderSystemMutex);
+    return d3d11::DestroyTarget(nativeTexture);
+#else
+    (void) nativeTexture;
+    return MILESTRO_API_RET_OK;
 #endif
 }
 

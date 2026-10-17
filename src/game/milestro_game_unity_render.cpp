@@ -127,4 +127,8 @@ MILESTRO_API int64_t MilestroUnityRenderDestroyD3D12ExternalTexture(void *&textu
     return milestro::unity_render::DestroyD3D12ExternalTextureForExport(texture);
 }
 
+MILESTRO_API int64_t MilestroUnityRenderDestroyD3D11Target(void *nativeTexture) {
+    return milestro::unity_render::DestroyD3D11TargetForExport(nativeTexture);
+}
+
 }

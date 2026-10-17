@@ -76,6 +76,8 @@ MILESTRO_API int64_t MilestroUnityRenderCreateD3D12ExternalTexture(int32_t width
                                                                    [[milize::CSharpType("IntPtr")]] void*& texture);
 MILESTRO_API int64_t MilestroUnityRenderDestroyD3D12ExternalTexture(
         [[milize::RefType("ref")]] [[milize::CSharpType("IntPtr")]] void*& texture);
+MILESTRO_API int64_t
+MilestroUnityRenderDestroyD3D11Target([[milize::CSharpType("IntPtr")]] void* nativeTexture);
 
 
 MILESTRO_API int64_t

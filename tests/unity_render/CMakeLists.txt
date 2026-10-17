@@ -20,6 +20,17 @@ target_link_libraries(${MILESTRO_UNITY_RENDER_PAYLOAD_TEST_NAME}
         GTest::gtest
         GTest::gtest_main
         ${PROJECT_PLATFORM_LIBRARIES})
+
+if (WIN32)
+    target_sources(${MILESTRO_UNITY_RENDER_PAYLOAD_TEST_NAME}
+            PRIVATE
+            src/test_unity_render_d3d11.cpp
+            ${PROJECT_SOURCE_DIR}/src/unity_render/MilestroUnityRenderD3D11Backend.cpp)
+    target_include_directories(${MILESTRO_UNITY_RENDER_PAYLOAD_TEST_NAME}
+            PRIVATE
+            ${PROJECT_SOURCE_DIR}/ext/PluginAPI)
+endif ()
+
 set_target_properties(${MILESTRO_UNITY_RENDER_PAYLOAD_TEST_NAME} PROPERTIES
         BUILD_WITH_INSTALL_RPATH OFF
         BUILD_RPATH "$<TARGET_FILE_DIR:Milestro>")

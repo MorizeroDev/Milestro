@@ -314,7 +314,7 @@ if (APPLE)
 endif ()
 
 if (WIN32)
-    set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} d3d12 dxgi d3dcompiler dwrite gdi32 imm32 ole32 uuid)
+    set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} d3d11 d3d12 dxgi d3dcompiler dwrite gdi32 imm32 ole32 uuid)
 elseif (CMAKE_DL_LIBS)
     set(PROJECT_PLATFORM_LIBRARIES ${PROJECT_PLATFORM_LIBRARIES} ${CMAKE_DL_LIBS})
 endif ()
@@ -437,6 +437,7 @@ endif ()
 
 if (WIN32)
     list(APPEND MILESTRO_APPLICATION_FILE
+            src/unity_render/MilestroUnityRenderD3D11Backend.cpp
             src/unity_render/MilestroUnityRenderD3D12Backend.cpp)
 endif ()
 

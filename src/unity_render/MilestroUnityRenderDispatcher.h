@@ -50,6 +50,7 @@ int64_t CreateD3D12ExternalTextureForExport(int32_t width,
                                             int32_t preferredFormat,
                                             void *&texture);
 int64_t DestroyD3D12ExternalTextureForExport(void *&texture);
+int64_t DestroyD3D11TargetForExport(void* nativeTexture);
 
 } // namespace milestro::unity_render
 

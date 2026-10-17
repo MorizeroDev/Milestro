@@ -115,6 +115,20 @@ TEST(UnityRenderDiagnostics, SnapshotAbiAndLayoutAreStable) {
     EXPECT_EQ(after.rejectedSubmissionCount, before.rejectedSubmissionCount + 1U);
 }
 
+TEST(UnityRenderDiagnostics, Direct3D11SubmissionsUseAProductionQueue) {
+    const MilestroUnityGraphicsBackend backend = MilestroUnityGraphicsBackend::Direct3D11;
+    EXPECT_EQ(static_cast<int32_t>(backend), 6);
+    const MilestroUnityRenderDiagnosticsSnapshot before = ReadProductionSnapshot();
+    MilestroUnityRenderSubmission& submission = KeepAliveSubmission(
+            static_cast<int32_t>(backend), 1920, 1080, 1.0f, before.currentDeviceEpoch);
+
+    EXPECT_EQ(Enqueue(submission.target.graphicsBackend, &submission), MILESTRO_API_RET_OK);
+
+    const MilestroUnityRenderDiagnosticsSnapshot after = ReadProductionSnapshot();
+    EXPECT_EQ(after.acceptedSubmissionCount, before.acceptedSubmissionCount + 1U);
+    EXPECT_EQ(after.lastAcceptedGraphicsBackend, static_cast<int32_t>(backend));
+}
+
 TEST(UnityRenderDiagnostics, AcceptedAndRejectedCountsRemainIndependent) {
     const MilestroUnityRenderDiagnosticsSnapshot before = ReadProductionSnapshot();
     MilestroUnityRenderSubmission& invalidAbi = KeepAliveSubmission(

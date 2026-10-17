@@ -120,6 +120,11 @@ out IntPtr texture);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroUnityRenderDestroyD3D11Target")]
+        internal static extern unsafe long UnityRenderDestroyD3D11Target(IntPtr nativeTexture);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroGameModelDataEnvelopDestroy")]
         internal static extern unsafe long GameModelDataEnvelopDestroy(ref IntPtr ret);
 
