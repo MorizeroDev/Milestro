@@ -108,6 +108,33 @@ TEST_F(SkiaParagraphHitTest, UsesLaidOutRtlAndAlignmentGeometry) {
     EXPECT_FALSE(paragraph->hitTestRange(0, Utf16Length(linked), 1, center.y()));
 }
 
+TEST_F(SkiaParagraphHitTest, EnumeratesTheSameTightBoxesUsedByHitTesting) {
+    const std::string linked = "linked words that wrap";
+    auto paragraph = BuildParagraph(linked, 100);
+    const auto expected = BoxesForRange(paragraph.get(), 0, Utf16Length(linked));
+    std::vector<SkRect> actual;
+
+    const auto result = paragraph->forEachRectInRange(0,
+                                                      Utf16Length(linked),
+                                                      &actual,
+                                                      [](const void* context,
+                                                         float left,
+                                                         float top,
+                                                         float right,
+                                                         float bottom) -> uint64_t {
+                                                          auto* output = static_cast<std::vector<SkRect>*>(
+                                                                  const_cast<void*>(context));
+                                                          output->push_back(SkRect::MakeLTRB(left, top, right, bottom));
+                                                          return 0;
+                                                      });
+
+    ASSERT_EQ(result, 0u);
+    ASSERT_EQ(actual.size(), expected.size());
+    for (size_t index = 0; index < actual.size(); ++index) {
+        EXPECT_EQ(actual[index], expected[index].rect);
+    }
+}
+
 TEST_F(SkiaParagraphHitTest, EllipsizedHiddenRangeHasNoHitBox) {
     const std::string visiblePrefix = "visible text before ";
     const std::string hiddenLink = "HIDDEN-LINK-RANGE";

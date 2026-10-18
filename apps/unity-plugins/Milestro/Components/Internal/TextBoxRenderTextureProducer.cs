@@ -509,6 +509,29 @@ namespace Milestro.Components.Internal
             return renderTarget.TryHitLink(normalizedViewportPoint, out hit);
         }
 
+        internal bool TryGetContentSnapshot(out TextBoxContentSnapshot snapshot)
+        {
+            if (renderTarget == null)
+            {
+                snapshot = default;
+                return false;
+            }
+
+            return renderTarget.TryGetContentSnapshot(out snapshot);
+        }
+
+        internal bool TryGetLinkGeometrySnapshot(out TextBoxLinkGeometrySnapshot snapshot, out long generation)
+        {
+            if (renderTarget == null)
+            {
+                snapshot = default;
+                generation = 0;
+                return false;
+            }
+
+            return renderTarget.TryGetLinkGeometrySnapshot(out snapshot, out generation);
+        }
+
         internal bool TryGetLayoutMeasurement(out TextBoxLayoutMeasurement measurement)
         {
             return TryBuildLayoutMeasurement(CurrentSettings(), out measurement);

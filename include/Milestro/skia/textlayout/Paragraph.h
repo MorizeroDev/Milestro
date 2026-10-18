@@ -39,6 +39,11 @@ public :
 
     bool hitTestRange(size_t startUtf16, size_t endUtf16, SkScalar x, SkScalar y) const;
 
+    uint64_t forEachRectInRange(size_t startUtf16,
+                                size_t endUtf16,
+                                void* context,
+                                MilestroSkiaTextlayoutParagraphRectCallback callback) const;
+
     uint64_t splitGlyph(SkScalar x, SkScalar y, void* context,
                                  MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback = nullptr);
 

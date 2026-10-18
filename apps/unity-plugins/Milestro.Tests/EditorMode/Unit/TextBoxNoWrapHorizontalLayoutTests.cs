@@ -663,6 +663,19 @@ namespace Milestro.Tests
                 return false;
             }
 
+            public bool TryGetContentSnapshot(out TextBoxContentSnapshot snapshot)
+            {
+                snapshot = default;
+                return false;
+            }
+
+            public bool TryGetLinkGeometrySnapshot(out TextBoxLinkGeometrySnapshot snapshot, out long generation)
+            {
+                snapshot = default;
+                generation = 0;
+                return false;
+            }
+
             public bool Rebuild(TextBoxRenderViewport viewport,
                 ColorSpace colorSpace,
                 TextBoxRenderTargetSettings settings,

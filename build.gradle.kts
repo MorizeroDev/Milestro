@@ -330,6 +330,8 @@ tasks {
 
             listOf("MilestroSkiaTextlayoutParagraphSplitGlyphCallback") to
                 "MilestroCTypes.SkiaTextlayoutParagraphSplitGlyphCallback",
+            listOf("MilestroSkiaTextlayoutParagraphRectCallback") to
+                "MilestroCTypes.SkiaTextlayoutParagraphRectCallback",
         )
 
         doLast {

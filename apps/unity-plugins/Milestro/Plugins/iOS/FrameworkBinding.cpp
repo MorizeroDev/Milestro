@@ -631,6 +631,15 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphHitTestRange(milestro::sk
     return MilestroSkiaTextlayoutParagraphHitTestRange(p, startUtf16, endUtf16, x, y, hit);
 }
 
+int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphForEachRectInRange(
+        milestro::skia::textlayout::Paragraph* p,
+        uint64_t startUtf16,
+        uint64_t endUtf16,
+        [[milize::CSharpType("IntPtr")]] void* context,
+        MilestroSkiaTextlayoutParagraphRectCallback callback) {
+    return MilestroSkiaTextlayoutParagraphForEachRectInRange(p, startUtf16, endUtf16, context, callback);
+}
+
 int64_t FrameworkBindingMilestroSkiaTextlayoutResolveNoWrapProbeLayoutWidth(uint64_t textSize,
                                                                             float fontSize,
                                                                             float viewportWidth,

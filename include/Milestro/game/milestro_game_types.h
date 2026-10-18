@@ -104,5 +104,10 @@ typedef uint64_t (*MilestroSkiaTextlayoutParagraphSplitGlyphCallback)(const void
 
                                                                       float advanceWidth,
                                                                       float advanceHeight);
+typedef uint64_t (*MilestroSkiaTextlayoutParagraphRectCallback)(const void* handler,
+                                                                float left,
+                                                                float top,
+                                                                float right,
+                                                                float bottom);
 
 #endif

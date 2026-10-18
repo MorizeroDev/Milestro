@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Milestro.Components;
@@ -11,6 +12,9 @@ using UnityEngine.EventSystems;
 using UnityEngine.Events;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
+#if UNITY_6000_3_OR_NEWER && MILESTRO_UNITY_ACCESSIBILITY
+using UnityEngine.Accessibility;
+#endif
 
 namespace Milestro.Tests
 {
@@ -449,6 +453,108 @@ namespace Milestro.Tests
             }
         }
 
+        [Test]
+        public void KeyboardAndControllerNavigateActivateAndShowFocus()
+        {
+            var fixture = CreateFixture();
+            try
+            {
+                fixture.Target.SetContent("firstsecond",
+                    new RichTextParser.LinkAnnotation("first-target", "first-id", 0, 5, 0),
+                    new RichTextParser.LinkAnnotation("second-target", "second-id", 5, 11, 1));
+                var accessibility = fixture.TextBox.gameObject.AddComponent<TextBoxAccessibility>();
+                var received = new List<string>();
+                fixture.TextBox.onLinkClicked.AddListener(value => received.Add(value.Href));
+
+                accessibility.OnSelect(new BaseEventData(fixture.EventSystem));
+                var indicator = fixture.TextBox.GetComponentInChildren<TextBoxLinkFocusIndicator>(true);
+                Assert.That(indicator, Is.Not.Null);
+                Assert.That(indicator!.enabled, Is.True);
+
+                accessibility.OnSubmit(new BaseEventData(fixture.EventSystem));
+                accessibility.OnMove(new AxisEventData(fixture.EventSystem) { moveDir = MoveDirection.Right });
+                accessibility.OnSubmit(new BaseEventData(fixture.EventSystem));
+
+                Assert.That(received, Is.EqualTo(new[] { "first-target", "second-target" }));
+                accessibility.OnDeselect(new BaseEventData(fixture.EventSystem));
+                Assert.That(indicator.enabled, Is.False);
+            }
+            finally
+            {
+                fixture.Dispose();
+            }
+        }
+
+        [Test]
+        public void NavigatingToOffscreenLinkScrollsItIntoView()
+        {
+            var fixture = CreateFixture();
+            try
+            {
+                fixture.Target.SetGeometry(
+                    new TextBoxLinkGeometry(0, new[] { new Rect(10f, 10f, 80f, 20f) }),
+                    new TextBoxLinkGeometry(1, new[] { new Rect(10f, 140f, 80f, 20f) }));
+                fixture.Target.SetVerticalScrollLimit(100f);
+                var accessibility = fixture.TextBox.gameObject.AddComponent<TextBoxAccessibility>();
+
+                accessibility.OnSelect(new BaseEventData(fixture.EventSystem));
+                accessibility.OnMove(new AxisEventData(fixture.EventSystem) { moveDir = MoveDirection.Down });
+
+                Assert.That(fixture.Producer.scrollY, Is.EqualTo(60f).Within(0.001f));
+            }
+            finally
+            {
+                fixture.Dispose();
+            }
+        }
+
+#if UNITY_6000_3_OR_NEWER && MILESTRO_UNITY_ACCESSIBILITY
+        [Test]
+        public void ScreenReaderHierarchyExposesTextAndLinksAndClearsOnDisable()
+        {
+            var fixture = CreateFixture();
+            var previousHierarchy = AssistiveSupport.activeHierarchy;
+            var hierarchy = new AccessibilityHierarchy();
+            try
+            {
+                AssistiveSupport.activeHierarchy = hierarchy;
+                fixture.Target.SetContent("a first b second c",
+                    new RichTextParser.LinkAnnotation("first-target", "first-id", 2, 7, 0),
+                    new RichTextParser.LinkAnnotation("second-target", "second-id", 10, 16, 1));
+                var accessibility = fixture.TextBox.gameObject.AddComponent<TextBoxAccessibility>();
+                typeof(TextBoxAccessibility).GetMethod("Update", DeclaredInstance)!
+                    .Invoke(accessibility, null);
+
+                Assert.That(hierarchy.rootNodes.Count, Is.EqualTo(1));
+                var container = hierarchy.rootNodes[0];
+                Assert.That(container.role, Is.EqualTo(AccessibilityRole.Container));
+                Assert.That(container.children.Select(node => node.role),
+                    Is.EqualTo(new[]
+                    {
+                        AccessibilityRole.StaticText,
+                        AccessibilityRole.Button,
+                        AccessibilityRole.StaticText,
+                        AccessibilityRole.Button,
+                        AccessibilityRole.StaticText
+                    }));
+                Assert.That(container.children.Select(node => node.label),
+                    Is.EqualTo(new[] { "a ", "first", " b ", "second", " c" }));
+                Assert.That(container.children[1].hint, Is.EqualTo("Link"));
+                hierarchy.RefreshNodeFrames();
+                Assert.That(container.children[1].frame.width, Is.GreaterThan(0f));
+                Assert.That(container.children[1].frame.height, Is.GreaterThan(0f));
+
+                accessibility.enabled = false;
+                Assert.That(hierarchy.rootNodes, Is.Empty);
+            }
+            finally
+            {
+                fixture.Dispose();
+                AssistiveSupport.activeHierarchy = previousHierarchy;
+            }
+        }
+#endif
+
         private static void AssertGetterOnlyProperty(Type owner, string name, Type propertyType)
         {
             var property = owner.GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
@@ -555,6 +661,17 @@ namespace Milestro.Tests
         private sealed class LinkRenderTarget : ITextBoxRenderTarget
         {
             private long generation = 1;
+            private string plainText = "firstsecond";
+            private RichTextParser.LinkAnnotation[] links =
+            {
+                new RichTextParser.LinkAnnotation("same-target", "same-id", 0, 5, 0),
+                new RichTextParser.LinkAnnotation("same-target", "same-id", 5, 11, 1)
+            };
+            private IReadOnlyList<TextBoxLinkGeometry> geometry = new[]
+            {
+                new TextBoxLinkGeometry(0, new[] { new Rect(10f, 10f, 80f, 20f) }),
+                new TextBoxLinkGeometry(1, new[] { new Rect(110f, 60f, 80f, 20f) })
+            };
 
             public Texture? OutputTexture => null;
             public Rect OutputUvRect => new Rect(0f, 0f, 1f, 1f);
@@ -562,10 +679,10 @@ namespace Milestro.Tests
             public int OutputHeight => 100;
             public bool HasOutput => false;
             public long OutputVersion => 0;
-            public Vector2 ScrollOffset => Vector2.zero;
+            public Vector2 ScrollOffset { get; private set; }
             public Vector2 ContentSize => new Vector2(200f, 100f);
             public Vector2 ViewportSize => new Vector2(200f, 100f);
-            public Vector2 MaxScrollOffset => Vector2.zero;
+            public Vector2 MaxScrollOffset { get; private set; }
             public TextBoxHorizontalScrollState HorizontalScrollState => default;
             internal int HitTestCalls { get; private set; }
             internal Vector2 LastNormalizedPoint { get; private set; }
@@ -603,12 +720,49 @@ namespace Milestro.Tests
                 return false;
             }
 
+            public bool TryGetContentSnapshot(out TextBoxContentSnapshot snapshot)
+            {
+                snapshot = new TextBoxContentSnapshot(1, plainText, links);
+                return true;
+            }
+
+            public bool TryGetLinkGeometrySnapshot(out TextBoxLinkGeometrySnapshot snapshot, out long publishedGeneration)
+            {
+                publishedGeneration = generation;
+                snapshot = new TextBoxLinkGeometrySnapshot(1,
+                    null!,
+                    links,
+                    geometry,
+                    new Vector2(0f, -ScrollOffset.y),
+                    new Rect(0f, 0f, 200f, 100f),
+                    new Vector2Int(200, 100));
+                return true;
+            }
+
+            internal void SetContent(string text, params RichTextParser.LinkAnnotation[] annotations)
+            {
+                plainText = text;
+                links = annotations;
+            }
+
+            internal void SetGeometry(params TextBoxLinkGeometry[] value)
+            {
+                geometry = value;
+            }
+
+            internal void SetVerticalScrollLimit(float value)
+            {
+                MaxScrollOffset = new Vector2(0f, value);
+            }
+
             public bool Rebuild(TextBoxRenderViewport viewport,
                 ColorSpace colorSpace,
                 TextBoxRenderTargetSettings settings,
                 bool forceText,
                 UnityEngine.Object? logContext)
             {
+                ScrollOffset = new Vector2(ScrollOffset.x,
+                    Mathf.Clamp(viewport.RequestedScrollY, 0f, MaxScrollOffset.y));
                 return true;
             }
 

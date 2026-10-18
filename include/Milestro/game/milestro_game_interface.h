@@ -308,6 +308,12 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphHitTestRange(milestro::skia:
                                                                  float x,
                                                                  float y,
                                                                  int32_t& hit);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphForEachRectInRange(
+        milestro::skia::textlayout::Paragraph* p,
+        uint64_t startUtf16,
+        uint64_t endUtf16,
+        [[milize::CSharpType("IntPtr")]] void* context,
+        MilestroSkiaTextlayoutParagraphRectCallback callback);
 MILESTRO_API int64_t MilestroSkiaTextlayoutResolveNoWrapProbeLayoutWidth(uint64_t textSize,
                                                                          float fontSize,
                                                                          float viewportWidth,

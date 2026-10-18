@@ -678,6 +678,15 @@ out int hit);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphForEachRectInRange")]
+        internal static extern unsafe long SkiaTextlayoutParagraphForEachRectInRange(IntPtr p,
+ulong startUtf16,
+ulong endUtf16,
+IntPtr context,
+MilestroCTypes.SkiaTextlayoutParagraphRectCallback callback);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutResolveNoWrapProbeLayoutWidth")]
         internal static extern unsafe long SkiaTextlayoutResolveNoWrapProbeLayoutWidth(ulong textSize,
 float fontSize,

@@ -34,6 +34,11 @@ namespace Milestro.Components.Internal
         private Vector2Int outputVisibleSizePixels = Vector2Int.one;
         private IReadOnlyList<RichTextParser.LinkAnnotation> linkAnnotations =
             Array.Empty<RichTextParser.LinkAnnotation>();
+        private TextBoxContentSnapshot contentSnapshot;
+        private bool hasContentSnapshot;
+        private string contentSource = "";
+        private long contentVersion;
+        private bool hasContentSource;
         private TextBoxLinkGeometryPublication linkGeometryPublication;
         private long pendingCompletionToken;
         private TextBoxRenderViewport pendingViewport;
@@ -111,6 +116,17 @@ namespace Milestro.Components.Internal
             }
 
             return false;
+        }
+
+        public bool TryGetContentSnapshot(out TextBoxContentSnapshot snapshot)
+        {
+            snapshot = contentSnapshot;
+            return hasContentSnapshot;
+        }
+
+        public bool TryGetLinkGeometrySnapshot(out TextBoxLinkGeometrySnapshot snapshot, out long generation)
+        {
+            return linkGeometryPublication.TryGetPublished(out snapshot, out generation);
         }
 
         public bool Rebuild(TextBoxRenderViewport viewport,
@@ -224,8 +240,10 @@ namespace Milestro.Components.Internal
                                  clipRect.width > 0f &&
                                  clipRect.height > 0f;
             var hitGeometry = hasHitGeometry
-                ? new TextBoxLinkGeometrySnapshot(paragraph!,
+                ? new TextBoxLinkGeometrySnapshot(contentVersion,
+                    paragraph!,
                     linkAnnotations,
+                    BuildLinkGeometry(paragraph!, linkAnnotations),
                     paintPosition,
                     clipRect,
                     visibleOutputSizePixels)
@@ -426,8 +444,37 @@ namespace Milestro.Components.Internal
             linkAnnotations = payload.Links.Count == 0
                 ? Array.Empty<RichTextParser.LinkAnnotation>()
                 : new List<RichTextParser.LinkAnnotation>(payload.Links);
+            if (!hasContentSource || !string.Equals(contentSource, settings.Content, StringComparison.Ordinal))
+            {
+                unchecked
+                {
+                    ++contentVersion;
+                    if (contentVersion == 0)
+                    {
+                        ++contentVersion;
+                    }
+                }
+                contentSource = settings.Content;
+                hasContentSource = true;
+            }
+            contentSnapshot = new TextBoxContentSnapshot(contentVersion, plainText, linkAnnotations);
+            hasContentSnapshot = true;
             ResizeParagraph(result, settings, layoutSizePixels, true);
             return result;
+        }
+
+        private static IReadOnlyList<TextBoxLinkGeometry> BuildLinkGeometry(
+            Paragraph source,
+            IReadOnlyList<RichTextParser.LinkAnnotation> links)
+        {
+            var geometry = new List<TextBoxLinkGeometry>(links.Count);
+            foreach (var link in links)
+            {
+                geometry.Add(new TextBoxLinkGeometry(link.Occurrence,
+                    source.GetRectsForRange(link.StartUtf16, link.EndUtf16)));
+            }
+
+            return geometry;
         }
 
         private Paragraph BuildPaintParagraph(TextBoxRenderTargetSettings settings)

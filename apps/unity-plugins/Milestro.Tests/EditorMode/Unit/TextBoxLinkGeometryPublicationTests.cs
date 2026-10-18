@@ -261,8 +261,10 @@ namespace Milestro.Tests
             Vector2 paint,
             Vector2Int visibleOutput)
         {
-            return new TextBoxLinkGeometrySnapshot(null!,
+            return new TextBoxLinkGeometrySnapshot(1,
+                null!,
                 new[] { new LinkAnnotation("href", "id", 0, 1, 0) },
+                Array.Empty<TextBoxLinkGeometry>(),
                 paint,
                 clip,
                 visibleOutput);

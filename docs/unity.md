@@ -482,9 +482,37 @@ Read-only `TextBox` exposes the serialized, getter-only
 `onLinkClicked` event. Its `LinkClickedEventArgs` payload contains `Href` and
 `Id`; omitted `id` is reported as an empty string. A click is emitted only when
 the primary mouse button or a touch press and release hit the same visible link
-range without becoming a drag. Keyboard and controller link navigation are not
-implemented because TextBox does not currently own a focus or active-link
-navigation model.
+range without becoming a drag.
+
+Add `Milestro.Components.TextBoxAccessibility` to the same GameObject to enable
+keyboard, controller, and screen-reader interaction. The component is a uGUI
+`Selectable`, so it uses the project's ordinary `EventSystem` and input module:
+
+- Left/Up selects the previous link and Right/Down selects the next link. At
+  either end, navigation returns to uGUI so focus can move to another
+  `Selectable`; links do not wrap around.
+- Submit invokes the active link through the same `onLinkClicked` event as a
+  pointer click. Cancel clears the component's EventSystem selection.
+- Keyboard or controller focus draws a configurable rectangle around each line
+  of the active link. Pointer selection does not display this indicator.
+  Fixed-viewport text scrolls an off-screen active link into view; flow-mode
+  visibility remains controlled by the external flow viewport.
+
+The inspector exposes `Focus Color`, `Focus Thickness`, `Link Hint`, and
+`Screen Reader Enabled`. Screen-reader support requires Unity 6000.3 or newer
+and the built-in Accessibility module (`com.unity.modules.accessibility`).
+Enable that module in Package Manager or the project's `Packages/manifest.json`.
+Without it, navigation still works and the component logs a warning instead of
+publishing accessibility nodes.
+
+With the module available, the component publishes a container with static-text
+and link nodes to `AssistiveSupport.activeHierarchy`. Link nodes use the visible
+link text as their label, `Link Hint` as additional guidance, a button role, and
+screen-space frames derived from the laid-out link rectangles. Screen-reader
+activation invokes `onLinkClicked`; moving screen-reader focus also shows the
+focus indicator and scrolls the link into view. Disabling or destroying the
+component removes its nodes. Milestro still returns link targets unchanged and
+never opens or interprets them.
 
 Task 201 persistent-listener and stripping checks are available from the Unity
 menus under `Milestro/Task 201`. Generate/open the fixture to verify the saved

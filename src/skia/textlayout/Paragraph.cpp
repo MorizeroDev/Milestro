@@ -35,6 +35,30 @@ bool Paragraph::hitTestRange(size_t startUtf16, size_t endUtf16, SkScalar x, SkS
     return false;
 }
 
+uint64_t Paragraph::forEachRectInRange(size_t startUtf16,
+                                       size_t endUtf16,
+                                       void* context,
+                                       MilestroSkiaTextlayoutParagraphRectCallback callback) const {
+    if (callback == nullptr) {
+        return -1;
+    }
+    if (paragraph == nullptr || endUtf16 <= startUtf16 || endUtf16 > std::numeric_limits<unsigned>::max()) {
+        return 0;
+    }
+
+    const auto boxes = paragraph->getRectsForRange(static_cast<unsigned>(startUtf16),
+                                                   static_cast<unsigned>(endUtf16),
+                                                   ::skia::textlayout::RectHeightStyle::kTight,
+                                                   ::skia::textlayout::RectWidthStyle::kTight);
+    for (const auto& box: boxes) {
+        if (box.rect.width() > 0 && box.rect.height() > 0) {
+            callback(context, box.rect.left(), box.rect.top(), box.rect.right(), box.rect.bottom());
+        }
+    }
+
+    return 0;
+}
+
 uint64_t
 Paragraph::splitGlyph(SkScalar x, SkScalar y,
                       void *context, MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback) {

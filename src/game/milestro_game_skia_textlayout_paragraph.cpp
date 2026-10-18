@@ -76,6 +76,27 @@ int64_t MilestroSkiaTextlayoutParagraphHitTestRange(milestro::skia::textlayout::
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutParagraphForEachRectInRange(milestro::skia::textlayout::Paragraph* p,
+                                                          uint64_t startUtf16,
+                                                          uint64_t endUtf16,
+                                                          void* context,
+                                                          MilestroSkiaTextlayoutParagraphRectCallback callback) try {
+    if (p == nullptr) {
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    if (startUtf16 > std::numeric_limits<size_t>::max() || endUtf16 > std::numeric_limits<size_t>::max()) {
+        return MILESTRO_API_RET_OK;
+    }
+
+    return p->forEachRectInRange(static_cast<size_t>(startUtf16),
+                                 static_cast<size_t>(endUtf16),
+                                 context,
+                                 callback);
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutResolveNoWrapProbeLayoutWidth(uint64_t textSize,
                                                             float fontSize,
                                                             float viewportWidth,

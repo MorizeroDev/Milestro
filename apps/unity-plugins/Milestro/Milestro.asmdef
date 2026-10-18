@@ -17,6 +17,11 @@
             "name": "com.unity.inputsystem",
             "expression": "[1.16.0,2.0.0-0)",
             "define": "MILESTRO_INPUT_SYSTEM_SUPPORTED"
+        },
+        {
+            "name": "com.unity.modules.accessibility",
+            "expression": "1.0.0",
+            "define": "MILESTRO_UNITY_ACCESSIBILITY"
         }
     ],
     "noEngineReferences": false

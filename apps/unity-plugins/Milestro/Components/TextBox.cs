@@ -365,7 +365,7 @@ namespace Milestro.Components
                 return;
             }
 
-            onLinkClicked.Invoke(new LinkClickedEventArgs(releaseHit.Href, releaseHit.Id));
+            ActivateLink(releaseHit);
         }
 
         public void OnCancel(BaseEventData eventData)
@@ -388,6 +388,220 @@ namespace Milestro.Components
             producer.RebuildOutput(forceText: false);
             ApplyProducerOutput(producer, force: false);
             return producer.TryHitLink(normalizedViewportPoint, out hit);
+        }
+
+        private bool ActivateLink(TextBoxLinkHit hit)
+        {
+            if (!TryGetLinkInteractionSnapshot(out var content, out _, out var generation) ||
+                generation != hit.Generation)
+            {
+                return false;
+            }
+
+            return ActivateLink(content, hit.Occurrence);
+        }
+
+        internal bool ActivateLink(long contentVersion, int occurrence)
+        {
+            if (!TryGetContentSnapshot(out var content) || content.ContentVersion != contentVersion)
+            {
+                return false;
+            }
+
+            return ActivateLink(content, occurrence);
+        }
+
+        private bool ActivateLink(TextBoxContentSnapshot content, int occurrence)
+        {
+            if (!content.TryGetLink(occurrence, out var link))
+            {
+                return false;
+            }
+
+            onLinkClicked.Invoke(new LinkClickedEventArgs(link.Href, link.Id));
+            return true;
+        }
+
+        internal bool TryGetContentSnapshot(out TextBoxContentSnapshot snapshot)
+        {
+            snapshot = default;
+            if (!isActiveAndEnabled)
+            {
+                return false;
+            }
+
+            var producer = ProducerComponent();
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: false);
+            return producer.TryGetContentSnapshot(out snapshot);
+        }
+
+        internal bool TryGetLinkInteractionSnapshot(out TextBoxContentSnapshot content,
+            out TextBoxLinkGeometrySnapshot geometry,
+            out long generation)
+        {
+            content = default;
+            geometry = default;
+            generation = 0;
+            if (!isActiveAndEnabled)
+            {
+                return false;
+            }
+
+            var producer = ProducerComponent();
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: false);
+            return producer.TryGetContentSnapshot(out content) &&
+                   producer.TryGetLinkGeometrySnapshot(out geometry, out generation) &&
+                   content.ContentVersion == geometry.ContentVersion;
+        }
+
+        internal bool TryGetLinkLocalRects(long contentVersion,
+            int occurrence,
+            List<Rect> results)
+        {
+            results.Clear();
+            if (!TryGetLinkInteractionSnapshot(out _, out var snapshot, out _) ||
+                snapshot.ContentVersion != contentVersion ||
+                !snapshot.TryGetGeometry(occurrence, out var linkGeometry))
+            {
+                return false;
+            }
+
+            foreach (var paragraphRect in linkGeometry.Rects)
+            {
+                var outputRect = OffsetRect(paragraphRect, snapshot.PaintPosition);
+                if (!TryClipRect(outputRect, snapshot.ClipRect, out var clippedRect))
+                {
+                    continue;
+                }
+
+                results.Add(OutputRectToLocal(clippedRect, snapshot.VisibleOutputSize));
+            }
+
+            return results.Count > 0;
+        }
+
+        internal bool EnsureLinkVisible(long contentVersion, int occurrence)
+        {
+            if (!TryGetLinkInteractionSnapshot(out _, out var snapshot, out _) ||
+                snapshot.ContentVersion != contentVersion ||
+                !snapshot.TryGetGeometry(occurrence, out var geometry) ||
+                geometry.Rects.Count == 0)
+            {
+                return false;
+            }
+
+            if (flowModeActive)
+            {
+                return true;
+            }
+
+            var anyVisible = false;
+            foreach (var paragraphRect in geometry.Rects)
+            {
+                if (TryClipRect(OffsetRect(paragraphRect, snapshot.PaintPosition), snapshot.ClipRect, out _))
+                {
+                    anyVisible = true;
+                    break;
+                }
+            }
+
+            if (anyVisible)
+            {
+                return true;
+            }
+
+            var targetRect = OffsetRect(geometry.Rects[0], snapshot.PaintPosition);
+            var deltaX = VisibilityScrollDelta(targetRect.xMin,
+                targetRect.xMax,
+                snapshot.ClipRect.xMin,
+                snapshot.ClipRect.xMax);
+            var deltaY = VisibilityScrollDelta(targetRect.yMin,
+                targetRect.yMax,
+                snapshot.ClipRect.yMin,
+                snapshot.ClipRect.yMax);
+            if (Mathf.Approximately(deltaX, 0f) && Mathf.Approximately(deltaY, 0f))
+            {
+                return true;
+            }
+
+            var producer = ProducerComponent();
+            CancelScrollTweens();
+            SettleElastic(producer, rebuild: false);
+            var nextScrollX = Mathf.Clamp(producer.scrollX + deltaX, 0f, producer.maxScrollX);
+            var nextScrollY = Mathf.Clamp(producer.scrollY + deltaY, 0f, producer.maxScrollY);
+            if (Mathf.Approximately(nextScrollX, producer.scrollX) &&
+                Mathf.Approximately(nextScrollY, producer.scrollY))
+            {
+                return true;
+            }
+
+            producer.scrollX = nextScrollX;
+            producer.scrollY = nextScrollY;
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: true);
+            return true;
+        }
+
+        private static float VisibilityScrollDelta(float minimum,
+            float maximum,
+            float clipMinimum,
+            float clipMaximum)
+        {
+            if (minimum < clipMinimum)
+            {
+                return minimum - clipMinimum;
+            }
+
+            if (maximum > clipMaximum)
+            {
+                return maximum - clipMaximum;
+            }
+
+            return 0f;
+        }
+
+        private static Rect OffsetRect(Rect rect, Vector2 offset)
+        {
+            return new Rect(rect.x + offset.x, rect.y + offset.y, rect.width, rect.height);
+        }
+
+        private static bool TryClipRect(Rect value, Rect clip, out Rect clipped)
+        {
+            var xMin = Mathf.Max(value.xMin, clip.xMin);
+            var yMin = Mathf.Max(value.yMin, clip.yMin);
+            var xMax = Mathf.Min(value.xMax, clip.xMax);
+            var yMax = Mathf.Min(value.yMax, clip.yMax);
+            if (xMax <= xMin || yMax <= yMin)
+            {
+                clipped = default;
+                return false;
+            }
+
+            clipped = Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+            return true;
+        }
+
+        private Rect OutputRectToLocal(Rect outputRect, Vector2Int visibleOutputSize)
+        {
+            var rect = GetPixelAdjustedRect();
+            var top = rect.yMax;
+            var bottom = rect.yMin;
+            if (flowModeActive)
+            {
+                top = Mathf.Clamp(rect.yMax - flowVisibleStartY, rect.yMin, rect.yMax);
+                bottom = Mathf.Clamp(rect.yMax - flowVisibleEndY, rect.yMin, rect.yMax);
+            }
+
+            var width = Mathf.Max(1f, visibleOutputSize.x);
+            var height = Mathf.Max(1f, visibleOutputSize.y);
+            var visibleHeight = Mathf.Max(0.0001f, top - bottom);
+            return Rect.MinMaxRect(
+                rect.xMin + outputRect.xMin / width * rect.width,
+                top - outputRect.yMax / height * visibleHeight,
+                rect.xMin + outputRect.xMax / width * rect.width,
+                top - outputRect.yMin / height * visibleHeight);
         }
 
         private bool TryScreenPointToNormalizedViewport(Vector2 screenPoint,
