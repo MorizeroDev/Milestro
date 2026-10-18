@@ -296,6 +296,7 @@ namespace Milestro.Components
         private void ApplyKeyboardOptions()
         {
             inputRegistration?.SetKeyboardOptions(GetKeyboardOptions());
+            SyncTouchKeyboardConfiguration();
         }
 
         private HybridInputKeyboardOptions GetKeyboardOptions()

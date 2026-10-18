@@ -57,7 +57,11 @@ residual non-zero momentum continues.
 
 These limitations apply to strict cancellation and ownership transfer of an
 active platform composition. They do not mean that ordinary platform IME text
-input is unsupported.
+input is unsupported. `TextInput`'s mobile `TouchScreenKeyboard` session is
+ordinary platform input: it opens and closes the soft keyboard and mirrors
+text and selection, but it does not own Unity's native `UITextInput` or
+`InputConnection` owner, so it does not change the strict cancellation
+behavior below.
 
 ### macOS Candidate UI Residue
 

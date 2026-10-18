@@ -256,17 +256,48 @@ input.onSubmit.AddListener(address => SaveAddress(address));
 `keyboardType` uses Unity's `TouchScreenKeyboardType`. The dispatcher sends
 keyboard type, autocorrection, multiline, masking, and read-only settings to
 providers implementing `IHybridInputKeyboardProvider`, before starting their
-focus session and when settings change. The built-in desktop providers do not
-open a mobile soft keyboard; a platform provider must implement this optional
-contract to apply these hints. Setting a keyboard type does not validate text.
+focus session and when settings change. On mobile, `TextInput` itself opens a
+`TouchScreenKeyboard` session with these settings (see below). Setting a
+keyboard type does not validate text.
+
+## TextInput Touch Keyboard
+
+On platforms where `TouchScreenKeyboard.isSupported` is true, focusing a
+`TextInput` opens a `TouchScreenKeyboard` session with the current
+`keyboardType`, autocorrection, multiline, masking, and `characterLimit`
+settings. Read-only inputs do not open one. Following TMP's rule, Android
+hardware keyboards (`TouchScreenKeyboard.isInPlaceEditingAllowed`) suppress
+the soft keyboard. Blurring the input closes the session; Done submits and
+blurs, and Cancel or LostFocus blurs without submitting.
+
+`shouldHideMobileInput` defaults to `true`, matching TMP's default: the
+native input field above the keyboard is hidden, so text is edited directly
+in the Unity-rendered field through the normal committed/composition events,
+and the input's text and selection stay mirrored into the keyboard for
+autocorrect context. Set it to `false` to show the system-native input field;
+in that mode the keyboard's text is polled back into the input through the
+same canonicalization and validation pipeline as typing, and corrected text
+and selection are written back to the keyboard. In hidden mode the system
+keyboard itself still appears; only the extra native input box is hidden.
+
+`touchScreenKeyboard` exposes the active `TouchScreenKeyboard`, or `null`
+when no session is open. `onTouchScreenKeyboardStatusChanged` is a
+`UnityEvent<TouchScreenKeyboard.Status>` that fires once per status
+transition (`Visible`, `Done`, `Canceled`, `LostFocus`).
+
+The soft keyboard session is ordinary platform text input. Strict native IME
+ownership transfer and composition cancellation remain limited as described
+in `docs/limitations.md`.
 
 ## TextInput Lifecycle Events
 
-`TextInput` exposes five getter-only Unity events:
+`TextInput` exposes six getter-only Unity events:
 
 - `onValueChanged`, `onEndEdit`, and `onSubmit` are `UnityEvent<string>` values. In the
   Inspector, bind methods that take the event's Dynamic String payload.
 - `onFocusGained` and `onFocusLost` are parameterless `UnityEvent` values.
+- `onTouchScreenKeyboardStatusChanged` is a `UnityEvent<TouchScreenKeyboard.Status>`
+  value for soft keyboard status transitions.
 
 Use `AddListener` and `RemoveListener` for runtime subscriptions. There is no
 second public C# event channel. Persistent Inspector listeners are serialized

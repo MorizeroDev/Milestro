@@ -139,6 +139,9 @@ namespace Milestro.Components
         [NonSerialized] private HybridInputDispatcher.HybridInputSinkRegistration? inputRegistration;
         [NonSerialized] private InputSink? inputSink;
         [NonSerialized] private readonly TextInputFrameState inputFrameState = new TextInputFrameState();
+        [NonSerialized]
+        private readonly TextInputTouchKeyboardController touchKeyboardController =
+            new TextInputTouchKeyboardController();
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
         [NonSerialized] private bool styleDirty = true;
         [NonSerialized] private bool layoutDirty = true;
@@ -245,6 +248,7 @@ namespace Milestro.Components
 
             m_text = canonical;
             UpdatePlaceholder();
+            SyncTouchKeyboardState();
             paintDirty = true;
             if (notify)
             {
@@ -565,6 +569,7 @@ namespace Milestro.Components
 
         private void Update()
         {
+            PollTouchKeyboardSession();
             if (IsDispatcherFocused)
             {
                 if (CanReadInput())
@@ -1272,6 +1277,10 @@ namespace Milestro.Components
             ResetSurrogateInputState();
             ResetKeyRepeatState();
             ResetBlink();
+            if (changed)
+            {
+                SyncTouchKeyboardState();
+            }
             paintDirty = true;
         }
 
@@ -1444,6 +1453,7 @@ namespace Milestro.Components
             UpdateCompositionCursorPosition();
             ApplyImeCompositionMode();
             ApplyKeyboardOptions();
+            OpenTouchKeyboardSession();
             ResetBlink();
             paintDirty = true;
             onFocusGained.Invoke();
@@ -1456,6 +1466,7 @@ namespace Milestro.Components
 
         private void OnDispatcherFocusLost()
         {
+            CloseTouchKeyboardSession();
             onFocusLost.Invoke();
         }
 
@@ -1489,6 +1500,7 @@ namespace Milestro.Components
 
         private void ResetLocalInputState(bool releaseFocus)
         {
+            CloseTouchKeyboardSession();
             submitRequested = false;
             compositionActive = false;
             lastCompositionText = "";
@@ -1936,6 +1948,7 @@ namespace Milestro.Components
             UpdatePlaceholder();
             if ((changed || textChanged) && inputBox != null)
             {
+                SyncTouchKeyboardState();
                 inputBox.EnsureCaretVisible();
                 CancelScrollTweens();
                 BeginKeyboardScrollInterlock();
