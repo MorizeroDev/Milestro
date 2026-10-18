@@ -1,9 +1,9 @@
-namespace Milestro.Components
+namespace Milestro.Model
 {
     public enum TextInputAlignment
     {
         Left,
         Center,
-        Right
+        Right,
     }
 }

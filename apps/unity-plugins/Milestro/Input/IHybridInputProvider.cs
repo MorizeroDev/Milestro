@@ -53,6 +53,40 @@ namespace Milestro.Input
         void OnInputReset(HybridInputResetReason reason);
     }
 
+    public interface IHybridInputKeyboardProvider
+    {
+        void SetKeyboardOptions(HybridInputKeyboardOptions options);
+    }
+
+    public readonly struct HybridInputKeyboardOptions
+    {
+        public HybridInputKeyboardOptions(TouchScreenKeyboardType keyboardType, bool autocorrection,
+            bool multiline, bool secure, bool readOnly)
+        {
+            KeyboardType = keyboardType;
+            Autocorrection = autocorrection;
+            Multiline = multiline;
+            Secure = secure;
+            ReadOnly = readOnly;
+        }
+
+        public TouchScreenKeyboardType KeyboardType { get; }
+        public bool Autocorrection { get; }
+        public bool Multiline { get; }
+        public bool Secure { get; }
+        public bool ReadOnly { get; }
+    }
+
+    internal interface IHybridInputSubmitSink : IHybridInputLifecycleSink
+    {
+        void OnSubmit(string value);
+    }
+
+    internal interface IHybridInputKeyboardSink
+    {
+        HybridInputKeyboardOptions KeyboardOptions { get; }
+    }
+
     internal interface IHybridInputLifecycleSink : IHybridInputFrameSink
     {
         GameObject Owner { get; }

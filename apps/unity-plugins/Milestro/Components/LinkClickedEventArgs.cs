@@ -1,5 +1,4 @@
 using System;
-using UnityEngine.Events;
 using UnityEngine.Scripting;
 
 namespace Milestro.Components
@@ -16,11 +15,5 @@ namespace Milestro.Components
 
         public string Href { get; }
         public string Id { get; }
-    }
-
-    [Serializable]
-    [Preserve]
-    public sealed class LinkClickedEvent : UnityEvent<LinkClickedEventArgs>
-    {
     }
 }

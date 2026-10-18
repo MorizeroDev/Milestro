@@ -21,7 +21,7 @@ namespace Milestro.Components
     [DisallowMultipleComponent]
     [RequireComponent(typeof(CanvasRenderer))]
     [AddComponentMenu("Milestro/Text Input")]
-    public class TextInput : RenderTextureGraphic,
+    public partial class TextInput : RenderTextureGraphic,
         IPointerDownHandler,
         IPointerClickHandler,
         IBeginDragHandler,
@@ -202,7 +202,13 @@ namespace Milestro.Components
 
         private void SetText(string value, bool notify)
         {
-            var managedCanonical = CanonicalizeTextForLineMode(value, m_lineMode);
+            var managedCanonical = NormalizeFormText(value);
+            if (!TryValidateEdit(m_text, 0, m_text.Length, managedCanonical, managedCanonical,
+                    TextInputEditSource.Programmatic, out var validatedText))
+            {
+                return;
+            }
+            managedCanonical = validatedText;
             if (string.Equals(m_text, managedCanonical, StringComparison.Ordinal) &&
                 (inputBox == null || string.Equals(inputBox.Text, managedCanonical, StringComparison.Ordinal)))
             {
@@ -238,6 +244,7 @@ namespace Milestro.Components
             }
 
             m_text = canonical;
+            UpdatePlaceholder();
             paintDirty = true;
             if (notify)
             {
@@ -328,12 +335,14 @@ namespace Milestro.Components
                 }
 
                 m_lineMode = value;
+                ApplyKeyboardOptions();
                 CoerceWrapModeForLineMode();
                 SetText(m_text, notify: true);
                 compositionActive = false;
                 lastCompositionText = "";
                 ResetSurrogateInputState();
                 ResetKeyRepeatState();
+                UpdatePlaceholder();
                 CancelScrollTweens();
                 inputBox?.SetSoftWrap(EffectiveSoftWrap());
                 styleDirty = true;
@@ -413,6 +422,7 @@ namespace Milestro.Components
                     inputBox?.BreakUndoGroup();
                 }
                 ApplyImeCompositionMode();
+                ApplyKeyboardOptions();
                 paintDirty = true;
             }
         }
@@ -428,6 +438,7 @@ namespace Milestro.Components
                 }
 
                 m_maskInput = value;
+                ApplyKeyboardOptions();
                 CancelScrollTweens();
                 inputBox?.SetMaskInput(m_maskInput);
                 layoutDirty = true;
@@ -528,6 +539,7 @@ namespace Milestro.Components
             paintDirty = true;
             ResetBlink();
             RebuildResources();
+            UpdatePlaceholder();
             if (EventSystem.current?.currentSelectedGameObject == gameObject)
             {
                 AcquireDispatcherFocus();
@@ -1348,6 +1360,7 @@ namespace Milestro.Components
         {
             base.OnValidate();
             ElasticSettings().Validate();
+            ValidateFormSettings();
             CoerceWrapModeForLineMode();
             SetText(m_text, notify: false);
             if (m_readOnly)
@@ -1368,6 +1381,8 @@ namespace Milestro.Components
             inputBox?.SetEllipsis(m_ellipsisString);
             ClearSelectionIfDisabled();
             ApplyImeCompositionMode();
+            ApplyKeyboardOptions();
+            UpdatePlaceholder();
             m_scrollTweenDurationSeconds = FloatUtil.IsFinite(m_scrollTweenDurationSeconds)
                 ? Mathf.Max(0f, m_scrollTweenDurationSeconds)
                 : DefaultScrollTweenDurationSeconds;
@@ -1428,6 +1443,7 @@ namespace Milestro.Components
             inputBox?.SetFocused(true);
             UpdateCompositionCursorPosition();
             ApplyImeCompositionMode();
+            ApplyKeyboardOptions();
             ResetBlink();
             paintDirty = true;
             onFocusGained.Invoke();
@@ -1473,6 +1489,7 @@ namespace Milestro.Components
 
         private void ResetLocalInputState(bool releaseFocus)
         {
+            submitRequested = false;
             compositionActive = false;
             lastCompositionText = "";
             inputFrameState.Reset();
@@ -1494,6 +1511,7 @@ namespace Milestro.Components
                 }
             }
             paintDirty = true;
+            UpdatePlaceholder();
         }
 
         private bool CanReadInput()
@@ -1539,6 +1557,7 @@ namespace Milestro.Components
 
         private void ReadKeyboardInput(HybridInputFrame frame)
         {
+            submitRequested = false;
             var providerInput = inputFrameState.Apply(frame);
             if (m_readOnly)
             {
@@ -1558,14 +1577,13 @@ namespace Milestro.Components
             {
                 if (compositionActive)
                 {
-                    committedGroupChanged |= inputBox.CommitComposition(committedText);
+                    committedGroupChanged |= InsertValidatedText(committedText, commitComposition: true);
                     compositionActive = false;
                     lastCompositionText = "";
                 }
                 else
                 {
-                    inputBox.InsertText(committedText);
-                    committedGroupChanged = true;
+                    committedGroupChanged |= InsertValidatedText(committedText);
                 }
 
                 if (!string.IsNullOrEmpty(inputFrameState.CompositionText))
@@ -1583,6 +1601,11 @@ namespace Milestro.Components
                 hadCompositionBeforeInput,
                 committedTextHadLineBreak);
             ApplyInputChange(editingGroupChanged, sessionBound: true);
+            if (submitRequested)
+            {
+                submitRequested = false;
+                Submit();
+            }
         }
 
         private bool ReadEditingKeys(HybridInputFrame frame,
@@ -1609,10 +1632,14 @@ namespace Milestro.Components
             if (frame.WasKeyPressed(KeyCode.Return) || frame.WasKeyPressed(KeyCode.KeypadEnter))
             {
                 ResetSurrogateInputState();
+                if (!m_readOnly && ShouldSubmitOnEnter(frame))
+                {
+                    submitRequested = true;
+                    return changed;
+                }
                 if (!m_readOnly && m_lineMode == TextInputLineMode.MultiLine && !suppressEnterInsertion)
                 {
-                    inputBox.InsertText("\n");
-                    changed = true;
+                    changed |= InsertValidatedText("\n");
                 }
             }
 
@@ -1810,9 +1837,8 @@ namespace Milestro.Components
                 }
 
                 inputBox.BreakUndoGroup();
-                inputBox.InsertText(clipboardText);
+                changed = InsertValidatedText(clipboardText, source: TextInputEditSource.Paste);
                 inputBox.BreakUndoGroup();
-                changed = true;
                 return true;
             }
 
@@ -1832,6 +1858,7 @@ namespace Milestro.Components
             lastCompositionText = "";
             inputFrameState.Reset();
             ResetSurrogateInputState();
+            UpdatePlaceholder();
         }
 
         private void ClearSelectionIfDisabled()
@@ -1906,6 +1933,7 @@ namespace Milestro.Components
             }
 
             var textChanged = inputBox != null && CommitCanonicalText(inputBox.Text, notify: true, sessionBound);
+            UpdatePlaceholder();
             if ((changed || textChanged) && inputBox != null)
             {
                 inputBox.EnsureCaretVisible();
@@ -2258,7 +2286,7 @@ namespace Milestro.Components
                 if (ch == '\r' || ch == '\n')
                 {
                     ClearPendingHighSurrogate();
-                    if (m_lineMode == TextInputLineMode.MultiLine)
+                    if (m_lineMode == TextInputLineMode.MultiLine && !m_submitOnEnter)
                     {
                         builder.Append('\n');
                     }
@@ -2553,7 +2581,7 @@ namespace Milestro.Components
 
             inputBox = new InputBox(paragraphStyle, textStyle);
             CoerceWrapModeForLineMode();
-            var managedCanonical = CanonicalizeTextForLineMode(m_text, m_lineMode);
+            var managedCanonical = NormalizeFormText(m_text, applyCustomValidation: false);
             inputBox.SetSoftWrap(EffectiveSoftWrap());
             inputBox.SetFocused(IsDispatcherFocused);
             inputBox.SetTextOverflow(m_textOverflow);
@@ -2570,6 +2598,7 @@ namespace Milestro.Components
             inputBox.SetViewport(ContentSize());
             ApplyInputBoxAutoMargin();
             ClearSelectionIfDisabled();
+            UpdatePlaceholder();
         }
 
         private static TextAlign ToParagraphTextAlign(TextInputAlignment alignment)
@@ -2695,7 +2724,7 @@ namespace Milestro.Components
             }
         }
 
-        private sealed class InputSink : IHybridInputLifecycleSink
+        private sealed class InputSink : IHybridInputSubmitSink, IHybridInputKeyboardSink
         {
             private readonly TextInput owner;
 
@@ -2708,6 +2737,7 @@ namespace Milestro.Components
             public bool IsActiveAndEnabled => owner.isActiveAndEnabled;
             public bool CanConsumeInputNow => owner.CanReadInput();
             public string CommittedText => owner.m_text;
+            public HybridInputKeyboardOptions KeyboardOptions => owner.GetKeyboardOptions();
 
             public void OnInputFrame(HybridInputFrame frame)
             {
@@ -2737,6 +2767,11 @@ namespace Milestro.Components
             public void OnValueChanged(string value)
             {
                 owner.OnDispatcherValueChanged(value);
+            }
+
+            public void OnSubmit(string value)
+            {
+                owner.onSubmit.Invoke(value);
             }
         }
     }

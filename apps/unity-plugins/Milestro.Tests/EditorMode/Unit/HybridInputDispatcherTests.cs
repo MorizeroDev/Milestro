@@ -2498,6 +2498,132 @@ namespace Milestro.Tests
             Assert.That(playerLoop.subSystemList![0].subSystemList!.Length, Is.EqualTo(3));
         }
 
+        [Test]
+        public void SubmitUsesOrderedBoundedNotificationsAndRecoversAfterListenerFailure()
+        {
+            var owner = new GameObject("submit owner");
+            try
+            {
+                using var selection = new SelectionFixture();
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var sink = new LifecycleSink(owner, "input");
+                using var registration = dispatcher.RegisterSink(sink);
+                selection.Select(owner);
+                registration.AcquireFocus();
+                sink.Calls.Clear();
+                sink.OnFrame = _ =>
+                {
+                    dispatcher.NotifyValueChanged(sink, "final", sessionBound: true);
+                    dispatcher.NotifySubmit(sink, "final");
+                };
+                provider.Emit(HybridInputEvent.CommittedText("final", 1d));
+                dispatcher.Drain(1, 1d);
+                Assert.That(sink.Calls, Is.EqualTo(new[] { "input:Value:final", "input:Submit:final" }));
+                sink.OnSubmitCallback = _ => throw new InvalidOperationException("submit listener");
+                dispatcher.NotifySubmit(sink, "throws");
+                Assert.That(dispatcher.Diagnostics.LastDiagnostic, Is.EqualTo(HybridInputDiagnosticCode.ListenerException));
+                sink.OnSubmitCallback = null;
+                dispatcher.NotifySubmit(sink, "recovered");
+                Assert.That(sink.Calls, Does.Contain("input:Submit:recovered"));
+                registration.ReleaseFocus();
+                sink.Calls.Clear();
+                dispatcher.NotifySubmit(sink, "stale");
+                Assert.That(sink.Calls, Is.Empty);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void KeyboardOptionsBelongToFocusedOwnerAndArriveBeforeSessionBegins()
+        {
+            var firstOwner = new GameObject("first keyboard owner");
+            var secondOwner = new GameObject("second keyboard owner");
+            try
+            {
+                using var selection = new SelectionFixture();
+                var provider = new FakeProvider("provider", HybridInputProviderMatch.Exact);
+                var dispatcher = StartedDispatcher(provider);
+                var firstSink = new LifecycleSink(firstOwner, "first")
+                {
+                    KeyboardOptions = new HybridInputKeyboardOptions(TouchScreenKeyboardType.EmailAddress,
+                        false, false, false, false)
+                };
+                var secondSink = new LifecycleSink(secondOwner, "second")
+                {
+                    KeyboardOptions = new HybridInputKeyboardOptions(TouchScreenKeyboardType.NumberPad,
+                        false, false, true, false)
+                };
+                using var first = dispatcher.RegisterSink(firstSink);
+                using var second = dispatcher.RegisterSink(secondSink);
+                selection.Select(firstOwner);
+                first.AcquireFocus();
+                Assert.That(provider.OptionsAtSessionStart.KeyboardType, Is.EqualTo(TouchScreenKeyboardType.EmailAddress));
+                selection.Select(secondOwner);
+                second.AcquireFocus();
+                Assert.That(provider.OptionsAtSessionStart.KeyboardType, Is.EqualTo(TouchScreenKeyboardType.NumberPad));
+                Assert.That(provider.OptionsAtSessionStart.Secure, Is.True);
+                Assert.That(first.SetKeyboardOptions(firstSink.KeyboardOptions), Is.False);
+                Assert.That(provider.KeyboardOptions.KeyboardType, Is.EqualTo(TouchScreenKeyboardType.NumberPad));
+                Assert.That(second.SetKeyboardOptions(firstSink.KeyboardOptions), Is.True);
+                Assert.That(provider.KeyboardOptions.KeyboardType, Is.EqualTo(TouchScreenKeyboardType.EmailAddress));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(firstOwner);
+                UnityEngine.Object.DestroyImmediate(secondOwner);
+            }
+        }
+
+        [Test]
+        public void TextInputEnterSubmitsCanonicalValueOnceAndImeConfirmationDoesNotSubmit()
+        {
+            var owner = new GameObject("submit input", typeof(RectTransform));
+            owner.SetActive(false);
+            HybridInputRuntime.ResetState();
+            try
+            {
+                using var selection = new SelectionFixture();
+                var provider = new FakeProvider("form-provider", HybridInputProviderMatch.Exact);
+                using var providerRegistration = HybridInputRuntime.RegisterProvider(provider);
+                var dispatcher = (HybridInputDispatcher)typeof(HybridInputRuntime)
+                    .GetField("Dispatcher", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+                dispatcher.RefreshEnvironment(FocusedEnvironment());
+                var input = owner.AddComponent<TextInput>();
+                input.characterLimit = 2;
+                var calls = new List<string>();
+                input.onValueChanged.AddListener(value => calls.Add("value:" + value));
+                input.onSubmit.AddListener(value => calls.Add("submit:" + value));
+                owner.SetActive(true);
+                selection.Select(owner);
+                Assert.That(input.IsDispatcherFocused, Is.True);
+                provider.Emit(HybridInputEvent.CommittedText("abc", 1d));
+                provider.Emit(HybridInputEvent.KeyState(KeyCode.Return, true, 1d));
+                dispatcher.Drain(1, 1d);
+                Assert.That(calls, Is.EqualTo(new[] { "value:ab", "submit:ab" }));
+                Assert.That(input.IsDispatcherFocused, Is.True);
+                calls.Clear();
+                input.SetTextWithoutNotify("");
+                provider.Emit(HybridInputEvent.Composition("候选", 2d));
+                dispatcher.Drain(2, 2d);
+                provider.Emit(HybridInputEvent.CommittedText("中", 3d));
+                provider.Emit(HybridInputEvent.KeyState(KeyCode.Return, true, 3d));
+                dispatcher.Drain(3, 3d);
+                Assert.That(calls, Is.EqualTo(new[] { "value:中" }));
+                input.readOnly = true;
+                input.Submit();
+                Assert.That(calls, Has.Count.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+                HybridInputRuntime.ResetState();
+            }
+        }
+
         private static HybridInputDispatcher StartedDispatcher(FakeProvider provider)
         {
             var dispatcher = new HybridInputDispatcher();
@@ -2788,7 +2914,7 @@ namespace Milestro.Tests
             }
         }
 
-        private sealed class LifecycleSink : IHybridInputLifecycleSink
+        private sealed class LifecycleSink : IHybridInputSubmitSink, IHybridInputKeyboardSink
         {
             private readonly string name;
             private readonly List<string> calls;
@@ -2804,6 +2930,7 @@ namespace Milestro.Tests
             public bool IsActiveAndEnabled { get; set; } = true;
             public bool CanConsumeInputNow { get; set; } = true;
             public string CommittedText { get; set; } = string.Empty;
+            public HybridInputKeyboardOptions KeyboardOptions { get; set; }
             internal List<HybridInputFrame> Frames { get; } = new List<HybridInputFrame>();
             internal List<HybridInputResetReason> Resets { get; } = new List<HybridInputResetReason>();
             internal List<string> Calls => calls;
@@ -2813,6 +2940,7 @@ namespace Milestro.Tests
             internal Action<string>? OnEndEditCallback { get; set; }
             internal Action? OnFocusLostCallback { get; set; }
             internal Action<string>? OnValueChangedCallback { get; set; }
+            internal Action<string>? OnSubmitCallback { get; set; }
 
             public void OnInputFrame(HybridInputFrame frame)
             {
@@ -2848,6 +2976,12 @@ namespace Milestro.Tests
             {
                 Calls.Add($"{name}:Value:{value}");
                 OnValueChangedCallback?.Invoke(value);
+            }
+
+            public void OnSubmit(string value)
+            {
+                Calls.Add($"{name}:Submit:{value}");
+                OnSubmitCallback?.Invoke(value);
             }
         }
 
@@ -2898,7 +3032,8 @@ namespace Milestro.Tests
             }
         }
 
-        private sealed class FakeProvider : IHybridInputProvider, IHybridInputFocusSessionProvider
+        private sealed class FakeProvider : IHybridInputProvider, IHybridInputFocusSessionProvider,
+            IHybridInputKeyboardProvider
         {
             private readonly Func<HybridInputEnvironment, HybridInputProviderMatch> match;
             private readonly List<string>? calls;
@@ -2950,6 +3085,13 @@ namespace Milestro.Tests
             internal Vector2 ImeCursorPosition { get; private set; }
             internal List<KeyCode> PressedKeys { get; } = new List<KeyCode>();
             internal bool ReplacePressedKeysOnCollect { get; set; } = true;
+            internal HybridInputKeyboardOptions KeyboardOptions { get; private set; }
+            internal HybridInputKeyboardOptions OptionsAtSessionStart { get; private set; }
+
+            public void SetKeyboardOptions(HybridInputKeyboardOptions options)
+            {
+                KeyboardOptions = options;
+            }
 
             public HybridInputProviderMatch Match(HybridInputEnvironment environment)
             {
@@ -2972,6 +3114,7 @@ namespace Milestro.Tests
 
             public void BeginFocusSession(IHybridInputEventSink nextSessionSink)
             {
+                OptionsAtSessionStart = KeyboardOptions;
                 sessionSink = nextSessionSink;
                 sessionSinks.Add(nextSessionSink);
                 ++BeginCount;

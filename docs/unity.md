@@ -187,11 +187,84 @@ normally rebuilds only when one of those changes. Pixel-only text updates do not
 rebuild the combined mesh. Per-label custom `MaterialPropertyBlock` values are
 not merged; keep shared visual settings in the source material.
 
+## TextInput Form Options
+
+`placeholder` accepts a separate uGUI `Graphic` (including `TextBox` or `Text`).
+Assign a child graphic, lay it out inside the input, and disable its raycast
+target. The input enables it only while both the value and IME preedit are empty;
+the placeholder never becomes part of `Text` or a value event.
+
+`characterLimit` defaults to `0` (unlimited). It counts Unicode scalar values:
+an emoji surrogate pair counts as one character; combining marks and multi-code-
+point emoji count separately. Limits apply to typing, paste, IME commits,
+`Text`, and `SetTextWithoutNotify`. Replacing a selection frees its budget before
+the new text is checked. Rejected input leaves the selection intact.
+
+`contentType` supplies `Standard`, `Autocorrected`, `IntegerNumber`,
+`DecimalNumber`, `Alphanumeric`, `Name`, `EmailAddress`, `Password`, `Pin`, and
+`Custom` presets. Numeric validation uses ASCII digits, an optional leading
+minus, and `.` for decimals; PIN accepts only digits. Name validation accepts
+Unicode letters and combining marks and capitalizes word starts. Email
+validation filters characters and duplicate `@`/adjacent dots; applications
+must still validate the complete address on submission. Password and PIN
+presets enable masking and disable copying. Presets other than Standard,
+Autocorrected, and Custom select single-line input.
+
+`characterValidation` and `keyboardType` can be overridden independently;
+changing either selects `Custom`. `onValidateInput` adds a runtime callback
+after built-in validation. Its arguments are the proposed text with the
+selection removed and accepted input inserted, the insertion index in UTF-16
+code units, and one Unicode code point. Return the accepted/replacement code
+point, or `0` to reject it. The callback should only validate its arguments;
+avoid changing the input or its settings from inside it. Invalid scalar return
+values are rejected. The callback is scalar-based, not grapheme-cluster-based:
+`👨‍👩‍👧‍👦` produces seven callbacks, including three for U+200D ZWJ, so it is
+not delivered or rejected atomically. Use `onValidateEdit` when the complete
+sequence matters. `onValueChanged` is a post-commit notification and is not a
+substitute for pre-edit validation.
+
+`onValidateEdit` runs after built-in rules, `onValidateInput`, and the character
+limit have produced a candidate, but before that candidate changes the value.
+Its `TextInputEditContext` contains `CurrentText`, `ProposedText`, the filtered
+`InsertedText`, UTF-16 selection offsets, and a `Source` of `Typing`, `Paste`,
+`ImeCommit`, or `Programmatic`. Return `TextInputEditResult.Accept()` to accept
+the candidate or `Reject()` to leave the value and selection unchanged.
+`Replace(text)` replaces the entire candidate value; line canonicalization,
+the character limit, built-in rules, and `onValidateInput` still apply to the
+replacement, but `onValidateEdit` is not called recursively. Interactive
+replacement retains undo history. Assigning `onValidateEdit` alone does not
+revalidate the current value.
+
+```csharp
+input.onValidateEdit = edit =>
+    edit.InsertedText == "👨‍👩‍👧‍👦"
+        ? TextInputEditResult.Reject()
+        : TextInputEditResult.Accept();
+```
+
+Changing limits, content rules, or `onValidateInput` revalidates the value and
+clears undo history so old edits cannot restore disallowed text. IME preedit
+remains unrestricted until committed. Character limits continue to count
+Unicode scalars rather than complete ZWJ sequences.
+
+```csharp
+input.contentType = TextInputContentType.EmailAddress;
+input.characterLimit = 254;
+input.onSubmit.AddListener(address => SaveAddress(address));
+```
+
+`keyboardType` uses Unity's `TouchScreenKeyboardType`. The dispatcher sends
+keyboard type, autocorrection, multiline, masking, and read-only settings to
+providers implementing `IHybridInputKeyboardProvider`, before starting their
+focus session and when settings change. The built-in desktop providers do not
+open a mobile soft keyboard; a platform provider must implement this optional
+contract to apply these hints. Setting a keyboard type does not validate text.
+
 ## TextInput Lifecycle Events
 
-`TextInput` exposes four getter-only Unity events:
+`TextInput` exposes five getter-only Unity events:
 
-- `onValueChanged` and `onEndEdit` are `UnityEvent<string>` values. In the
+- `onValueChanged`, `onEndEdit`, and `onSubmit` are `UnityEvent<string>` values. In the
   Inspector, bind methods that take the event's Dynamic String payload.
 - `onFocusGained` and `onFocusLost` are parameterless `UnityEvent` values.
 
@@ -213,6 +286,16 @@ Assigning a different canonical value through `Text` invokes
 `onValueChanged` once, including while the component is disabled or inactive.
 Assigning the same value does not invoke it. `SetTextWithoutNotify`, Inspector
 validation, deserialization, and scene loading are silent.
+
+Single-line Enter/Keypad Enter invokes `onSubmit` after any value change in the
+same input frame. Multiline Enter inserts a newline by default; set
+`submitOnEnter` to submit on Enter and insert a newline with Shift+Enter.
+Enter used to confirm IME composition does not submit. `Submit()` also submits
+the currently focused, enabled, editable input when no composition is active.
+Submission retains focus; an application's listener can move focus or close
+the form, which then produces the normal `onEndEdit`/`onFocusLost` sequence.
+Submit callbacks use the same bounded dispatcher and exception handling as
+the other events.
 
 ## Elastic Scrolling
 

@@ -50,6 +50,11 @@ namespace Milestro.Input
             Dispatcher.NotifyValueChanged(sink, value, sessionBound);
         }
 
+        internal static void NotifySubmit(IHybridInputSubmitSink sink, string value)
+        {
+            Dispatcher.NotifySubmit(sink, value);
+        }
+
         internal static void ResetAndInitialize()
         {
             HybridInputPlayerLoop.Uninstall();

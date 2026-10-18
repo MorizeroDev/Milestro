@@ -4,6 +4,36 @@ namespace Milestro.Util
 {
     internal static class Utf16Util
     {
+        internal static int CountUnicodeScalars(string text)
+        {
+            var count = 0;
+            for (var offset = 0; offset < text.Length; ++offset)
+            {
+                if (char.IsHighSurrogate(text[offset]) && offset + 1 < text.Length &&
+                    char.IsLowSurrogate(text[offset + 1]))
+                {
+                    ++offset;
+                }
+                ++count;
+            }
+            return count;
+        }
+
+        internal static int Utf8ToUtf16Offset(string text, ulong utf8Offset)
+        {
+            ulong byteOffset = 0;
+            var offset = 0;
+            while (offset < text.Length && byteOffset < utf8Offset)
+            {
+                var codePoint = char.ConvertToUtf32(text, offset);
+                var byteCount = codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
+                if (byteOffset + (ulong)byteCount > utf8Offset) break;
+                byteOffset += (ulong)byteCount;
+                offset += codePoint > 0xffff ? 2 : 1;
+            }
+            return offset;
+        }
+
         internal static string RemoveUnpairedSurrogates(string input)
         {
             if (string.IsNullOrEmpty(input))

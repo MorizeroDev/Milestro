@@ -24,6 +24,7 @@ namespace Milestro.Tests.TextInputLifecycle.Unit
 
                 AssertEventShape<string>(input, "m_OnValueChanged", "onValueChanged");
                 AssertEventShape<string>(input, "m_OnEndEdit", "onEndEdit");
+                AssertEventShape<string>(input, "m_OnSubmit", "onSubmit");
                 AssertEventShape(input, "m_OnFocusGained", "onFocusGained");
                 AssertEventShape(input, "m_OnFocusLost", "onFocusLost");
 

@@ -302,6 +302,16 @@ namespace Milestro.Input
             Pump();
         }
 
+        internal void NotifySubmit(IHybridInputSubmitSink sink, string value)
+        {
+            if (!IsMainThread() || IsRejectingTransactionWork()) return;
+            var sinkId = FindSinkId(sink);
+            if (sinkId == 0 || sinkId != focusedSinkId) return;
+            TryQueueNotification(Notification.Submit(sink, sinkId, focusSessionToken,
+                value ?? string.Empty, deliveringSealedReleaseFrame));
+            Pump();
+        }
+
         private void RequestEnvironmentRefresh(HybridInputEnvironment nextEnvironment)
         {
             if (!IsMainThread() || IsRejectingTransactionWork())
@@ -652,6 +662,12 @@ namespace Milestro.Input
         {
             try
             {
+                if (sessionProvider is IHybridInputKeyboardProvider keyboardProvider &&
+                    TryGetRegisteredSink(focusedSinkId, out var entry) &&
+                    entry.Sink is IHybridInputKeyboardSink keyboardSink)
+                {
+                    keyboardProvider.SetKeyboardOptions(keyboardSink.KeyboardOptions);
+                }
                 sessionProvider.BeginFocusSession(session);
                 return true;
             }
@@ -1085,6 +1101,10 @@ namespace Milestro.Input
                         }
                         notification.LifecycleSink!.OnValueChanged(notification.Text);
                         break;
+                    case NotificationKind.Submit:
+                        if (!CanDeliverSessionNotification(notification)) return;
+                        ((IHybridInputSubmitSink)notification.LifecycleSink!).OnSubmit(notification.Text);
+                        break;
                 }
             }
             catch
@@ -1355,6 +1375,15 @@ namespace Milestro.Input
                 return;
             }
             sinks.Remove(sinkId);
+        }
+
+        private bool SetKeyboardOptions(int sinkId, HybridInputKeyboardOptions options)
+        {
+            if (!IsMainThread() || IsRejectingTransactionWork() || sinkId != focusedSinkId ||
+                !environment.ApplicationFocused ||
+                !(activeProvider is IHybridInputKeyboardProvider keyboardProvider)) return false;
+            keyboardProvider.SetKeyboardOptions(options);
+            return true;
         }
 
         private bool SetImeEnabled(int sinkId, bool enabled)
@@ -1715,7 +1744,8 @@ namespace Milestro.Input
         {
             Frame,
             FocusGained,
-            ValueChanged
+            ValueChanged,
+            Submit
         }
 
         private enum TerminalStage
@@ -1807,6 +1837,13 @@ namespace Milestro.Input
                     sessionBound,
                     allowSealedSession);
             }
+
+            internal static Notification Submit(IHybridInputSubmitSink sink,
+                int sinkId, int sessionToken, string text, bool allowSealedSession)
+            {
+                return new Notification(NotificationKind.Submit, sink, sink, sinkId, sessionToken,
+                    -1, text, true, allowSealedSession);
+            }
         }
 
         private sealed class FixedRing<T>
@@ -1892,6 +1929,11 @@ namespace Milestro.Input
             internal bool SetImeEnabled(bool enabled)
             {
                 return dispatcher?.SetImeEnabled(sinkId, enabled) == true;
+            }
+
+            internal bool SetKeyboardOptions(HybridInputKeyboardOptions options)
+            {
+                return dispatcher?.SetKeyboardOptions(sinkId, options) == true;
             }
 
             internal bool SetImeCursorPosition(Vector2 position)
