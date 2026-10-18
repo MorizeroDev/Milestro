@@ -49,6 +49,39 @@ public:
 
     size_t getFontFeatureNumber() const { return textStyle.getFontFeatureNumber(); }
     void addFontFeature(const SkString &fontFeature, int value) { textStyle.addFontFeature(fontFeature, value); }
+    void setFontFeature(const SkString &fontFeature, int value) {
+        auto features = textStyle.getFontFeatures();
+        bool updated = false;
+        textStyle.resetFontFeatures();
+        for (const auto &feature: features) {
+            if (feature.fName == fontFeature) {
+                if (!updated) {
+                    textStyle.addFontFeature(fontFeature, value);
+                    updated = true;
+                }
+            } else {
+                textStyle.addFontFeature(feature.fName, feature.fValue);
+            }
+        }
+        if (!updated) {
+            textStyle.addFontFeature(fontFeature, value);
+        }
+    }
+    void removeFontFeature(const SkString &fontFeature) {
+        auto features = textStyle.getFontFeatures();
+        textStyle.resetFontFeatures();
+        for (const auto &feature: features) {
+            if (feature.fName != fontFeature) {
+                textStyle.addFontFeature(feature.fName, feature.fValue);
+            }
+        }
+    }
+    void copyFontFeaturesFrom(const TextStyle &other) {
+        textStyle.resetFontFeatures();
+        for (const auto &feature: other.textStyle.getFontFeatures()) {
+            textStyle.addFontFeature(feature.fName, feature.fValue);
+        }
+    }
     void resetFontFeatures() { textStyle.resetFontFeatures(); }
 
     // getFontArguments

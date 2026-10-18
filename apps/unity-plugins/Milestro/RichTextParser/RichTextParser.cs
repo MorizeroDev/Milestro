@@ -6,6 +6,7 @@ using System.Text;
 using System.Xml;
 using Milestro.Model;
 using Milestro.RichTextParser.AST;
+using Milestro.RichTextParser.Css;
 using Milestro.Skia;
 using Milestro.Skia.TextLayout;
 using Paraparty.Colors;
@@ -235,6 +236,11 @@ namespace Milestro.RichTextParser
                     state.FontFamilyTokens = fontFamilies;
                     state.FontFamilies = FontFamilyParser.ToSourceFamilyList(fontFamilies);
                 }
+
+                if (node.Attributes.TryGetValue("style", out var fontDeclarations))
+                {
+                    CssParser.Apply(state, fontDeclarations);
+                }
             }
             else if (node.Tag == "span")
             {
@@ -279,6 +285,11 @@ namespace Milestro.RichTextParser
                 {
                     state.FontSlant = fontSlant;
                 }
+
+                if (node.Attributes.TryGetValue("style", out var spanDeclarations))
+                {
+                    CssParser.Apply(state, spanDeclarations);
+                }
             }
             else if (node.Tag == "p")
             {
@@ -296,6 +307,11 @@ namespace Milestro.RichTextParser
                     && TryParseEnum(textDirection, out TextDirection direction))
                 {
                     ctx.Result.ParagraphStyle.TextDirection = direction;
+                }
+
+                if (node.Attributes.TryGetValue("style", out var paragraphDeclarations))
+                {
+                    CssParser.Apply(state, paragraphDeclarations, ctx.Result.ParagraphStyle);
                 }
             }
             else if (node.Tag == "br")

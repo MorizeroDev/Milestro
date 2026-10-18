@@ -415,8 +415,8 @@ void TextWrapper::breakRubyTextIntoLines(ParagraphImpl* parent, SkScalar maxWidt
     fMinIntrinsicWidth = 0;
     fMaxIntrinsicWidth = 0;
     fExceededMaxLines = false;
-    SkScalar hardLineWidth = 0;
-    SkScalar wordWidth = 0;
+    SkScalar hardLineWidth = parent->textIndent();
+    SkScalar wordWidth = parent->textIndent();
     for (const auto& unit : units) {
         hardLineWidth += unit.width;
         wordWidth += unit.width;
@@ -487,6 +487,7 @@ void TextWrapper::breakRubyTextIntoLines(ParagraphImpl* parent, SkScalar maxWidt
     };
     size_t first = 0;
     while (first < units.size()) {
+        auto lineWidth = parent->lines().empty() ? parent->firstLineWidth(maxWidth) : maxWidth;
         size_t cursor = first;
         size_t softBreak = first;
         size_t emergencyBreak = first;
@@ -494,7 +495,7 @@ void TextWrapper::breakRubyTextIntoLines(ParagraphImpl* parent, SkScalar maxWidt
         bool hardBreak = false;
         while (cursor < units.size()) {
             const auto& unit = units[cursor];
-            if (cursor > first && !unit.whitespace && width + unit.width > maxWidth) {
+            if (cursor > first && !unit.whitespace && width + unit.width > lineWidth) {
                 auto boundary = softBreak > first ? softBreak : emergencyBreak;
                 if (boundary > first) { cursor = boundary; break; }
             }

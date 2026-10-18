@@ -87,6 +87,7 @@ ParagraphImpl::ParagraphImpl(const SkString& text,
         , fStrutMetrics(false)
         , fOldWidth(0)
         , fOldHeight(0)
+        , fTextIndent(0)
         , fUnicode(std::move(unicode))
         , fHasLineBreaks(false)
         , fHasWhitespacesInside(false)
@@ -141,6 +142,11 @@ void ParagraphImpl::layout(SkScalar rawWidth) {
     if (getApplyRoundingHack()) {
         floorWidth = SkScalarFloorToScalar(floorWidth);
     }
+    auto textIndent = fParagraphStyle.getTextIndent();
+    if (fParagraphStyle.getTextIndentIsPercentage()) {
+        textIndent = SkIsFinite(floorWidth) ? floorWidth * textIndent / 100 : 0;
+    }
+    fTextIndent = SkIsFinite(textIndent) ? textIndent : 0;
 
     if ((!SkIsFinite(rawWidth) || fLongestLine <= floorWidth) &&
         fState >= kLineBroken &&
@@ -607,7 +613,7 @@ void ParagraphImpl::breakShapedTextIntoLines(SkScalar maxWidth) {
     if (!hasRuby() && !fHasLineBreaks &&
         !fHasWhitespacesInside &&
         fPlaceholders.size() == 1 &&
-        fRuns.size() == 1 && fRuns[0].fAdvance.fX <= maxWidth) {
+        fRuns.size() == 1 && fRuns[0].fAdvance.fX <= firstLineWidth(maxWidth)) {
         // This is a short version of a line breaking when we know that:
         // 1. We have only one line of text
         // 2. It's shaped into a single run
@@ -650,16 +656,17 @@ void ParagraphImpl::breakShapedTextIntoLines(SkScalar maxWidth) {
         advance.fY = metrics.height();
         auto clusterRange = ClusterRange(0, trailingSpaces);
         auto clusterRangeWithGhosts = ClusterRange(0, this->clusters().size() - 1);
-        this->addLine(SkPoint::Make(0, 0), advance,
+        this->addLine(SkPoint::Make(firstLineOffset(), 0), advance,
                       textExcludingSpaces, textRange, textRange,
                       clusterRange, clusterRangeWithGhosts, run.advance().x(),
                       metrics);
 
-        fLongestLine = nearlyZero(advance.fX) ? run.advance().fX : advance.fX;
+        auto longestLine = nearlyZero(advance.fX) ? run.advance().fX : advance.fX;
+        fLongestLine = std::max(SkScalar(0), longestLine + fTextIndent);
         fHeight = advance.fY;
         fWidth = maxWidth;
-        fMaxIntrinsicWidth = run.advance().fX;
-        fMinIntrinsicWidth = advance.fX;
+        fMaxIntrinsicWidth = std::max(SkScalar(0), run.advance().fX + fTextIndent);
+        fMinIntrinsicWidth = std::max(SkScalar(0), advance.fX + fTextIndent);
         fAlphabeticBaseline = fLines.empty() ? fEmptyMetrics.alphabeticBaseline() : fLines.front().alphabeticBaseline();
         fIdeographicBaseline = fLines.empty() ? fEmptyMetrics.ideographicBaseline() : fLines.front().ideographicBaseline();
         fExceededMaxLines = false;
@@ -683,14 +690,24 @@ void ParagraphImpl::breakShapedTextIntoLines(SkScalar maxWidth) {
                 InternalLineMetrics metrics,
                 bool addEllipsis) {
                 // TODO: Take in account clipped edges
+                auto firstLine = this->fLines.empty();
+                if (firstLine) {
+                    offset.fX = this->firstLineOffset();
+                }
                 auto& line = this->addLine(offset, advance, textExcludingSpaces, text, textWithNewlines, clusters, clustersWithGhosts, widthWithSpaces, metrics);
                 if (addEllipsis) {
-                    line.createEllipsis(maxWidth, this->getEllipsis(), true);
+                    line.createEllipsis(firstLine ? this->firstLineWidth(maxWidth) : maxWidth,
+                                        this->getEllipsis(), true);
                 }
                 if (this->paragraphStyle().getRenderSoftHyphens()) {
                     line.createSoftHyphen();
                 }
-                fLongestLine = std::max(fLongestLine, nearlyZero(line.width()) ? widthWithSpaces : line.width());
+                auto longestLine = nearlyZero(line.width()) ? widthWithSpaces : line.width();
+                fLongestLine = std::max(fLongestLine, longestLine + (firstLine ? fTextIndent : 0));
+                if (firstLine) {
+                    this->fMaxWidthWithTrailingSpaces = std::max(this->fMaxWidthWithTrailingSpaces,
+                                                                 widthWithSpaces + fTextIndent);
+                }
             });
 
     fHeight = textWrapper.height();

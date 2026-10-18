@@ -203,6 +203,35 @@ namespace Milestro.Skia.TextLayout
             }
         }
 
+        public unsafe void SetFontFeature(string feature, int value)
+        {
+            var featureCStr = feature.CStr();
+            fixed (byte* featurePtr = featureCStr)
+            {
+                ExitCodeUtil.ThrowIfFailed(
+                    BindingC.SkiaTextlayoutTextStyleSetFontFeature(NativePtr, featurePtr, value)
+                );
+            }
+        }
+
+        public unsafe void RemoveFontFeature(string feature)
+        {
+            var featureCStr = feature.CStr();
+            fixed (byte* featurePtr = featureCStr)
+            {
+                ExitCodeUtil.ThrowIfFailed(
+                    BindingC.SkiaTextlayoutTextStyleRemoveFontFeature(NativePtr, featurePtr)
+                );
+            }
+        }
+
+        public void CopyFontFeaturesFrom(TextStyle other)
+        {
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutTextStyleCopyFontFeaturesFrom(NativePtr, other.NativePtr)
+            );
+        }
+
         public void ResetFontFeature()
         {
             ExitCodeUtil.ThrowIfFailed(

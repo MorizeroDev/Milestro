@@ -211,6 +211,8 @@ private:
     SkScalar fHeight;
     SkScalar fMinIntrinsicWidth;
     SkScalar fMaxIntrinsicWidth;
+    SkScalar fTextIndent;
+    bool fTextIndentPending;
 
     void reset() {
         fWords.clean();
@@ -228,6 +230,7 @@ private:
     void trimEndSpaces(TextAlign align);
     std::tuple<Cluster*, size_t, SkScalar> trimStartSpaces(Cluster* endOfClusters);
     SkScalar getClustersTrimmedWidth();
+    void updateMinIntrinsicWidth(SkScalar width);
 };
 }  // namespace textlayout
 }  // namespace skia

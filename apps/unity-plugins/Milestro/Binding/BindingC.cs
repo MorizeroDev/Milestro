@@ -1301,6 +1301,20 @@ int align);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleGetTextIndent")]
+        internal static extern unsafe long SkiaTextlayoutParagraphStyleGetTextIndent(IntPtr s,
+out float value,
+out int isPercentage);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleSetTextIndent")]
+        internal static extern unsafe long SkiaTextlayoutParagraphStyleSetTextIndent(IntPtr s,
+float value,
+int isPercentage);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleGetMaxLines")]
         internal static extern unsafe long SkiaTextlayoutParagraphStyleGetMaxLines(IntPtr s,
 out ulong maxLines);
@@ -1663,6 +1677,25 @@ out ulong num);
         internal static extern unsafe long SkiaTextlayoutTextStyleAddFontFeature(IntPtr s,
 byte* fontFeature,
 int value);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleSetFontFeature")]
+        internal static extern unsafe long SkiaTextlayoutTextStyleSetFontFeature(IntPtr s,
+byte* fontFeature,
+int value);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleRemoveFontFeature")]
+        internal static extern unsafe long SkiaTextlayoutTextStyleRemoveFontFeature(IntPtr s,
+byte* fontFeature);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleCopyFontFeaturesFrom")]
+        internal static extern unsafe long SkiaTextlayoutTextStyleCopyFontFeaturesFrom(IntPtr s,
+IntPtr other);
 
 
 

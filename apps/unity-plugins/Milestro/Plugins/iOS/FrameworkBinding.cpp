@@ -1233,6 +1233,18 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphStyleSetTextAlign(milestr
     return MilestroSkiaTextlayoutParagraphStyleSetTextAlign(s, align);
 }
 
+int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphStyleGetTextIndent(milestro::skia::textlayout::ParagraphStyle* s,
+                                                                          float& value,
+                                                                          int32_t& isPercentage) {
+    return MilestroSkiaTextlayoutParagraphStyleGetTextIndent(s, value, isPercentage);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphStyleSetTextIndent(milestro::skia::textlayout::ParagraphStyle* s,
+                                                                          float value,
+                                                                          int32_t isPercentage) {
+    return MilestroSkiaTextlayoutParagraphStyleSetTextIndent(s, value, isPercentage);
+}
+
 int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphStyleGetMaxLines(milestro::skia::textlayout::ParagraphStyle* s,
                                                                         uint64_t& maxLines) {
     return MilestroSkiaTextlayoutParagraphStyleGetMaxLines(s, maxLines);
@@ -1555,6 +1567,25 @@ FrameworkBindingMilestroSkiaTextlayoutTextStyleAddFontFeature(milestro::skia::te
                                                               [[milize::CSharpType("byte*")]] uint8_t* fontFeature,
                                                               int32_t value) {
     return MilestroSkiaTextlayoutTextStyleAddFontFeature(s, fontFeature, value);
+}
+
+int64_t
+FrameworkBindingMilestroSkiaTextlayoutTextStyleSetFontFeature(milestro::skia::textlayout::TextStyle* s,
+                                                              [[milize::CSharpType("byte*")]] uint8_t* fontFeature,
+                                                              int32_t value) {
+    return MilestroSkiaTextlayoutTextStyleSetFontFeature(s, fontFeature, value);
+}
+
+int64_t
+FrameworkBindingMilestroSkiaTextlayoutTextStyleRemoveFontFeature(milestro::skia::textlayout::TextStyle* s,
+                                                                 [[milize::CSharpType("byte*")]] uint8_t* fontFeature) {
+    return MilestroSkiaTextlayoutTextStyleRemoveFontFeature(s, fontFeature);
+}
+
+int64_t
+FrameworkBindingMilestroSkiaTextlayoutTextStyleCopyFontFeaturesFrom(milestro::skia::textlayout::TextStyle* s,
+                                                                    milestro::skia::textlayout::TextStyle* other) {
+    return MilestroSkiaTextlayoutTextStyleCopyFontFeaturesFrom(s, other);
 }
 
 int64_t FrameworkBindingMilestroSkiaTextlayoutTextStyleResetFontFeatures(milestro::skia::textlayout::TextStyle* s) {

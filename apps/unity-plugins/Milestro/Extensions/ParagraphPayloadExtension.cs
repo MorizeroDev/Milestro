@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
 using Milestro.Model;
 using Milestro.RichTextParser;
@@ -14,6 +15,7 @@ namespace Milestro.Extensions
             var ret = new ParagraphStyle();
             ret.TextDirection = t.TextDirection ?? baseParaStyle.TextDirection;
             ret.TextAlign = t.TextAlign ?? baseParaStyle.TextAlign;
+            ret.TextIndent = t.TextIndent ?? baseParaStyle.TextIndent;
 
             if (baseParaStyle.IsUnlimitedLines)
             {
@@ -110,6 +112,25 @@ namespace Milestro.Extensions
             ret.LetterSpacing = t.LetterSpacing ?? baseTextStyle.LetterSpacing;
             ret.WordSpacing = baseTextStyle.WordSpacing;
             ret.TextBaseline = baseTextStyle.TextBaseline;
+
+            ret.CopyFontFeaturesFrom(baseTextStyle);
+            foreach (var operation in t.FontFeatureOperations)
+            {
+                switch (operation.Type)
+                {
+                    case FontFeatureOperationType.ResetAll:
+                        ret.ResetFontFeature();
+                        break;
+                    case FontFeatureOperationType.Set:
+                        ret.SetFontFeature(operation.Feature!, operation.Value);
+                        break;
+                    case FontFeatureOperationType.Remove:
+                        ret.RemoveFontFeature(operation.Feature!);
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
+            }
 
 
             var shadowList = baseTextStyle.GetShadows();

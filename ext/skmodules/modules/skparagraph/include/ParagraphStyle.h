@@ -82,6 +82,8 @@ struct ParagraphStyle {
         return this->fHeight == rhs.fHeight && this->fEllipsis == rhs.fEllipsis &&
                this->fEllipsisUtf16 == rhs.fEllipsisUtf16 &&
                this->fTextDirection == rhs.fTextDirection && this->fTextAlign == rhs.fTextAlign &&
+               this->fTextIndent == rhs.fTextIndent &&
+               this->fTextIndentIsPercentage == rhs.fTextIndentIsPercentage &&
                this->fDefaultTextStyle == rhs.fDefaultTextStyle &&
                this->fReplaceTabCharacters == rhs.fReplaceTabCharacters &&
                this->fFakeMissingFontStyles == rhs.fFakeMissingFontStyles &&
@@ -99,6 +101,13 @@ struct ParagraphStyle {
 
     TextAlign getTextAlign() const { return fTextAlign; }
     void setTextAlign(TextAlign align) { fTextAlign = align; }
+
+    SkScalar getTextIndent() const { return fTextIndent; }
+    bool getTextIndentIsPercentage() const { return fTextIndentIsPercentage; }
+    void setTextIndent(SkScalar value, bool isPercentage) {
+        fTextIndent = value;
+        fTextIndentIsPercentage = isPercentage;
+    }
 
     size_t getMaxLines() const { return fLinesLimit; }
     void setMaxLines(size_t maxLines) { fLinesLimit = maxLines; }
@@ -142,6 +151,8 @@ private:
     TextStyle fDefaultTextStyle;
     TextAlign fTextAlign;
     TextDirection fTextDirection;
+    SkScalar fTextIndent = 0;
+    bool fTextIndentIsPercentage = false;
     size_t fLinesLimit;
     std::u16string fEllipsisUtf16;
     SkString fEllipsis;

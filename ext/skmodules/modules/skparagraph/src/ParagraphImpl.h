@@ -29,6 +29,7 @@
 #include "src/core/SkBitmaskEnum.h"
 #include "src/core/SkTHash.h"
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
@@ -141,6 +142,13 @@ public:
     SkSpan<Cluster> clusters() { return SkSpan<Cluster>(fClusters.begin(), fClusters.size()); }
     sk_sp<FontCollection> fontCollection() const { return fFontCollection; }
     void formatLines(SkScalar maxWidth);
+    SkScalar textIndent() const { return fTextIndent; }
+    SkScalar firstLineWidth(SkScalar maxWidth) const {
+        return SkIsFinite(maxWidth) ? std::max(SkScalar(0), maxWidth - fTextIndent) : maxWidth;
+    }
+    SkScalar firstLineOffset() const {
+        return fParagraphStyle.getTextDirection() == TextDirection::kLtr ? fTextIndent : 0;
+    }
     void setRubyAnnotations(std::vector<RubyAnnotation> annotations);
     bool hasRuby() const { return !fRubyAnnotations.empty(); }
     void prepareRuby();
@@ -310,6 +318,7 @@ private:
     SkScalar fOldWidth;
     SkScalar fOldHeight;
     SkScalar fMaxWidthWithTrailingSpaces;
+    SkScalar fTextIndent;
 
     sk_sp<SkUnicode> fUnicode;
     bool fHasLineBreaks;

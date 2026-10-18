@@ -288,7 +288,8 @@ void TextLine::ensureTextBlobCachePopulated() {
 }
 
 void TextLine::format(TextAlign align, SkScalar maxWidth) {
-    SkScalar delta = maxWidth - this->width();
+    auto lineWidth = this == fOwner->lines().data() ? fOwner->firstLineWidth(maxWidth) : maxWidth;
+    SkScalar delta = lineWidth - this->width();
     if (delta <= 0) {
         return;
     }
@@ -296,7 +297,7 @@ void TextLine::format(TextAlign align, SkScalar maxWidth) {
     // We do nothing for left align
     if (align == TextAlign::kJustify) {
         if (!this->endsWithHardLineBreak()) {
-            this->justify(maxWidth);
+            this->justify(lineWidth);
         } else if (fOwner->paragraphStyle().getTextDirection() == TextDirection::kRtl) {
             // Justify -> Right align
             fShift = delta;

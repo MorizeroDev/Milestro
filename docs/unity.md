@@ -480,6 +480,18 @@ Supported tags in the current parser:
   HTML fallback content and are not rendered. Nested Ruby and multiple `<rt>`
   elements are rejected.
 
+The `style` attribute on `<font>`, `<span>`, and `<p>` accepts
+`font-kerning: auto | normal | none` and `font-feature-settings`. Feature
+settings accept `normal` or a comma-separated list such as `'liga' 0`,
+`'tnum' on`, or `'kern' 1`. Use `&quot;` when a double-quoted feature tag
+appears inside a double-quoted XML attribute.
+
+`<p>` also accepts `text-indent` with a `px` length or a percentage, for
+example `<p style="text-indent: 24px">` or `<p style="text-indent: 10%">`.
+Unitless zero and negative finite values are accepted. Indentation applies
+only to the first formatted line and follows the paragraph's inline-start
+direction. The CSS `hanging` and `each-line` modifiers are not supported.
+
 Ruby layout styles use the element's standard HTML `style` attribute. The
 supported standard CSS Ruby properties are:
 

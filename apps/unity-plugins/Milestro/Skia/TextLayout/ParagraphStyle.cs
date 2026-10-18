@@ -6,6 +6,28 @@ using Paraparty.UnityNative.Base;
 
 namespace Milestro.Skia.TextLayout
 {
+    public readonly struct TextIndent
+    {
+        public TextIndent(float value, bool isPercentage)
+        {
+            Value = value;
+            IsPercentage = isPercentage;
+        }
+
+        public float Value { get; }
+        public bool IsPercentage { get; }
+
+        public static TextIndent Pixels(float value)
+        {
+            return new TextIndent(value, false);
+        }
+
+        public static TextIndent Percentage(float value)
+        {
+            return new TextIndent(value, true);
+        }
+    }
+
     /// <summary>
     /// 虽然你看到这里是引用类型，但是实际上用的时候是值类型
     /// </summary>
@@ -97,6 +119,23 @@ namespace Milestro.Skia.TextLayout
             set =>
                 ExitCodeUtil.ThrowIfFailed(
                     BindingC.SkiaTextlayoutParagraphStyleSetTextAlign(NativePtr, (int)value)
+                );
+        }
+
+
+        public TextIndent TextIndent
+        {
+            get
+            {
+                ExitCodeUtil.ThrowIfFailed(
+                    BindingC.SkiaTextlayoutParagraphStyleGetTextIndent(NativePtr, out var value, out var isPercentage)
+                );
+                return new TextIndent(value, isPercentage != 0);
+            }
+            set =>
+                ExitCodeUtil.ThrowIfFailed(
+                    BindingC.SkiaTextlayoutParagraphStyleSetTextIndent(NativePtr, value.Value,
+                        value.IsPercentage ? 1 : 0)
                 );
         }
 

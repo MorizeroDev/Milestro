@@ -603,6 +603,12 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetTextAlign(milestro::
                                                                       int32_t& align);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetTextAlign(milestro::skia::textlayout::ParagraphStyle* s,
                                                                       int32_t align);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetTextIndent(milestro::skia::textlayout::ParagraphStyle* s,
+                                                                       float& value,
+                                                                       int32_t& isPercentage);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetTextIndent(milestro::skia::textlayout::ParagraphStyle* s,
+                                                                       float value,
+                                                                       int32_t isPercentage);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetMaxLines(milestro::skia::textlayout::ParagraphStyle* s,
                                                                      uint64_t& maxLines);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetMaxLines(milestro::skia::textlayout::ParagraphStyle* s,
@@ -748,6 +754,13 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetFontFeatureNumber(milestr
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleAddFontFeature(milestro::skia::textlayout::TextStyle* s,
                                                                    [[milize::CSharpType("byte*")]] uint8_t* fontFeature,
                                                                    int32_t value);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetFontFeature(milestro::skia::textlayout::TextStyle* s,
+                                                                   [[milize::CSharpType("byte*")]] uint8_t* fontFeature,
+                                                                   int32_t value);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleRemoveFontFeature(milestro::skia::textlayout::TextStyle* s,
+                                                                      [[milize::CSharpType("byte*")]] uint8_t* fontFeature);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleCopyFontFeaturesFrom(milestro::skia::textlayout::TextStyle* s,
+                                                                         milestro::skia::textlayout::TextStyle* other);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleResetFontFeatures(milestro::skia::textlayout::TextStyle* s);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetFontSize(milestro::skia::textlayout::TextStyle* s, float size);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetFontSize(milestro::skia::textlayout::TextStyle* s, float& size);

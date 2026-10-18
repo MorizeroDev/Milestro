@@ -9,6 +9,27 @@ using UnityEngine;
 
 namespace Milestro.RichTextParser
 {
+    internal enum FontFeatureOperationType
+    {
+        ResetAll,
+        Set,
+        Remove,
+    }
+
+    internal readonly struct FontFeatureOperation
+    {
+        internal FontFeatureOperation(FontFeatureOperationType type, string? feature = null, int value = 0)
+        {
+            Type = type;
+            Feature = feature;
+            Value = value;
+        }
+
+        internal FontFeatureOperationType Type { get; }
+        internal string? Feature { get; }
+        internal int Value { get; }
+    }
+
     /// <summary>
     /// Tracks the inline text style overrides collected while walking rich text markup.
     /// </summary>
@@ -103,6 +124,8 @@ namespace Milestro.RichTextParser
         /// </summary>
         public string? Locale { get; set; } = null;
 
+        internal List<FontFeatureOperation> FontFeatureOperations { get; } = new List<FontFeatureOperation>();
+
         /// <summary>
         /// Creates an inherited snapshot for a rich text element so its attributes can be
         /// applied without mutating the parent or sibling segment state.
@@ -124,6 +147,7 @@ namespace Milestro.RichTextParser
             ret.LetterSpacing = LetterSpacing;
             ret.BaselineShift = BaselineShift;
             ret.Locale = Locale;
+            ret.FontFeatureOperations.AddRange(FontFeatureOperations);
 
             return ret;
         }

@@ -152,6 +152,25 @@ int64_t MilestroSkiaTextlayoutTextStyleAddFontFeature(milestro::skia::textlayout
     return MILESTRO_API_RET_OK;
 }
 
+int64_t MilestroSkiaTextlayoutTextStyleSetFontFeature(milestro::skia::textlayout::TextStyle *s,
+                                                      uint8_t *fontFeature,
+                                                      int32_t value) {
+    s->setFontFeature(SkString(reinterpret_cast<const char *>(fontFeature)), value);
+    return MILESTRO_API_RET_OK;
+}
+
+int64_t MilestroSkiaTextlayoutTextStyleRemoveFontFeature(milestro::skia::textlayout::TextStyle *s,
+                                                         uint8_t *fontFeature) {
+    s->removeFontFeature(SkString(reinterpret_cast<const char *>(fontFeature)));
+    return MILESTRO_API_RET_OK;
+}
+
+int64_t MilestroSkiaTextlayoutTextStyleCopyFontFeaturesFrom(milestro::skia::textlayout::TextStyle *s,
+                                                            milestro::skia::textlayout::TextStyle *other) {
+    s->copyFontFeaturesFrom(*other);
+    return MILESTRO_API_RET_OK;
+}
+
 int64_t MilestroSkiaTextlayoutTextStyleResetFontFeatures(milestro::skia::textlayout::TextStyle *s) {
     s->resetFontFeatures();
     return MILESTRO_API_RET_OK;

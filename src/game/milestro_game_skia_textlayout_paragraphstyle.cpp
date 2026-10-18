@@ -76,6 +76,21 @@ int64_t MilestroSkiaTextlayoutParagraphStyleSetTextAlign(milestro::skia::textlay
     return MILESTRO_API_RET_OK;
 }
 
+int64_t MilestroSkiaTextlayoutParagraphStyleGetTextIndent(milestro::skia::textlayout::ParagraphStyle *s,
+                                                          float &value,
+                                                          int32_t &isPercentage) {
+    value = s->getTextIndent();
+    isPercentage = s->getTextIndentIsPercentage() ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+}
+
+int64_t MilestroSkiaTextlayoutParagraphStyleSetTextIndent(milestro::skia::textlayout::ParagraphStyle *s,
+                                                          float value,
+                                                          int32_t isPercentage) {
+    s->setTextIndent(value, isPercentage != 0);
+    return MILESTRO_API_RET_OK;
+}
+
 int64_t MilestroSkiaTextlayoutParagraphStyleGetMaxLines(milestro::skia::textlayout::ParagraphStyle *s,
                                                         uint64_t &maxLines
 ) {

@@ -537,4 +537,121 @@ TEST_F(RubyLayoutTest, BuilderResetDiscardsAnnotations) {
     EXPECT_FALSE(static_cast<ParagraphImpl&>(*paragraph).hasRuby());
 }
 
+TEST_F(RubyLayoutTest, TextIndentHandlesSingleRunMeasurements) {
+    auto control = build("word");
+    style.setTextIndent(20, false);
+    auto paragraph = build("word");
+    auto& impl = static_cast<ParagraphImpl&>(*paragraph);
+    ASSERT_EQ(impl.lines().size(), 1u);
+
+    EXPECT_FLOAT_EQ(impl.lines()[0].offset().fX, 20);
+    EXPECT_FLOAT_EQ(paragraph->getLongestLine(), control->getLongestLine() + 20);
+    EXPECT_FLOAT_EQ(paragraph->getMinIntrinsicWidth(), control->getMinIntrinsicWidth() + 20);
+    EXPECT_FLOAT_EQ(paragraph->getMaxIntrinsicWidth(), control->getMaxIntrinsicWidth() + 20);
+
+    style.setTextIndent(-5, false);
+    auto negative = build("word");
+    auto& negativeLine = static_cast<ParagraphImpl&>(*negative).lines()[0];
+    EXPECT_FLOAT_EQ(negativeLine.offset().fX, -5);
+    EXPECT_FLOAT_EQ(negative->getMinIntrinsicWidth(), control->getMinIntrinsicWidth() - 5);
+    EXPECT_FLOAT_EQ(negative->getMaxIntrinsicWidth(), control->getMaxIntrinsicWidth() - 5);
+}
+
+TEST_F(RubyLayoutTest, TextIndentWrapsAndHitTestsOnlyTheFirstLine) {
+    style.setTextIndent(24, false);
+    auto paragraph = build("one two three four", {}, 110);
+    auto& impl = static_cast<ParagraphImpl&>(*paragraph);
+    ASSERT_GT(impl.lines().size(), 1u);
+
+    EXPECT_FLOAT_EQ(impl.lines()[0].offset().fX, 24);
+    EXPECT_FLOAT_EQ(impl.lines()[1].offset().fX, 0);
+    EXPECT_LE(impl.lines()[0].width(), 86);
+    auto firstBoxes = paragraph->getRectsForRange(0, 3, RectHeightStyle::kTight, RectWidthStyle::kMax);
+    ASSERT_FALSE(firstBoxes.empty());
+    EXPECT_NEAR(firstBoxes.front().rect.fLeft, 24, 0.01);
+
+    LineMetrics secondLine;
+    ASSERT_TRUE(paragraph->getLineMetricsAt(1, &secondLine));
+    auto secondBoxes = paragraph->getRectsForRange(secondLine.fStartIndex,
+                                                   secondLine.fEndExcludingWhitespaces,
+                                                   RectHeightStyle::kTight,
+                                                   RectWidthStyle::kMax);
+    ASSERT_FALSE(secondBoxes.empty());
+    EXPECT_NEAR(secondBoxes.front().rect.fLeft, 0, 0.01);
+}
+
+TEST_F(RubyLayoutTest, TextIndentResolvesPercentagesAgainstLayoutWidth) {
+    style.setTextIndent(10, true);
+    auto paragraph = build("one two", {}, 200);
+    auto& impl = static_cast<ParagraphImpl&>(*paragraph);
+    ASSERT_EQ(impl.lines().size(), 1u);
+    EXPECT_FLOAT_EQ(impl.lines()[0].offset().fX, 20);
+
+    paragraph->layout(300);
+    EXPECT_FLOAT_EQ(impl.lines()[0].offset().fX, 30);
+}
+
+TEST_F(RubyLayoutTest, TextIndentUsesInlineStartForAlignmentAndDirection) {
+    style.setTextAlign(TextAlign::kRight);
+    style.setTextIndent(20, false);
+    auto ltr = build("one two", {}, 120);
+    auto& ltrLine = static_cast<ParagraphImpl&>(*ltr).lines()[0];
+    EXPECT_NEAR(ltrLine.offset().fX + ltrLine.width(), 120, 0.01);
+
+    style.setTextDirection(TextDirection::kRtl);
+    auto rtl = build("one two", {}, 120);
+    auto& rtlLine = static_cast<ParagraphImpl&>(*rtl).lines()[0];
+    EXPECT_NEAR(rtlLine.offset().fX + rtlLine.width(), 100, 0.01);
+}
+
+TEST_F(RubyLayoutTest, TextIndentConstrainsJustificationAndEllipsis) {
+    style.setTextAlign(TextAlign::kJustify);
+    style.setTextIndent(20, false);
+    auto justified = build("one two three four", {}, 180);
+    auto& justifiedLine = static_cast<ParagraphImpl&>(*justified).lines()[0];
+    EXPECT_FLOAT_EQ(justifiedLine.offset().fX, 20);
+    EXPECT_NEAR(justifiedLine.width(), 160, 0.01);
+
+    style.setTextAlign(TextAlign::kLeft);
+    style.setMaxLines(1);
+    style.setEllipsis(SkString("..."));
+    auto ellipsized = build("one two three four", {}, 180);
+    auto& ellipsizedLine = static_cast<ParagraphImpl&>(*ellipsized).lines()[0];
+    EXPECT_FLOAT_EQ(ellipsizedLine.offset().fX, 20);
+    EXPECT_LE(ellipsizedLine.width(), 160);
+}
+
+TEST_F(RubyLayoutTest, TextIndentAffectsOnlyFirstIntrinsicSegmentsAndHardLines) {
+    auto firstMaxControl = build("longword x\na");
+    auto laterMaxControl = build("x\nlongword");
+    auto firstMinControl = build("longword x");
+    auto laterMinControl = build("x longword");
+    style.setTextIndent(20, false);
+    auto firstMax = build("longword x\na");
+    auto laterMax = build("x\nlongword");
+    auto firstMin = build("longword x");
+    auto laterMin = build("x longword");
+
+    EXPECT_FLOAT_EQ(firstMax->getMaxIntrinsicWidth(), firstMaxControl->getMaxIntrinsicWidth() + 20);
+    EXPECT_FLOAT_EQ(laterMax->getMaxIntrinsicWidth(), laterMaxControl->getMaxIntrinsicWidth());
+    EXPECT_FLOAT_EQ(firstMin->getMinIntrinsicWidth(), firstMinControl->getMinIntrinsicWidth() + 20);
+    EXPECT_FLOAT_EQ(laterMin->getMinIntrinsicWidth(), laterMinControl->getMinIntrinsicWidth());
+    EXPECT_FLOAT_EQ(firstMax->getLongestLine(), firstMaxControl->getLongestLine() + 20);
+    EXPECT_FLOAT_EQ(laterMax->getLongestLine(), laterMaxControl->getLongestLine());
+}
+
+TEST_F(RubyLayoutTest, TextIndentAppliesToRubyFirstLine) {
+    std::vector<RubyAnnotation> annotations = {{{0, 4}, "note"}};
+    auto control = build("ruby base", annotations, 90);
+    style.setTextIndent(20, false);
+    auto paragraph = build("ruby base", annotations, 90);
+    auto& impl = static_cast<ParagraphImpl&>(*paragraph);
+    ASSERT_GT(impl.lines().size(), 1u);
+
+    EXPECT_FLOAT_EQ(impl.lines()[0].offset().fX, 20);
+    EXPECT_FLOAT_EQ(impl.lines()[1].offset().fX, 0);
+    EXPECT_LE(impl.lines()[0].width(), 70);
+    EXPECT_FLOAT_EQ(paragraph->getMaxIntrinsicWidth(), control->getMaxIntrinsicWidth() + 20);
+}
+
 }

@@ -126,6 +126,10 @@ public:
     ::skia::textlayout::TextAlign getTextAlign() const { return style.getTextAlign(); }
     void setTextAlign(::skia::textlayout::TextAlign align) { style.setTextAlign(align); }
 
+    SkScalar getTextIndent() const { return style.getTextIndent(); }
+    bool getTextIndentIsPercentage() const { return style.getTextIndentIsPercentage(); }
+    void setTextIndent(SkScalar value, bool isPercentage) { style.setTextIndent(value, isPercentage); }
+
     size_t getMaxLines() const { return style.getMaxLines(); }
     void setMaxLines(size_t maxLines) { style.setMaxLines(maxLines); }
     void clearMaxLines() { style.setMaxLines(std::numeric_limits<size_t>::max()); }
