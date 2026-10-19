@@ -187,6 +187,36 @@ namespace Milestro.Components
 
         internal bool IsDispatcherFocused => inputRegistration?.IsFocused == true;
 
+        internal InputBox? AccessibilityInputBox => inputBox;
+
+        internal bool CompositionIsActive => compositionActive;
+
+        internal bool BeginEditingFromAccessibility()
+        {
+            if (!isActiveAndEnabled)
+            {
+                return false;
+            }
+
+            var eventSystem = EventSystem.current;
+            if (eventSystem != null && eventSystem.currentSelectedGameObject != gameObject)
+            {
+                eventSystem.SetSelectedGameObject(gameObject);
+            }
+
+            return IsDispatcherFocused || AcquireDispatcherFocus();
+        }
+
+        internal void EndEditingFromAccessibility()
+        {
+            ReleaseInputFocus();
+            var eventSystem = EventSystem.current;
+            if (eventSystem != null && eventSystem.currentSelectedGameObject == gameObject)
+            {
+                eventSystem.SetSelectedGameObject(null);
+            }
+        }
+
         public UnityEvent<string> onValueChanged => m_OnValueChanged ??= new UnityEvent<string>();
         public UnityEvent<string> onEndEdit => m_OnEndEdit ??= new UnityEvent<string>();
         public UnityEvent onFocusGained => m_OnFocusGained ??= new UnityEvent();

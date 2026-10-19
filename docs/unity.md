@@ -557,6 +557,29 @@ focus indicator and scrolls the link into view. Disabling or destroying the
 component removes its nodes. Milestro still returns link targets unchanged and
 never opens or interprets them.
 
+Add `Milestro.Components.TextInputAccessibility` to the same GameObject as a
+`TextInput` to publish the editable text to screen readers. With the module
+available, the component publishes a single `TextField` node whose value tracks
+the current text (masked fields publish the mask characters instead), whose
+label falls back to the placeholder text or the GameObject name, and whose hint
+carries read-only and password state. Screen-reader invocation starts an
+editing session (dismissal ends it), matching the platform "editing"
+affordance.
+
+Because the Accessibility module exposes no structured selection or caret
+channel, selection, caret, and edit changes are delivered as spoken
+announcements through `AssistiveSupport.notificationDispatcher`, following the
+same live-region model as web `aria-live` regions and Android's
+text-selection-changed events: inserted or removed text is echoed (large pastes
+summarized by count), caret movement echoes the crossed character, word, or
+line, selection changes announce the selected text or its length, and editing
+start and end are announced. Password fields never announce plaintext — edits
+and caret moves speak the configured password character name and selections
+report only a character count. Announcement text and the echo length limit are
+serialized fields so projects can localize or retune them. Without the module
+the component logs a warning and publishes nothing. See
+`docs/textinput-accessibility.md` for the design rationale.
+
 Task 201 persistent-listener and stripping checks are available from the Unity
 menus under `Milestro/Task 201`. Generate/open the fixture to verify the saved
 prefab and scene in Play Mode, or build the ordinary macOS IL2CPP player with
