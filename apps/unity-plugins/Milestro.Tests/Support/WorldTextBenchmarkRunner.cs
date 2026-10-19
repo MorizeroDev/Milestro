@@ -135,6 +135,8 @@ namespace Milestro.Tests
             }
             var sharedMaterial = new Material(shader);
             var smoke = Array.IndexOf(Environment.GetCommandLineArgs(), "-world-text-smoke") >= 0;
+            SlimTextPipelineProfiler.Enabled =
+                Array.IndexOf(Environment.GetCommandLineArgs(), "-world-text-profile") >= 0;
             var batchOnly = Array.IndexOf(Environment.GetCommandLineArgs(), "-world-text-batch-only") >= 0;
             var updateOnly = Array.IndexOf(Environment.GetCommandLineArgs(), "-world-text-update-only") >= 0;
             var counts = smoke ? new[] { 100 } :
@@ -177,6 +179,7 @@ namespace Milestro.Tests
                 }
             }
             Destroy(sharedMaterial);
+            SlimTextPipelineProfiler.Enabled = false;
         }
 
         private IEnumerator Measure(Case benchmark, int updatePercent, ProfilerRecorder drawCalls,
@@ -190,10 +193,15 @@ namespace Milestro.Tests
             };
             var beforeErrors = errorCount;
             var updates = benchmark.Count * updatePercent / 100;
+            var profiling = SlimTextPipelineProfiler.Enabled;
+            var updateLoopMs = 0d;
+            var gcBytesStart = 0L;
+            var gen0Start = 0;
             ulong beforeSubmissions = 0;
             long beforeAtlasSubmissions = 0;
             for (var frame = 0; frame < SampleFrames + 30; ++frame)
             {
+                var updateStart = profiling ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
                 try
                 {
                     for (var index = 0; index < updates; ++index)
@@ -217,10 +225,20 @@ namespace Milestro.Tests
                                      benchmark.Count + " labels, " + updatePercent + "% updates: " + result.failure);
                     break;
                 }
+
+                if (profiling && frame >= 30)
+                {
+                    updateLoopMs += (System.Diagnostics.Stopwatch.GetTimestamp() - updateStart) * 1000.0 /
+                                    System.Diagnostics.Stopwatch.Frequency;
+                }
+
                 if (frame == 30)
                 {
                     beforeSubmissions = UnitySkiaRenderTextureSurface.ReadNativeDiagnostics().AcceptedSubmissionCount;
                     beforeAtlasSubmissions = RenderTextureAtlas.SubmissionCount;
+                    SlimTextPipelineProfiler.Reset();
+                    gcBytesStart = GC.GetAllocatedBytesForCurrentThread();
+                    gen0Start = GC.CollectionCount(0);
                 }
                 FrameTimingManager.CaptureFrameTimings();
                 yield return null;
@@ -256,6 +274,34 @@ namespace Milestro.Tests
                 result.atlasSubmissionsPerFrame =
                     (RenderTextureAtlas.SubmissionCount - beforeAtlasSubmissions) / (double)result.sampledFrames;
             }
+            if (profiling)
+            {
+                var frames = (double)sampledFrames;
+                result.profiled = true;
+                result.updateLoopMs = updateLoopMs / frames;
+                result.gcAllocBytesPerFrame =
+                    (GC.GetAllocatedBytesForCurrentThread() - gcBytesStart) / frames;
+                result.gen0CollectionsPerFrame = (GC.CollectionCount(0) - gen0Start) / frames;
+                result.rebuildCallsPerFrame = SlimTextPipelineProfiler.RebuildCalls / frames;
+                result.rebuildSkippedPerFrame = SlimTextPipelineProfiler.RebuildSkippedNoDraw / frames;
+                result.ensureSurfaceMs = SlimTextPipelineProfiler.EnsureSurfaceMs / frames;
+                result.ensureFontMs = SlimTextPipelineProfiler.EnsureFontMs / frames;
+                result.buildCommandsMs = SlimTextPipelineProfiler.BuildCommandsMs / frames;
+                result.measureTextMs = SlimTextPipelineProfiler.MeasureTextMs / frames;
+                result.trySubmitMs = SlimTextPipelineProfiler.TrySubmitMs / frames;
+                result.submitCallsPerFrame = SlimTextPipelineProfiler.SubmitCalls / frames;
+                result.submitPrepareMs = SlimTextPipelineProfiler.SubmitPrepareMs / frames;
+                result.submitMarshalMs = SlimTextPipelineProfiler.SubmitMarshalMs / frames;
+                result.submitEnqueueMs = SlimTextPipelineProfiler.SubmitEnqueueMs / frames;
+                result.producerRebuildCallsPerFrame = SlimTextPipelineProfiler.ProducerRebuildCalls / frames;
+                result.producerRebuildMs = SlimTextPipelineProfiler.ProducerRebuildMs / frames;
+                result.presenterUpdateCallsPerFrame = SlimTextPipelineProfiler.PresenterUpdateCalls / frames;
+                result.presenterUpdateMs = SlimTextPipelineProfiler.PresenterUpdateMs / frames;
+                result.completionCallsPerFrame = SlimTextPipelineProfiler.CompletionCalls / frames;
+                result.completionMs = SlimTextPipelineProfiler.CompletionMs / frames;
+                result.fastPathCallsPerFrame = SlimTextPipelineProfiler.FastPathCalls / frames;
+            }
+
             result.completed = result.sampledFrames == SampleFrames && string.IsNullOrEmpty(result.failure);
             result.committedTextureBytes = UnitySkiaRenderTextureSurface.BudgetLedger.Snapshot().CommittedBytes;
             result.atlasPages = RenderTextureAtlas.PageCount;
@@ -393,6 +439,28 @@ namespace Milestro.Tests
             public double nativeSubmissionsPerFrame;
             public double atlasSubmissionsPerFrame;
             public long committedTextureBytes;
+            public bool profiled;
+            public double updateLoopMs;
+            public double gcAllocBytesPerFrame;
+            public double rebuildCallsPerFrame;
+            public double rebuildSkippedPerFrame;
+            public double ensureSurfaceMs;
+            public double ensureFontMs;
+            public double buildCommandsMs;
+            public double measureTextMs;
+            public double trySubmitMs;
+            public double submitCallsPerFrame;
+            public double submitPrepareMs;
+            public double submitMarshalMs;
+            public double submitEnqueueMs;
+            public double gen0CollectionsPerFrame;
+            public double producerRebuildCallsPerFrame;
+            public double producerRebuildMs;
+            public double presenterUpdateCallsPerFrame;
+            public double presenterUpdateMs;
+            public double completionCallsPerFrame;
+            public double completionMs;
+            public double fastPathCallsPerFrame;
         }
     }
 }
