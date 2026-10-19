@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using Milestro.Binding;
+using Milestro.Components.Internal;
 using Milestro.Configuration;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -885,6 +886,13 @@ namespace Milestro.Skia
 
         public bool TrySubmit(UnitySkiaRenderCommandList commands, bool? clearBeforeDraw = null)
         {
+            var profiling = SlimTextPipelineProfiler.Enabled;
+            var phaseStart = profiling ? SlimTextPipelineProfiler.Timestamp : 0;
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.SubmitCalls++;
+            }
+
             ThrowIfDisposed();
             RefreshDeviceEpoch();
             CollectCompletedEvents();
@@ -931,9 +939,21 @@ namespace Milestro.Skia
             NativeOwnedResource[] nativeOwnedResources = Array.Empty<NativeOwnedResource>();
             PendingRenderEvent? pendingEvent = null;
             var enqueued = false;
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.SubmitPrepareMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+                phaseStart = SlimTextPipelineProfiler.Timestamp;
+            }
+
             try
             {
                 commandsPtr = MarshalCommands(commands, out resources, out ownedResources, out nativeOwnedResources);
+                if (profiling)
+                {
+                    SlimTextPipelineProfiler.SubmitMarshalMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+                    phaseStart = SlimTextPipelineProfiler.Timestamp;
+                }
+
                 var submission = new RenderSubmissionPayload
                 {
                     AbiVersion = RenderPayloadAbiVersion,
@@ -963,6 +983,10 @@ namespace Milestro.Skia
                     renderEventFunc,
                     renderEventId,
                     secondRenderEventId);
+                if (profiling)
+                {
+                    SlimTextPipelineProfiler.SubmitEnqueueMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+                }
             }
             catch
             {
