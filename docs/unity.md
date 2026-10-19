@@ -466,6 +466,16 @@ Supported tags in the current parser:
 - `<i>`: italic
 - `<u>`: underline
 - `<s>`: strikethrough
+- `<sup>`, `<sub>`: superscript and subscript runs. Both scale the effective
+  font size by `0.5`; `<sup>` raises the baseline by `0.5em` and `<sub>` lowers
+  it by `0.25em`, measured against the effective font size before script
+  scaling. The size scale composes multiplicatively and the baseline shift
+  composes additively across nesting. An explicit `<span voffset="...">`
+  override takes precedence over the script baseline shift. Script metrics are
+  fixed parser constants (`RichTextParser.ScriptFontSizeScale`,
+  `RichTextParser.SuperscriptBaselineShiftEm`,
+  `RichTextParser.SubscriptBaselineShiftEm`); they are not read from font
+  metrics.
 - `<font color="..." size="..." weight="...">`: inline style values
 - `<p align="...">`: paragraph alignment
 - `<br>`: line break
@@ -479,6 +489,14 @@ Supported tags in the current parser:
   tags may style the base. Optional plain-text `<rp>` children are accepted as
   HTML fallback content and are not rendered. Nested Ruby and multiple `<rt>`
   elements are rejected.
+
+The `<span>` element carries lower-level inline overrides:
+`cspace` (letter spacing), `voffset` (absolute baseline shift), `lang`
+(locale), `face` (font families), `weight`, `width` (font width), and `slant`.
+Two script-oriented attributes accept the same state as `<sup>`/`<sub>`
+without the tag semantics: `fscale` sets an absolute font size multiplier
+(positive finite values only), and `voffset-em` sets an absolute baseline
+shift in em units of the effective font size before scaling.
 
 The `style` attribute on `<font>`, `<span>`, and `<p>` accepts
 `font-kerning: auto | normal | none` and `font-feature-settings`. Feature

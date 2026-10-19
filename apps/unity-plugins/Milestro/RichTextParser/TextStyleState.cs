@@ -110,14 +110,32 @@ namespace Milestro.RichTextParser
         public float? FontSize { get; set; } = null;
 
         /// <summary>
+        /// Optional font size multiplier applied on top of the effective font size
+        /// (the explicit <see cref="FontSize"/> override or the inherited base size).
+        /// <c>&lt;sup&gt;</c>/<c>&lt;sub&gt;</c> compose this value multiplicatively
+        /// across nesting; the <c>fscale</c> span attribute sets it absolutely.
+        /// </summary>
+        public float? FontSizeScale { get; set; } = null;
+
+        /// <summary>
         /// Optional letter spacing override.
         /// </summary>
         public float? LetterSpacing { get; set; } = null;
 
         /// <summary>
-        /// Optional baseline shift override.
+        /// Optional baseline shift override in paragraph text units.
+        /// Takes precedence over <see cref="BaselineShiftEm"/> when both are set.
         /// </summary>
         public float? BaselineShift { get; set; } = null;
+
+        /// <summary>
+        /// Optional baseline shift override expressed in em units of the effective
+        /// font size before <see cref="FontSizeScale"/> is applied. Positive values
+        /// raise the baseline. <c>&lt;sup&gt;</c>/<c>&lt;sub&gt;</c> compose this
+        /// value additively across nesting; the <c>voffset-em</c> span attribute
+        /// sets it absolutely.
+        /// </summary>
+        public float? BaselineShiftEm { get; set; } = null;
 
         /// <summary>
         /// Optional locale override used by text shaping and font fallback.
@@ -144,8 +162,10 @@ namespace Milestro.RichTextParser
             ret.FontFamilyTokens = FontFamilyTokens == null ? null : new List<FontFamilyToken>(FontFamilyTokens);
             ret.Color = Color;
             ret.FontSize = FontSize;
+            ret.FontSizeScale = FontSizeScale;
             ret.LetterSpacing = LetterSpacing;
             ret.BaselineShift = BaselineShift;
+            ret.BaselineShiftEm = BaselineShiftEm;
             ret.Locale = Locale;
             ret.FontFeatureOperations.AddRange(FontFeatureOperations);
 
@@ -202,10 +222,16 @@ namespace Milestro.RichTextParser
                 sb.Append("<s>");
             }
 
-            if (LetterSpacing.HasValue || BaselineShift.HasValue || Locale != null || FontWidth.HasValue ||
+            if (LetterSpacing.HasValue || BaselineShift.HasValue || BaselineShiftEm.HasValue ||
+                FontSizeScale.HasValue || Locale != null || FontWidth.HasValue ||
                 (FontSlant.HasValue && FontSlant.Value != Milestro.Model.FontSlant.Italic))
             {
                 sb.Append("<span");
+                if (FontSizeScale.HasValue)
+                {
+                    AppendAttribute(sb, "fscale", FontSizeScale.Value.ToString(CultureInfo.InvariantCulture));
+                }
+
                 if (LetterSpacing.HasValue)
                 {
                     AppendAttribute(sb, "cspace", LetterSpacing.Value.ToString(CultureInfo.InvariantCulture));
@@ -214,6 +240,11 @@ namespace Milestro.RichTextParser
                 if (BaselineShift.HasValue)
                 {
                     AppendAttribute(sb, "voffset", BaselineShift.Value.ToString(CultureInfo.InvariantCulture));
+                }
+
+                if (BaselineShiftEm.HasValue)
+                {
+                    AppendAttribute(sb, "voffset-em", BaselineShiftEm.Value.ToString(CultureInfo.InvariantCulture));
                 }
 
                 if (Locale != null)

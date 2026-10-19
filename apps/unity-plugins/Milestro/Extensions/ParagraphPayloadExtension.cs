@@ -95,17 +95,23 @@ namespace Milestro.Extensions
                 ret.Color = baseTextStyle.Color;
             }
 
-            if (t.FontSize.HasValue)
+            var unscaledFontSize = t.FontSize ?? baseTextStyle.FontSize;
+            ret.FontSize = unscaledFontSize * (t.FontSizeScale ?? 1f);
+
+            ret.Locale = t.Locale ?? baseTextStyle.Locale;
+            if (t.BaselineShift.HasValue)
             {
-                ret.FontSize = t.FontSize.Value;
+                ret.BaselineShift = t.BaselineShift.Value;
+            }
+            else if (t.BaselineShiftEm.HasValue)
+            {
+                ret.BaselineShift = baseTextStyle.BaselineShift + t.BaselineShiftEm.Value * unscaledFontSize;
             }
             else
             {
-                ret.FontSize = baseTextStyle.FontSize;
+                ret.BaselineShift = baseTextStyle.BaselineShift;
             }
 
-            ret.Locale = t.Locale ?? baseTextStyle.Locale;
-            ret.BaselineShift = t.BaselineShift ?? baseTextStyle.BaselineShift;
             ret.Height = baseTextStyle.Height;
             ret.HeightOverride = baseTextStyle.HeightOverride;
             ret.HalfLeading = baseTextStyle.HalfLeading;

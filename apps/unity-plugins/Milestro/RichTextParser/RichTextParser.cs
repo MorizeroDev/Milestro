@@ -17,6 +17,24 @@ namespace Milestro.RichTextParser
 {
     public class RichTextParser
     {
+        /// <summary>
+        /// Font size multiplier applied to <c>&lt;sup&gt;</c> and <c>&lt;sub&gt;</c> content.
+        /// Matches the TextMesh Pro default superscript/subscript size factor.
+        /// </summary>
+        public const float ScriptFontSizeScale = 0.5f;
+
+        /// <summary>
+        /// Baseline raise applied to <c>&lt;sup&gt;</c> content, in em units of the
+        /// effective font size before script scaling.
+        /// </summary>
+        public const float SuperscriptBaselineShiftEm = 0.5f;
+
+        /// <summary>
+        /// Baseline drop applied to <c>&lt;sub&gt;</c> content, in em units of the
+        /// effective font size before script scaling.
+        /// </summary>
+        public const float SubscriptBaselineShiftEm = -0.25f;
+
         public Stack<XmlNode> NodeStack { get; private set; } = new Stack<XmlNode>();
 
         public XmlNode? RootNode { get; private set; } = null;
@@ -200,6 +218,12 @@ namespace Milestro.RichTextParser
             {
                 state.FontSlant = FontSlant.Italic;
             }
+            else if (node.Tag == "sup" || node.Tag == "sub")
+            {
+                state.FontSizeScale = (state.FontSizeScale ?? 1f) * ScriptFontSizeScale;
+                state.BaselineShiftEm = (state.BaselineShiftEm ?? 0f) +
+                    (node.Tag == "sup" ? SuperscriptBaselineShiftEm : SubscriptBaselineShiftEm);
+            }
             else if (node.Tag == "font")
             {
                 if (node.Attributes.TryGetValue("color", out var color))
@@ -254,6 +278,19 @@ namespace Milestro.RichTextParser
                     && TryParseFloat(voffset, out var baselineShift))
                 {
                     state.BaselineShift = baselineShift;
+                }
+
+                if (node.Attributes.TryGetValue("fscale", out var fscale)
+                    && TryParseFloat(fscale, out var fontSizeScale)
+                    && fontSizeScale > 0)
+                {
+                    state.FontSizeScale = fontSizeScale;
+                }
+
+                if (node.Attributes.TryGetValue("voffset-em", out var voffsetEm)
+                    && TryParseFloat(voffsetEm, out var baselineShiftEm))
+                {
+                    state.BaselineShiftEm = baselineShiftEm;
                 }
 
                 if (node.Attributes.TryGetValue("lang", out var lang) && !string.IsNullOrWhiteSpace(lang))
