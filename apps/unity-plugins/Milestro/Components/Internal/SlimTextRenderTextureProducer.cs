@@ -27,6 +27,8 @@ namespace Milestro.Components.Internal
         [SerializeField, HideInInspector] private bool m_screenSpaceRasterization = true;
 
         [NonSerialized] private RectTransform? rectTransformCache;
+        [NonSerialized] private Vector2Int cachedSize = Vector2Int.one;
+        [NonSerialized] private bool sizeDirty = true;
         [NonSerialized] private readonly Vector3[] worldCorners = new Vector3[4];
         [NonSerialized] private SlimTextRenderTarget? renderTarget;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
@@ -207,6 +209,7 @@ namespace Milestro.Components.Internal
 
         protected virtual void OnEnable()
         {
+            sizeDirty = true;
             rectTransformCache = GetComponent<RectTransform>();
             if (GetComponent<Milestro.Components.WorldSpaceSlimText>() != null)
             {
@@ -244,6 +247,7 @@ namespace Milestro.Components.Internal
 
         private void OnRectTransformDimensionsChange()
         {
+            sizeDirty = true;
             if (!isActiveAndEnabled)
             {
                 return;
@@ -362,6 +366,13 @@ namespace Milestro.Components.Internal
 
         private void RebuildResources()
         {
+            var profiling = SlimTextPipelineProfiler.Enabled;
+            var phaseStart = profiling ? SlimTextPipelineProfiler.Timestamp : 0;
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.ProducerRebuildCalls++;
+            }
+
             NormalizeSerializedValues();
             var size = CurrentSize();
             ResolveRasterization(out var useScreenSpaceRasterization, out var desiredRasterScale);
@@ -377,10 +388,20 @@ namespace Milestro.Components.Internal
                 QueueEditorRebuild();
 #endif
             }
+
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.ProducerRebuildMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+            }
         }
 
         private Vector2Int CurrentSize()
         {
+            if (!sizeDirty)
+            {
+                return cachedSize;
+            }
+
             var rectTransform = RectTransformComponent();
             if (rectTransform == null)
             {
@@ -388,8 +409,10 @@ namespace Milestro.Components.Internal
             }
 
             var rect = rectTransform.rect;
-            return new Vector2Int(Mathf.Max(1, Mathf.CeilToInt(rect.width)),
+            cachedSize = new Vector2Int(Mathf.Max(1, Mathf.CeilToInt(rect.width)),
                 Mathf.Max(1, Mathf.CeilToInt(rect.height)));
+            sizeDirty = false;
+            return cachedSize;
         }
 
         private void ResolveRasterization(out bool useScreenSpaceRasterization, out float desiredRasterScale)

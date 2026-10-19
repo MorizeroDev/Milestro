@@ -26,6 +26,9 @@ namespace Milestro.Components.Internal
         [NonSerialized] private string observedTexturePropertyName = DefaultTexturePropertyName;
         [NonSerialized] private bool rendererDisabledByPresenter;
         [NonSerialized] private RenderTextureProducer? observedProducer;
+        [NonSerialized] private string cachedTexturePropertyName = "";
+        [NonSerialized] private int cachedTexturePropertyId = -1;
+        [NonSerialized] private int cachedTextureStPropertyId = -1;
 
         public RenderTextureProducer? Producer
         {
@@ -105,7 +108,19 @@ namespace Milestro.Components.Internal
 
         private void Update()
         {
+            var profiling = SlimTextPipelineProfiler.Enabled;
+            var phaseStart = profiling ? SlimTextPipelineProfiler.Timestamp : 0;
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.PresenterUpdateCalls++;
+            }
+
             ApplyProducerOutput(force: false);
+
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.PresenterUpdateMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+            }
         }
 
 #if UNITY_EDITOR
@@ -150,11 +165,11 @@ namespace Milestro.Components.Internal
             var outputUvRect = producer.OutputUvRect;
             var texturePropertyName = TexturePropertyNameOrDefault();
             if (!force &&
-                observedOutputVersion == outputVersion &&
                 observedOutputTexture == outputTexture &&
                 observedOutputUvRect == outputUvRect &&
                 observedTexturePropertyName == texturePropertyName)
             {
+                observedOutputVersion = outputVersion;
                 return;
             }
 
@@ -172,11 +187,18 @@ namespace Milestro.Components.Internal
         {
             RestoreRendererIfDisabledByPresenter(targetRenderer);
 
+            if (cachedTexturePropertyName != texturePropertyName)
+            {
+                cachedTexturePropertyName = texturePropertyName;
+                cachedTexturePropertyId = Shader.PropertyToID(texturePropertyName);
+                cachedTextureStPropertyId = Shader.PropertyToID(texturePropertyName + "_ST");
+            }
+
             var block = PropertyBlock();
             targetRenderer.GetPropertyBlock(block);
 
-            block.SetTexture(Shader.PropertyToID(texturePropertyName), outputTexture);
-            block.SetVector(Shader.PropertyToID(texturePropertyName + "_ST"),
+            block.SetTexture(cachedTexturePropertyId, outputTexture);
+            block.SetVector(cachedTextureStPropertyId,
                 new Vector4(outputUvRect.width, outputUvRect.height, outputUvRect.x, outputUvRect.y));
 
             targetRenderer.SetPropertyBlock(block);
