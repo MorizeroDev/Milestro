@@ -44,7 +44,7 @@ std::atomic<uint64_t> gRenderSerial = 0;
 
 constexpr bool kUseUnityStateTrackerInQueueMode = false;
 constexpr bool kProbeDirectRenderTargetView = false;
-constexpr bool kSyncSkiaSubmitForDiagnostics = true;
+constexpr bool kSyncSkiaSubmitForDiagnostics = false;
 
 struct PendingResourceRetain {
     gr_cp<ID3D12Resource> resource;

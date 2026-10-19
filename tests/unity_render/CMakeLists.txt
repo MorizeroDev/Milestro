@@ -25,7 +25,9 @@ if (WIN32)
     target_sources(${MILESTRO_UNITY_RENDER_PAYLOAD_TEST_NAME}
             PRIVATE
             src/test_unity_render_d3d11.cpp
-            ${PROJECT_SOURCE_DIR}/src/unity_render/MilestroUnityRenderD3D11Backend.cpp)
+            src/test_unity_render_d3d12.cpp
+            ${PROJECT_SOURCE_DIR}/src/unity_render/MilestroUnityRenderD3D11Backend.cpp
+            ${PROJECT_SOURCE_DIR}/src/unity_render/MilestroUnityRenderD3D12Backend.cpp)
     target_include_directories(${MILESTRO_UNITY_RENDER_PAYLOAD_TEST_NAME}
             PRIVATE
             ${PROJECT_SOURCE_DIR}/ext/PluginAPI)
