@@ -121,6 +121,7 @@ fi
 overlay_paths=(
     modules/skparagraph/include/Paragraph.h
     modules/skparagraph/include/ParagraphBuilder.h
+    modules/skparagraph/include/ParagraphStyle.h
     modules/skparagraph/include/Ruby.h
     modules/skparagraph/src/ParagraphBuilderImpl.cpp
     modules/skparagraph/src/ParagraphBuilderImpl.h

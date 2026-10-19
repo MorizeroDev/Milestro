@@ -1,12 +1,21 @@
 # Skia module vendor
 
 `vendor-meta` records the upstream source and compatible Skia core revision. The current
-module source is from `b23ddbff12658185f0d506befec22a84f8b8c03b`.
+module source is from `a3cc6e57c0379322e3507839372ba4cfc382cfd6`.
+
+This revision includes upstream fixes for BiDi cluster coverage and ellipsis shaping,
+zero-width grapheme hit bounds, combining-mark and ligature styling, justified hit
+testing, and soft hyphen rendering (including configurable replacement strings).
+SkUnicode includes the native Apple backend, Unicode property fixes, and
+`isDefaultIgnorable`. Milestro still selects the ICU backend; its no-data fallback
+uses the upstream hardcoded default-ignorable property table. Skia core and headers
+must match this revision because the new virtual method changes the SkUnicode ABI.
 
 Milestro keeps horizontal Ruby integration in the paragraph/builder public headers,
 `Ruby.h`, `ParagraphBuilderImpl.cpp/.h`, `ParagraphImpl.cpp/.h`, `Run.cpp/.h`,
 `RubyLayout.cpp/.h`, `TextLine.cpp`, and `TextWrapper.cpp/.h`. Visitor safety changes
 also remain in `SkParagraphTest.cpp`. The earlier prototype lives in `src/experimental/`.
+First-line indentation also modifies `ParagraphStyle.h` and the paragraph layout files.
 These overlays are preserved by `scripts/vendor-skia-modules.sh`; its `overlay_paths`
 array supplies both upstream conflict detection and synchronization exclusions.
 

@@ -1,5 +1,6 @@
 #include "SkUnicodeNop.h"
 
+#include "modules/skunicode/src/SkUnicode_hardcoded.h"
 #include "src/core/SkBitmaskEnum.h"
 #include "src/core/SkUTF.h"
 
@@ -210,6 +211,10 @@ public:
 
     bool isHardBreak(SkUnichar unichar) override {
         return unichar == '\n' || unichar == '\r' || unichar == 0x2028;
+    }
+
+    bool isDefaultIgnorable(SkUnichar unichar) override {
+        return SkUnicodeHardCodedCharProperties::IsDefaultIgnorable(unichar);
     }
 
     bool isEmoji(SkUnichar) override {

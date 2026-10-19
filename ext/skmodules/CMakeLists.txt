@@ -49,6 +49,7 @@ endif ()
 
 set(MILESTRO_SKUNICODE_SOURCES
         modules/skunicode/src/SkUnicode.cpp
+        modules/skunicode/src/SkUnicode_hardcoded.cpp
         modules/skunicode/src/SkUnicode_icu.cpp
         modules/skunicode/src/SkUnicode_icu_bidi.cpp
         modules/skunicode/src/SkBidiFactory_icu_full.cpp

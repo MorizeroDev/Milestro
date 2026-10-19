@@ -10,6 +10,17 @@
 #include <vector>
 
 TEST(SkiaUnicodeFallbackTest, ProviderExistsWhenIcuDataWasNotLoaded) {
+    const auto checkDefaultIgnorables = [](SkUnicode* unicode) {
+        for (const SkUnichar codepoint : {0x00AD, 0x034F, 0x061C, 0x200B, 0x200D,
+                                         0x2068, 0x2069, 0xFE0F, 0xE0100}) {
+            EXPECT_TRUE(unicode->isDefaultIgnorable(codepoint)) << codepoint;
+        }
+        for (const SkUnichar codepoint : {-1, 0x0000, 0x0020, 0x0041, 0x0301,
+                                         0x0600, 0x4E00, 0x1F600, 0x110000}) {
+            EXPECT_FALSE(unicode->isDefaultIgnorable(codepoint)) << codepoint;
+        }
+    };
+
     auto provider = milestro::skia::GetUnicodeProvider();
     ASSERT_NE(provider, nullptr);
 
@@ -18,6 +29,7 @@ TEST(SkiaUnicodeFallbackTest, ProviderExistsWhenIcuDataWasNotLoaded) {
 
     EXPECT_TRUE(unicode->isWhitespace(' '));
     EXPECT_TRUE(unicode->isHardBreak('\n'));
+    checkDefaultIgnorables(unicode.get());
     EXPECT_STREQ(unicode->toUpper(SkString("istanbul"), "tr").c_str(), "istanbul");
 
     auto iterator = unicode->makeBreakIterator("en-US", SkUnicode::BreakType::kWords);
@@ -61,6 +73,7 @@ TEST(SkiaUnicodeFallbackTest, ProviderExistsWhenIcuDataWasNotLoaded) {
     ASSERT_NE(upgradedProvider, nullptr);
     auto upgradedUnicode = upgradedProvider->unwrap();
     ASSERT_NE(upgradedUnicode, nullptr);
+    checkDefaultIgnorables(upgradedUnicode.get());
     EXPECT_STREQ(upgradedUnicode->toUpper(SkString("istanbul"), "tr").c_str(), "\xC4\xB0STANBUL");
 
     auto upgradedIterator = upgradedUnicode->makeBreakIterator("en-US", SkUnicode::BreakType::kWords);
@@ -68,4 +81,21 @@ TEST(SkiaUnicodeFallbackTest, ProviderExistsWhenIcuDataWasNotLoaded) {
     ASSERT_TRUE(upgradedIterator->setText(text, static_cast<int>(std::strlen(text))));
     EXPECT_EQ(upgradedIterator->first(), 0);
     EXPECT_GT(upgradedIterator->next(), 0);
+}
+
+TEST(SkiaUnicodeFallbackTest, Utf16IterationReplacesUnpairedSurrogates) {
+    auto provider = milestro::skia::GetUnicodeProvider();
+    ASSERT_NE(provider, nullptr);
+    auto unicode = provider->unwrap();
+    ASSERT_NE(unicode, nullptr);
+
+    for (const char16_t surrogate : {char16_t(0xD800), char16_t(0xDC00)}) {
+        std::vector<SkUnichar> codepoints;
+        unicode->forEachCodepoint(&surrogate, 1, [&](SkUnichar codepoint, int start, int end) {
+            codepoints.push_back(codepoint);
+            EXPECT_EQ(start, 0);
+            EXPECT_EQ(end, 1);
+        });
+        EXPECT_EQ(codepoints, std::vector<SkUnichar>{0xFFFD});
+    }
 }

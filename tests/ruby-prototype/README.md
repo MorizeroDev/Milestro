@@ -23,7 +23,7 @@ Dependencies: GCC13/C++20, CMake>=3.25, Ninja, Skia's GN executable, fixed Skia 
 Milestro's ICU source and its matching static archives. There is no Unity dependency.
 
 1. Initialize the repo's `ext/icu` submodule (`457157a92aa053e632cc7fcfd0e12f8a943b2d11`).
-2. Fetch upstream `google/skia` at `b23ddbff12658185f0d506befec22a84f8b8c03b` into `ext/skia`.
+2. Fetch upstream `google/skia` at `a3cc6e57c0379322e3507839372ba4cfc382cfd6` into `ext/skia`.
    Supply GN and sync the pinned DEPS. CPU targets require freetype, harfbuzz, brotli, libpng, zlib
    and Skia's ICU checkout. Matching clean local clones may be reused, not older revisions.
 3. Build Milestro's `ext/icu-cmake` or supply matching archives from an existing build.

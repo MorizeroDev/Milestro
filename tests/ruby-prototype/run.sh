@@ -7,7 +7,7 @@ build=${BUILD_DIR:-"$root/build/ruby-prototype"}
 output=${OUTPUT_DIR:-"$build/results"}
 : "${ICU_SOURCE:?Set ICU_SOURCE to the exact ext/icu checkout}"
 : "${ICU_ARCHIVES:?Set ICU_ARCHIVES to the matching libicu.a directory}"
-test "$(git -C "$root/ext/skia" rev-parse HEAD)" = b23ddbff12658185f0d506befec22a84f8b8c03b
+test "$(git -C "$root/ext/skia" rev-parse HEAD)" = a3cc6e57c0379322e3507839372ba4cfc382cfd6
 test "$(git -C "$ICU_SOURCE" rev-parse HEAD)" = 457157a92aa053e632cc7fcfd0e12f8a943b2d11
 mkdir -p "$root/ext/skia/out/ruby-prototype" "$output"
 cp "$root/tests/ruby-prototype/args.gn" "$root/ext/skia/out/ruby-prototype/args.gn"
