@@ -6,12 +6,10 @@ SDK 35. A successful APK build is not evidence that GPU rendering works.
 
 ## Prepare an isolated project
 
-1. Build matching native, managed and ICU artifacts from this checkout:
-
-   ```powershell
-   ./scripts/build-android-unity.ps1 `
-     -UnityRoot '<UnityRoot>' -RunContractTests -PackageUnity
-   ```
+1. Build matching native, managed and ICU artifacts from this checkout. Use
+   the Android CMake configurations and the Unity plugin packaging step from
+   `docs/build.md`; the former `scripts/build-android-unity.ps1` helper was
+   removed.
 
 2. Clone the reference Demo into a **new** ignored directory. Use a clean Demo
    commit: this copies committed files, not uncommitted work. Skip its obsolete

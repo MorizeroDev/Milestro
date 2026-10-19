@@ -97,20 +97,6 @@ cmake -S . -B cmake-build-ios -G Ninja \
 cmake --build cmake-build-ios
 ```
 
-## Android with Unity's bundled tools (Windows)
-
-```powershell
-./scripts/build-android-unity.ps1 `
-  -UnityRoot '<UnityRoot>' -RunContractTests -PackageUnity
-```
-
-This selects that installation's SDK/NDK/JDK, defaults to ARM64 / API 26 with
-Vulkan and GLES, enables flexible page-size linking, and packages matching
-native/C#/ICU files. See `tests/android_unity/README.md` for isolated Demo APK
-validation. The helper restores its process environment and supports
-`-GlesOnly -ApiLevel 23` and `-ConfigureOnly` for separate native GLES-only
-configurations.
-
 ## Binding Generation
 
 When `include/Milestro/game/milestro_game_interface.h` changes, regenerate the
