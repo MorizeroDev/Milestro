@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using Milestro.Model;
 using Milestro.Skia;
 using Milestro.Util;
@@ -11,7 +12,11 @@ namespace Milestro.Components.Internal
     {
         private static readonly Rect DefaultUvRect = new Rect(0f, 0f, 1f, 1f);
 
+        private readonly UnitySkiaRenderCommandList reusableCommands = new UnitySkiaRenderCommandList();
         private ManagedRenderTextureSurface? surface;
+        private ReusableTextDrawSnapshot? fastSnapshot;
+        private int fastSnapshotCapacity;
+        private Color32 fastSnapshotColor;
         private SkFont? font;
         private string resolvedFontFamily = "";
         private int resolvedFontWeight = FontWeight.Normal;
@@ -71,6 +76,7 @@ namespace Milestro.Components.Internal
                 throw new ArgumentOutOfRangeException(nameof(capacity));
             }
 
+            DisposeFastSnapshot();
             noAllocMode = true;
             noAllocCapacityConfigured = true;
             if (capacity <= noAllocCapacity)
@@ -138,19 +144,48 @@ namespace Milestro.Components.Internal
             float desiredRasterScale,
             UnityEngine.Object? logContext)
         {
+            var profiling = SlimTextPipelineProfiler.Enabled;
+            long phaseStart = 0;
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.RebuildCalls++;
+            }
+
             logicalSizePixels = NormalizeSize(sizePixels);
+            if (profiling)
+            {
+                phaseStart = SlimTextPipelineProfiler.Timestamp;
+            }
+
             var surfaceReady = EnsureSurface(logicalSizePixels,
                 colorSpace,
                 useScreenSpaceRasterization,
                 desiredRasterScale,
                 logContext,
                 out var surfaceChanged);
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.EnsureSurfaceMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+                phaseStart = SlimTextPipelineProfiler.Timestamp;
+            }
+
             var needsDraw = surfaceChanged;
-            needsDraw |= EnsureFont(settings);
+            var fontChanged = EnsureFont(settings);
+            needsDraw |= fontChanged;
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.EnsureFontMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+            }
+
             needsDraw |= paintChanged;
             needsDraw |= noAllocMode && noAllocTextChanged;
             if (!needsDraw)
             {
+                if (profiling)
+                {
+                    SlimTextPipelineProfiler.RebuildSkippedNoDraw++;
+                }
+
                 return true;
             }
 
@@ -166,10 +201,32 @@ namespace Milestro.Components.Internal
                 return RebuildNoAlloc(settings, needsDraw);
             }
 
-            if (!TrySubmit(BuildRenderCommands(settings)))
+            if (surface != null && surface.SupportsSlimTextFastSubmit)
+            {
+                return RebuildFastManaged(settings, fontChanged);
+            }
+
+            if (profiling)
+            {
+                phaseStart = SlimTextPipelineProfiler.Timestamp;
+            }
+
+            var commands = BuildRenderCommands(settings);
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.BuildCommandsMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+                phaseStart = SlimTextPipelineProfiler.Timestamp;
+            }
+
+            if (!TrySubmit(commands))
             {
                 paintChanged = true;
                 return false;
+            }
+
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.TrySubmitMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
             }
 
             styleChanged = false;
@@ -179,6 +236,7 @@ namespace Milestro.Components.Internal
 
         public void Dispose()
         {
+            DisposeFastSnapshot();
             DisposeFont();
             DisposeNoAllocSubmission();
             DisposeNoAllocSubmission(ref retiredNoAllocSubmission);
@@ -335,15 +393,126 @@ namespace Milestro.Components.Internal
             }
         }
 
+        private bool RebuildFastManaged(SlimTextRenderTargetSettings settings, bool fontChanged)
+        {
+            var profiling = SlimTextPipelineProfiler.Enabled;
+            var phaseStart = profiling ? SlimTextPipelineProfiler.Timestamp : 0;
+
+            var text = settings.Text;
+            if (font == null || text.Length == 0)
+            {
+                if (!surface!.TrySubmitEmptyFast())
+                {
+                    paintChanged = true;
+                    return false;
+                }
+
+                styleChanged = false;
+                paintChanged = false;
+                return true;
+            }
+
+            if (!surface!.CanSubmitSlimTextFast())
+            {
+                paintChanged = true;
+                return false;
+            }
+
+            var byteCount = Encoding.UTF8.GetByteCount(text);
+            EnsureFastSnapshot(settings, fontChanged, byteCount);
+            var snapshot = fastSnapshot!;
+            if (byteCount <= 512)
+            {
+                Span<byte> buffer = stackalloc byte[512];
+                var written = Encoding.UTF8.GetBytes(text.AsSpan(), buffer);
+                snapshot.UpdateText(buffer.Slice(0, written));
+            }
+            else
+            {
+                var payload = Encoding.UTF8.GetBytes(text);
+                snapshot.UpdateText(payload, 0, payload.Length);
+            }
+
+            var measurement = snapshot.MeasureText();
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.FastPathCalls++;
+                SlimTextPipelineProfiler.MeasureTextMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+                phaseStart = SlimTextPipelineProfiler.Timestamp;
+            }
+
+            var baseline = ResolveBaseline(settings, measurement);
+            if (!surface!.TrySubmitSlimTextFast(snapshot, baseline))
+            {
+                paintChanged = true;
+                return false;
+            }
+
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.TrySubmitMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+            }
+
+            styleChanged = false;
+            paintChanged = false;
+            return true;
+        }
+
+        private void EnsureFastSnapshot(SlimTextRenderTargetSettings settings, bool fontChanged, int textByteCount)
+        {
+            var color = (Color32)settings.TextColor;
+            if (fastSnapshot != null &&
+                !fontChanged &&
+                fastSnapshotCapacity >= textByteCount &&
+                ColorsEqual(fastSnapshotColor, color))
+            {
+                return;
+            }
+
+            DisposeFastSnapshot();
+            var capacity = Math.Max(64, Mathf.NextPowerOfTwo(Math.Max(1, textByteCount)));
+            fastSnapshot = new ReusableTextDrawSnapshot(font!, capacity, color);
+            fastSnapshotCapacity = capacity;
+            fastSnapshotColor = color;
+        }
+
+        private void DisposeFastSnapshot()
+        {
+            var snapshot = fastSnapshot;
+            if (snapshot == null)
+            {
+                return;
+            }
+
+            fastSnapshot = null;
+            fastSnapshotCapacity = 0;
+            if (surface != null)
+            {
+                surface.DisposeResourceAfterPendingDraws(snapshot);
+            }
+            else
+            {
+                snapshot.Dispose();
+            }
+        }
+
         private UnitySkiaRenderCommandList BuildRenderCommands(SlimTextRenderTargetSettings settings)
         {
-            var commands = new UnitySkiaRenderCommandList();
+            var commands = reusableCommands;
+            commands.Clear();
             if (font == null || string.IsNullOrEmpty(settings.Text))
             {
                 return commands;
             }
 
+            var profiling = SlimTextPipelineProfiler.Enabled;
+            var measureStart = profiling ? SlimTextPipelineProfiler.Timestamp : 0;
             var measurement = font.MeasureText(settings.Text);
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.MeasureTextMs += SlimTextPipelineProfiler.ElapsedMs(measureStart);
+            }
+
             var baseline = ResolveBaseline(settings, measurement);
             commands.DrawString(settings.Text, font, baseline, settings.TextColor);
             return commands;
@@ -401,6 +570,13 @@ namespace Milestro.Components.Internal
 
         private void HandleRenderEventCompleted(UnitySkiaRenderTextureSurface.RenderSubmissionStatus status)
         {
+            var profiling = SlimTextPipelineProfiler.Enabled;
+            var phaseStart = profiling ? SlimTextPipelineProfiler.Timestamp : 0;
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.CompletionCalls++;
+            }
+
             if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn)
             {
                 MarkOutputChanged();
@@ -412,6 +588,11 @@ namespace Milestro.Components.Internal
             }
 
             RenderEventCompleted?.Invoke(status);
+
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.CompletionMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+            }
         }
 
         private void DisposeFont()

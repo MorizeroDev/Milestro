@@ -210,6 +210,23 @@ namespace Milestro.Components.Internal
             return false;
         }
 
+        internal bool SupportsSlimTextFastSubmit => atlasLease != null;
+
+        internal bool CanSubmitSlimTextFast()
+        {
+            return atlasLease != null && atlasLease.TryBeginSubmit();
+        }
+
+        internal bool TrySubmitSlimTextFast(ReusableTextDrawSnapshot snapshot, Vector2 baseline)
+        {
+            return atlasLease != null && atlasLease.TrySubmitSlimText(snapshot, baseline);
+        }
+
+        internal bool TrySubmitEmptyFast()
+        {
+            return atlasLease != null && atlasLease.TrySubmitEmpty();
+        }
+
         internal bool TrySubmit(UnitySkiaRenderCommandList commands)
         {
             if (atlasLease != null)

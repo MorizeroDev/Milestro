@@ -207,8 +207,20 @@ namespace Milestro.Skia
             var captured = new CapturedCommands();
             try
             {
-                foreach (var source in commands)
-                {
+                CaptureInto(captured);
+                return captured;
+            }
+            catch
+            {
+                captured.Dispose();
+                throw;
+            }
+        }
+
+        internal void CaptureInto(CapturedCommands captured)
+        {
+            foreach (var source in commands)
+            {
                     var command = source;
                     if (command.SnapshotParagraph)
                     {
@@ -236,13 +248,6 @@ namespace Milestro.Skia
                     command.SnapshotSlimText = false;
                     command.ParagraphSnapshotFactory = null!;
                     captured.Commands.Add(command);
-                }
-                return captured;
-            }
-            catch
-            {
-                captured.Dispose();
-                throw;
             }
         }
 

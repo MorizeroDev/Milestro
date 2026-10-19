@@ -52,6 +52,24 @@ namespace Milestro.Skia
             textLength = length;
         }
 
+        internal unsafe void UpdateText(ReadOnlySpan<byte> text)
+        {
+            if (text.Length > Capacity)
+            {
+                throw new ArgumentOutOfRangeException(nameof(text));
+            }
+
+            fixed (byte* textPtr = text)
+            {
+                var payload = text.Length == 0 ? null : textPtr;
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaReusableTextDrawSnapshotUpdateText(NativePtr,
+                    payload,
+                    (ulong)text.Length));
+            }
+
+            textLength = text.Length;
+        }
+
         internal void CopyTextFrom(ReusableTextDrawSnapshot source)
         {
             if (source == null)

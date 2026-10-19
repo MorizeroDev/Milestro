@@ -168,18 +168,64 @@ namespace Milestro.Skia
 
             internal bool TrySubmit(UnitySkiaRenderCommandList commands)
             {
+                if (!TryBeginSubmit())
+                {
+                    return false;
+                }
+                var captured = page.RentCaptured();
+                try
+                {
+                    commands.CaptureInto(captured);
+                }
+                catch
+                {
+                    captured.Dispose();
+                    page.ReturnCaptured(captured);
+                    throw;
+                }
+                Pending = true;
+                page.Enqueue(this, captured);
+                return true;
+            }
+
+            internal bool TrySubmitSlimText(ReusableTextDrawSnapshot snapshot, Vector2 baseline)
+            {
+                if (!TryBeginSubmit())
+                {
+                    return false;
+                }
+                var captured = page.RentCaptured();
+                captured.Commands.Add(new UnitySkiaRenderCommandList.Command
+                {
+                    Kind = UnitySkiaRenderCommandList.CommandKind.SlimText,
+                    Resource = snapshot.NativePtr,
+                    X = baseline.x,
+                    Y = baseline.y,
+                    KeepAlive = snapshot
+                });
+                Pending = true;
+                page.Enqueue(this, captured);
+                return true;
+            }
+
+            internal bool TrySubmitEmpty()
+            {
+                if (!TryBeginSubmit())
+                {
+                    return false;
+                }
+                Pending = true;
+                page.Enqueue(this, page.RentCaptured());
+                return true;
+            }
+
+            internal bool TryBeginSubmit()
+            {
                 if (Pending)
                 {
                     UnitySkiaRenderTextureSurface.CollectCompletedEventsFromPump();
                 }
-                if (!IsLive || Pending || Epoch != UnityAutoRenderTextureSurface.ReadCurrentDeviceEpoch())
-                {
-                    return false;
-                }
-                var captured = commands.Capture();
-                Pending = true;
-                page.Enqueue(this, captured);
-                return true;
+                return IsLive && !Pending && Epoch == UnityAutoRenderTextureSurface.ReadCurrentDeviceEpoch();
             }
 
             internal void DisposeResourceAfterPendingDraws(IDisposable resource)
@@ -231,6 +277,9 @@ namespace Milestro.Skia
             private readonly RenderAtlasAllocator allocator;
             private readonly ulong fingerprint;
             private readonly List<Update> pending = new List<Update>();
+            private readonly Stack<UnitySkiaRenderCommandList.CapturedCommands> capturedPool =
+                new Stack<UnitySkiaRenderCommandList.CapturedCommands>();
+            private readonly Stack<Update> updatePool = new Stack<Update>();
             private List<Update> inFlight = new List<Update>();
             private int leases;
             private bool initialized;
@@ -269,7 +318,36 @@ namespace Milestro.Skia
 
             internal void Enqueue(Lease lease, UnitySkiaRenderCommandList.CapturedCommands captured)
             {
-                pending.Add(new Update(lease, captured));
+                pending.Add(RentUpdate(lease, captured));
+            }
+
+            internal UnitySkiaRenderCommandList.CapturedCommands RentCaptured()
+            {
+                return capturedPool.Count > 0 ? capturedPool.Pop() : new UnitySkiaRenderCommandList.CapturedCommands();
+            }
+
+            internal void ReturnCaptured(UnitySkiaRenderCommandList.CapturedCommands captured)
+            {
+                capturedPool.Push(captured);
+            }
+
+            private Update RentUpdate(Lease lease, UnitySkiaRenderCommandList.CapturedCommands captured)
+            {
+                if (updatePool.Count > 0)
+                {
+                    var rented = updatePool.Pop();
+                    rented.Lease = lease;
+                    rented.Commands = captured;
+                    return rented;
+                }
+                return new Update(lease, captured);
+            }
+
+            private void ReturnUpdate(Update update)
+            {
+                update.Lease = null!;
+                update.Commands = null!;
+                updatePool.Push(update);
             }
 
             internal void Flush()
@@ -318,18 +396,26 @@ namespace Milestro.Skia
                 FinishUpdates(completed, status);
             }
 
-            private static void FinishUpdates(List<Update> completed, SubmissionStatus status)
+            private void FinishUpdates(List<Update> completed, SubmissionStatus status)
             {
                 foreach (var update in completed)
                 {
+                    var commands = update.Commands;
+                    var clean = false;
                     try
                     {
-                        update.Commands.Dispose();
+                        commands.Dispose();
                         update.Lease.Notify(status);
+                        clean = true;
                     }
                     catch (Exception exception)
                     {
                         Debug.LogException(exception);
+                    }
+                    if (clean)
+                    {
+                        ReturnUpdate(update);
+                        ReturnCaptured(commands);
                     }
                 }
             }
@@ -379,8 +465,8 @@ namespace Milestro.Skia
 
             private sealed class Update
             {
-                internal readonly Lease Lease;
-                internal readonly UnitySkiaRenderCommandList.CapturedCommands Commands;
+                internal Lease Lease;
+                internal UnitySkiaRenderCommandList.CapturedCommands Commands;
 
                 internal Update(Lease lease, UnitySkiaRenderCommandList.CapturedCommands commands)
                 {
