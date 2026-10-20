@@ -3,6 +3,7 @@ set(MILESTRO_TEST_SOURCE
         src/test_font_collection.cpp
         src/test_paragraph_style.cpp
         src/test_paragraph_hit_test.cpp
+        src/test_paragraph_spacing.cpp
         src/test_unicode_fallback.cpp
 )
 

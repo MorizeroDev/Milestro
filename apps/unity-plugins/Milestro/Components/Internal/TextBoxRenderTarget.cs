@@ -507,6 +507,13 @@ namespace Milestro.Components.Internal
             textStyle.FontSize = settings.Size;
             textStyle.Locale = settings.Locale;
             textStyle.Color = settings.TextColor;
+            textStyle.LetterSpacing = settings.LetterSpacing;
+            textStyle.WordSpacing = settings.WordSpacing;
+            if (settings.LineHeight > 0f)
+            {
+                textStyle.Height = settings.LineHeight;
+                textStyle.HeightOverride = true;
+            }
             if (settings.Weight > FontWeight.Invisible && settings.Weight <= FontWeight.ExtraBlack)
             {
                 textStyle.GetFontStyle(out int weight, out var width, out var slant);

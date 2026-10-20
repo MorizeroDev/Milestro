@@ -21,7 +21,10 @@ namespace Milestro.Model
             bool autoSize = false,
             float minSize = 0f,
             float maxSize = 0f,
-            TextAutoSizeWrapMode autoSizeWrapMode = TextAutoSizeWrapMode.NoWrap)
+            TextAutoSizeWrapMode autoSizeWrapMode = TextAutoSizeWrapMode.NoWrap,
+            float letterSpacing = 0f,
+            float wordSpacing = 0f,
+            float lineHeight = 0f)
         {
             Content = content ?? "";
             Margin = margin ?? Margin.FixedZero();
@@ -41,6 +44,9 @@ namespace Milestro.Model
             MinSize = minSize;
             MaxSize = maxSize;
             AutoSizeWrapMode = autoSizeWrapMode;
+            LetterSpacing = letterSpacing;
+            WordSpacing = wordSpacing;
+            LineHeight = lineHeight;
         }
 
         public string Content { get; }
@@ -60,5 +66,8 @@ namespace Milestro.Model
         public float MinSize { get; }
         public float MaxSize { get; }
         public TextAutoSizeWrapMode AutoSizeWrapMode { get; }
+        public float LetterSpacing { get; }
+        public float WordSpacing { get; }
+        public float LineHeight { get; }
     }
 }

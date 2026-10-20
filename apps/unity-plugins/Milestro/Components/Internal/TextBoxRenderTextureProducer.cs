@@ -56,6 +56,15 @@ namespace Milestro.Components.Internal
         private string m_locale = "zh-Hans";
 
         [SerializeField]
+        private float m_letterSpacing;
+
+        [SerializeField]
+        private float m_wordSpacing;
+
+        [SerializeField]
+        private float m_lineHeight;
+
+        [SerializeField]
         private bool m_enableAutoSizing;
 
         [SerializeField]
@@ -247,6 +256,36 @@ namespace Milestro.Components.Internal
             set
             {
                 m_locale = value ?? "";
+                MarkPropertiesChanged();
+            }
+        }
+
+        public float letterSpacing
+        {
+            get => m_letterSpacing;
+            set
+            {
+                m_letterSpacing = value;
+                MarkPropertiesChanged();
+            }
+        }
+
+        public float wordSpacing
+        {
+            get => m_wordSpacing;
+            set
+            {
+                m_wordSpacing = value;
+                MarkPropertiesChanged();
+            }
+        }
+
+        public float lineHeight
+        {
+            get => m_lineHeight;
+            set
+            {
+                m_lineHeight = value;
                 MarkPropertiesChanged();
             }
         }
@@ -669,7 +708,10 @@ namespace Milestro.Components.Internal
                 m_enableAutoSizing,
                 m_fontSizeMin,
                 m_fontSizeMax,
-                m_autoSizeWrapMode);
+                m_autoSizeWrapMode,
+                m_letterSpacing,
+                m_wordSpacing,
+                m_lineHeight);
         }
 
         private RectTransform? RectTransformComponent()

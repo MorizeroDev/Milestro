@@ -655,6 +655,30 @@ Semantics notes:
 - Do not combine auto sizing with a `ContentSizeFitter` on the same axis; the
   fitted size feeds back into the fitting constraint.
 
+## Text Spacing
+
+`TextBoxRenderTextureProducer` exposes component-level spacing properties that
+apply to the whole paragraph and can be animated per frame (each change
+re-runs layout and rasterization, like changing `size`):
+
+- `letterSpacing`: extra spacing between glyphs in points; negative values
+  tighten text. Matches TextMesh Pro `characterSpacing` semantics.
+- `wordSpacing`: extra spacing added at word-boundary spaces in points.
+- `lineHeight`: line-height multiplier applied with Skia height override, so
+  each line's height is approximately `fontSize * lineHeight`. Values at or
+  below zero keep the font's natural line metrics. Unlike TextMesh Pro
+  `lineSpacing` (absolute points added to the natural line height), this is a
+  multiplier; convert existing content with
+  `lineHeight = (naturalLineHeight + spacingPoints) / fontSize` and retune
+  visually, because glyph metrics differ between renderers.
+
+Rich text runs inherit the component values; a `<font style="...cspace...">`
+run can still override letter spacing locally.
+
+TextMesh Pro `paragraphSpacing` has no equivalent: TextBox content lays out
+as a single Skia paragraph, and SkParagraph does not support per-paragraph
+spacing. Insert spacing through margins or content structure instead.
+
 ## Color Gradients
 
 `TextBox` and `TextInput` can tint the rendered text with a color gradient.
