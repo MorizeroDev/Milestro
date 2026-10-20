@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Milestro.Model;
 using Milestro.Skia;
 using Milestro.Util;
@@ -22,47 +21,16 @@ namespace Milestro.Components.Internal
         private Margin m_margin = new Margin();
 
         [SerializeField]
-        private List<string> m_fontFamilies = new List<string>() { "system-ui" };
+        private ParagraphStyleSettings m_paragraphStyle = new ParagraphStyleSettings();
 
         [SerializeField]
-        private TextAlign m_textAlign = TextAlign.Start;
-
-        [SerializeField]
-        private TextDirection m_textDirection = TextDirection.Ltr;
+        private TextStyleSettings m_textStyle = new TextStyleSettings();
 
         [SerializeField]
         private TextBoxWrapMode m_wrapMode = TextBoxWrapMode.Wrap;
 
         [SerializeField]
-        private bool m_singleLine;
-
-        [SerializeField]
         private TextOverflow m_textOverflow = TextOverflow.Clip;
-
-        [SerializeField]
-        private string m_ellipsisString = "\u2026";
-
-        [SerializeField]
-        private float m_size = 36;
-
-        [SerializeField]
-        [Range(0, 1000)]
-        private int m_weight = FontWeight.Normal;
-
-        [SerializeField]
-        private Color m_textColor = Color.white;
-
-        [SerializeField]
-        private string m_locale = "zh-Hans";
-
-        [SerializeField]
-        private float m_letterSpacing;
-
-        [SerializeField]
-        private float m_wordSpacing;
-
-        [SerializeField]
-        private float m_lineHeight;
 
         [SerializeField]
         private bool m_enableAutoSizing;
@@ -150,32 +118,44 @@ namespace Milestro.Components.Internal
             }
         }
 
-        public List<string> fontFamilies
+        public ParagraphStyleSettings paragraphStyle
         {
-            get => m_fontFamilies;
+            get => m_paragraphStyle;
             set
             {
-                m_fontFamilies = value ?? new List<string>();
+                var nextValue = value ?? new ParagraphStyleSettings();
+                if (ReferenceEquals(m_paragraphStyle, nextValue))
+                {
+                    return;
+                }
+
+                if (m_paragraphStyle != null)
+                {
+                    m_paragraphStyle.Changed -= MarkPropertiesChanged;
+                }
+                m_paragraphStyle = nextValue;
+                HookStyleModels();
                 MarkPropertiesChanged();
             }
         }
 
-        public TextAlign textAlign
+        public TextStyleSettings textStyle
         {
-            get => m_textAlign;
+            get => m_textStyle;
             set
             {
-                m_textAlign = value;
-                MarkPropertiesChanged();
-            }
-        }
+                var nextValue = value ?? new TextStyleSettings();
+                if (ReferenceEquals(m_textStyle, nextValue))
+                {
+                    return;
+                }
 
-        public TextDirection textDirection
-        {
-            get => m_textDirection;
-            set
-            {
-                m_textDirection = value;
+                if (m_textStyle != null)
+                {
+                    m_textStyle.Changed -= MarkPropertiesChanged;
+                }
+                m_textStyle = nextValue;
+                HookStyleModels();
                 MarkPropertiesChanged();
             }
         }
@@ -190,102 +170,12 @@ namespace Milestro.Components.Internal
             }
         }
 
-        public bool singleLine
-        {
-            get => m_singleLine;
-            set
-            {
-                m_singleLine = value;
-                MarkPropertiesChanged();
-            }
-        }
-
         public TextOverflow textOverflow
         {
             get => m_textOverflow;
             set
             {
                 m_textOverflow = value;
-                MarkPropertiesChanged();
-            }
-        }
-
-        public string ellipsisString
-        {
-            get => m_ellipsisString;
-            set
-            {
-                m_ellipsisString = value ?? "";
-                MarkPropertiesChanged();
-            }
-        }
-
-        public float size
-        {
-            get => m_size;
-            set
-            {
-                m_size = value;
-                MarkPropertiesChanged();
-            }
-        }
-
-        public int weight
-        {
-            get => m_weight;
-            set
-            {
-                m_weight = value;
-                MarkPropertiesChanged();
-            }
-        }
-
-        public Color textColor
-        {
-            get => m_textColor;
-            set
-            {
-                m_textColor = value;
-                MarkPropertiesChanged();
-            }
-        }
-
-        public string locale
-        {
-            get => m_locale;
-            set
-            {
-                m_locale = value ?? "";
-                MarkPropertiesChanged();
-            }
-        }
-
-        public float letterSpacing
-        {
-            get => m_letterSpacing;
-            set
-            {
-                m_letterSpacing = value;
-                MarkPropertiesChanged();
-            }
-        }
-
-        public float wordSpacing
-        {
-            get => m_wordSpacing;
-            set
-            {
-                m_wordSpacing = value;
-                MarkPropertiesChanged();
-            }
-        }
-
-        public float lineHeight
-        {
-            get => m_lineHeight;
-            set
-            {
-                m_lineHeight = value;
                 MarkPropertiesChanged();
             }
         }
@@ -516,6 +406,15 @@ namespace Milestro.Components.Internal
             {
                 m_margin = new Margin();
             }
+            if (m_paragraphStyle == null)
+            {
+                m_paragraphStyle = new ParagraphStyleSettings();
+            }
+            if (m_textStyle == null)
+            {
+                m_textStyle = new TextStyleSettings();
+            }
+            HookStyleModels();
             m_margin.Normalize();
             m_scrollX = FloatUtil.IsFinite(m_scrollX) ? Mathf.Max(0f, m_scrollX) : 0f;
             m_scrollY = FloatUtil.IsFinite(m_scrollY) ? Mathf.Max(0f, m_scrollY) : 0f;
@@ -688,30 +587,22 @@ namespace Milestro.Components.Internal
 
         private TextBoxRenderTargetSettings CurrentSettings()
         {
-            if (m_margin == null)
+            HookStyleModels();
+            return TextBoxRenderTargetSettingsBuilder.BuildFrom(this);
+        }
+
+        private void HookStyleModels()
+        {
+            if (m_paragraphStyle != null)
             {
-                m_margin = new Margin();
+                m_paragraphStyle.Changed -= MarkPropertiesChanged;
+                m_paragraphStyle.Changed += MarkPropertiesChanged;
             }
-            return new TextBoxRenderTargetSettings(m_content,
-                m_margin,
-                m_fontFamilies,
-                m_textAlign,
-                m_textDirection,
-                m_wrapMode,
-                m_singleLine,
-                m_textOverflow,
-                m_ellipsisString,
-                m_size,
-                m_weight,
-                m_textColor,
-                m_locale,
-                m_enableAutoSizing,
-                m_fontSizeMin,
-                m_fontSizeMax,
-                m_autoSizeWrapMode,
-                m_letterSpacing,
-                m_wordSpacing,
-                m_lineHeight);
+            if (m_textStyle != null)
+            {
+                m_textStyle.Changed -= MarkPropertiesChanged;
+                m_textStyle.Changed += MarkPropertiesChanged;
+            }
         }
 
         private RectTransform? RectTransformComponent()
@@ -728,7 +619,7 @@ namespace Milestro.Components.Internal
         {
             return settings.Margin.Resolve(new MarginResolveContext(containerSizePixels.x,
                 containerSizePixels.y,
-                settings.Size));
+                settings.TextStyle.size));
         }
 
         private ITextBoxRenderTarget RenderTarget
@@ -881,7 +772,7 @@ namespace Milestro.Components.Internal
 
         private static bool ShouldUseContentPreferredWidth(TextBoxRenderTargetSettings settings)
         {
-            if (settings.SingleLine)
+            if (settings.ParagraphStyle.singleLine)
             {
                 return settings.TextOverflow != TextOverflow.Ellipsis;
             }

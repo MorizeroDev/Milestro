@@ -77,8 +77,8 @@ namespace Milestro.Tests
                         rect.anchoredPosition = new Vector2(index % 32 * 40, -(index / 32) * 22);
                         rect.sizeDelta = new Vector2(38, 20);
                         var producer = label.AddComponent<TextBoxRenderTextureProducer>();
-                        producer.size = 12;
-                        producer.singleLine = true;
+                        producer.textStyle.size = 12;
+                        producer.paragraphStyle.singleLine = true;
                         producer.content = "T" + index;
                         labels[index] = producer;
                         label.AddComponent<TextBox>();

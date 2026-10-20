@@ -166,8 +166,11 @@ Primary runtime components:
 Internal component building blocks:
 
 - `TextBoxRenderTextureProducer`: builds text render-target output from content,
-  font family list, alignment, direction, wrap mode, size, weight, color, locale,
-  margin, and scroll offset.
+  wrap mode, margin, and scroll offset, styled by a component-level
+  `paragraphStyle` (`ParagraphStyleSettings`: alignment, direction, single-line,
+  ellipsis string) and `textStyle` (`TextStyleSettings`: font families, size,
+  weight, width, slant, color, spacings, locale). Rich text runs override these
+  base styles; see [Rich Text](#rich-text).
 - `TextBoxRenderTarget`: builds Skia paragraph payloads and submits render
   commands to a Unity render texture surface.
 - `RenderTextureGraphic` and `RenderTextureMeshPresenter`: present render texture
@@ -657,9 +660,10 @@ Semantics notes:
 
 ## Text Spacing
 
-`TextBoxRenderTextureProducer` exposes component-level spacing properties that
+`TextStyleSettings` on `TextBoxRenderTextureProducer.textStyle` exposes
+component-level spacing properties that
 apply to the whole paragraph and can be animated per frame (each change
-re-runs layout and rasterization, like changing `size`):
+re-runs layout and rasterization, like changing `textStyle.size`):
 
 - `letterSpacing`: extra spacing between glyphs in points; negative values
   tighten text. Matches TextMesh Pro `characterSpacing` semantics.

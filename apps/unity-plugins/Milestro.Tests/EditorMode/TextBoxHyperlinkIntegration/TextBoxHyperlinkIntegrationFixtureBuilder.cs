@@ -209,9 +209,9 @@ namespace Milestro.Tests.TextBoxHyperlinkIntegration.Editor
             var producer = root.AddComponent<TextBoxRenderTextureProducer>();
             producer.content =
                 "<a href=\"milestro://integration/task201\" id=\"task201-link\">Open integration link</a>";
-            producer.size = 36f;
-            producer.textAlign = Milestro.Model.TextAlign.Left;
-            producer.textDirection = Milestro.Model.TextDirection.Ltr;
+            producer.textStyle.size = 36f;
+            producer.paragraphStyle.textAlign = Milestro.Model.TextAlign.Left;
+            producer.paragraphStyle.textDirection = Milestro.Model.TextDirection.Ltr;
             var textBox = root.AddComponent<TextBox>();
             textBox.raycastTarget = true;
             root.AddComponent<TextBoxHyperlinkIntegrationReceiver>();

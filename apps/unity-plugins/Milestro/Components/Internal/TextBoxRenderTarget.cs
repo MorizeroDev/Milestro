@@ -490,35 +490,9 @@ namespace Milestro.Components.Internal
         private Paragraph CreateParagraph(TextBoxRenderTargetSettings settings,
             out RichTextParser.ParagraphPayload payload)
         {
-            using var paragraphStyle = new ParagraphStyle();
-            paragraphStyle.TextAlign = settings.TextAlign;
-            paragraphStyle.TextDirection = settings.TextDirection;
-            if (settings.SingleLine)
-            {
-                paragraphStyle.MaxLines = 1;
-                if (settings.TextOverflow == TextOverflow.Ellipsis)
-                {
-                    paragraphStyle.SetEllipsis(settings.EllipsisString);
-                }
-            }
-
-            using var textStyle = new TextStyle();
-            textStyle.SetFontFamilies(settings.FontFamilies);
-            textStyle.FontSize = settings.Size;
-            textStyle.Locale = settings.Locale;
-            textStyle.Color = settings.TextColor;
-            textStyle.LetterSpacing = settings.LetterSpacing;
-            textStyle.WordSpacing = settings.WordSpacing;
-            if (settings.LineHeight > 0f)
-            {
-                textStyle.Height = settings.LineHeight;
-                textStyle.HeightOverride = true;
-            }
-            if (settings.Weight > FontWeight.Invisible && settings.Weight <= FontWeight.ExtraBlack)
-            {
-                textStyle.GetFontStyle(out int weight, out var width, out var slant);
-                textStyle.SetFontStyle(settings.Weight, width, slant);
-            }
+            using var paragraphStyle = settings.ParagraphStyle.ToParagraphStyle(
+                settings.TextOverflow == TextOverflow.Ellipsis);
+            using var textStyle = settings.TextStyle.ToTextStyle();
 
             var parser = new RichTextParser.RichTextParser();
             parser.ParseText(settings.Content);
@@ -609,8 +583,8 @@ namespace Milestro.Components.Internal
                     },
                     viewportWidth,
                     viewportHeight,
-                    settings.MinSize / settings.Size,
-                    settings.MaxSize / settings.Size);
+                    settings.MinSize / settings.TextStyle.size,
+                    settings.MaxSize / settings.TextStyle.size);
                 finalVirtualWidth = CeilToPositiveInt(viewportWidth / scale);
                 if (probeWidth != finalVirtualWidth)
                 {
@@ -628,7 +602,7 @@ namespace Milestro.Components.Internal
                     Mathf.Max(0f, targetParagraph.Height),
                     viewportWidth,
                     viewportHeight,
-                    settings.Size,
+                    settings.TextStyle.size,
                     settings.MinSize,
                     settings.MaxSize);
             }
@@ -654,7 +628,7 @@ namespace Milestro.Components.Internal
             if (force)
             {
                 targetParagraph.Layout(Paragraph.ResolveNoWrapProbeLayoutWidth(paragraphPlainText,
-                    settings.Size,
+                    settings.TextStyle.size,
                     viewportWidth));
                 paragraphContentWidth = targetParagraph.ResolveNoWrapContentWidth(paragraphPlainText);
             }
@@ -667,7 +641,7 @@ namespace Milestro.Components.Internal
                     unscaledHeight,
                     viewportWidth,
                     ContentViewportHeight(settings, layoutSizePixels),
-                    settings.Size,
+                    settings.TextStyle.size,
                     settings.MinSize,
                     settings.MaxSize);
             }
@@ -684,8 +658,8 @@ namespace Milestro.Components.Internal
             fitScale = scale;
 
             var horizontalLayout = TextBoxNoWrapHorizontalLayout.Resolve(true,
-                settings.TextAlign,
-                settings.TextDirection,
+                settings.ParagraphStyle.textAlign,
+                settings.ParagraphStyle.textDirection,
                 viewportWidth,
                 paragraphContentWidth * fitScale,
                 layoutWidth * fitScale);
@@ -710,8 +684,8 @@ namespace Milestro.Components.Internal
                 ContentViewportHeight(settings, outputSizePixels));
             var useWideNoWrapLayout = ShouldUseWideNoWrapLayout(settings);
             var horizontalLayout = TextBoxNoWrapHorizontalLayout.Resolve(useWideNoWrapLayout,
-                settings.TextAlign,
-                settings.TextDirection,
+                settings.ParagraphStyle.textAlign,
+                settings.ParagraphStyle.textDirection,
                 nextViewportSize.x,
                 paragraph != null ? paragraphContentWidth * fitScale : 0f,
                 paragraph != null ? layoutWidth * fitScale : 0f);
@@ -758,7 +732,7 @@ namespace Milestro.Components.Internal
         {
             return settings.Margin.Resolve(new MarginResolveContext(containerSizePixels.x,
                 containerSizePixels.y,
-                settings.Size));
+                settings.TextStyle.size));
         }
 
         private static int CeilToPositiveInt(float value)
@@ -773,7 +747,7 @@ namespace Milestro.Components.Internal
 
         private static bool ShouldUseWideNoWrapLayout(TextBoxRenderTargetSettings settings)
         {
-            if (settings.SingleLine)
+            if (settings.ParagraphStyle.singleLine)
             {
                 return settings.TextOverflow != TextOverflow.Ellipsis;
             }
@@ -806,14 +780,14 @@ namespace Milestro.Components.Internal
 
         private static TextAlign EffectiveAlign(TextBoxRenderTargetSettings settings)
         {
-            switch (settings.TextAlign)
+            switch (settings.ParagraphStyle.textAlign)
             {
                 case TextAlign.Start:
-                    return settings.TextDirection == TextDirection.Rtl ? TextAlign.Right : TextAlign.Left;
+                    return settings.ParagraphStyle.textDirection == TextDirection.Rtl ? TextAlign.Right : TextAlign.Left;
                 case TextAlign.End:
-                    return settings.TextDirection == TextDirection.Rtl ? TextAlign.Left : TextAlign.Right;
+                    return settings.ParagraphStyle.textDirection == TextDirection.Rtl ? TextAlign.Left : TextAlign.Right;
                 default:
-                    return settings.TextAlign;
+                    return settings.ParagraphStyle.textAlign;
             }
         }
 
