@@ -285,6 +285,11 @@ namespace Milestro.Skia.TextLayout
             return _cachedFontFamily;
         }
 
+        /// <summary>
+        /// Skia baseline shift in pixels. Positive values move glyphs DOWN along the
+        /// canvas Y axis (which grows downward). Rich text markup applies the TMPro
+        /// convention (positive raises) and negates before assigning this property.
+        /// </summary>
         public float BaselineShift
         {
             get

@@ -68,7 +68,7 @@ namespace Milestro.Tests
             using var merged = payload.Body[1].TextStyle.ToTextStyle(baseStyle);
 
             Assert.That(merged.FontSize, Is.EqualTo(16f));
-            Assert.That(merged.BaselineShift, Is.EqualTo(0.5f * 32f));
+            Assert.That(merged.BaselineShift, Is.EqualTo(-0.5f * 32f));
         }
 
         [Test]
@@ -80,7 +80,7 @@ namespace Milestro.Tests
             using var merged = payload.Body[1].TextStyle.ToTextStyle(baseStyle);
 
             Assert.That(merged.FontSize, Is.EqualTo(20f));
-            Assert.That(merged.BaselineShift, Is.EqualTo(0.5f * 40f));
+            Assert.That(merged.BaselineShift, Is.EqualTo(-0.5f * 40f));
         }
 
         [Test]
@@ -92,7 +92,7 @@ namespace Milestro.Tests
             using var merged = payload.Body[1].TextStyle.ToTextStyle(baseStyle);
 
             Assert.That(merged.FontSize, Is.EqualTo(16f));
-            Assert.That(merged.BaselineShift, Is.EqualTo(7f));
+            Assert.That(merged.BaselineShift, Is.EqualTo(-7f));
         }
 
         [Test]
@@ -107,7 +107,7 @@ namespace Milestro.Tests
             using var baseStyle = new TextStyle { FontSize = 32 };
             using var merged = style.ToTextStyle(baseStyle);
             Assert.That(merged.FontSize, Is.EqualTo(24f));
-            Assert.That(merged.BaselineShift, Is.EqualTo(0.1f * 32f));
+            Assert.That(merged.BaselineShift, Is.EqualTo(-0.1f * 32f));
         }
 
         [Test]

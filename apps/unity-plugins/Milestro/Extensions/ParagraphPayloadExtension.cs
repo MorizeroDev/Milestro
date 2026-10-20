@@ -140,11 +140,14 @@ namespace Milestro.Extensions
             ret.Locale = t.Locale ?? baseTextStyle.Locale;
             if (t.BaselineShift.HasValue)
             {
-                ret.BaselineShift = t.BaselineShift.Value;
+                // Rich text state follows the TMPro convention (positive raises the
+                // baseline); Skia canvas Y grows downward, so positive BaselineShift
+                // moves glyphs down. Negate at the boundary.
+                ret.BaselineShift = -t.BaselineShift.Value;
             }
             else if (t.BaselineShiftEm.HasValue)
             {
-                ret.BaselineShift = baseTextStyle.BaselineShift + t.BaselineShiftEm.Value * unscaledFontSize;
+                ret.BaselineShift = baseTextStyle.BaselineShift - t.BaselineShiftEm.Value * unscaledFontSize;
             }
             else
             {
