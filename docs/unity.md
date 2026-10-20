@@ -613,6 +613,42 @@ Unknown tags throw during conversion. In the Unity editor, parser errors are
 returned as visible error text; in player builds the fallback text is
 `Render Error`.
 
+## Color Gradients
+
+`TextBox` and `TextInput` can tint the rendered text with a color gradient.
+The gradient is baked into the display mesh vertex colors and multiplied with
+the rendered texture, so changing it never re-runs text layout or re-renders
+the render texture; per-frame gradient animation only rebuilds the display
+mesh.
+
+Enable `Enable Color Gradient` on the component and edit the inline
+`Color Gradient`, or assign a preset through `Color Gradient Preset`, which
+takes precedence over the inline value. Create presets from the project context
+menu under `Milestro/Text Gradient`.
+
+Three modes are available:
+
+- `FourCorners`: TextMeshPro-style per-corner colors, rendered with the exact
+  four-vertex display quad.
+- `Linear`: an Office-style multi-stop gradient evaluated from a
+  `UnityEngine.Gradient`. `Angle Degrees` follows the Office convention: `0`
+  fills left to right, `90` fills top to bottom, and values increase clockwise.
+  The parameter range is scaled so the first and last stops touch the extreme
+  corners of the quad along the gradient axis.
+- `Radial`: the same stop list evaluated by distance from `Radial Center`
+  (normalized; `(0.5, 0.5)` is the quad middle). The farthest corner maps to
+  the last stop.
+
+Linear and Radial gradients bake into a tessellated mesh whose density is
+`Mesh Resolution` (default 16, clamped to 2..64). Higher values sharpen hard
+stop transitions at the cost of more vertices per gradient text.
+
+Gradients map onto the display quad rectangle, not the laid-out text bounds.
+Vertex colors multiply with `Graphic.color`, so ordinary color and alpha
+animations compose with any gradient. Mutating a shared `Gradient` stop list
+in place is not tracked; reassign `colorGradient` or call `SetVerticesDirty()`
+after in-place edits.
+
 ## Draw Call Batching
 
 TextBox, TextInput, and ordinary SlimText render targets share render-texture
