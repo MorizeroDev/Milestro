@@ -478,14 +478,16 @@ namespace Milestro.Components.Internal
                 QueueEditorRebuild();
 #endif
             }
-
-            ApplyHorizontalScrollState(RenderTarget.HorizontalScrollState);
-            if (!m_flowMode)
+            else
             {
-                var nextScrollY = RenderTarget.ScrollOffset.y;
-                if (!Mathf.Approximately(m_scrollY, nextScrollY))
+                ApplyHorizontalScrollState(RenderTarget.HorizontalScrollState);
+                if (!m_flowMode)
                 {
-                    m_scrollY = nextScrollY;
+                    var nextScrollY = RenderTarget.ScrollOffset.y;
+                    if (!Mathf.Approximately(m_scrollY, nextScrollY))
+                    {
+                        m_scrollY = nextScrollY;
+                    }
                 }
             }
 
