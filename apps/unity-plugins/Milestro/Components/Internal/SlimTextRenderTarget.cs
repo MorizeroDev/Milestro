@@ -169,6 +169,8 @@ namespace Milestro.Components.Internal
                 phaseStart = SlimTextPipelineProfiler.Timestamp;
             }
 
+            settings = ResolveAutoSizeSettings(settings);
+
             var needsDraw = surfaceChanged;
             var fontChanged = EnsureFont(settings);
             needsDraw |= fontChanged;
@@ -281,6 +283,37 @@ namespace Milestro.Components.Internal
             }
 
             return ready;
+        }
+
+        private SlimTextRenderTargetSettings ResolveAutoSizeSettings(SlimTextRenderTargetSettings settings)
+        {
+            if (!settings.AutoSize || noAllocMode || settings.Text.Length == 0)
+            {
+                return settings;
+            }
+
+            EnsureFont(settings);
+            if (font == null)
+            {
+                return settings;
+            }
+
+            var measurement = font.MeasureText(settings.Text);
+            var availableWidth = logicalSizePixels.x - settings.RectOffsetLeft - settings.RectOffsetRight;
+            var availableHeight = logicalSizePixels.y - settings.RectOffsetTop - settings.RectOffsetBottom;
+            var scale = TextAutoSizeScale.Resolve(MeasureContentWidth(measurement),
+                MeasureContentHeight(measurement),
+                availableWidth,
+                availableHeight,
+                settings.FontSize,
+                settings.MinSize,
+                settings.MaxSize);
+            if (Mathf.Approximately(scale, 1f))
+            {
+                return settings;
+            }
+
+            return settings.WithFontSize(settings.FontSize * scale);
         }
 
         private bool EnsureFont(SlimTextRenderTargetSettings settings)

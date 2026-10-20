@@ -46,6 +46,9 @@ struct MilestroUnityDrawCommand {
     float visualOffsetX = 0.0f;
     float visualOffsetY = 0.0f;
     int32_t resourceOwnership = 0;
+    // Uniform content scale applied around (x, y) when painting. Values <= 0 or
+    // non-finite are treated as 1.0 (no scaling).
+    float contentScale = 1.0f;
 };
 
 struct MilestroUnityRenderSubmission {

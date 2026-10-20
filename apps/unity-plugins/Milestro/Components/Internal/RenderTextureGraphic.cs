@@ -239,23 +239,23 @@ namespace Milestro.Components.Internal
                 case TextGradientMode.Linear:
                     return EvaluateStops(gradient, LinearGradientParameter(u, v, gradient.AngleDegrees));
                 case TextGradientMode.Radial:
-                {
-                    var center = gradient.RadialCenter;
-                    var dx = u - center.x;
-                    var dy = v - center.y;
-                    var maxDistance = MaxRadialDistance(center);
-                    var t = maxDistance > 1e-6f
-                        ? Mathf.Clamp01(Mathf.Sqrt(dx * dx + dy * dy) / maxDistance)
-                        : 0f;
-                    return EvaluateStops(gradient, t);
-                }
+                    {
+                        var center = gradient.RadialCenter;
+                        var dx = u - center.x;
+                        var dy = v - center.y;
+                        var maxDistance = MaxRadialDistance(center);
+                        var t = maxDistance > 1e-6f
+                            ? Mathf.Clamp01(Mathf.Sqrt(dx * dx + dy * dy) / maxDistance)
+                            : 0f;
+                        return EvaluateStops(gradient, t);
+                    }
                 default:
-                {
-                    var corners = gradient.FourCorners;
-                    var top = Color.Lerp(corners.TopLeft, corners.TopRight, u);
-                    var bottom = Color.Lerp(corners.BottomLeft, corners.BottomRight, u);
-                    return Color.Lerp(bottom, top, v);
-                }
+                    {
+                        var corners = gradient.FourCorners;
+                        var top = Color.Lerp(corners.TopLeft, corners.TopRight, u);
+                        var bottom = Color.Lerp(corners.BottomLeft, corners.BottomRight, u);
+                        return Color.Lerp(bottom, top, v);
+                    }
             }
         }
 

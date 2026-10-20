@@ -17,7 +17,11 @@ namespace Milestro.Model
             float size,
             int weight,
             Color textColor,
-            string locale)
+            string locale,
+            bool autoSize = false,
+            float minSize = 0f,
+            float maxSize = 0f,
+            TextAutoSizeWrapMode autoSizeWrapMode = TextAutoSizeWrapMode.NoWrap)
         {
             Content = content ?? "";
             Margin = margin ?? Margin.FixedZero();
@@ -33,6 +37,10 @@ namespace Milestro.Model
             Weight = weight;
             TextColor = textColor;
             Locale = locale ?? "";
+            AutoSize = autoSize;
+            MinSize = minSize;
+            MaxSize = maxSize;
+            AutoSizeWrapMode = autoSizeWrapMode;
         }
 
         public string Content { get; }
@@ -48,5 +56,9 @@ namespace Milestro.Model
         public int Weight { get; }
         public Color TextColor { get; }
         public string Locale { get; }
+        public bool AutoSize { get; }
+        public float MinSize { get; }
+        public float MaxSize { get; }
+        public TextAutoSizeWrapMode AutoSizeWrapMode { get; }
     }
 }

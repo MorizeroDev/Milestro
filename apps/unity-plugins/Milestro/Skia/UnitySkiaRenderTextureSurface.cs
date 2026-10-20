@@ -71,6 +71,7 @@ namespace Milestro.Skia
             public float VisualOffsetX;
             public float VisualOffsetY;
             public int ResourceOwnership;
+            public float ContentScale;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -551,7 +552,7 @@ namespace Milestro.Skia
         }
 
         private const int RenderDrainMagic = 0x4D524451; // MRDQ
-        private const uint RenderPayloadAbiVersion = 3;
+        private const uint RenderPayloadAbiVersion = 4;
         private static readonly object PendingLock = new object();
         private static readonly List<PendingRenderEvent> PendingEvents = new List<PendingRenderEvent>();
         private static readonly List<DeferredRelease> DeferredReleases = new List<DeferredRelease>();
@@ -1177,7 +1178,10 @@ namespace Milestro.Skia
                         ClipHeight = command.ClipHeight,
                         VisualOffsetX = command.VisualOffsetX,
                         VisualOffsetY = command.VisualOffsetY,
-                        ResourceOwnership = (int)ownership
+                        ResourceOwnership = (int)ownership,
+                        ContentScale = command.ContentScale <= 0f || !float.IsFinite(command.ContentScale)
+                            ? 1f
+                            : command.ContentScale
                     };
                     Marshal.StructureToPtr(payload, IntPtr.Add(commandsPtr, i * commandSize), false);
                     if (keepAlive != null)

@@ -48,6 +48,7 @@ namespace Milestro.Skia
             public bool SnapshotSlimText;
             public string Text;
             public Color32 Color;
+            public float ContentScale;
         }
 
         private readonly List<Command> commands = new List<Command>();
@@ -94,7 +95,10 @@ namespace Milestro.Skia
             });
         }
 
-        internal void DrawParagraphSnapshot(Func<Paragraph> paragraphFactory, Vector2 position, Rect clipRect)
+        internal void DrawParagraphSnapshot(Func<Paragraph> paragraphFactory,
+            Vector2 position,
+            Rect clipRect,
+            float contentScale = 1f)
         {
             if (paragraphFactory == null)
             {
@@ -110,6 +114,7 @@ namespace Milestro.Skia
                 ClipY = clipRect.y,
                 ClipWidth = clipRect.width,
                 ClipHeight = clipRect.height,
+                ContentScale = FloatUtil.IsFinite(contentScale) && contentScale > 0f ? contentScale : 1f,
                 ParagraphSnapshotFactory = paragraphFactory,
                 SnapshotParagraph = true
             });
@@ -221,33 +226,33 @@ namespace Milestro.Skia
         {
             foreach (var source in commands)
             {
-                    var command = source;
-                    if (command.SnapshotParagraph)
-                    {
-                        var snapshot = command.ParagraphSnapshotFactory();
-                        captured.OwnedResources.Add(snapshot);
-                        command.Resource = snapshot.NativePtr;
-                        command.KeepAlive = snapshot;
-                    }
-                    else if (command.SnapshotInputBox)
-                    {
-                        var snapshot = ((TextLayout.InputBox)command.KeepAlive).CreateDrawSnapshot();
-                        captured.OwnedResources.Add(snapshot);
-                        command.Resource = snapshot.NativePtr;
-                        command.KeepAlive = snapshot;
-                    }
-                    else if (command.SnapshotSlimText)
-                    {
-                        var snapshot = new TextDrawSnapshot((SkFont)command.KeepAlive, command.Text, command.Color);
-                        captured.OwnedResources.Add(snapshot);
-                        command.Resource = snapshot.NativePtr;
-                        command.KeepAlive = snapshot;
-                    }
-                    command.SnapshotParagraph = false;
-                    command.SnapshotInputBox = false;
-                    command.SnapshotSlimText = false;
-                    command.ParagraphSnapshotFactory = null!;
-                    captured.Commands.Add(command);
+                var command = source;
+                if (command.SnapshotParagraph)
+                {
+                    var snapshot = command.ParagraphSnapshotFactory();
+                    captured.OwnedResources.Add(snapshot);
+                    command.Resource = snapshot.NativePtr;
+                    command.KeepAlive = snapshot;
+                }
+                else if (command.SnapshotInputBox)
+                {
+                    var snapshot = ((TextLayout.InputBox)command.KeepAlive).CreateDrawSnapshot();
+                    captured.OwnedResources.Add(snapshot);
+                    command.Resource = snapshot.NativePtr;
+                    command.KeepAlive = snapshot;
+                }
+                else if (command.SnapshotSlimText)
+                {
+                    var snapshot = new TextDrawSnapshot((SkFont)command.KeepAlive, command.Text, command.Color);
+                    captured.OwnedResources.Add(snapshot);
+                    command.Resource = snapshot.NativePtr;
+                    command.KeepAlive = snapshot;
+                }
+                command.SnapshotParagraph = false;
+                command.SnapshotInputBox = false;
+                command.SnapshotSlimText = false;
+                command.ParagraphSnapshotFactory = null!;
+                captured.Commands.Add(command);
             }
         }
 

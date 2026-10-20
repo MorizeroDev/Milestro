@@ -55,6 +55,18 @@ namespace Milestro.Components.Internal
         [SerializeField]
         private string m_locale = "zh-Hans";
 
+        [SerializeField]
+        private bool m_enableAutoSizing;
+
+        [SerializeField]
+        private float m_fontSizeMin = 12f;
+
+        [SerializeField]
+        private float m_fontSizeMax = 72f;
+
+        [SerializeField]
+        private TextAutoSizeWrapMode m_autoSizeWrapMode = TextAutoSizeWrapMode.NoWrap;
+
         [SerializeField, HideInInspector]
         private bool m_screenSpaceRasterization = true;
 
@@ -249,6 +261,70 @@ namespace Milestro.Components.Internal
             }
         }
 
+        public bool enableAutoSizing
+        {
+            get => m_enableAutoSizing;
+            set
+            {
+                if (m_enableAutoSizing == value)
+                {
+                    return;
+                }
+
+                m_enableAutoSizing = value;
+                MarkPropertiesChanged();
+            }
+        }
+
+        public float fontSizeMin
+        {
+            get => m_fontSizeMin;
+            set
+            {
+                var nextValue = NormalizeAutoSizeBound(value);
+                if (Mathf.Approximately(m_fontSizeMin, nextValue))
+                {
+                    return;
+                }
+
+                m_fontSizeMin = nextValue;
+                NormalizeAutoSizeBounds();
+                MarkPropertiesChanged();
+            }
+        }
+
+        public float fontSizeMax
+        {
+            get => m_fontSizeMax;
+            set
+            {
+                var nextValue = NormalizeAutoSizeBound(value);
+                if (Mathf.Approximately(m_fontSizeMax, nextValue))
+                {
+                    return;
+                }
+
+                m_fontSizeMax = nextValue;
+                NormalizeAutoSizeBounds();
+                MarkPropertiesChanged();
+            }
+        }
+
+        public TextAutoSizeWrapMode autoSizeWrapMode
+        {
+            get => m_autoSizeWrapMode;
+            set
+            {
+                if (m_autoSizeWrapMode == value)
+                {
+                    return;
+                }
+
+                m_autoSizeWrapMode = value;
+                MarkPropertiesChanged();
+            }
+        }
+
         public bool srgb
         {
             get => SurfaceColorSpace() == ColorSpace.Linear;
@@ -404,6 +480,9 @@ namespace Milestro.Components.Internal
             m_margin.Normalize();
             m_scrollX = FloatUtil.IsFinite(m_scrollX) ? Mathf.Max(0f, m_scrollX) : 0f;
             m_scrollY = FloatUtil.IsFinite(m_scrollY) ? Mathf.Max(0f, m_scrollY) : 0f;
+            m_fontSizeMin = NormalizeAutoSizeBound(m_fontSizeMin);
+            m_fontSizeMax = NormalizeAutoSizeBound(m_fontSizeMax);
+            NormalizeAutoSizeBounds();
             MarkPropertiesChanged();
             if (isActiveAndEnabled)
             {
@@ -411,6 +490,19 @@ namespace Milestro.Components.Internal
             }
         }
 #endif
+
+        private static float NormalizeAutoSizeBound(float value)
+        {
+            return FloatUtil.IsFinite(value) ? Mathf.Max(0.1f, value) : 0.1f;
+        }
+
+        private void NormalizeAutoSizeBounds()
+        {
+            if (m_fontSizeMax < m_fontSizeMin)
+            {
+                m_fontSizeMax = m_fontSizeMin;
+            }
+        }
 
         private void OnRectTransformDimensionsChange()
         {
@@ -573,7 +665,11 @@ namespace Milestro.Components.Internal
                 m_size,
                 m_weight,
                 m_textColor,
-                m_locale);
+                m_locale,
+                m_enableAutoSizing,
+                m_fontSizeMin,
+                m_fontSizeMax,
+                m_autoSizeWrapMode);
         }
 
         private RectTransform? RectTransformComponent()

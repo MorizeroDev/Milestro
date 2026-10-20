@@ -24,6 +24,9 @@ namespace Milestro.Components.Internal
         [SerializeField] private SlimTextHorizontalAlign m_horizontalAlign = SlimTextHorizontalAlign.Left;
         [SerializeField] private SlimTextVerticalAlign m_verticalAlign = SlimTextVerticalAlign.Top;
         [SerializeField] private bool m_fallbackToSystemFont = true;
+        [SerializeField] private bool m_enableAutoSizing;
+        [SerializeField] private float m_fontSizeMin = 12f;
+        [SerializeField] private float m_fontSizeMax = 72f;
         [SerializeField, HideInInspector] private bool m_screenSpaceRasterization = true;
 
         [NonSerialized] private RectTransform? rectTransformCache;
@@ -179,6 +182,55 @@ namespace Milestro.Components.Internal
 
                 m_verticalAlign = value;
                 MarkPaintChanged();
+            }
+        }
+
+        public bool enableAutoSizing
+        {
+            get => m_enableAutoSizing;
+            set
+            {
+                if (m_enableAutoSizing == value)
+                {
+                    return;
+                }
+
+                m_enableAutoSizing = value;
+                MarkPropertiesChanged();
+            }
+        }
+
+        public float fontSizeMin
+        {
+            get => m_fontSizeMin;
+            set
+            {
+                var nextValue = NormalizeAutoSizeBound(value);
+                if (Mathf.Approximately(m_fontSizeMin, nextValue))
+                {
+                    return;
+                }
+
+                m_fontSizeMin = nextValue;
+                NormalizeAutoSizeBounds();
+                MarkPropertiesChanged();
+            }
+        }
+
+        public float fontSizeMax
+        {
+            get => m_fontSizeMax;
+            set
+            {
+                var nextValue = NormalizeAutoSizeBound(value);
+                if (Mathf.Approximately(m_fontSizeMax, nextValue))
+                {
+                    return;
+                }
+
+                m_fontSizeMax = nextValue;
+                NormalizeAutoSizeBounds();
+                MarkPropertiesChanged();
             }
         }
 
@@ -450,7 +502,10 @@ namespace Milestro.Components.Internal
                 m_rectOffset,
                 m_horizontalAlign,
                 m_verticalAlign,
-                m_fallbackToSystemFont);
+                m_fallbackToSystemFont,
+                m_enableAutoSizing,
+                m_fontSizeMin,
+                m_fontSizeMax);
         }
 
         private RectTransform? RectTransformComponent()
@@ -554,7 +609,23 @@ namespace Milestro.Components.Internal
 
             m_fontWeight = NormalizeFontWeight(m_fontWeight);
             m_fontSize = NormalizeFontSize(m_fontSize);
+            m_fontSizeMin = NormalizeAutoSizeBound(m_fontSizeMin);
+            m_fontSizeMax = NormalizeAutoSizeBound(m_fontSizeMax);
+            NormalizeAutoSizeBounds();
             NormalizeRectOffsetInPlace();
+        }
+
+        private static float NormalizeAutoSizeBound(float value)
+        {
+            return FloatUtil.IsFinite(value) ? Mathf.Max(0.1f, value) : 0.1f;
+        }
+
+        private void NormalizeAutoSizeBounds()
+        {
+            if (m_fontSizeMax < m_fontSizeMin)
+            {
+                m_fontSizeMax = m_fontSizeMin;
+            }
         }
 
         private static int NormalizeFontWeight(int weight)

@@ -27,7 +27,7 @@ struct MilestroUnityRenderTargetPayload {
     uint64_t deviceEpoch = 0;
 };
 
-inline constexpr uint32_t kMilestroUnityRenderPayloadAbiVersion = 3;
+inline constexpr uint32_t kMilestroUnityRenderPayloadAbiVersion = 4;
 static_assert(sizeof(MilestroUnityRenderTargetPayload) <= std::numeric_limits<uint32_t>::max());
 inline constexpr uint32_t kMilestroUnityRenderTargetPayloadSize =
         static_cast<uint32_t>(sizeof(MilestroUnityRenderTargetPayload));

@@ -32,6 +32,9 @@ namespace Milestro.Components
         [SerializeField] private SlimTextVerticalAlign m_verticalAlign = SlimTextVerticalAlign.Top;
         [SerializeField] private bool m_autoFitTexture;
         [SerializeField] private bool m_fallbackToSystemFont = true;
+        [SerializeField] private bool m_enableAutoSizing;
+        [SerializeField] private float m_fontSizeMin = 12f;
+        [SerializeField] private float m_fontSizeMax = 72f;
         [SerializeField] private Material? m_material;
         [SerializeField] private string m_texturePropertyName = DefaultTexturePropertyName;
         [SerializeField] private bool m_disableRendererWhenNoOutput;
@@ -96,6 +99,38 @@ namespace Milestro.Components
             set
             {
                 m_color = value;
+                ApplyConfiguration();
+            }
+        }
+
+        public bool enableAutoSizing
+        {
+            get => m_enableAutoSizing;
+            set
+            {
+                m_enableAutoSizing = value;
+                ApplyConfiguration();
+            }
+        }
+
+        public float fontSizeMin
+        {
+            get => m_fontSizeMin;
+            set
+            {
+                m_fontSizeMin = NormalizeAutoSizeBound(value);
+                NormalizeAutoSizeBounds();
+                ApplyConfiguration();
+            }
+        }
+
+        public float fontSizeMax
+        {
+            get => m_fontSizeMax;
+            set
+            {
+                m_fontSizeMax = NormalizeAutoSizeBound(value);
+                NormalizeAutoSizeBounds();
                 ApplyConfiguration();
             }
         }
@@ -334,6 +369,9 @@ namespace Milestro.Components
             producer.horizontalAlign = m_horizontalAlign;
             producer.verticalAlign = m_verticalAlign;
             producer.fallbackToSystemFont = m_fallbackToSystemFont;
+            producer.enableAutoSizing = m_enableAutoSizing;
+            producer.fontSizeMin = m_fontSizeMin;
+            producer.fontSizeMax = m_fontSizeMax;
         }
 
         private void ApplyPresenterSettings(RenderTextureMeshPresenter presenter,
@@ -715,6 +753,9 @@ namespace Milestro.Components
 
             m_fontWeight = NormalizeFontWeight(m_fontWeight);
             m_fontSize = NormalizeFontSize(m_fontSize);
+            m_fontSizeMin = NormalizeAutoSizeBound(m_fontSizeMin);
+            m_fontSizeMax = NormalizeAutoSizeBound(m_fontSizeMax);
+            NormalizeAutoSizeBounds();
             m_textureSizePixels = NormalizeTextureSize(m_textureSizePixels);
             m_pixelsPerUnit = NormalizePixelsPerUnit(m_pixelsPerUnit);
             NormalizeRectOffsetInPlace();
@@ -737,6 +778,19 @@ namespace Milestro.Components
         private static float NormalizeFontSize(float fontSize)
         {
             return FloatUtil.IsFinite(fontSize) ? Mathf.Max(1f, fontSize) : 1f;
+        }
+
+        private static float NormalizeAutoSizeBound(float value)
+        {
+            return FloatUtil.IsFinite(value) ? Mathf.Max(0.1f, value) : 0.1f;
+        }
+
+        private void NormalizeAutoSizeBounds()
+        {
+            if (m_fontSizeMax < m_fontSizeMin)
+            {
+                m_fontSizeMax = m_fontSizeMin;
+            }
         }
 
         private static float NormalizePixelsPerUnit(float pixelsPerUnit)

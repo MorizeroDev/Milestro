@@ -470,7 +470,7 @@ namespace Milestro.Components
 
             foreach (var paragraphRect in linkGeometry.Rects)
             {
-                var outputRect = OffsetRect(paragraphRect, snapshot.PaintPosition);
+                var outputRect = OffsetRect(ScaleRect(paragraphRect, snapshot.FitScale), snapshot.PaintPosition);
                 if (!TryClipRect(outputRect, snapshot.ClipRect, out var clippedRect))
                 {
                     continue;
@@ -500,7 +500,7 @@ namespace Milestro.Components
             var anyVisible = false;
             foreach (var paragraphRect in geometry.Rects)
             {
-                if (TryClipRect(OffsetRect(paragraphRect, snapshot.PaintPosition), snapshot.ClipRect, out _))
+                if (TryClipRect(OffsetRect(ScaleRect(paragraphRect, snapshot.FitScale), snapshot.PaintPosition), snapshot.ClipRect, out _))
                 {
                     anyVisible = true;
                     break;
@@ -512,7 +512,7 @@ namespace Milestro.Components
                 return true;
             }
 
-            var targetRect = OffsetRect(geometry.Rects[0], snapshot.PaintPosition);
+            var targetRect = OffsetRect(ScaleRect(geometry.Rects[0], snapshot.FitScale), snapshot.PaintPosition);
             var deltaX = VisibilityScrollDelta(targetRect.xMin,
                 targetRect.xMax,
                 snapshot.ClipRect.xMin,
@@ -565,6 +565,16 @@ namespace Milestro.Components
         private static Rect OffsetRect(Rect rect, Vector2 offset)
         {
             return new Rect(rect.x + offset.x, rect.y + offset.y, rect.width, rect.height);
+        }
+
+        private static Rect ScaleRect(Rect rect, float scale)
+        {
+            if (Mathf.Approximately(scale, 1f))
+            {
+                return rect;
+            }
+
+            return new Rect(rect.x * scale, rect.y * scale, rect.width * scale, rect.height * scale);
         }
 
         private static bool TryClipRect(Rect value, Rect clip, out Rect clipped)

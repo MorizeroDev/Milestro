@@ -12,7 +12,10 @@ namespace Milestro.Model
             RectOffset rectOffset,
             SlimTextHorizontalAlign horizontalAlign,
             SlimTextVerticalAlign verticalAlign,
-            bool fallbackToSystemFont)
+            bool fallbackToSystemFont,
+            bool autoSize = false,
+            float minSize = 0f,
+            float maxSize = 0f)
         {
             Text = text ?? "";
             FontFamily = fontFamily ?? "";
@@ -26,6 +29,25 @@ namespace Milestro.Model
             HorizontalAlign = horizontalAlign;
             VerticalAlign = verticalAlign;
             FallbackToSystemFont = fallbackToSystemFont;
+            AutoSize = autoSize;
+            MinSize = minSize;
+            MaxSize = maxSize;
+        }
+
+        public SlimTextRenderTargetSettings WithFontSize(float newFontSize)
+        {
+            return new SlimTextRenderTargetSettings(Text,
+                FontFamily,
+                FontWeight,
+                newFontSize,
+                TextColor,
+                new RectOffset(RectOffsetLeft, RectOffsetRight, RectOffsetTop, RectOffsetBottom),
+                HorizontalAlign,
+                VerticalAlign,
+                FallbackToSystemFont,
+                AutoSize,
+                MinSize,
+                MaxSize);
         }
 
         public string Text { get; }
@@ -40,5 +62,8 @@ namespace Milestro.Model
         public SlimTextHorizontalAlign HorizontalAlign { get; }
         public SlimTextVerticalAlign VerticalAlign { get; }
         public bool FallbackToSystemFont { get; }
+        public bool AutoSize { get; }
+        public float MinSize { get; }
+        public float MaxSize { get; }
     }
 }

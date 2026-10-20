@@ -1,6 +1,8 @@
 #include "unity_render/MilestroUnityRenderSubmissionDraw.h"
 #include "unity_render/MilestroUnityRenderTransform.h"
 
+#include <cmath>
+
 #include <Milestro/skia/Image.h>
 #include <Milestro/skia/SlimTextDrawSnapshot.h>
 #include <Milestro/skia/textlayout/InputBox.h>
@@ -42,15 +44,28 @@ void DrawParagraphCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& comm
         return;
     }
 
-    if (command.clipWidth > 0.0f && command.clipHeight > 0.0f) {
-        canvas->save();
-        canvas->clipRect(SkRect::MakeXYWH(command.clipX, command.clipY, command.clipWidth, command.clipHeight));
+    const float contentScale = std::isfinite(command.contentScale) && command.contentScale > 0.0f
+        ? command.contentScale
+        : 1.0f;
+    const bool hasClip = command.clipWidth > 0.0f && command.clipHeight > 0.0f;
+    const bool hasScale = contentScale != 1.0f;
+    if (!hasClip && !hasScale) {
         paragraph->paint(canvas, command.x, command.y);
-        canvas->restore();
         return;
     }
 
-    paragraph->paint(canvas, command.x, command.y);
+    canvas->save();
+    if (hasClip) {
+        canvas->clipRect(SkRect::MakeXYWH(command.clipX, command.clipY, command.clipWidth, command.clipHeight));
+    }
+    if (hasScale) {
+        canvas->translate(command.x, command.y);
+        canvas->scale(contentScale, contentScale);
+        paragraph->paint(canvas, 0.0f, 0.0f);
+    } else {
+        paragraph->paint(canvas, command.x, command.y);
+    }
+    canvas->restore();
 }
 
 void DrawInputBoxSnapshotCommand(SkCanvas* canvas, const MilestroUnityDrawCommand& command) {

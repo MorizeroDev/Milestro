@@ -613,6 +613,48 @@ Unknown tags throw during conversion. In the Unity editor, parser errors are
 returned as visible error text; in player builds the fallback text is
 `Render Error`.
 
+## Auto Sizing
+
+`TextBoxRenderTextureProducer` and `SlimTextRenderTextureProducer` can scale
+text to fit the available rect, equivalent to TextMesh Pro's Auto Size. Enable
+`Enable Auto Sizing` and set `Font Size Min` / `Font Size Max`; the producer's
+base font size acts as the design size, and the rendered content is uniformly
+scaled so it lands inside the `[min, max]` range. The resolved scale is exposed
+to layout through the usual content-size measurement, so
+`TextBoxLayoutElement` reports the scaled result.
+
+Semantics notes:
+
+- `Auto Size Wrap Mode` controls how wrapping interacts with fitting:
+  - `NoWrap` (default) lays the paragraph out once at the base font size and
+    freezes the resulting line breaks, then scales the laid-out block
+    uniformly. This matches the "grow my label to fill the rect" mental model
+    and never introduces new line breaks (PowerPoint-style).
+  - `Wrap` rebalances line breaking while fitting, probing progressively
+    narrower virtual widths, and returns the largest scale whose re-wrapped
+    layout fits. This matches TextMesh Pro Best Fit and can reach larger
+    glyph sizes for multi-line content, but may break unspaced text (CJK,
+    digit strings) mid-run.
+- In `Wrap` mode TextBox re-lays out the paragraph at a compensated virtual
+  width and paints it with a matching output scale, so wrapping rebalances as
+  the content shrinks or grows and horizontal alignment stays correct at any
+  scale. Rich text scales uniformly in both modes, including absolute inline
+  `<font size>` runs and Ruby annotations.
+- SlimText measures its single line and derives the effective font size
+  directly, which is exact for unwrapped text.
+- `TextOverflow.Ellipsis` disables auto sizing on TextBox: truncation already
+  keeps content inside the viewport, matching TextMesh Pro behavior where such
+  text always "fits".
+- Empty content resolves to the maximum scale.
+- Auto sizing is ignored on the SlimText no-alloc UTF-8 path; texts using
+  `SetTextUtf8NoAlloc` keep their configured font size.
+- Auto sizing recomputes only when content, settings, or the rect change. The
+  wrapped TextBox case resolves the scale with a deterministic binary search
+  over `[min, max]`, probing paragraph layouts per unique virtual width, so
+  the result cannot oscillate between frames at a line-break boundary.
+- Do not combine auto sizing with a `ContentSizeFitter` on the same axis; the
+  fitted size feeds back into the fitting constraint.
+
 ## Color Gradients
 
 `TextBox` and `TextInput` can tint the rendered text with a color gradient.
