@@ -24,9 +24,7 @@ namespace Milestro.Components.Internal
         [SerializeField] private SlimTextHorizontalAlign m_horizontalAlign = SlimTextHorizontalAlign.Left;
         [SerializeField] private SlimTextVerticalAlign m_verticalAlign = SlimTextVerticalAlign.Top;
         [SerializeField] private bool m_fallbackToSystemFont = true;
-        [SerializeField] private bool m_enableAutoSizing;
-        [SerializeField] private float m_fontSizeMin = 12f;
-        [SerializeField] private float m_fontSizeMax = 72f;
+        [SerializeField] private TextAutoSizeSettings m_autoSize = TextAutoSizeSettings.Default;
         [SerializeField, HideInInspector] private bool m_screenSpaceRasterization = true;
 
         [NonSerialized] private RectTransform? rectTransformCache;
@@ -187,49 +185,49 @@ namespace Milestro.Components.Internal
 
         public bool enableAutoSizing
         {
-            get => m_enableAutoSizing;
+            get => m_autoSize.enabled;
             set
             {
-                if (m_enableAutoSizing == value)
+                if (m_autoSize.enabled == value)
                 {
                     return;
                 }
 
-                m_enableAutoSizing = value;
+                m_autoSize.enabled = value;
                 MarkPropertiesChanged();
             }
         }
 
         public float fontSizeMin
         {
-            get => m_fontSizeMin;
+            get => m_autoSize.fontSizeMin;
             set
             {
-                var nextValue = NormalizeAutoSizeBound(value);
-                if (Mathf.Approximately(m_fontSizeMin, nextValue))
+                var nextValue = TextAutoSizeSettings.NormalizeBound(value);
+                if (Mathf.Approximately(m_autoSize.fontSizeMin, nextValue))
                 {
                     return;
                 }
 
-                m_fontSizeMin = nextValue;
-                NormalizeAutoSizeBounds();
+                m_autoSize.fontSizeMin = nextValue;
+                m_autoSize.Normalize();
                 MarkPropertiesChanged();
             }
         }
 
         public float fontSizeMax
         {
-            get => m_fontSizeMax;
+            get => m_autoSize.fontSizeMax;
             set
             {
-                var nextValue = NormalizeAutoSizeBound(value);
-                if (Mathf.Approximately(m_fontSizeMax, nextValue))
+                var nextValue = TextAutoSizeSettings.NormalizeBound(value);
+                if (Mathf.Approximately(m_autoSize.fontSizeMax, nextValue))
                 {
                     return;
                 }
 
-                m_fontSizeMax = nextValue;
-                NormalizeAutoSizeBounds();
+                m_autoSize.fontSizeMax = nextValue;
+                m_autoSize.Normalize();
                 MarkPropertiesChanged();
             }
         }
@@ -503,9 +501,9 @@ namespace Milestro.Components.Internal
                 m_horizontalAlign,
                 m_verticalAlign,
                 m_fallbackToSystemFont,
-                m_enableAutoSizing,
-                m_fontSizeMin,
-                m_fontSizeMax);
+                m_autoSize.enabled,
+                m_autoSize.fontSizeMin,
+                m_autoSize.fontSizeMax);
         }
 
         private RectTransform? RectTransformComponent()
@@ -609,23 +607,8 @@ namespace Milestro.Components.Internal
 
             m_fontWeight = NormalizeFontWeight(m_fontWeight);
             m_fontSize = NormalizeFontSize(m_fontSize);
-            m_fontSizeMin = NormalizeAutoSizeBound(m_fontSizeMin);
-            m_fontSizeMax = NormalizeAutoSizeBound(m_fontSizeMax);
-            NormalizeAutoSizeBounds();
+            m_autoSize.Normalize();
             NormalizeRectOffsetInPlace();
-        }
-
-        private static float NormalizeAutoSizeBound(float value)
-        {
-            return FloatUtil.IsFinite(value) ? Mathf.Max(0.1f, value) : 0.1f;
-        }
-
-        private void NormalizeAutoSizeBounds()
-        {
-            if (m_fontSizeMax < m_fontSizeMin)
-            {
-                m_fontSizeMax = m_fontSizeMin;
-            }
         }
 
         private static int NormalizeFontWeight(int weight)

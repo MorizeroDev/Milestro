@@ -33,16 +33,7 @@ namespace Milestro.Components.Internal
         private TextOverflow m_textOverflow = TextOverflow.Clip;
 
         [SerializeField]
-        private bool m_enableAutoSizing;
-
-        [SerializeField]
-        private float m_fontSizeMin = 12f;
-
-        [SerializeField]
-        private float m_fontSizeMax = 72f;
-
-        [SerializeField]
-        private TextAutoSizeWrapMode m_autoSizeWrapMode = TextAutoSizeWrapMode.NoWrap;
+        private TextAutoSizeSettings m_autoSize = TextAutoSizeSettings.Default;
 
         [SerializeField, HideInInspector]
         private bool m_screenSpaceRasterization = true;
@@ -192,64 +183,64 @@ namespace Milestro.Components.Internal
 
         public bool enableAutoSizing
         {
-            get => m_enableAutoSizing;
+            get => m_autoSize.enabled;
             set
             {
-                if (m_enableAutoSizing == value)
+                if (m_autoSize.enabled == value)
                 {
                     return;
                 }
 
-                m_enableAutoSizing = value;
+                m_autoSize.enabled = value;
                 MarkPropertiesChanged();
             }
         }
 
         public float fontSizeMin
         {
-            get => m_fontSizeMin;
+            get => m_autoSize.fontSizeMin;
             set
             {
-                var nextValue = NormalizeAutoSizeBound(value);
-                if (Mathf.Approximately(m_fontSizeMin, nextValue))
+                var nextValue = TextAutoSizeSettings.NormalizeBound(value);
+                if (Mathf.Approximately(m_autoSize.fontSizeMin, nextValue))
                 {
                     return;
                 }
 
-                m_fontSizeMin = nextValue;
-                NormalizeAutoSizeBounds();
+                m_autoSize.fontSizeMin = nextValue;
+                m_autoSize.Normalize();
                 MarkPropertiesChanged();
             }
         }
 
         public float fontSizeMax
         {
-            get => m_fontSizeMax;
+            get => m_autoSize.fontSizeMax;
             set
             {
-                var nextValue = NormalizeAutoSizeBound(value);
-                if (Mathf.Approximately(m_fontSizeMax, nextValue))
+                var nextValue = TextAutoSizeSettings.NormalizeBound(value);
+                if (Mathf.Approximately(m_autoSize.fontSizeMax, nextValue))
                 {
                     return;
                 }
 
-                m_fontSizeMax = nextValue;
-                NormalizeAutoSizeBounds();
+                m_autoSize.fontSizeMax = nextValue;
+                m_autoSize.Normalize();
                 MarkPropertiesChanged();
             }
         }
 
         public TextAutoSizeWrapMode autoSizeWrapMode
         {
-            get => m_autoSizeWrapMode;
+            get => m_autoSize.wrapMode;
             set
             {
-                if (m_autoSizeWrapMode == value)
+                if (m_autoSize.wrapMode == value)
                 {
                     return;
                 }
 
-                m_autoSizeWrapMode = value;
+                m_autoSize.wrapMode = value;
                 MarkPropertiesChanged();
             }
         }
@@ -418,9 +409,7 @@ namespace Milestro.Components.Internal
             m_margin.Normalize();
             m_scrollX = FloatUtil.IsFinite(m_scrollX) ? Mathf.Max(0f, m_scrollX) : 0f;
             m_scrollY = FloatUtil.IsFinite(m_scrollY) ? Mathf.Max(0f, m_scrollY) : 0f;
-            m_fontSizeMin = NormalizeAutoSizeBound(m_fontSizeMin);
-            m_fontSizeMax = NormalizeAutoSizeBound(m_fontSizeMax);
-            NormalizeAutoSizeBounds();
+            m_autoSize.Normalize();
             MarkPropertiesChanged();
             if (isActiveAndEnabled)
             {
@@ -428,19 +417,6 @@ namespace Milestro.Components.Internal
             }
         }
 #endif
-
-        private static float NormalizeAutoSizeBound(float value)
-        {
-            return FloatUtil.IsFinite(value) ? Mathf.Max(0.1f, value) : 0.1f;
-        }
-
-        private void NormalizeAutoSizeBounds()
-        {
-            if (m_fontSizeMax < m_fontSizeMin)
-            {
-                m_fontSizeMax = m_fontSizeMin;
-            }
-        }
 
         private void OnRectTransformDimensionsChange()
         {
