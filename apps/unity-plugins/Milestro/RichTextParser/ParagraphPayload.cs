@@ -9,14 +9,58 @@ namespace Milestro.RichTextParser
         private static readonly IReadOnlyList<RubyAnnotation> EmptyRubyAnnotations = Array.Empty<RubyAnnotation>();
         private List<LinkAnnotation>? links;
         private List<RubyAnnotation>? rubyAnnotations;
+        private List<ParagraphBlock>? blocks;
 
         public ParagraphStyleState ParagraphStyle { get; set; } = new ParagraphStyleState();
 
-        public List<TextSegment> Body { get; set; } = new List<TextSegment>();
+        /// <summary>
+        /// Block-level paragraphs in document order. A payload always contains at least one
+        /// block; leading text that is not wrapped in a &lt;p&gt; element forms an anonymous
+        /// block. Blocks join with no implicit separator: link and ruby annotation ranges
+        /// index into the concatenation of all block texts.
+        /// </summary>
+        public IReadOnlyList<ParagraphBlock> Blocks => blocks ??= new List<ParagraphBlock> { new ParagraphBlock() };
+
+        /// <summary>
+        /// Flattened view of every block's segments, kept for single-paragraph consumers.
+        /// </summary>
+        public List<TextSegment> Body
+        {
+            get
+            {
+                var all = new List<TextSegment>();
+                foreach (var block in Blocks)
+                {
+                    all.AddRange(block.Segments);
+                }
+                return all;
+            }
+        }
 
         internal IReadOnlyList<LinkAnnotation> Links => links ?? EmptyLinks;
 
         internal IReadOnlyList<RubyAnnotation> RubyAnnotations => rubyAnnotations ?? EmptyRubyAnnotations;
+
+        internal ParagraphBlock AddBlock(bool isExplicit, int startUtf16)
+        {
+            var list = blocks ??= new List<ParagraphBlock> { new ParagraphBlock() };
+            if (list.Count == 1 && !list[0].IsExplicit && list[0].Segments.Count == 0)
+            {
+                if (isExplicit)
+                {
+                    list[0].IsExplicit = true;
+                }
+                return list[0];
+            }
+
+            var block = new ParagraphBlock
+            {
+                IsExplicit = isExplicit,
+                StartUtf16 = startUtf16,
+            };
+            list.Add(block);
+            return block;
+        }
 
         internal void AddLink(LinkAnnotation link)
         {
@@ -33,7 +77,9 @@ namespace Milestro.RichTextParser
         public static ParagraphPayload MakeText(string text)
         {
             var ret = new ParagraphPayload();
-            ret.Body.Add(TextSegment.MakeText(text));
+            var block = ret.AddBlock(false, 0);
+            block.Segments.Add(TextSegment.MakeText(text));
+            block.LengthUtf16 = text.Length;
             return ret;
         }
     }

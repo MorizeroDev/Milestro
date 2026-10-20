@@ -20,6 +20,10 @@ namespace Milestro.Model
         [SerializeField]
         private string m_ellipsisString = "…";
 
+        [SerializeField]
+        [Min(0f)]
+        private float m_paragraphSpacing;
+
         public TextAlign textAlign
         {
             get => m_textAlign;
@@ -51,6 +55,20 @@ namespace Milestro.Model
 
                 m_ellipsisString = nextValue;
                 NotifyChanged();
+            }
+        }
+
+        /// <summary>
+        /// Extra gap in points inserted between adjacent rich text paragraph blocks,
+        /// equivalent to a default stylesheet rule of "p { margin-bottom: value }".
+        /// </summary>
+        public float paragraphSpacing
+        {
+            get => m_paragraphSpacing;
+            set
+            {
+                var nextValue = float.IsFinite(value) && value > 0f ? value : 0f;
+                SetField(ref m_paragraphSpacing, nextValue);
             }
         }
 

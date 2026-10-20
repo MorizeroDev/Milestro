@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using Milestro.Model;
 using Milestro.RichTextParser;
 using Milestro.Skia.TextLayout;
 
@@ -33,6 +34,18 @@ namespace Milestro.RichTextParser.Css
                          TryParseTextIndent(declaration.Value, out var indent))
                 {
                     textIndent = indent;
+                }
+                else if (paragraphStyle != null &&
+                         declaration.Property.Equals("margin-top", StringComparison.OrdinalIgnoreCase) &&
+                         TryParseBlockMargin(declaration.Value, out var marginTop))
+                {
+                    paragraphStyle.MarginTop = marginTop;
+                }
+                else if (paragraphStyle != null &&
+                         declaration.Property.Equals("margin-bottom", StringComparison.OrdinalIgnoreCase) &&
+                         TryParseBlockMargin(declaration.Value, out var marginBottom))
+                {
+                    paragraphStyle.MarginBottom = marginBottom;
                 }
             }
 
@@ -185,6 +198,45 @@ namespace Milestro.RichTextParser.Css
 
             if (suffixLength == 0 && result != 0) return false;
             indent = new TextIndent(result, isPercentage);
+            return true;
+        }
+
+        private static bool TryParseBlockMargin(CssSlice value, out MarginValue margin)
+        {
+            margin = default;
+            MarginUnit unit;
+            var suffixLength = 0;
+            if (value.EndsWith("%", StringComparison.Ordinal))
+            {
+                unit = MarginUnit.ContainerPercent;
+                suffixLength = 1;
+            }
+            else if (value.EndsWith("px", StringComparison.OrdinalIgnoreCase))
+            {
+                unit = MarginUnit.Px;
+                suffixLength = 2;
+            }
+            else if (value.EndsWith("em", StringComparison.OrdinalIgnoreCase))
+            {
+                unit = MarginUnit.Em;
+                suffixLength = 2;
+            }
+            else
+            {
+                unit = MarginUnit.Px;
+            }
+
+            var number = value.Slice(0, value.Length - suffixLength);
+            var trimmedNumber = number.Trim();
+            if (number.Length == 0 || trimmedNumber.Length != number.Length ||
+                !float.TryParse(number.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var result) ||
+                float.IsNaN(result) || float.IsInfinity(result) || result < 0f)
+            {
+                return false;
+            }
+
+            if (suffixLength == 0 && result != 0f) return false;
+            margin = new MarginValue { Value = result, Unit = unit };
             return true;
         }
     }

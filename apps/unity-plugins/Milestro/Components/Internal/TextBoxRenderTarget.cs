@@ -15,16 +15,27 @@ namespace Milestro.Components.Internal
         private static readonly Rect DefaultUvRect = new Rect(0f, 0f, 1f, 1f);
 
         private ManagedRenderTextureSurface? surface;
-        private Paragraph? paragraph;
+        private readonly List<Paragraph> paragraphs = new List<Paragraph>();
+        private readonly List<int> blockStartsUtf16 = new List<int>();
+        private readonly List<string> blockPlainTexts = new List<string>();
+        private readonly List<MarginValue> blockMarginTopValues = new List<MarginValue>();
+        private readonly List<MarginValue> blockMarginBottomValues = new List<MarginValue>();
+        private readonly List<TextAlign> blockPhysicalAligns = new List<TextAlign>();
+        private readonly List<float> blockHeights = new List<float>();
+        private readonly List<float> blockMarginTops = new List<float>();
+        private readonly List<float> blockMarginBottoms = new List<float>();
+        private readonly List<float> blockTops = new List<float>();
+        private readonly List<float> blockAlignmentOffsetsX = new List<float>();
+        private readonly List<float> blockContentWidths = new List<float>();
+        private readonly List<float> probeTops = new List<float>();
+        private bool hasHeightDependentBlockMargins;
         private bool layoutChanged = true;
         private bool paintChanged = true;
         private int layoutWidth = 640;
-        private string paragraphPlainText = "";
         private float paragraphHeight;
         private float paragraphContentWidth;
         private float paragraphVisualLeft;
         private float paragraphVisualWidth;
-        private float paragraphAlignmentOffset;
         private TextBoxHorizontalScrollState horizontalScrollState;
         private long outputVersion;
         private Vector2 scrollOffset;
@@ -105,16 +116,32 @@ namespace Milestro.Components.Internal
             var paragraphPoint = (outputPoint - snapshot.PaintPosition) / fitScale;
             foreach (var annotation in snapshot.Links)
             {
-                if (!snapshot.Paragraph.HitTestRange(annotation.StartUtf16, annotation.EndUtf16, paragraphPoint))
+                if (!snapshot.TryGetGeometry(annotation.Occurrence, out var geometry))
                 {
                     continue;
                 }
 
-                hit = new TextBoxLinkHit(annotation.Href,
-                    annotation.Id,
-                    annotation.Occurrence,
-                    generation);
-                return true;
+                foreach (var blockRange in geometry.BlockRanges)
+                {
+                    if (blockRange.BlockIndex < 0 || blockRange.BlockIndex >= snapshot.Paragraphs.Count)
+                    {
+                        continue;
+                    }
+
+                    var blockPoint = paragraphPoint - blockRange.FrameOffset;
+                    if (!snapshot.Paragraphs[blockRange.BlockIndex].HitTestRange(blockRange.StartUtf16,
+                            blockRange.EndUtf16,
+                            blockPoint))
+                    {
+                        continue;
+                    }
+
+                    hit = new TextBoxLinkHit(annotation.Href,
+                        annotation.Id,
+                        annotation.Occurrence,
+                        generation);
+                    return true;
+                }
             }
 
             return false;
@@ -185,9 +212,9 @@ namespace Milestro.Components.Internal
                 ClearSurfaceOutput();
             }
 
-            if (forceText || paragraph == null || layoutChanged)
+            if (forceText || paragraphs.Count == 0 || layoutChanged)
             {
-                ReplaceParagraph(BuildParagraph(settings, layoutSizePixels));
+                ReplaceParagraphs(BuildParagraphs(settings, layoutSizePixels));
                 needsDraw = true;
             }
             if (linkAnnotations.Count > 0)
@@ -195,7 +222,7 @@ namespace Milestro.Components.Internal
                 linkGeometryPublication.RequireControlledSubmission();
             }
 
-            needsDraw |= ResizeParagraph(paragraph, settings, layoutSizePixels);
+            needsDraw |= ResizeParagraphs(paragraphs, settings, layoutSizePixels);
             needsDraw |= UpdateScrollMetrics(settings,
                 layoutSizePixels,
                 visibleOutputSizePixels,
@@ -237,15 +264,15 @@ namespace Milestro.Components.Internal
                 logContext,
                 out var paintPosition,
                 out var clipRect);
-            var hasHitGeometry = paragraph != null &&
+            var hasHitGeometry = paragraphs.Count > 0 &&
                                  linkAnnotations.Count > 0 &&
                                  clipRect.width > 0f &&
                                  clipRect.height > 0f;
             var hitGeometry = hasHitGeometry
                 ? new TextBoxLinkGeometrySnapshot(contentVersion,
-                    paragraph!,
+                    paragraphs.ToArray(),
                     linkAnnotations,
-                    BuildLinkGeometry(paragraph!, linkAnnotations),
+                    BuildLinkGeometry(paragraphs, linkAnnotations, viewport.VisualScrollOffset.x),
                     paintPosition,
                     clipRect,
                     visibleOutputSizePixels,
@@ -266,16 +293,14 @@ namespace Milestro.Components.Internal
 
         public void Dispose()
         {
-            RetireParagraph();
+            RetireParagraphs();
             DisposeSurface();
-            paragraphPlainText = "";
             layoutChanged = true;
             paintChanged = true;
             paragraphHeight = 0f;
             paragraphContentWidth = 0f;
             paragraphVisualLeft = 0f;
             paragraphVisualWidth = 0f;
-            paragraphAlignmentOffset = 0f;
             horizontalScrollState = default;
             scrollOffset = Vector2.zero;
             contentSize = Vector2.zero;
@@ -439,14 +464,14 @@ namespace Milestro.Components.Internal
             }
         }
 
-        private Paragraph BuildParagraph(TextBoxRenderTargetSettings settings, Vector2Int layoutSizePixels)
+        private List<Paragraph> BuildParagraphs(TextBoxRenderTargetSettings settings, Vector2Int layoutSizePixels)
         {
-            var result = CreateParagraph(settings, out var payload);
+            var result = CreateParagraphs(settings, out var payload);
             var plainText = PlainText(payload);
-            paragraphPlainText = plainText;
             linkAnnotations = payload.Links.Count == 0
                 ? Array.Empty<RichTextParser.LinkAnnotation>()
                 : new List<RichTextParser.LinkAnnotation>(payload.Links);
+            CaptureBlockMetadata(payload, settings);
             if (!hasContentSource || !string.Equals(contentSource, settings.Content, StringComparison.Ordinal))
             {
                 unchecked
@@ -462,32 +487,121 @@ namespace Milestro.Components.Internal
             }
             contentSnapshot = new TextBoxContentSnapshot(contentVersion, plainText, linkAnnotations);
             hasContentSnapshot = true;
-            ResizeParagraph(result, settings, layoutSizePixels, true);
+            ResizeParagraphs(result, settings, layoutSizePixels, true);
             return result;
         }
 
-        private static IReadOnlyList<TextBoxLinkGeometry> BuildLinkGeometry(
-            Paragraph source,
-            IReadOnlyList<RichTextParser.LinkAnnotation> links)
+        private void CaptureBlockMetadata(RichTextParser.ParagraphPayload payload,
+            TextBoxRenderTargetSettings settings)
+        {
+            blockStartsUtf16.Clear();
+            blockPlainTexts.Clear();
+            blockMarginTopValues.Clear();
+            blockMarginBottomValues.Clear();
+            blockPhysicalAligns.Clear();
+            hasHeightDependentBlockMargins = false;
+            foreach (var block in payload.Blocks)
+            {
+                blockStartsUtf16.Add(block.StartUtf16);
+                var plainText = new StringBuilder();
+                foreach (var segment in block.Segments)
+                {
+                    plainText.Append(segment.Content ?? "");
+                }
+                blockPlainTexts.Add(plainText.ToString());
+                blockMarginTopValues.Add(block.Style.MarginTop);
+                blockMarginBottomValues.Add(block.Style.MarginBottom);
+                hasHeightDependentBlockMargins |= IsHeightDependent(block.Style.MarginTop) ||
+                                                  IsHeightDependent(block.Style.MarginBottom);
+
+                var align = block.Style.TextAlign ??
+                            payload.ParagraphStyle.TextAlign ??
+                            settings.ParagraphStyle.textAlign;
+                var direction = block.Style.TextDirection ??
+                                payload.ParagraphStyle.TextDirection ??
+                                settings.ParagraphStyle.textDirection;
+                blockPhysicalAligns.Add(PhysicalAlign(align, direction));
+            }
+        }
+
+        private static TextAlign PhysicalAlign(TextAlign align, TextDirection direction)
+        {
+            switch (align)
+            {
+                case TextAlign.Start:
+                    return direction == TextDirection.Rtl ? TextAlign.Right : TextAlign.Left;
+                case TextAlign.End:
+                    return direction == TextDirection.Rtl ? TextAlign.Left : TextAlign.Right;
+                case TextAlign.Justify:
+                    return TextAlign.Left;
+                default:
+                    return align;
+            }
+        }
+
+        private static bool IsHeightDependent(MarginValue value)
+        {
+            return !value.Auto &&
+                   (value.Unit == MarginUnit.ContainerPercent || value.Unit == MarginUnit.Vh);
+        }
+
+        private IReadOnlyList<TextBoxLinkGeometry> BuildLinkGeometry(
+            IReadOnlyList<Paragraph> source,
+            IReadOnlyList<RichTextParser.LinkAnnotation> links,
+            float visualScrollOffsetX)
         {
             var geometry = new List<TextBoxLinkGeometry>(links.Count);
             foreach (var link in links)
             {
-                geometry.Add(new TextBoxLinkGeometry(link.Occurrence,
-                    source.GetRectsForRange(link.StartUtf16, link.EndUtf16)));
+                var rects = new List<Rect>();
+                var blockRanges = new List<TextBoxLinkBlockRange>();
+                for (var blockIndex = 0; blockIndex < source.Count; ++blockIndex)
+                {
+                    var blockStart = blockStartsUtf16[blockIndex];
+                    var blockEnd = blockStart + blockPlainTexts[blockIndex].Length;
+                    var localStart = Math.Max(link.StartUtf16, blockStart);
+                    var localEnd = Math.Min(link.EndUtf16, blockEnd);
+                    if (localStart >= localEnd)
+                    {
+                        continue;
+                    }
+
+                    var blockRects = source[blockIndex].GetRectsForRange(localStart - blockStart,
+                        localEnd - blockStart);
+                    var top = blockIndex < blockTops.Count ? blockTops[blockIndex] : 0f;
+                    var paintOffsetX = TextBoxNoWrapHorizontalLayout.ResolvePaintOffsetX(
+                        blockIndex < blockAlignmentOffsetsX.Count ? blockAlignmentOffsetsX[blockIndex] : 0f,
+                        scrollOffset.x,
+                        visualScrollOffsetX);
+                    var offsetX = paintOffsetX / fitScale;
+                    foreach (var rect in blockRects)
+                    {
+                        rects.Add(new Rect(rect.x + offsetX, rect.y + top, rect.width, rect.height));
+                    }
+                    blockRanges.Add(new TextBoxLinkBlockRange(blockIndex,
+                        localStart - blockStart,
+                        localEnd - blockStart,
+                        new Vector2(offsetX, top)));
+                }
+
+                geometry.Add(new TextBoxLinkGeometry(link.Occurrence, rects, blockRanges));
             }
 
             return geometry;
         }
 
-        private Paragraph BuildPaintParagraph(TextBoxRenderTargetSettings settings)
+        private List<Paragraph> BuildPaintParagraphs(TextBoxRenderTargetSettings settings)
         {
-            var result = CreateParagraph(settings, out _);
-            result.Layout(Math.Max(1, layoutWidth));
+            var result = CreateParagraphs(settings, out _);
+            var width = Math.Max(1, layoutWidth);
+            foreach (var paragraph in result)
+            {
+                paragraph.Layout(width);
+            }
             return result;
         }
 
-        private Paragraph CreateParagraph(TextBoxRenderTargetSettings settings,
+        private List<Paragraph> CreateParagraphs(TextBoxRenderTargetSettings settings,
             out RichTextParser.ParagraphPayload payload)
         {
             using var paragraphStyle = settings.ParagraphStyle.ToParagraphStyle(
@@ -497,7 +611,7 @@ namespace Milestro.Components.Internal
             var parser = new RichTextParser.RichTextParser();
             parser.ParseText(settings.Content);
             payload = parser.ConvertToSegments();
-            return payload.ToParagraph(paragraphStyle, textStyle);
+            return payload.ToParagraphs(paragraphStyle, textStyle);
         }
 
         private static void ValidateMargin(Margin margin)
@@ -505,43 +619,46 @@ namespace Milestro.Components.Internal
             margin.Normalize();
         }
 
-        private bool ResizeParagraph(Paragraph? targetParagraph,
+        private bool ResizeParagraphs(IReadOnlyList<Paragraph> targetParagraphs,
             TextBoxRenderTargetSettings settings,
             Vector2Int layoutSizePixels,
             bool force = false)
         {
-            if (targetParagraph == null)
+            if (targetParagraphs.Count == 0)
             {
                 return false;
             }
 
             if (ShouldUseWideNoWrapLayout(settings))
             {
-                return ResizeNoWrapParagraph(targetParagraph, settings, layoutSizePixels, force);
+                return ResizeNoWrapParagraphs(targetParagraphs, settings, layoutSizePixels, force);
             }
 
             var viewportWidth = ContentViewportWidth(settings, layoutSizePixels);
-            var alignmentChanged = !Mathf.Approximately(paragraphAlignmentOffset, 0f);
-            paragraphAlignmentOffset = 0f;
+            var alignmentChanged = ClearBlockAlignmentOffsets();
 
             if (!ShouldApplyAutoSize(settings))
             {
                 fitScale = 1f;
-                if (viewportWidth == layoutWidth && !force)
+                if (viewportWidth == layoutWidth && !force && !hasHeightDependentBlockMargins)
                 {
                     return alignmentChanged;
                 }
 
                 layoutWidth = viewportWidth;
-                targetParagraph.Layout(layoutWidth);
+                foreach (var targetParagraph in targetParagraphs)
+                {
+                    targetParagraph.Layout(layoutWidth);
+                }
                 paragraphContentWidth = layoutWidth;
-                paragraphVisualWidth = Mathf.Clamp(targetParagraph.LongestLine, 0f, layoutWidth);
-                paragraphVisualLeft = ResolveParagraphVisualLeft(settings, paragraphVisualWidth, layoutWidth);
-                paragraphHeight = Mathf.Max(0f, targetParagraph.Height);
+                ResolveBlockMargins(settings, layoutSizePixels);
+                var stackHeight = RestackBlocks(targetParagraphs, settings);
+                ResolveWrapVisualBounds(targetParagraphs, layoutWidth);
+                paragraphHeight = Mathf.Max(0f, stackHeight);
                 return true;
             }
 
-            return ResizeAutoSizeWrapParagraph(targetParagraph,
+            return ResizeAutoSizeWrapParagraphs(targetParagraphs,
                 settings,
                 layoutSizePixels,
                 viewportWidth,
@@ -549,12 +666,76 @@ namespace Milestro.Components.Internal
                 alignmentChanged);
         }
 
+        private bool ClearBlockAlignmentOffsets()
+        {
+            var hadOffset = false;
+            for (var index = 0; index < blockAlignmentOffsetsX.Count; ++index)
+            {
+                hadOffset |= !Mathf.Approximately(blockAlignmentOffsetsX[index], 0f);
+            }
+            blockAlignmentOffsetsX.Clear();
+            return hadOffset;
+        }
+
+        private void ResolveBlockMargins(TextBoxRenderTargetSettings settings, Vector2Int layoutSizePixels)
+        {
+            blockMarginTops.Clear();
+            blockMarginBottoms.Clear();
+            var context = new MarginResolveContext(layoutSizePixels.x,
+                layoutSizePixels.y,
+                settings.TextStyle.size);
+            for (var index = 0; index < blockMarginTopValues.Count; ++index)
+            {
+                blockMarginTops.Add(blockMarginTopValues[index].Resolve(context, MarginAxis.Vertical));
+                blockMarginBottoms.Add(blockMarginBottomValues[index].Resolve(context, MarginAxis.Vertical));
+            }
+        }
+
+        private float RestackBlocks(IReadOnlyList<Paragraph> targetParagraphs,
+            TextBoxRenderTargetSettings settings)
+        {
+            blockHeights.Clear();
+            for (var index = 0; index < targetParagraphs.Count; ++index)
+            {
+                blockHeights.Add(Mathf.Max(0f, targetParagraphs[index].Height));
+            }
+
+            return TextBoxBlockStack.Layout(blockHeights,
+                blockMarginTops,
+                blockMarginBottoms,
+                settings.ParagraphStyle.paragraphSpacing,
+                blockTops);
+        }
+
+        private void ResolveWrapVisualBounds(IReadOnlyList<Paragraph> targetParagraphs, float width)
+        {
+            var left = float.MaxValue;
+            var right = float.MinValue;
+            for (var index = 0; index < targetParagraphs.Count; ++index)
+            {
+                var visualWidth = Mathf.Clamp(targetParagraphs[index].LongestLine, 0f, width);
+                var visualLeft = ResolveVisualLeft(blockPhysicalAligns[index], visualWidth, width);
+                left = Math.Min(left, visualLeft);
+                right = Math.Max(right, visualLeft + visualWidth);
+            }
+
+            if (left > right)
+            {
+                paragraphVisualLeft = 0f;
+                paragraphVisualWidth = 0f;
+                return;
+            }
+
+            paragraphVisualLeft = left;
+            paragraphVisualWidth = right - left;
+        }
+
         private bool ShouldApplyAutoSize(TextBoxRenderTargetSettings settings)
         {
             return settings.AutoSize && settings.TextOverflow != TextOverflow.Ellipsis;
         }
 
-        private bool ResizeAutoSizeWrapParagraph(Paragraph targetParagraph,
+        private bool ResizeAutoSizeWrapParagraphs(IReadOnlyList<Paragraph> targetParagraphs,
             TextBoxRenderTargetSettings settings,
             Vector2Int layoutSizePixels,
             int viewportWidth,
@@ -562,6 +743,7 @@ namespace Milestro.Components.Internal
             bool alignmentChanged)
         {
             var viewportHeight = ContentViewportHeight(settings, layoutSizePixels);
+            ResolveBlockMargins(settings, layoutSizePixels);
             float scale;
             var finalVirtualWidth = Mathf.Max(1, viewportWidth);
             if (settings.AutoSizeWrapMode == TextAutoSizeWrapMode.Wrap)
@@ -574,9 +756,11 @@ namespace Milestro.Components.Internal
                         if (candidateWidth != probeWidth)
                         {
                             probeWidth = candidateWidth;
-                            targetParagraph.Layout(candidateWidth);
-                            probeSize = new Vector2(targetParagraph.LongestLine,
-                                Mathf.Max(0f, targetParagraph.Height));
+                            foreach (var targetParagraph in targetParagraphs)
+                            {
+                                targetParagraph.Layout(candidateWidth);
+                            }
+                            probeSize = MeasureStackedContent(targetParagraphs, settings);
                         }
 
                         return probeSize;
@@ -588,18 +772,25 @@ namespace Milestro.Components.Internal
                 finalVirtualWidth = CeilToPositiveInt(viewportWidth / scale);
                 if (probeWidth != finalVirtualWidth)
                 {
-                    targetParagraph.Layout(finalVirtualWidth);
+                    foreach (var targetParagraph in targetParagraphs)
+                    {
+                        targetParagraph.Layout(finalVirtualWidth);
+                    }
                 }
             }
             else
             {
                 if (finalVirtualWidth != layoutWidth || force)
                 {
-                    targetParagraph.Layout(finalVirtualWidth);
+                    foreach (var targetParagraph in targetParagraphs)
+                    {
+                        targetParagraph.Layout(finalVirtualWidth);
+                    }
                 }
 
-                scale = TextAutoSizeScale.Resolve(targetParagraph.LongestLine,
-                    Mathf.Max(0f, targetParagraph.Height),
+                var measured = MeasureStackedContent(targetParagraphs, settings);
+                scale = TextAutoSizeScale.Resolve(measured.x,
+                    measured.y,
                     viewportWidth,
                     viewportHeight,
                     settings.TextStyle.size,
@@ -609,17 +800,54 @@ namespace Milestro.Components.Internal
 
             var changed = alignmentChanged || force || finalVirtualWidth != layoutWidth;
             layoutWidth = finalVirtualWidth;
-            var height = Mathf.Max(0f, targetParagraph.Height);
+            var height = RestackBlocks(targetParagraphs, settings);
             var scaleChanged = !Mathf.Approximately(fitScale, scale);
             fitScale = scale;
             paragraphContentWidth = layoutWidth;
-            paragraphVisualWidth = Mathf.Clamp(targetParagraph.LongestLine * fitScale, 0f, viewportWidth);
-            paragraphVisualLeft = ResolveParagraphVisualLeft(settings, paragraphVisualWidth, viewportWidth);
+
+            var visualLeft = float.MaxValue;
+            var visualRight = float.MinValue;
+            for (var index = 0; index < targetParagraphs.Count; ++index)
+            {
+                var visualWidth = Mathf.Clamp(targetParagraphs[index].LongestLine * fitScale, 0f, viewportWidth);
+                var left = ResolveVisualLeft(blockPhysicalAligns[index], visualWidth, viewportWidth);
+                visualLeft = Math.Min(visualLeft, left);
+                visualRight = Math.Max(visualRight, left + visualWidth);
+            }
+            if (visualLeft > visualRight)
+            {
+                paragraphVisualLeft = 0f;
+                paragraphVisualWidth = 0f;
+            }
+            else
+            {
+                paragraphVisualLeft = visualLeft;
+                paragraphVisualWidth = visualRight - visualLeft;
+            }
             paragraphHeight = height * fitScale;
             return changed || scaleChanged;
         }
 
-        private bool ResizeNoWrapParagraph(Paragraph targetParagraph,
+        private Vector2 MeasureStackedContent(IReadOnlyList<Paragraph> targetParagraphs,
+            TextBoxRenderTargetSettings settings)
+        {
+            blockHeights.Clear();
+            var width = 0f;
+            foreach (var targetParagraph in targetParagraphs)
+            {
+                blockHeights.Add(Mathf.Max(0f, targetParagraph.Height));
+                width = Math.Max(width, targetParagraph.LongestLine);
+            }
+
+            var total = TextBoxBlockStack.Layout(blockHeights,
+                blockMarginTops,
+                blockMarginBottoms,
+                settings.ParagraphStyle.paragraphSpacing,
+                probeTops);
+            return new Vector2(width, total);
+        }
+
+        private bool ResizeNoWrapParagraphs(IReadOnlyList<Paragraph> targetParagraphs,
             TextBoxRenderTargetSettings settings,
             Vector2Int layoutSizePixels,
             bool force)
@@ -627,17 +855,30 @@ namespace Milestro.Components.Internal
             var viewportWidth = ContentViewportWidth(settings, layoutSizePixels);
             if (force)
             {
-                targetParagraph.Layout(Paragraph.ResolveNoWrapProbeLayoutWidth(paragraphPlainText,
-                    settings.TextStyle.size,
-                    viewportWidth));
-                paragraphContentWidth = targetParagraph.ResolveNoWrapContentWidth(paragraphPlainText);
+                blockContentWidths.Clear();
+                for (var index = 0; index < targetParagraphs.Count; ++index)
+                {
+                    var plainText = index < blockPlainTexts.Count ? blockPlainTexts[index] : "";
+                    targetParagraphs[index].Layout(Paragraph.ResolveNoWrapProbeLayoutWidth(plainText,
+                        settings.TextStyle.size,
+                        viewportWidth));
+                    blockContentWidths.Add(targetParagraphs[index].ResolveNoWrapContentWidth(plainText));
+                }
             }
 
-            var unscaledHeight = Mathf.Max(0f, targetParagraph.Height);
+            var contentWidth = 0f;
+            foreach (var width in blockContentWidths)
+            {
+                contentWidth = Math.Max(contentWidth, width);
+            }
+
+            ResolveBlockMargins(settings, layoutSizePixels);
+            var unscaledHeight = RestackBlocks(targetParagraphs, settings);
+            paragraphContentWidth = contentWidth;
             var scale = 1f;
             if (ShouldApplyAutoSize(settings))
             {
-                scale = TextAutoSizeScale.Resolve(paragraphContentWidth,
+                scale = TextAutoSizeScale.Resolve(contentWidth,
                     unscaledHeight,
                     viewportWidth,
                     ContentViewportHeight(settings, layoutSizePixels),
@@ -646,30 +887,55 @@ namespace Milestro.Components.Internal
                     settings.MaxSize);
             }
 
-            var newLayoutWidth = CeilToPositiveInt(Paragraph.ResolveNoWrapLayoutWidth(viewportWidth, paragraphContentWidth));
+            var newLayoutWidth = CeilToPositiveInt(Paragraph.ResolveNoWrapLayoutWidth(viewportWidth, contentWidth));
             var widthChanged = newLayoutWidth != layoutWidth;
             if (widthChanged || force)
             {
                 layoutWidth = newLayoutWidth;
-                targetParagraph.Layout(layoutWidth);
+                foreach (var targetParagraph in targetParagraphs)
+                {
+                    targetParagraph.Layout(layoutWidth);
+                }
+                RestackBlocks(targetParagraphs, settings);
             }
 
             var scaleChanged = !Mathf.Approximately(fitScale, scale);
             fitScale = scale;
 
-            var horizontalLayout = TextBoxNoWrapHorizontalLayout.Resolve(true,
-                settings.ParagraphStyle.textAlign,
-                settings.ParagraphStyle.textDirection,
-                viewportWidth,
-                paragraphContentWidth * fitScale,
-                layoutWidth * fitScale);
-            var metricsChanged = !Mathf.Approximately(paragraphVisualWidth, horizontalLayout.ContentWidth) ||
-                                 !Mathf.Approximately(paragraphVisualLeft, horizontalLayout.LogicalVisualLeft) ||
-                                 !Mathf.Approximately(paragraphAlignmentOffset,
-                                     horizontalLayout.LayoutAlignmentOffset);
-            paragraphVisualWidth = paragraphContentWidth * fitScale;
-            paragraphVisualLeft = horizontalLayout.LogicalVisualLeft;
-            paragraphAlignmentOffset = horizontalLayout.LayoutAlignmentOffset;
+            var metricsChanged = false;
+            var visualLeft = float.MaxValue;
+            var visualRight = float.MinValue;
+            for (var index = 0; index < targetParagraphs.Count; ++index)
+            {
+                var blockWidth = index < blockContentWidths.Count ? blockContentWidths[index] : 0f;
+                var horizontalLayout = TextBoxNoWrapHorizontalLayout.Resolve(true,
+                    blockPhysicalAligns[index],
+                    settings.ParagraphStyle.textDirection,
+                    viewportWidth,
+                    blockWidth * fitScale,
+                    layoutWidth * fitScale);
+                while (blockAlignmentOffsetsX.Count <= index)
+                {
+                    blockAlignmentOffsetsX.Add(0f);
+                }
+                if (!Mathf.Approximately(blockAlignmentOffsetsX[index], horizontalLayout.LayoutAlignmentOffset))
+                {
+                    blockAlignmentOffsetsX[index] = horizontalLayout.LayoutAlignmentOffset;
+                    metricsChanged = true;
+                }
+
+                var left = horizontalLayout.LogicalVisualLeft;
+                var right = left + blockWidth * fitScale;
+                visualLeft = Math.Min(visualLeft, left);
+                visualRight = Math.Max(visualRight, right);
+            }
+
+            var nextVisualWidth = contentWidth * fitScale;
+            var nextVisualLeft = visualLeft <= visualRight ? visualLeft : 0f;
+            metricsChanged |= !Mathf.Approximately(paragraphVisualWidth, nextVisualWidth) ||
+                              !Mathf.Approximately(paragraphVisualLeft, nextVisualLeft);
+            paragraphVisualWidth = nextVisualWidth;
+            paragraphVisualLeft = nextVisualLeft;
             paragraphHeight = unscaledHeight * fitScale;
             return widthChanged || force || metricsChanged || scaleChanged;
         }
@@ -687,12 +953,12 @@ namespace Milestro.Components.Internal
                 settings.ParagraphStyle.textAlign,
                 settings.ParagraphStyle.textDirection,
                 nextViewportSize.x,
-                paragraph != null ? paragraphContentWidth * fitScale : 0f,
-                paragraph != null ? layoutWidth * fitScale : 0f);
+                paragraphs.Count > 0 ? paragraphContentWidth * fitScale : 0f,
+                paragraphs.Count > 0 ? layoutWidth * fitScale : 0f);
             var nextContentWidth = useWideNoWrapLayout
                 ? horizontalLayout.ContentWidth
                 : layoutViewportWidth;
-            var nextContentSize = new Vector2(nextContentWidth, paragraph != null ? paragraphHeight : 0f);
+            var nextContentSize = new Vector2(nextContentWidth, paragraphs.Count > 0 ? paragraphHeight : 0f);
             var nextMaxScrollOffset = new Vector2(
                 Mathf.Max(0f, nextContentSize.x - nextViewportSize.x),
                 Mathf.Max(0f, nextContentSize.y - nextViewportSize.y));
@@ -755,7 +1021,7 @@ namespace Milestro.Components.Internal
             return settings.WrapMode == TextBoxWrapMode.NoWrap;
         }
 
-        private static float ResolveParagraphVisualLeft(TextBoxRenderTargetSettings settings,
+        private static float ResolveVisualLeft(TextAlign physicalAlign,
             float visualWidth,
             float containingWidth)
         {
@@ -767,7 +1033,7 @@ namespace Milestro.Components.Internal
                 return 0f;
             }
 
-            switch (EffectiveAlign(settings))
+            switch (physicalAlign)
             {
                 case TextAlign.Center:
                     return (containingWidth - visualWidth) * 0.5f;
@@ -775,19 +1041,6 @@ namespace Milestro.Components.Internal
                     return containingWidth - visualWidth;
                 default:
                     return 0f;
-            }
-        }
-
-        private static TextAlign EffectiveAlign(TextBoxRenderTargetSettings settings)
-        {
-            switch (settings.ParagraphStyle.textAlign)
-            {
-                case TextAlign.Start:
-                    return settings.ParagraphStyle.textDirection == TextDirection.Rtl ? TextAlign.Right : TextAlign.Left;
-                case TextAlign.End:
-                    return settings.ParagraphStyle.textDirection == TextDirection.Rtl ? TextAlign.Left : TextAlign.Right;
-                default:
-                    return settings.ParagraphStyle.textAlign;
             }
         }
 
@@ -813,25 +1066,45 @@ namespace Milestro.Components.Internal
             var commands = new UnitySkiaRenderCommandList();
             paintPosition = Vector2.zero;
             clipRect = default;
-            if (paragraph != null)
+            if (paragraphs.Count > 0)
             {
                 var margin = ResolveMargin(settings, layoutSizePixels);
                 var layoutViewportSize = new Vector2(ContentViewportWidth(settings, layoutSizePixels),
                     ContentViewportHeight(settings, layoutSizePixels));
                 var autoOffset = AutoContentOffset(settings, layoutViewportSize);
-                paintPosition = new Vector2(
-                    margin.Left + autoOffset.x + TextBoxNoWrapHorizontalLayout.ResolvePaintOffsetX(
-                        paragraphAlignmentOffset,
-                        scrollOffset.x,
-                        viewport.VisualScrollOffset.x),
-                    margin.Top + autoOffset.y - scrollOffset.y - viewport.VisualScrollOffset.y);
+                var basePaintX = margin.Left + autoOffset.x;
+                var basePaintY = margin.Top + autoOffset.y - scrollOffset.y - viewport.VisualScrollOffset.y;
                 clipRect = ResolveClipRect(settings, viewport, margin, outputSizePixels);
-                commands.DrawParagraphSnapshot(() => BuildPaintParagraph(settings), paintPosition, clipRect, fitScale);
+                paintPosition = new Vector2(basePaintX, basePaintY);
+
+                List<Paragraph>? paintParagraphs = null;
+                for (var index = 0; index < paragraphs.Count; ++index)
+                {
+                    var blockIndex = index;
+                    var offsetX = TextBoxNoWrapHorizontalLayout.ResolvePaintOffsetX(
+                        index < blockAlignmentOffsetsX.Count ? blockAlignmentOffsetsX[index] : 0f,
+                        scrollOffset.x,
+                        viewport.VisualScrollOffset.x);
+                    var blockTop = index < blockTops.Count ? blockTops[index] : 0f;
+                    var blockPaintPosition = new Vector2(basePaintX + offsetX,
+                        basePaintY + blockTop * fitScale);
+
+                    commands.DrawParagraphSnapshot(() => PaintParagraphAt(blockIndex),
+                        blockPaintPosition,
+                        clipRect,
+                        fitScale);
+                }
+
+                Paragraph PaintParagraphAt(int blockIndex)
+                {
+                    paintParagraphs ??= BuildPaintParagraphs(settings);
+                    return paintParagraphs[blockIndex];
+                }
             }
             else
             {
 #if MILESTRO_RENDER_DEBUG_LOG
-                Debug.LogWarning("No paragraph selected", logContext);
+                Debug.LogWarning("No paragraphs built", logContext);
 #endif
             }
 
@@ -909,27 +1182,23 @@ namespace Milestro.Components.Internal
             }
         }
 
-        private void ReplaceParagraph(Paragraph nextParagraph)
+        private void ReplaceParagraphs(List<Paragraph> nextParagraphs)
         {
-            var oldParagraph = paragraph;
-            paragraph = nextParagraph;
-            DisposeParagraphAfterPendingDraws(oldParagraph);
+            RetireParagraphs();
+            paragraphs.AddRange(nextParagraphs);
         }
 
-        private void RetireParagraph()
+        private void RetireParagraphs()
         {
-            var oldParagraph = paragraph;
-            paragraph = null;
-            DisposeParagraphAfterPendingDraws(oldParagraph);
-        }
-
-        private void DisposeParagraphAfterPendingDraws(Paragraph? oldParagraph)
-        {
-            if (oldParagraph == null)
+            foreach (var oldParagraph in paragraphs)
             {
-                return;
+                DisposeParagraphAfterPendingDraws(oldParagraph);
             }
+            paragraphs.Clear();
+        }
 
+        private void DisposeParagraphAfterPendingDraws(Paragraph oldParagraph)
+        {
             if (surface != null)
             {
                 surface.DisposeResourceAfterPendingDraws(oldParagraph);

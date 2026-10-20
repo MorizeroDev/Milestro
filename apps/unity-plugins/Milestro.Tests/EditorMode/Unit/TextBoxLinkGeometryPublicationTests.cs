@@ -44,7 +44,7 @@ namespace Milestro.Tests
             Assert.That(needsRebuild, Is.False);
             Assert.That(publication.TryGetPublished(out var published, out var generation), Is.True);
             Assert.That(generation, Is.Not.Zero);
-            Assert.That(published.Paragraph, Is.SameAs(snapshot.Paragraph));
+            Assert.That(published.Paragraphs, Is.SameAs(snapshot.Paragraphs));
             Assert.That(published.Links, Is.SameAs(snapshot.Links));
             Assert.That(published.PaintPosition, Is.EqualTo(snapshot.PaintPosition));
             Assert.That(published.ClipRect, Is.EqualTo(snapshot.ClipRect));

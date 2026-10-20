@@ -50,20 +50,52 @@ namespace Milestro.Components.Internal
 
     internal readonly struct TextBoxLinkGeometry
     {
-        internal TextBoxLinkGeometry(int occurrence, IReadOnlyList<Rect> rects)
+        internal TextBoxLinkGeometry(int occurrence,
+            IReadOnlyList<Rect> rects,
+            IReadOnlyList<TextBoxLinkBlockRange> blockRanges)
         {
             Occurrence = occurrence;
             Rects = rects;
+            BlockRanges = blockRanges;
         }
 
         internal int Occurrence { get; }
         internal IReadOnlyList<Rect> Rects { get; }
+        internal IReadOnlyList<TextBoxLinkBlockRange> BlockRanges { get; }
+    }
+
+    /// <summary>
+    /// The portion of one link annotation that falls inside a single paragraph block,
+    /// expressed in that block's local UTF-16 range.
+    /// </summary>
+    internal readonly struct TextBoxLinkBlockRange
+    {
+        internal TextBoxLinkBlockRange(int blockIndex,
+            int startUtf16,
+            int endUtf16,
+            Vector2 frameOffset)
+        {
+            BlockIndex = blockIndex;
+            StartUtf16 = startUtf16;
+            EndUtf16 = endUtf16;
+            FrameOffset = frameOffset;
+        }
+
+        internal int BlockIndex { get; }
+        internal int StartUtf16 { get; }
+        internal int EndUtf16 { get; }
+
+        /// <summary>
+        /// Offset in unscaled paragraph coordinates from the stacked-content origin to this
+        /// block's paragraph origin.
+        /// </summary>
+        internal Vector2 FrameOffset { get; }
     }
 
     internal readonly struct TextBoxLinkGeometrySnapshot
     {
         internal TextBoxLinkGeometrySnapshot(long contentVersion,
-            Paragraph paragraph,
+            IReadOnlyList<Paragraph> paragraphs,
             IReadOnlyList<LinkAnnotation> links,
             IReadOnlyList<TextBoxLinkGeometry> geometry,
             Vector2 paintPosition,
@@ -72,7 +104,7 @@ namespace Milestro.Components.Internal
             float fitScale = 1f)
         {
             ContentVersion = contentVersion;
-            Paragraph = paragraph;
+            Paragraphs = paragraphs;
             Links = links;
             Geometry = geometry;
             PaintPosition = paintPosition;
@@ -82,7 +114,7 @@ namespace Milestro.Components.Internal
         }
 
         internal long ContentVersion { get; }
-        internal Paragraph Paragraph { get; }
+        internal IReadOnlyList<Paragraph> Paragraphs { get; }
         internal IReadOnlyList<LinkAnnotation> Links { get; }
         internal IReadOnlyList<TextBoxLinkGeometry> Geometry { get; }
         internal Vector2 PaintPosition { get; }

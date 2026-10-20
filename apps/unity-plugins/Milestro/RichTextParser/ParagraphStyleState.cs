@@ -11,5 +11,17 @@ namespace Milestro.RichTextParser
         public TextDirection? TextDirection { get; set; } = null;
 
         public TextIndent? TextIndent { get; set; } = null;
+
+        /// <summary>
+        /// Block top margin applied when the payload stacks multiple paragraphs.
+        /// Adjacent vertical block margins collapse: the larger one wins.
+        /// </summary>
+        public MarginValue MarginTop { get; set; } = new MarginValue();
+
+        /// <summary>
+        /// Block bottom margin applied when the payload stacks multiple paragraphs.
+        /// Adjacent vertical block margins collapse: the larger one wins.
+        /// </summary>
+        public MarginValue MarginBottom { get; set; } = new MarginValue();
     }
 }

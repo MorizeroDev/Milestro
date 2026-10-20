@@ -43,6 +43,45 @@ namespace Milestro.Extensions
             return ret;
         }
 
+        /// <summary>
+        /// Resolves a block paragraph style, falling back to the payload default style and
+        /// finally to the component-provided base style.
+        /// </summary>
+        public static ParagraphStyle ToParagraphStyle(this ParagraphStyleState blockStyle,
+            ParagraphStyleState payloadDefault,
+            ParagraphStyle baseParaStyle)
+        {
+            var ret = new ParagraphStyle();
+            ret.TextDirection = blockStyle.TextDirection ?? payloadDefault.TextDirection ?? baseParaStyle.TextDirection;
+            ret.TextAlign = blockStyle.TextAlign ?? payloadDefault.TextAlign ?? baseParaStyle.TextAlign;
+            ret.TextIndent = blockStyle.TextIndent ?? payloadDefault.TextIndent ?? baseParaStyle.TextIndent;
+
+            if (baseParaStyle.IsUnlimitedLines)
+            {
+                ret.ClearMaxLines();
+            }
+            else
+            {
+                ret.MaxLines = baseParaStyle.MaxLines;
+            }
+
+            if (baseParaStyle.IsEllipsized)
+            {
+                ret.SetEllipsis(baseParaStyle.Ellipsis);
+            }
+
+            ret.Height = baseParaStyle.Height;
+            ret.TextHeightBehavior = baseParaStyle.TextHeightBehavior;
+            ret.ReplaceTabCharacters = baseParaStyle.ReplaceTabCharacters;
+            ret.ApplyRoundingHack = baseParaStyle.ApplyRoundingHack;
+            if (!baseParaStyle.IsHintingOn)
+            {
+                ret.TurnHintingOff();
+            }
+
+            return ret;
+        }
+
         public static TextStyle ToTextStyle(this TextStyleState t, TextStyle baseTextStyle)
         {
             var ret = new TextStyle();
@@ -156,23 +195,93 @@ namespace Milestro.Extensions
 
             using var builder = new ParagraphBuilder(paragraphStyle);
 
-            foreach (var item in payload.Body)
+            var blocks = payload.Blocks;
+            var blockIndex = 0;
+            foreach (var block in blocks)
             {
-                using var textStyle = item.TextStyle.ToTextStyle(baseTextStyle);
-                builder.PushStyle(textStyle);
-                builder.AddText(item.Content);
-                builder.Pop();
+                if (blockIndex > 0)
+                {
+                    // Legacy single-paragraph consumers get a plain line break between blocks.
+                    using var breakStyle = baseTextStyle;
+                    builder.PushStyle(breakStyle);
+                    builder.AddText("\n");
+                    builder.Pop();
+                }
+
+                foreach (var item in block.Segments)
+                {
+                    using var textStyle = item.TextStyle.ToTextStyle(baseTextStyle);
+                    builder.PushStyle(textStyle);
+                    builder.AddText(item.Content);
+                    builder.Pop();
+                }
+
+                ++blockIndex;
             }
 
             foreach (var annotation in payload.RubyAnnotations)
             {
-                builder.AddRubyUtf16(annotation.StartUtf16,
-                    annotation.EndUtf16,
+                // Each block separator shifts later ranges by one UTF-16 unit.
+                var separatorShift = 0;
+                for (var index = 1; index < blocks.Count; ++index)
+                {
+                    if (blocks[index].StartUtf16 <= annotation.StartUtf16)
+                    {
+                        separatorShift = index;
+                    }
+                }
+
+                builder.AddRubyUtf16(annotation.StartUtf16 + separatorShift,
+                    annotation.EndUtf16 + separatorShift,
                     annotation.Text,
                     annotation.Style);
             }
 
             return builder.Build();
+        }
+
+        /// <summary>
+        /// Builds one native paragraph per payload block. Ruby annotations are attached to
+        /// the block that fully contains their range; annotations that straddle a block
+        /// boundary cannot be built and are skipped with an error.
+        /// </summary>
+        public static List<Paragraph> ToParagraphs(this ParagraphPayload payload,
+            ParagraphStyle baseParaStyle,
+            TextStyle baseTextStyle)
+        {
+            var blocks = payload.Blocks;
+            var ret = new List<Paragraph>(blocks.Count);
+            foreach (var block in blocks)
+            {
+                using var paragraphStyle = block.Style.ToParagraphStyle(payload.ParagraphStyle, baseParaStyle);
+                paragraphStyle.SetTextStyle(baseTextStyle);
+
+                using var builder = new ParagraphBuilder(paragraphStyle);
+                foreach (var segment in block.Segments)
+                {
+                    using var textStyle = segment.TextStyle.ToTextStyle(baseTextStyle);
+                    builder.PushStyle(textStyle);
+                    builder.AddText(segment.Content);
+                    builder.Pop();
+                }
+
+                foreach (var annotation in payload.RubyAnnotations)
+                {
+                    if (!block.ContainsRange(annotation.StartUtf16, annotation.EndUtf16))
+                    {
+                        continue;
+                    }
+
+                    builder.AddRubyUtf16(annotation.StartUtf16 - block.StartUtf16,
+                        annotation.EndUtf16 - block.StartUtf16,
+                        annotation.Text,
+                        annotation.Style);
+                }
+
+                ret.Add(builder.Build());
+            }
+
+            return ret;
         }
     }
 }

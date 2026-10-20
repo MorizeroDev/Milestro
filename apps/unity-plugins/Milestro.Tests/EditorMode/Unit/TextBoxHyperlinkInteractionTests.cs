@@ -492,8 +492,12 @@ namespace Milestro.Tests
             try
             {
                 fixture.Target.SetGeometry(
-                    new TextBoxLinkGeometry(0, new[] { new Rect(10f, 10f, 80f, 20f) }),
-                    new TextBoxLinkGeometry(1, new[] { new Rect(10f, 140f, 80f, 20f) }));
+                    new TextBoxLinkGeometry(0,
+                        new[] { new Rect(10f, 10f, 80f, 20f) },
+                        Array.Empty<TextBoxLinkBlockRange>()),
+                    new TextBoxLinkGeometry(1,
+                        new[] { new Rect(10f, 140f, 80f, 20f) },
+                        Array.Empty<TextBoxLinkBlockRange>()));
                 fixture.Target.SetVerticalScrollLimit(100f);
                 var accessibility = fixture.TextBox.gameObject.AddComponent<TextBoxAccessibility>();
 
@@ -669,8 +673,12 @@ namespace Milestro.Tests
             };
             private IReadOnlyList<TextBoxLinkGeometry> geometry = new[]
             {
-                new TextBoxLinkGeometry(0, new[] { new Rect(10f, 10f, 80f, 20f) }),
-                new TextBoxLinkGeometry(1, new[] { new Rect(110f, 60f, 80f, 20f) })
+                new TextBoxLinkGeometry(0,
+                    new[] { new Rect(10f, 10f, 80f, 20f) },
+                    Array.Empty<TextBoxLinkBlockRange>()),
+                new TextBoxLinkGeometry(1,
+                    new[] { new Rect(110f, 60f, 80f, 20f) },
+                    Array.Empty<TextBoxLinkBlockRange>())
             };
 
             public Texture? OutputTexture => null;

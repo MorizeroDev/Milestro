@@ -330,26 +330,47 @@ namespace Milestro.RichTextParser
             }
             else if (node.Tag == "p")
             {
-                StartParagraph(ctx, state);
+                if (ctx.HasActiveRuby)
+                {
+                    Debug.LogError("<p> is not allowed inside <ruby>; the <p> element is ignored");
+                    foreach (var child in node.Children)
+                    {
+                        ConvertChild(ctx, state, child);
+                    }
+                    return;
+                }
+
+                // Like HTML, a <p> start tag implicitly closes any open paragraph: each
+                // <p> simply starts a fresh block. <a> is transparent and may wrap <p>.
+                var block = ctx.Result.AddBlock(true, ctx.TextLengthUtf16);
+                ctx.CurrentBlock = block;
 
                 if (node.Attributes.TryGetValue("align", out var alignDirection))
                 {
                     if (TryParseEnum(alignDirection, out TextAlign textAlign))
                     {
-                        ctx.Result.ParagraphStyle.TextAlign = textAlign;
+                        block.Style.TextAlign = textAlign;
                     }
                 }
 
                 if (node.Attributes.TryGetValue("dir", out var textDirection)
                     && TryParseEnum(textDirection, out TextDirection direction))
                 {
-                    ctx.Result.ParagraphStyle.TextDirection = direction;
+                    block.Style.TextDirection = direction;
                 }
 
                 if (node.Attributes.TryGetValue("style", out var paragraphDeclarations))
                 {
-                    CssParser.Apply(state, paragraphDeclarations, ctx.Result.ParagraphStyle);
+                    CssParser.Apply(state, paragraphDeclarations, block.Style);
                 }
+
+                foreach (var child in node.Children)
+                {
+                    ConvertChild(ctx, state, child);
+                }
+
+                ctx.CurrentBlock = null;
+                return;
             }
             else if (node.Tag == "br")
             {
@@ -578,17 +599,12 @@ namespace Milestro.RichTextParser
             }
         }
 
-        private static void StartParagraph(Context ctx, TextStyleState state)
-        {
-            if (ctx.Result.Body.Count > 0)
-            {
-                AddText(ctx, state, "\n\n");
-            }
-        }
-
         private static void AddText(Context ctx, TextStyleState state, string text)
         {
-            ctx.Result.Body.Add(TextSegment.MakeText(state, text));
+            var block = ctx.CurrentBlock ?? ctx.Result.AddBlock(false, ctx.TextLengthUtf16);
+            ctx.CurrentBlock = block;
+            block.Segments.Add(TextSegment.MakeText(state, text));
+            block.LengthUtf16 += text.Length;
             ctx.TextLengthUtf16 += text.Length;
         }
 

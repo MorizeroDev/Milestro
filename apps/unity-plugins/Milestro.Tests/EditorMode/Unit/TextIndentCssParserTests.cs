@@ -14,7 +14,7 @@ namespace Milestro.Tests
         {
             var payload = Parse($"<p style=\"color: red; text-indent: {value}\">text</p>");
 
-            var indent = payload.ParagraphStyle.TextIndent;
+            var indent = payload.Blocks[0].Style.TextIndent;
             Assert.That(indent.HasValue, Is.True);
             Assert.That(indent.Value.Value, Is.EqualTo(expected));
             Assert.That(indent.Value.IsPercentage, Is.EqualTo(isPercentage));
@@ -32,7 +32,7 @@ namespace Milestro.Tests
         {
             var payload = Parse($"<p style=\"text-indent: {value}\">text</p>");
 
-            Assert.That(payload.ParagraphStyle.TextIndent.HasValue, Is.False);
+            Assert.That(payload.Blocks[0].Style.TextIndent.HasValue, Is.False);
         }
 
         [Test]
@@ -40,7 +40,7 @@ namespace Milestro.Tests
         {
             var payload = Parse("<p style=\"text-indent: 8px; text-indent: invalid\">text</p>");
 
-            Assert.That(payload.ParagraphStyle.TextIndent.Value.Value, Is.EqualTo(8));
+            Assert.That(payload.Blocks[0].Style.TextIndent.Value.Value, Is.EqualTo(8));
         }
 
         private static ParagraphPayload Parse(string markup)
