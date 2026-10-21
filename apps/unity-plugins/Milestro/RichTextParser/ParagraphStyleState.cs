@@ -12,6 +12,12 @@ namespace Milestro.RichTextParser
 
         public TextIndent? TextIndent { get; set; } = null;
 
+        public float? TextIndentEm { get; set; } = null;
+
+        internal float? TextIndentFontSize { get; set; }
+
+        internal float TextIndentFontSizeScale { get; set; } = 1f;
+
         /// <summary>
         /// Block top margin applied when the payload stacks multiple paragraphs.
         /// Adjacent vertical block margins collapse: the larger one wins.
