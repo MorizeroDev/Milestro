@@ -223,7 +223,11 @@ private:
         fHardLineBreak = false;
     }
 
-    void lookAhead(SkScalar maxWidth, Cluster* endOfClusters, bool applyRoundingHack);
+    // softHyphen is the string drawn at soft hyphen line breaks, or nullptr if none is drawn.
+    void lookAhead(SkScalar maxWidth,
+                   Cluster* endOfClusters,
+                   bool applyRoundingHack,
+                   const SkString* softHyphen);
     void breakRubyTextIntoLines(ParagraphImpl* parent, SkScalar maxWidth,
                                const AddLineToParagraph& addLine);
     void moveForward(bool hasEllipsis);

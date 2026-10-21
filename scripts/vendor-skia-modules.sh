@@ -80,11 +80,11 @@ readonly skia_commit="$(git -C "${skia_source}" rev-parse --verify HEAD)"
 readonly metadata_path="${REPO_ROOT}/ext/skmodules/vendor-meta"
 previous_source=""
 if [[ -f "${metadata_path}" ]]; then
-    previous_source="$(sed -n 's/^source-commit: //p' "${metadata_path}")"
+    previous_source="$(sed -n 's/\r$//; s/^source-commit: //p' "${metadata_path}")"
 fi
 
 if [[ -z "${skia_base}" && -f "${metadata_path}" ]]; then
-    skia_base="$(sed -n 's/^skia-base: //p' "${metadata_path}")"
+    skia_base="$(sed -n 's/\r$//; s/^skia-base: //p' "${metadata_path}")"
 fi
 if [[ -z "${skia_base}" ]]; then
     skia_base="${skia_commit}"
@@ -160,13 +160,10 @@ sync_module() {
     local module="$1"
     local destination="$2"
     local overlay
-    local -a excludes=()
+    local -a rsync_options=(-rlpc --delete)
     if [[ "${module}" == skparagraph ]]; then
-        excludes=(
-            --exclude=/src/experimental/
-        )
         for overlay in "${overlay_paths[@]}"; do
-            excludes+=("--exclude=/${overlay#modules/skparagraph/}")
+            rsync_options+=("--exclude=/${overlay#modules/skparagraph/}")
         done
     fi
 
@@ -176,13 +173,13 @@ sync_module() {
         else
             # Apple openrsync itemizes unchanged checksummed files as a
             # timestamp-only difference even without -t; filter only that row.
-            rsync -rlpcni --delete "${excludes[@]}" \
+            rsync "${rsync_options[@]}" -ni \
                 "${temporary_dir}/modules/${module}/" \
                 "${destination}/" | sed '/^\.f\.\.T\.\.\.\. /d'
         fi
     else
         mkdir -p "${destination}"
-        rsync -rlpc --delete "${excludes[@]}" \
+        rsync "${rsync_options[@]}" \
             "${temporary_dir}/modules/${module}/" \
             "${destination}/"
     fi

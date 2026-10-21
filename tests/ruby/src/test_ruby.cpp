@@ -654,4 +654,92 @@ TEST_F(RubyLayoutTest, TextIndentAppliesToRubyFirstLine) {
     EXPECT_FLOAT_EQ(paragraph->getMaxIntrinsicWidth(), control->getMaxIntrinsicWidth() + 20);
 }
 
+TEST_F(RubyLayoutTest, SoftHyphenBreakReservesHyphenWidthWithTextIndent) {
+    const auto width = build("xy abcd")->getMaxIntrinsicWidth() +
+                       build("-")->getMaxIntrinsicWidth() / 2;
+    style.setRenderSoftHyphens(true);
+    style.setTextIndent(24, false);
+    auto paragraph = build("xy abcd\xC2\xAD" "efgh", {}, width + 24);
+    auto lines = static_cast<ParagraphImpl&>(*paragraph).lines();
+    ASSERT_GE(lines.size(), 2u);
+    EXPECT_EQ(lines[0].trimmedText().end, 2u);
+    EXPECT_EQ(lines[0].hyphen(), nullptr);
+    EXPECT_FLOAT_EQ(lines[0].offset().fX, 24);
+    EXPECT_FLOAT_EQ(lines[1].offset().fX, 0);
+    EXPECT_LE(paragraph->getLongestLine(), width + 24);
+}
+
+TEST_F(RubyLayoutTest, SoftHyphenSelectionAndHitTestingUseOriginalSourceRange) {
+    const auto width = build("inter-")->getMaxIntrinsicWidth() + 0.5f;
+    style.setRenderSoftHyphens(true);
+    for (auto direction : {TextDirection::kLtr, TextDirection::kRtl}) {
+        style.setTextDirection(direction);
+        auto paragraph = build("inter\xC2\xAD" "national", {}, width);
+        auto lines = static_cast<ParagraphImpl&>(*paragraph).lines();
+        ASSERT_GE(lines.size(), 2u);
+        ASSERT_NE(lines[0].hyphen(), nullptr);
+        const auto rects = paragraph->getRectsForRange(5, 6, RectHeightStyle::kTight,
+                                                      RectWidthStyle::kTight);
+        ASSERT_EQ(rects.size(), 1u);
+        EXPECT_NEAR(rects[0].rect.width(), lines[0].hyphen()->advance().fX, 0.01f);
+        const auto position = paragraph->getGlyphPositionAtCoordinate(
+                rects[0].rect.centerX(), rects[0].rect.centerY());
+        EXPECT_GE(position.position, 5);
+        EXPECT_LE(position.position, 6);
+    }
+}
+
+TEST_F(RubyLayoutTest, HeightOverrideAppliesBaselineShiftOnce) {
+    for (bool halfLeading : {false, true}) {
+        auto textStyle = style.getTextStyle();
+        textStyle.setHeightOverride(true);
+        textStyle.setHeight(2);
+        textStyle.setHalfLeading(halfLeading);
+        textStyle.setBaselineShift(0);
+        style.setTextStyle(textStyle);
+        auto control = build("A");
+        textStyle.setBaselineShift(-12);
+        style.setTextStyle(textStyle);
+        auto shifted = build("A");
+        const auto& originalRun = static_cast<ParagraphImpl&>(*control).runs()[0];
+        const auto& shiftedRun = static_cast<ParagraphImpl&>(*shifted).runs()[0];
+        EXPECT_NEAR(shiftedRun.correctAscent(), originalRun.correctAscent() - 12, 0.01f);
+        EXPECT_NEAR(shiftedRun.correctDescent(), originalRun.correctDescent() - 12, 0.01f);
+    }
+}
+
+TEST_F(RubyLayoutTest, CachedHalfLeadingMatchesFreshLayoutForBaseAndRuby) {
+    for (const auto& annotations : {std::vector<RubyAnnotation>{},
+                                    std::vector<RubyAnnotation>{{{0, 4}, "annotation"}}}) {
+        auto textStyle = style.getTextStyle();
+        textStyle.setHeightOverride(true);
+        textStyle.setHeight(2);
+        textStyle.setHalfLeading(false);
+        style.setTextStyle(textStyle);
+        auto scaled = build("base", annotations);
+        textStyle.setHalfLeading(true);
+        style.setTextStyle(textStyle);
+        auto cached = build("base", annotations);
+        fonts->clearCaches();
+        auto fresh = build("base", annotations);
+        EXPECT_FLOAT_EQ(cached->getAlphabeticBaseline(), fresh->getAlphabeticBaseline());
+        EXPECT_EQ(raster(*cached), raster(*fresh));
+        EXPECT_NE(scaled->getAlphabeticBaseline(), fresh->getAlphabeticBaseline());
+    }
+}
+
+TEST_F(RubyLayoutTest, CacheRestoresMissingGlyphAndResolvedFontDiagnostics) {
+    auto textStyle = style.getTextStyle();
+    textStyle.setFontFamilies({SkString("Latin")});
+    style.setTextStyle(textStyle);
+    const std::string text = "base \xE2\xBF\xB0";
+    auto shaped = build(text);
+    auto cached = build(text);
+    ASSERT_GT(shaped->unresolvedGlyphs(), 0);
+    EXPECT_EQ(cached->unresolvedGlyphs(), shaped->unresolvedGlyphs());
+    EXPECT_EQ(cached->unresolvedCodepoints(), shaped->unresolvedCodepoints());
+    EXPECT_EQ(static_cast<ParagraphImpl&>(*cached).resolvedFonts().size(),
+              static_cast<ParagraphImpl&>(*shaped).resolvedFonts().size());
+}
+
 }

@@ -17,9 +17,6 @@
 namespace skia {
 namespace textlayout {
 
-class RubyPrototype;
-struct PrototypeRubyInput;
-
 class ParagraphBuilderImpl : public ParagraphBuilder {
 public:
     ParagraphBuilderImpl(const ParagraphStyle& style,
@@ -61,9 +58,6 @@ public:
 
     // Constructs a SkParagraph object that can be used to layout and paint the text to a SkCanvas.
     std::unique_ptr<Paragraph> Build() override;
-#if defined(MILESTRO_RUBY_PROTOTYPE)
-    std::unique_ptr<RubyPrototype> BuildRubyPrototype(std::vector<PrototypeRubyInput> inputs);
-#endif
 
     // Support for "Client" unicode
     SkSpan<char> getText() override;

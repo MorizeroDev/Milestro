@@ -9,9 +9,6 @@
 #include "modules/skparagraph/include/ParagraphStyle.h"
 #include "modules/skparagraph/include/TextStyle.h"
 #include "modules/skparagraph/src/ParagraphImpl.h"
-#if defined(MILESTRO_RUBY_PROTOTYPE)
-#include "modules/skparagraph/src/experimental/RubyPrototype.h"
-#endif
 #include "modules/skunicode/include/SkUnicode.h"
 #include "src/core/SkStringUtils.h"
 
@@ -198,12 +195,6 @@ SkSpan<char> ParagraphBuilderImpl::getText() {
     return SkSpan<char>(fUtf8.isEmpty() ? nullptr : fUtf8.data(), fUtf8.size());
 }
 
-#if defined(MILESTRO_RUBY_PROTOTYPE)
-std::unique_ptr<RubyPrototype> ParagraphBuilderImpl::BuildRubyPrototype(std::vector<PrototypeRubyInput> inputs) {
-    return std::make_unique<RubyPrototype>(Build(), std::move(inputs), fParagraphStyle,
-                                           fFontCollection, fUnicode);
-}
-#endif
 
 const ParagraphStyle& ParagraphBuilderImpl::getParagraphStyle() const {
     return fParagraphStyle;
