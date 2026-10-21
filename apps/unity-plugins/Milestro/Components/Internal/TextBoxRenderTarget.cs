@@ -1123,15 +1123,15 @@ namespace Milestro.Components.Internal
 
             if (viewport.SliceOutput)
             {
-                return new Rect(margin.Left,
+                return new Rect(0f,
                     0f,
-                    Mathf.Max(1f, outputSizePixels.x - margin.FixedHorizontalSize),
+                    outputSizePixels.x,
                     outputSizePixels.y);
             }
 
-            return new Rect(margin.Left,
+            return new Rect(0f,
                 margin.Top,
-                viewportSize.x,
+                outputSizePixels.x,
                 viewportSize.y);
         }
 
