@@ -1,18 +1,13 @@
 using System;
 using Milestro.Components.Internal;
+using Milestro.Events;
 using Milestro.Model;
 using UnityEngine;
-using UnityEngine.Events;
 
 namespace Milestro.Components
 {
     public partial class TextInput
     {
-        [Serializable]
-        public class TouchScreenKeyboardEvent : UnityEvent<TouchScreenKeyboard.Status>
-        {
-        }
-
         [SerializeField] private bool m_shouldHideMobileInput = true;
         [SerializeField]
         private TouchScreenKeyboardEvent m_OnTouchScreenKeyboardStatusChanged = new TouchScreenKeyboardEvent();

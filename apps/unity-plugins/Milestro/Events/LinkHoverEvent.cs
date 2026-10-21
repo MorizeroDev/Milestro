@@ -2,11 +2,11 @@ using System;
 using UnityEngine.Events;
 using UnityEngine.Scripting;
 
-namespace Milestro.Components
+namespace Milestro.Events
 {
     [Serializable]
     [Preserve]
-    public sealed class LinkClickedEvent : UnityEvent<LinkClickedEventArgs>
+    public sealed class LinkHoverEvent : UnityEvent<LinkHoverEventArgs>
     {
     }
 }

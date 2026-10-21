@@ -1,7 +1,7 @@
 using System;
 using UnityEngine.Scripting;
 
-namespace Milestro.Components
+namespace Milestro.Events
 {
     [Serializable]
     [Preserve]

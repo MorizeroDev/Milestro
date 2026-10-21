@@ -548,10 +548,44 @@ supported. When omitted, the standard properties use their CSS initial values:
 `ruby-position: over`, `ruby-align: space-around`, and `ruby-overhang: auto`.
 
 Read-only `TextBox` exposes the serialized, getter-only
-`onLinkClicked` event. Its `LinkClickedEventArgs` payload contains `Href` and
-`Id`; omitted `id` is reported as an empty string. A click is emitted only when
+`onLinkClicked` event. Its `Milestro.Events.LinkClickedEventArgs` payload contains
+`Href` and `Id`; omitted `id` is reported as an empty string. A click is emitted only when
 the primary mouse button or a touch press and release hit the same visible link
 range without becoming a drag.
+
+Pointer hover is available through the serialized, getter-only
+`onLinkHoverChanged` event. `Milestro.Events.LinkHoverEventArgs` contains `Href`,
+`Id`, and `Hovered`; the event is raised once when the pointer enters or leaves a link.
+Both legacy and Input System UI modules are supported. Touch follows uGUI's
+pointer enter/exit lifecycle, so feedback also appears during a touch.
+`TextBox` provides hover feedback without additional setup: a subtle blue tint,
+an underline, and a hand cursor. The Inspector groups these settings and the
+hover event in a collapsed `Link Hover` foldout. `linkHoverColor` controls the
+rectangle tint, and `linkHoverUnderlineColor` plus
+`linkHoverUnderlineThickness` draw an underline over each visible line. Set
+the alpha or thickness to zero to disable either part. The built-in hand cursor
+is used when `linkHoverCursor` is unassigned. Assign
+`linkHoverCursor` to a `Texture2D` to override it; its
+`linkHoverCursorHotspot` and `linkHoverCursorMode` are passed to
+`Cursor.SetCursor`. The texture must satisfy Unity's cursor texture import
+requirements. Leaving the link, disabling the component, or losing application
+focus restores the project's default cursor. Set `linkHoverCursorEnabled` to
+`false` to disable cursor changes, including when using `onLinkHoverChanged`
+with an application-level cursor manager. The built-in hand cursor is a bundled
+browser-style bitmap; its appearance does not depend on the operating system's
+cursor theme.
+
+Hover is rechecked at the stationary pointer when text or scrolling changes.
+Its overlay uses the published link geometry and does not rebuild text layout.
+
+Named event types and their payloads live in `Milestro.Events`; UI components
+remain in `Milestro.Components`. Code referring to these types directly should
+import `Milestro.Events`. The keyboard status event is
+`Milestro.Events.TouchScreenKeyboardEvent` (previously nested in `TextInput`).
+
+The component does not persist a visited-link state. Applications that need
+visited styling can record `Href` or `Id` from `onLinkClicked` and update their
+content or presentation explicitly.
 
 Add `Milestro.Components.TextBoxAccessibility` to the same GameObject to enable
 keyboard, controller, and screen-reader interaction. The component is a uGUI

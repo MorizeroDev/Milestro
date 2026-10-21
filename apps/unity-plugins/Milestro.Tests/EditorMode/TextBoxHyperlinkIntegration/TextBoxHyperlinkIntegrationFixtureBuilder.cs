@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Milestro.Components;
 using Milestro.Components.Internal;
+using Milestro.Events;
 using UnityEditor;
 using UnityEditor.Events;
 using UnityEditor.SceneManagement;

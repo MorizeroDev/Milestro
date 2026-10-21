@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using Milestro.Components;
 using Milestro.Components.Internal;
+using Milestro.Events;
 using Milestro.Model;
 using NUnit.Framework;
 using UnityEngine;
@@ -30,9 +31,14 @@ namespace Milestro.Tests
             Assert.That(typeof(LinkClickedEventArgs).IsSerializable, Is.True);
             Assert.That(typeof(LinkClickedEvent).IsSealed, Is.True);
             Assert.That(typeof(LinkClickedEvent).IsSerializable, Is.True);
+            Assert.That(typeof(LinkHoverEvent).IsSerializable, Is.True);
+            Assert.That(typeof(LinkHoverEventArgs).IsSerializable, Is.True);
 
             AssertGetterOnlyProperty(typeof(LinkClickedEventArgs), nameof(LinkClickedEventArgs.Href), typeof(string));
             AssertGetterOnlyProperty(typeof(LinkClickedEventArgs), nameof(LinkClickedEventArgs.Id), typeof(string));
+            AssertGetterOnlyProperty(typeof(LinkHoverEventArgs), nameof(LinkHoverEventArgs.Href), typeof(string));
+            AssertGetterOnlyProperty(typeof(LinkHoverEventArgs), nameof(LinkHoverEventArgs.Id), typeof(string));
+            AssertGetterOnlyProperty(typeof(LinkHoverEventArgs), nameof(LinkHoverEventArgs.Hovered), typeof(bool));
 
             var fixture = CreateFixture();
             try
@@ -50,6 +56,7 @@ namespace Milestro.Tests
                 Assert.That(property.GetMethod!.IsPublic, Is.True);
                 Assert.That(property.SetMethod, Is.Null);
                 Assert.That(fixture.TextBox.onLinkClicked, Is.SameAs(fixture.TextBox.onLinkClicked));
+                Assert.That(fixture.TextBox.onLinkHoverChanged, Is.SameAs(fixture.TextBox.onLinkHoverChanged));
 
                 Assert.That(typeof(TextBox).GetEvents(BindingFlags.Instance |
                                                        BindingFlags.Public |
@@ -87,6 +94,256 @@ namespace Milestro.Tests
             {
                 fixture.Dispose();
             }
+        }
+
+        [TestCase(-1)]
+        [TestCase(17)]
+        public void HoverNotifiesOnlyWhenEnteringLeavingOrChangingOccurrence(int pointerId)
+        {
+            using var fixture = CreateFixture();
+            var received = new List<LinkHoverEventArgs>();
+            fixture.TextBox.onLinkHoverChanged.AddListener(received.Add);
+            var pointer = fixture.PointerAt(0.25f, 0.5f, pointerId);
+
+            fixture.TextBox.OnPointerEnter(pointer);
+            fixture.TextBox.OnPointerMove(pointer);
+            var indicator = fixture.TextBox.GetComponentInChildren<TextBoxLinkHoverIndicator>(true);
+            Assert.That(indicator, Is.Not.Null);
+            Assert.That(indicator!.enabled, Is.True);
+            Assert.That(indicator.raycastTarget, Is.False);
+
+            pointer.position = fixture.ScreenPoint(0.75f, 0.5f);
+            fixture.TextBox.OnPointerMove(pointer);
+            fixture.TextBox.OnPointerExit(pointer);
+            fixture.TextBox.OnPointerExit(pointer);
+
+            Assert.That(received.Select(value => value.Hovered), Is.EqualTo(new[] { true, false, true, false }));
+            Assert.That(received.All(value => value.Href == "same-target" && value.Id == "same-id"), Is.True);
+            Assert.That(indicator.enabled, Is.False);
+        }
+
+        [Test]
+        public void StationaryHoverRechecksLinksAfterScrollAndRestoresOnScrollBack()
+        {
+            using var fixture = CreateFixture();
+            fixture.Target.UseGeometryHitTesting = true;
+            fixture.Target.SetVerticalScrollLimit(100f);
+            var received = new List<bool>();
+            fixture.TextBox.onLinkHoverChanged.AddListener(value => received.Add(value.Hovered));
+            var pointer = fixture.PointerAt(0.25f, 0.2f, pointerId: -1);
+            fixture.TextBox.OnPointerEnter(pointer);
+
+            fixture.Producer.scrollY = 50f;
+            fixture.TickTextBox();
+            fixture.Producer.scrollY = 0f;
+            fixture.TickTextBox();
+
+            Assert.That(received, Is.EqualTo(new[] { true, false, true }));
+        }
+
+        [Test]
+        public void PendingGeometryHidesFeedbackAndResumesWithoutDuplicateHoverEvents()
+        {
+            using var fixture = CreateFixture();
+            var received = new List<bool>();
+            fixture.TextBox.onLinkHoverChanged.AddListener(value => received.Add(value.Hovered));
+            fixture.TextBox.OnPointerEnter(fixture.PointerAt(0.25f, 0.5f, pointerId: -1));
+            var indicator = fixture.TextBox.GetComponentInChildren<TextBoxLinkHoverIndicator>(true);
+
+            fixture.Target.GeometryAvailable = false;
+            fixture.TickTextBox();
+            Assert.That(indicator!.enabled, Is.False);
+            fixture.Target.MarkPaintChanged();
+            fixture.Target.GeometryAvailable = true;
+            fixture.TickTextBox();
+
+            Assert.That(indicator.enabled, Is.True);
+            Assert.That(received, Is.EqualTo(new[] { true }));
+        }
+
+        [Test]
+        public void ReplacingContentAndDisablingTextBoxEndHover()
+        {
+            using var fixture = CreateFixture();
+            var received = new List<bool>();
+            fixture.TextBox.onLinkHoverChanged.AddListener(value => received.Add(value.Hovered));
+            var pointer = fixture.PointerAt(0.25f, 0.5f, pointerId: -1);
+            fixture.TextBox.OnPointerEnter(pointer);
+
+            fixture.Target.SetContent("plain text");
+            fixture.TickTextBox();
+            fixture.Target.SetContent("first", new RichTextParser.LinkAnnotation("next-target", "", 0, 5, 0));
+            fixture.TickTextBox();
+            fixture.TextBox.enabled = false;
+            fixture.TextBox.enabled = true;
+            fixture.TickTextBox();
+
+            Assert.That(received, Is.EqualTo(new[] { true, false, true, false }));
+        }
+
+        [Test]
+        public void HoverExitListenerDisablingComponentPreventsNextLinkEntry()
+        {
+            using var fixture = CreateFixture();
+            var received = new List<bool>();
+            fixture.TextBox.onLinkHoverChanged.AddListener(value =>
+            {
+                received.Add(value.Hovered);
+                if (!value.Hovered)
+                {
+                    fixture.TextBox.enabled = false;
+                }
+            });
+            var pointer = fixture.PointerAt(0.25f, 0.5f, pointerId: -1);
+            fixture.TextBox.OnPointerEnter(pointer);
+            pointer.position = fixture.ScreenPoint(0.75f, 0.5f);
+
+            fixture.TextBox.OnPointerMove(pointer);
+
+            Assert.That(received, Is.EqualTo(new[] { true, false }));
+            Assert.That(fixture.TextBox.GetComponentInChildren<TextBoxLinkHoverIndicator>(true).enabled, Is.False);
+        }
+
+        [Test]
+        public void HoverListenerDestroyingTextBoxReturnsWithoutPostCallbackAccess()
+        {
+            using var fixture = CreateFixture();
+            var calls = 0;
+            fixture.TextBox.onLinkHoverChanged.AddListener(value =>
+            {
+                if (value.Hovered)
+                {
+                    ++calls;
+                    UnityEngine.Object.DestroyImmediate(fixture.TextBox);
+                }
+            });
+
+            Assert.That(() => fixture.TextBox.OnPointerEnter(fixture.PointerAt(0.25f, 0.5f, pointerId: -1)),
+                Throws.Nothing);
+            Assert.That(calls, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void HoverUsesBuiltInHandCursorAndReleasesItsTextureOnDestroy()
+        {
+            var fixture = CreateFixture();
+            Texture2D? cursor = null;
+            try
+            {
+                Assert.That(fixture.TextBox.linkHoverCursorEnabled, Is.True);
+                Assert.That(fixture.TextBox.linkHoverCursor, Is.Null);
+                Assert.That(fixture.TextBox.linkHoverColor.a, Is.GreaterThan(0f));
+                var pointer = fixture.PointerAt(0.25f, 0.5f, pointerId: -1);
+                fixture.TextBox.OnPointerEnter(pointer);
+                cursor = (Texture2D?)typeof(TextBox).GetField("appliedLinkHoverCursor", DeclaredInstance)!
+                    .GetValue(fixture.TextBox);
+
+                Assert.That(cursor, Is.Not.Null);
+                Assert.That(cursor!.isReadable, Is.True);
+                Assert.That(cursor.format, Is.EqualTo(TextureFormat.RGBA32));
+                fixture.TextBox.OnPointerMove(pointer);
+                Assert.That(typeof(TextBox).GetField("appliedLinkHoverCursor", DeclaredInstance)!
+                    .GetValue(fixture.TextBox), Is.SameAs(cursor));
+
+                fixture.TextBox.OnPointerExit(pointer);
+                Assert.That(typeof(TextBox).GetField("appliedLinkHoverCursor", DeclaredInstance)!
+                    .GetValue(fixture.TextBox), Is.Null);
+            }
+            finally
+            {
+                fixture.Dispose();
+            }
+
+            Assert.That(cursor == null, Is.True);
+        }
+
+        [Test]
+        public void CursorCanBeDisabledWithoutSuppressingHoverPresentationOrEvents()
+        {
+            using var fixture = CreateFixture();
+            fixture.TextBox.linkHoverCursorEnabled = false;
+            var received = new List<bool>();
+            fixture.TextBox.onLinkHoverChanged.AddListener(value => received.Add(value.Hovered));
+            fixture.TextBox.OnPointerEnter(fixture.PointerAt(0.25f, 0.5f, pointerId: -1));
+
+            Assert.That(typeof(TextBox).GetField("defaultLinkHoverCursor", DeclaredInstance)!
+                .GetValue(fixture.TextBox), Is.Null);
+            Assert.That(fixture.TextBox.GetComponentInChildren<TextBoxLinkHoverIndicator>(true).enabled, Is.True);
+            fixture.TextBox.linkHoverCursorEnabled = true;
+            Assert.That(typeof(TextBox).GetField("appliedLinkHoverCursor", DeclaredInstance)!
+                .GetValue(fixture.TextBox), Is.Not.Null);
+            fixture.TextBox.linkHoverCursorEnabled = false;
+            Assert.That(typeof(TextBox).GetField("appliedLinkHoverCursor", DeclaredInstance)!
+                .GetValue(fixture.TextBox), Is.Null);
+            Assert.That(received, Is.EqualTo(new[] { true }));
+        }
+
+        [Test]
+        public void CustomCursorOverridesHandAndClearingItRestoresDefaultHotspot()
+        {
+            var fixture = CreateFixture();
+            var customCursor = new Texture2D(4, 4, TextureFormat.RGBA32, mipChain: false);
+            customCursor.Apply(updateMipmaps: false, makeNoLongerReadable: false);
+            try
+            {
+                fixture.TextBox.linkHoverCursor = customCursor;
+                fixture.TextBox.linkHoverCursorHotspot = new Vector2(2f, 3f);
+                fixture.TextBox.OnPointerEnter(fixture.PointerAt(0.25f, 0.5f, pointerId: -1));
+
+                Assert.That(typeof(TextBox).GetField("appliedLinkHoverCursor", DeclaredInstance)!
+                    .GetValue(fixture.TextBox), Is.SameAs(customCursor));
+                Assert.That(typeof(TextBox).GetField("appliedLinkHoverCursorHotspot", DeclaredInstance)!
+                    .GetValue(fixture.TextBox), Is.EqualTo(new Vector2(2f, 3f)));
+
+                fixture.TextBox.linkHoverCursor = null;
+                Assert.That(typeof(TextBox).GetField("appliedLinkHoverCursor", DeclaredInstance)!
+                    .GetValue(fixture.TextBox), Is.Not.SameAs(customCursor));
+                Assert.That(typeof(TextBox).GetField("appliedLinkHoverCursorHotspot", DeclaredInstance)!
+                    .GetValue(fixture.TextBox), Is.EqualTo(TextBoxLinkHoverCursor.Hotspot));
+
+                fixture.Dispose();
+                Assert.That(customCursor != null, Is.True);
+            }
+            finally
+            {
+                fixture.Dispose();
+                UnityEngine.Object.DestroyImmediate(customCursor);
+            }
+        }
+
+        [Test]
+        public void TransparentHoverStylesKeepEventsWithoutCreatingIndicator()
+        {
+            using var fixture = CreateFixture();
+            fixture.TextBox.linkHoverColor = Color.clear;
+            fixture.TextBox.linkHoverUnderlineThickness = 0f;
+            var calls = 0;
+            fixture.TextBox.onLinkHoverChanged.AddListener(_ => ++calls);
+
+            fixture.TextBox.OnPointerEnter(fixture.PointerAt(0.25f, 0.5f, pointerId: -1));
+
+            Assert.That(calls, Is.EqualTo(1));
+            Assert.That(fixture.TextBox.GetComponentInChildren<TextBoxLinkHoverIndicator>(true), Is.Null);
+        }
+
+        [Test]
+        public void HoverRespectsFlowSliceAndIgnoresOtherPointerExits()
+        {
+            using var fixture = CreateFixture();
+            fixture.TextBox.SetFlowModeActive(true);
+            fixture.TextBox.SetFlowVisibleRange(true, 20f, 60f, 40f);
+            var received = new List<bool>();
+            fixture.TextBox.onLinkHoverChanged.AddListener(value => received.Add(value.Hovered));
+            var pointer = fixture.PointerAtFlowLocalDistance(30f, pointerId: 42);
+
+            fixture.TextBox.OnPointerEnter(pointer);
+            fixture.TextBox.OnPointerExit(fixture.PointerAt(0.25f, 0.5f, pointerId: 43));
+            Assert.That(fixture.Target.LastNormalizedPoint.y, Is.EqualTo(0.25f).Within(0.001f));
+            Assert.That(received, Is.EqualTo(new[] { true }));
+            pointer.position = fixture.ScreenPointFromTop(0.25f, 10f);
+            fixture.TextBox.OnPointerMove(pointer);
+
+            Assert.That(received, Is.EqualTo(new[] { true, false }));
         }
 
         [Test]
@@ -614,6 +871,11 @@ namespace Milestro.Tests
             internal LinkRenderTarget Target { get; }
             internal EventSystem EventSystem => eventSystem;
 
+            internal void TickTextBox()
+            {
+                typeof(TextBox).GetMethod("Update", DeclaredInstance)!.Invoke(TextBox, null);
+            }
+
             internal PointerEventData PointerAt(float normalizedX, float normalizedY, int pointerId)
             {
                 return new PointerEventData(eventSystem)
@@ -665,6 +927,7 @@ namespace Milestro.Tests
         private sealed class LinkRenderTarget : ITextBoxRenderTarget
         {
             private long generation = 1;
+            private long contentVersion = 1;
             private string plainText = "firstsecond";
             private RichTextParser.LinkAnnotation[] links =
             {
@@ -694,6 +957,8 @@ namespace Milestro.Tests
             public TextBoxHorizontalScrollState HorizontalScrollState => default;
             internal int HitTestCalls { get; private set; }
             internal Vector2 LastNormalizedPoint { get; private set; }
+            internal bool UseGeometryHitTesting { get; set; }
+            internal bool GeometryAvailable { get; set; } = true;
 
             public event Action<Milestro.Skia.UnitySkiaRenderTextureSurface.RenderSubmissionStatus>?
                 RenderEventCompleted;
@@ -712,16 +977,36 @@ namespace Milestro.Tests
             {
                 ++HitTestCalls;
                 LastNormalizedPoint = normalizedViewportPoint;
-                if (normalizedViewportPoint.x < 0.45f)
+                if (!GeometryAvailable)
                 {
-                    hit = new TextBoxLinkHit("same-target", "same-id", 0, generation);
-                    return true;
+                    hit = default;
+                    return false;
                 }
 
-                if (normalizedViewportPoint.x > 0.55f)
+                var occurrence = normalizedViewportPoint.x < 0.45f ? 0 :
+                    normalizedViewportPoint.x > 0.55f ? 1 : -1;
+                if (UseGeometryHitTesting)
                 {
-                    hit = new TextBoxLinkHit("same-target", "same-id", 1, generation);
-                    return true;
+                    var point = new Vector2(normalizedViewportPoint.x * 200f,
+                        normalizedViewportPoint.y * 100f) + ScrollOffset;
+                    occurrence = -1;
+                    foreach (var candidate in geometry)
+                    {
+                        if (candidate.Rects.Any(rect => rect.Contains(point)))
+                        {
+                            occurrence = candidate.Occurrence;
+                            break;
+                        }
+                    }
+                }
+
+                foreach (var annotation in links)
+                {
+                    if (annotation.Occurrence == occurrence)
+                    {
+                        hit = new TextBoxLinkHit(annotation.Href, annotation.Id, occurrence, generation);
+                        return true;
+                    }
                 }
 
                 hit = default;
@@ -730,27 +1015,29 @@ namespace Milestro.Tests
 
             public bool TryGetContentSnapshot(out TextBoxContentSnapshot snapshot)
             {
-                snapshot = new TextBoxContentSnapshot(1, plainText, links);
+                snapshot = new TextBoxContentSnapshot(contentVersion, plainText, links);
                 return true;
             }
 
             public bool TryGetLinkGeometrySnapshot(out TextBoxLinkGeometrySnapshot snapshot, out long publishedGeneration)
             {
                 publishedGeneration = generation;
-                snapshot = new TextBoxLinkGeometrySnapshot(1,
+                snapshot = new TextBoxLinkGeometrySnapshot(contentVersion,
                     null!,
                     links,
                     geometry,
                     new Vector2(0f, -ScrollOffset.y),
                     new Rect(0f, 0f, 200f, 100f),
                     new Vector2Int(200, 100));
-                return true;
+                return GeometryAvailable;
             }
 
             internal void SetContent(string text, params RichTextParser.LinkAnnotation[] annotations)
             {
                 plainText = text;
                 links = annotations;
+                ++contentVersion;
+                ++generation;
             }
 
             internal void SetGeometry(params TextBoxLinkGeometry[] value)

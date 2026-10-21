@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using Milestro.Components.Internal;
+using Milestro.Events;
 using Milestro.Input;
 using Milestro.Model;
 using Milestro.Util;
@@ -16,11 +17,14 @@ using UnityEngine.UI;
 namespace Milestro.Components
 {
     [AddComponentMenu("Milestro/Text Box")]
-    public class TextBox : RenderTextureGraphic,
+    public partial class TextBox : RenderTextureGraphic,
         ICancelHandler,
         IPointerDownHandler,
         IPointerUpHandler,
         IPointerClickHandler,
+        IPointerEnterHandler,
+        IPointerExitHandler,
+        IPointerMoveHandler,
         IScrollHandler,
         ITextBoxScrollTarget
     {
@@ -101,10 +105,12 @@ namespace Milestro.Components
             Texture = null;
             observedOutputVersion = long.MinValue;
             LayoutChanged?.Invoke();
+            ResetLinkHover(notify: true);
         }
 
         protected override void OnDestroy()
         {
+            DestroyLinkHoverFeedback();
             ClearLinkPresses();
             base.OnDestroy();
         }
@@ -119,6 +125,7 @@ namespace Milestro.Components
                 TickElastic(producer);
             }
             ApplyProducerOutput(producer, force: false);
+            RefreshLinkHover();
         }
 
         protected
@@ -143,6 +150,7 @@ namespace Milestro.Components
             m_scrollTweenDurationSeconds = FloatUtil.IsFinite(m_scrollTweenDurationSeconds)
                 ? Mathf.Max(0f, m_scrollTweenDurationSeconds)
                 : DefaultScrollTweenDurationSeconds;
+            ValidateLinkHoverSettings();
             ElasticSettings().Validate();
             if (this && gameObject != null)
             {
@@ -462,8 +470,20 @@ namespace Milestro.Components
         {
             results.Clear();
             if (!TryGetLinkInteractionSnapshot(out _, out var snapshot, out _) ||
-                snapshot.ContentVersion != contentVersion ||
-                !snapshot.TryGetGeometry(occurrence, out var linkGeometry))
+                snapshot.ContentVersion != contentVersion)
+            {
+                return false;
+            }
+
+            return TryGetLinkLocalRects(snapshot, occurrence, results);
+        }
+
+        private bool TryGetLinkLocalRects(TextBoxLinkGeometrySnapshot snapshot,
+            int occurrence,
+            List<Rect> results)
+        {
+            results.Clear();
+            if (!snapshot.TryGetGeometry(occurrence, out var linkGeometry))
             {
                 return false;
             }
