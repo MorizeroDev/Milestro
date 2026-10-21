@@ -513,7 +513,10 @@ example `<p style="text-indent: 24px">`, `<p style="text-indent: -2em">`, or
 font size, including font scaling; child inline font changes do not affect it.
 Unitless zero and negative finite values are accepted. Indentation applies
 only to the first formatted line and follows the paragraph's inline-start
-direction. The CSS `hanging` and `each-line` modifiers are not supported.
+direction. Negative indentation can paint into the TextBox's horizontal margins;
+horizontal clipping occurs at the TextBox's outer edges. Layout and wrapping
+still use the width inside the margins. The CSS `hanging` and `each-line`
+modifiers are not supported.
 
 Ruby layout styles use the element's standard HTML `style` attribute. The
 supported standard CSS Ruby properties are:
