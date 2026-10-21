@@ -1,5 +1,6 @@
 using System;
 using Milestro.Components;
+using Milestro.Events;
 using Milestro.Tests.TextBoxHyperlinkIntegration.Editor;
 using NUnit.Framework;
 using UnityEditor;

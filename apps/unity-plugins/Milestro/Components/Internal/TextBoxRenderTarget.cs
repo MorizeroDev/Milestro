@@ -32,6 +32,7 @@ namespace Milestro.Components.Internal
         private bool layoutChanged = true;
         private bool paintChanged = true;
         private int layoutWidth = 640;
+        private int layoutHeight;
         private float paragraphHeight;
         private float paragraphContentWidth;
         private float paragraphVisualLeft;
@@ -640,12 +641,14 @@ namespace Milestro.Components.Internal
             if (!ShouldApplyAutoSize(settings))
             {
                 fitScale = 1f;
-                if (viewportWidth == layoutWidth && !force && !hasHeightDependentBlockMargins)
+                if (viewportWidth == layoutWidth && !force &&
+                    (!hasHeightDependentBlockMargins || layoutSizePixels.y == layoutHeight))
                 {
                     return alignmentChanged;
                 }
 
                 layoutWidth = viewportWidth;
+                layoutHeight = layoutSizePixels.y;
                 foreach (var targetParagraph in targetParagraphs)
                 {
                     targetParagraph.Layout(layoutWidth);
