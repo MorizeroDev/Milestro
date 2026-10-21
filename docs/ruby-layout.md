@@ -118,7 +118,7 @@ plain-text-only. Vertical text/shaping is not implemented.
 
 ## Validation
 
-The normal CMake test tree registers `MilestroTest_Ruby` and `RubyPrototype` and
+The normal CMake test tree registers `MilestroTest_Ruby` and
 reuses the existing Skia/ICU targets. It also covers the exported API in
 `MilestroTest_SkiaParagraphHitTest`. Use the existing Visual Studio developer shell:
 

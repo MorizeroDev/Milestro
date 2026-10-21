@@ -3,7 +3,6 @@ add_subdirectory(image)
 add_subdirectory(icu)
 add_subdirectory(skia)
 add_subdirectory(ruby)
-add_subdirectory(ruby-prototype)
 add_subdirectory(inputbox)
 add_subdirectory(unity_render)
 

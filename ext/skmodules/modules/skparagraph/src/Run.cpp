@@ -57,7 +57,6 @@ Run::Run(ParagraphImpl* owner,
     fOffsets[info.glyphCount] = {0, 0};
     fClusterIndexes[info.glyphCount] = this->leftToRight() ? info.utf8Range.end() : info.utf8Range.begin();
     fEllipsis = false;
-    fHyphen = false;
     fPlaceholderIndex = std::numeric_limits<size_t>::max();
 }
 
@@ -86,7 +85,6 @@ Run::Run(const Run& other, bool detachGlyphs)
     , fCorrectDescent(other.fCorrectDescent)
     , fCorrectLeading(other.fCorrectLeading)
     , fEllipsis(other.fEllipsis)
-    , fHyphen(other.fHyphen)
     , fBidiLevel(other.fBidiLevel)
     , fScript(other.fScript)
     , fLanguage(other.fLanguage) {}
@@ -109,9 +107,8 @@ void Run::calculateMetrics() {
         fCorrectAscent *= multiplier;
         fCorrectDescent *= multiplier;
     }
-    // If we shift the baseline we need to make sure the shifted text fits the line
-    fCorrectAscent += fBaselineShift;
-    fCorrectDescent += fBaselineShift;
+    // fCorrectAscent and fCorrectDescent stay unshifted; correctAscent() and correctDescent()
+    // apply fBaselineShift on read
 }
 
 SkShaper::RunHandler::Buffer Run::newRunBuffer() {
