@@ -10,12 +10,14 @@ namespace Milestro.Extensions
 {
     public static class ParagraphPayloadExtension
     {
-        public static ParagraphStyle ToParagraphStyle(this ParagraphStyleState t, ParagraphStyle baseParaStyle)
+        public static ParagraphStyle ToParagraphStyle(this ParagraphStyleState t,
+            ParagraphStyle baseParaStyle,
+            float? fontSize = null)
         {
             var ret = new ParagraphStyle();
             ret.TextDirection = t.TextDirection ?? baseParaStyle.TextDirection;
             ret.TextAlign = t.TextAlign ?? baseParaStyle.TextAlign;
-            ret.TextIndent = t.TextIndent ?? baseParaStyle.TextIndent;
+            ret.TextIndent = ResolveTextIndent(t, baseParaStyle, fontSize);
 
             if (baseParaStyle.IsUnlimitedLines)
             {
@@ -49,12 +51,16 @@ namespace Milestro.Extensions
         /// </summary>
         public static ParagraphStyle ToParagraphStyle(this ParagraphStyleState blockStyle,
             ParagraphStyleState payloadDefault,
-            ParagraphStyle baseParaStyle)
+            ParagraphStyle baseParaStyle,
+            float? fontSize = null)
         {
             var ret = new ParagraphStyle();
             ret.TextDirection = blockStyle.TextDirection ?? payloadDefault.TextDirection ?? baseParaStyle.TextDirection;
             ret.TextAlign = blockStyle.TextAlign ?? payloadDefault.TextAlign ?? baseParaStyle.TextAlign;
-            ret.TextIndent = blockStyle.TextIndent ?? payloadDefault.TextIndent ?? baseParaStyle.TextIndent;
+            var indentStyle = blockStyle.TextIndent.HasValue || blockStyle.TextIndentEm.HasValue
+                ? blockStyle
+                : payloadDefault;
+            ret.TextIndent = ResolveTextIndent(indentStyle, baseParaStyle, fontSize);
 
             if (baseParaStyle.IsUnlimitedLines)
             {
@@ -80,6 +86,23 @@ namespace Milestro.Extensions
             }
 
             return ret;
+        }
+
+        private static TextIndent ResolveTextIndent(ParagraphStyleState style,
+            ParagraphStyle baseParaStyle,
+            float? fontSize)
+        {
+            if (style.TextIndent.HasValue) return style.TextIndent.Value;
+            if (!style.TextIndentEm.HasValue) return baseParaStyle.TextIndent;
+
+            var effectiveFontSize = style.TextIndentFontSize ?? fontSize;
+            if (!effectiveFontSize.HasValue)
+            {
+                using var textStyle = baseParaStyle.GetTextStyle();
+                effectiveFontSize = textStyle.FontSize;
+            }
+
+            return TextIndent.Pixels(style.TextIndentEm.Value * effectiveFontSize.Value * style.TextIndentFontSizeScale);
         }
 
         public static TextStyle ToTextStyle(this TextStyleState t, TextStyle baseTextStyle)
@@ -193,7 +216,7 @@ namespace Milestro.Extensions
         public static Paragraph ToParagraph(this ParagraphPayload payload, ParagraphStyle baseParaStyle,
             TextStyle baseTextStyle)
         {
-            using var paragraphStyle = payload.ParagraphStyle.ToParagraphStyle(baseParaStyle);
+            using var paragraphStyle = payload.ParagraphStyle.ToParagraphStyle(baseParaStyle, baseTextStyle.FontSize);
             paragraphStyle.SetTextStyle(baseTextStyle);
 
             using var builder = new ParagraphBuilder(paragraphStyle);
@@ -256,7 +279,9 @@ namespace Milestro.Extensions
             var ret = new List<Paragraph>(blocks.Count);
             foreach (var block in blocks)
             {
-                using var paragraphStyle = block.Style.ToParagraphStyle(payload.ParagraphStyle, baseParaStyle);
+                using var paragraphStyle = block.Style.ToParagraphStyle(payload.ParagraphStyle,
+                    baseParaStyle,
+                    baseTextStyle.FontSize);
                 paragraphStyle.SetTextStyle(baseTextStyle);
 
                 using var builder = new ParagraphBuilder(paragraphStyle);

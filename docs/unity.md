@@ -507,8 +507,10 @@ settings accept `normal` or a comma-separated list such as `'liga' 0`,
 `'tnum' on`, or `'kern' 1`. Use `&quot;` when a double-quoted feature tag
 appears inside a double-quoted XML attribute.
 
-`<p>` also accepts `text-indent` with a `px` length or a percentage, for
-example `<p style="text-indent: 24px">` or `<p style="text-indent: 10%">`.
+`<p>` also accepts `text-indent` with a `px` or `em` length or a percentage, for
+example `<p style="text-indent: 24px">`, `<p style="text-indent: -2em">`, or
+`<p style="text-indent: 10%">`. `em` resolves against the paragraph's inherited
+font size, including font scaling; child inline font changes do not affect it.
 Unitless zero and negative finite values are accepted. Indentation applies
 only to the first formatted line and follows the paragraph's inline-start
 direction. The CSS `hanging` and `each-line` modifiers are not supported.

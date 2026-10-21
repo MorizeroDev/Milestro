@@ -17,6 +17,7 @@ namespace Milestro.RichTextParser.Css
             FontFeatureOperation? kerningOperation = null;
             List<FontFeatureOperation>? featureOperations = null;
             TextIndent? textIndent = null;
+            float? textIndentEm = null;
             var parser = new CssDeclarationParser(declarations);
             while (parser.TryRead(out var declaration))
             {
@@ -31,9 +32,10 @@ namespace Milestro.RichTextParser.Css
                 }
                 else if (paragraphStyle != null &&
                          declaration.Property.Equals("text-indent", StringComparison.OrdinalIgnoreCase) &&
-                         TryParseTextIndent(declaration.Value, out var indent))
+                         TryParseTextIndent(declaration.Value, out var indent, out var isEm))
                 {
-                    textIndent = indent;
+                    textIndent = isEm ? (TextIndent?)null : indent;
+                    textIndentEm = isEm ? indent.Value : (float?)null;
                 }
                 else if (paragraphStyle != null &&
                          declaration.Property.Equals("margin-top", StringComparison.OrdinalIgnoreCase) &&
@@ -51,7 +53,13 @@ namespace Milestro.RichTextParser.Css
 
             if (kerningOperation.HasValue) textStyle.FontFeatureOperations.Add(kerningOperation.Value);
             if (featureOperations != null) textStyle.FontFeatureOperations.AddRange(featureOperations);
-            if (paragraphStyle != null && textIndent.HasValue) paragraphStyle.TextIndent = textIndent;
+            if (paragraphStyle != null && (textIndent.HasValue || textIndentEm.HasValue))
+            {
+                paragraphStyle.TextIndent = textIndent;
+                paragraphStyle.TextIndentEm = textIndentEm;
+                paragraphStyle.TextIndentFontSize = textStyle.FontSize;
+                paragraphStyle.TextIndentFontSizeScale = textStyle.FontSizeScale ?? 1f;
+            }
         }
 
         private static bool TryParseKerning(CssSlice value, out FontFeatureOperation operation)
@@ -181,12 +189,13 @@ namespace Milestro.RichTextParser.Css
             return true;
         }
 
-        private static bool TryParseTextIndent(CssSlice value, out TextIndent indent)
+        private static bool TryParseTextIndent(CssSlice value, out TextIndent indent, out bool isEm)
         {
             indent = default;
+            isEm = value.EndsWith("em", StringComparison.OrdinalIgnoreCase);
             var isPercentage = value.EndsWith("%", StringComparison.Ordinal);
             var isPixels = value.EndsWith("px", StringComparison.OrdinalIgnoreCase);
-            var suffixLength = isPercentage ? 1 : isPixels ? 2 : 0;
+            var suffixLength = isPercentage ? 1 : isPixels || isEm ? 2 : 0;
             var number = value.Slice(0, value.Length - suffixLength);
             var trimmedNumber = number.Trim();
             if (number.Length == 0 || trimmedNumber.Length != number.Length ||
