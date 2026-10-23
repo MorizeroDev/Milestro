@@ -627,7 +627,17 @@ namespace Milestro.Components.Internal
         {
             if (targetParagraphs.Count == 0)
             {
+                fitScale = settings.Sizing.HasValue
+                    ? settings.Sizing.Value.EffectiveFontSize / Mathf.Max(0.1f, settings.TextStyle.size)
+                    : 1f;
+                paragraphContentWidth = 0f;
+                paragraphHeight = 0f;
                 return false;
+            }
+
+            if (settings.Sizing.HasValue)
+            {
+                return ResizeResolvedParagraphs(targetParagraphs, settings, layoutSizePixels, force);
             }
 
             if (ShouldUseWideNoWrapLayout(settings))
@@ -638,7 +648,7 @@ namespace Milestro.Components.Internal
             var viewportWidth = ContentViewportWidth(settings, layoutSizePixels);
             var alignmentChanged = ClearBlockAlignmentOffsets();
 
-            if (!ShouldApplyAutoSize(settings))
+            if (!ShouldApplyAutoFontSize(settings))
             {
                 fitScale = 1f;
                 if (viewportWidth == layoutWidth && !force &&
@@ -661,12 +671,54 @@ namespace Milestro.Components.Internal
                 return true;
             }
 
-            return ResizeAutoSizeWrapParagraphs(targetParagraphs,
+            return ResizeAutoFontSizeWrapParagraphs(targetParagraphs,
                 settings,
                 layoutSizePixels,
                 viewportWidth,
                 force,
                 alignmentChanged);
+        }
+
+        private bool ResizeResolvedParagraphs(IReadOnlyList<Paragraph> targetParagraphs,
+            TextBoxRenderTargetSettings settings,
+            Vector2Int layoutSizePixels,
+            bool force)
+        {
+            var sizing = settings.Sizing!.Value;
+            var scale = sizing.EffectiveFontSize / Mathf.Max(0.1f, settings.TextStyle.size);
+            var wraps = settings.WrapMode == TextBoxWrapMode.Wrap && !settings.ParagraphStyle.singleLine;
+            if (!wraps && ShouldUseWideNoWrapLayout(settings))
+            {
+                return ResizeNoWrapParagraphs(targetParagraphs, settings, layoutSizePixels, force);
+            }
+            var contentWidth = wraps
+                ? Mathf.Max(0.01f, (layoutSizePixels.x - sizing.Margin.FixedHorizontalSize) / Mathf.Max(0.001f, scale))
+                : Mathf.Max(0.01f, (sizing.UsedWidth - sizing.Margin.FixedHorizontalSize) / Mathf.Max(0.001f, scale));
+            var nextLayoutWidth = CeilToPositiveInt(contentWidth);
+            var changed = force || layoutWidth != nextLayoutWidth || !Mathf.Approximately(fitScale, scale);
+            layoutWidth = nextLayoutWidth;
+            layoutHeight = layoutSizePixels.y;
+            fitScale = scale;
+            ClearBlockAlignmentOffsets();
+            ResolveBlockMargins(settings, layoutSizePixels);
+            blockHeights.Clear();
+            paragraphContentWidth = 0f;
+            for (var index = 0; index < targetParagraphs.Count; ++index)
+            {
+                var paragraph = targetParagraphs[index];
+                paragraph.Layout(layoutWidth);
+                blockHeights.Add(Mathf.Max(0f, paragraph.Height));
+                paragraphContentWidth = Mathf.Max(paragraphContentWidth,
+                    wraps ? paragraph.LongestLine : paragraph.MaxIntrinsicWidth);
+            }
+            var rawHeight = TextBoxBlockStack.Layout(blockHeights,
+                blockMarginTops,
+                blockMarginBottoms,
+                settings.ParagraphStyle.paragraphSpacing,
+                blockTops);
+            paragraphHeight = rawHeight * scale;
+            ResolveWrapVisualBounds(targetParagraphs, layoutWidth);
+            return changed;
         }
 
         private bool ClearBlockAlignmentOffsets()
@@ -684,13 +736,20 @@ namespace Milestro.Components.Internal
         {
             blockMarginTops.Clear();
             blockMarginBottoms.Clear();
-            var context = new MarginResolveContext(layoutSizePixels.x,
-                layoutSizePixels.y,
-                settings.TextStyle.size);
+            var referenceSize = settings.Sizing.HasValue ? settings.MarginReferenceSize :
+                new Vector2(layoutSizePixels.x, layoutSizePixels.y);
+            var scale = settings.Sizing.HasValue
+                ? settings.Sizing.Value.EffectiveFontSize / Mathf.Max(0.1f, settings.TextStyle.size)
+                : 1f;
+            var context = new MarginResolveContext(referenceSize.x,
+                referenceSize.y,
+                settings.Sizing.HasValue
+                    ? settings.Sizing.Value.EffectiveFontSize
+                    : settings.TextStyle.size);
             for (var index = 0; index < blockMarginTopValues.Count; ++index)
             {
-                blockMarginTops.Add(blockMarginTopValues[index].Resolve(context, MarginAxis.Vertical));
-                blockMarginBottoms.Add(blockMarginBottomValues[index].Resolve(context, MarginAxis.Vertical));
+                blockMarginTops.Add(blockMarginTopValues[index].Resolve(context, MarginAxis.Vertical) / scale);
+                blockMarginBottoms.Add(blockMarginBottomValues[index].Resolve(context, MarginAxis.Vertical) / scale);
             }
         }
 
@@ -733,12 +792,12 @@ namespace Milestro.Components.Internal
             paragraphVisualWidth = right - left;
         }
 
-        private bool ShouldApplyAutoSize(TextBoxRenderTargetSettings settings)
+        private bool ShouldApplyAutoFontSize(TextBoxRenderTargetSettings settings)
         {
-            return settings.AutoSize && settings.TextOverflow != TextOverflow.Ellipsis;
+            return settings.AutoFontSize && settings.TextOverflow != TextOverflow.Ellipsis;
         }
 
-        private bool ResizeAutoSizeWrapParagraphs(IReadOnlyList<Paragraph> targetParagraphs,
+        private bool ResizeAutoFontSizeWrapParagraphs(IReadOnlyList<Paragraph> targetParagraphs,
             TextBoxRenderTargetSettings settings,
             Vector2Int layoutSizePixels,
             int viewportWidth,
@@ -749,56 +808,34 @@ namespace Milestro.Components.Internal
             ResolveBlockMargins(settings, layoutSizePixels);
             float scale;
             var finalVirtualWidth = Mathf.Max(1, viewportWidth);
-            if (settings.WrapMode == TextBoxWrapMode.Wrap)
+            var probeWidth = -1;
+            var probeSize = Vector2.zero;
+            scale = TextAutoFontSizeScale.SearchFit(candidate =>
             {
-                var probeWidth = -1;
-                var probeSize = Vector2.zero;
-                scale = TextAutoSizeScale.SearchFit(candidate =>
-                    {
-                        var candidateWidth = CeilToPositiveInt(viewportWidth / candidate);
-                        if (candidateWidth != probeWidth)
-                        {
-                            probeWidth = candidateWidth;
-                            foreach (var targetParagraph in targetParagraphs)
-                            {
-                                targetParagraph.Layout(candidateWidth);
-                            }
-                            probeSize = MeasureStackedContent(targetParagraphs, settings);
-                        }
-
-                        return probeSize;
-                    },
-                    viewportWidth,
-                    viewportHeight,
-                    settings.MinSize / settings.TextStyle.size,
-                    settings.MaxSize / settings.TextStyle.size);
-                finalVirtualWidth = CeilToPositiveInt(viewportWidth / scale);
-                if (probeWidth != finalVirtualWidth)
+                var candidateWidth = CeilToPositiveInt(viewportWidth / candidate);
+                if (candidateWidth != probeWidth)
                 {
+                    probeWidth = candidateWidth;
                     foreach (var targetParagraph in targetParagraphs)
                     {
-                        targetParagraph.Layout(finalVirtualWidth);
+                        targetParagraph.Layout(candidateWidth);
                     }
-                }
-            }
-            else
-            {
-                if (finalVirtualWidth != layoutWidth || force)
-                {
-                    foreach (var targetParagraph in targetParagraphs)
-                    {
-                        targetParagraph.Layout(finalVirtualWidth);
-                    }
+                    probeSize = MeasureStackedContent(targetParagraphs, settings);
                 }
 
-                var measured = MeasureStackedContent(targetParagraphs, settings);
-                scale = TextAutoSizeScale.Resolve(measured.x,
-                    measured.y,
-                    viewportWidth,
-                    viewportHeight,
-                    settings.TextStyle.size,
-                    settings.MinSize,
-                    settings.MaxSize);
+                return probeSize;
+            },
+                viewportWidth,
+                viewportHeight,
+                settings.MinSize / settings.TextStyle.size,
+                settings.MaxSize / settings.TextStyle.size);
+            finalVirtualWidth = CeilToPositiveInt(viewportWidth / scale);
+            if (probeWidth != finalVirtualWidth)
+            {
+                foreach (var targetParagraph in targetParagraphs)
+                {
+                    targetParagraph.Layout(finalVirtualWidth);
+                }
             }
 
             var changed = alignmentChanged || force || finalVirtualWidth != layoutWidth;
@@ -878,10 +915,12 @@ namespace Milestro.Components.Internal
             ResolveBlockMargins(settings, layoutSizePixels);
             var unscaledHeight = RestackBlocks(targetParagraphs, settings);
             paragraphContentWidth = contentWidth;
-            var scale = 1f;
-            if (ShouldApplyAutoSize(settings))
+            var scale = settings.Sizing.HasValue
+                ? settings.Sizing.Value.EffectiveFontSize / Mathf.Max(0.1f, settings.TextStyle.size)
+                : 1f;
+            if (!settings.Sizing.HasValue && ShouldApplyAutoFontSize(settings))
             {
-                scale = TextAutoSizeScale.Resolve(contentWidth,
+                scale = TextAutoFontSizeScale.Resolve(contentWidth,
                     unscaledHeight,
                     viewportWidth,
                     ContentViewportHeight(settings, layoutSizePixels),
@@ -890,7 +929,8 @@ namespace Milestro.Components.Internal
                     settings.MaxSize);
             }
 
-            var newLayoutWidth = CeilToPositiveInt(Paragraph.ResolveNoWrapLayoutWidth(viewportWidth, contentWidth));
+            var virtualViewportWidth = settings.Sizing.HasValue ? viewportWidth / scale : viewportWidth;
+            var newLayoutWidth = CeilToPositiveInt(Paragraph.ResolveNoWrapLayoutWidth(virtualViewportWidth, contentWidth));
             var widthChanged = newLayoutWidth != layoutWidth;
             if (widthChanged || force)
             {
@@ -999,6 +1039,11 @@ namespace Milestro.Components.Internal
 
         private ResolvedMargin ResolveMargin(TextBoxRenderTargetSettings settings, Vector2Int containerSizePixels)
         {
+            if (settings.Sizing.HasValue)
+            {
+                return settings.Sizing.Value.Margin;
+            }
+
             return settings.Margin.Resolve(new MarginResolveContext(containerSizePixels.x,
                 containerSizePixels.y,
                 settings.TextStyle.size));

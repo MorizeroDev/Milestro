@@ -57,6 +57,16 @@ namespace Milestro.Skia.TextLayout
             }
         }
 
+        public float MinIntrinsicWidth
+        {
+            get
+            {
+                ExitCodeUtil.ThrowIfFailed(
+                    BindingC.SkiaTextlayoutParagraphGetMinIntrinsicWidth(NativePtr, out var ret));
+                return ret;
+            }
+        }
+
         public float MaxIntrinsicWidth
         {
             get

@@ -11,7 +11,7 @@ namespace Milestro.Components.Internal
 {
     [DisallowMultipleComponent]
     [AddComponentMenu("Milestro/Internal/Text Box Render Texture Producer")]
-    public class TextBoxRenderTextureProducer : RenderTextureProducer
+    public class TextBoxRenderTextureProducer : RenderTextureProducer, ITextIntrinsicMeasurement
     {
         [TextArea(3, 10)]
         [SerializeField]
@@ -26,6 +26,9 @@ namespace Milestro.Components.Internal
         [SerializeField]
         private TextStyleSettings m_textStyle = new TextStyleSettings();
 
+        [Tooltip("Wrap allows automatic line breaks at the actual assigned box width; NoWrap keeps each paragraph on one line. " +
+                 "Also controls line breaking during Auto Font Size fitting. Width Mode selects the preferred box width; " +
+                 "FitContent can become narrower than MaxContent only when wrapping is allowed. Single Line overrides wrapping.")]
         [SerializeField]
         private TextBoxWrapMode m_wrapMode = TextBoxWrapMode.Wrap;
 
@@ -33,7 +36,7 @@ namespace Milestro.Components.Internal
         private TextOverflow m_textOverflow = TextOverflow.Clip;
 
         [SerializeField]
-        private TextAutoSizeSettings m_autoSize = TextAutoSizeSettings.Default;
+        private TextAutoFontSizeSettings m_autoFontSize = TextAutoFontSizeSettings.Default;
 
         [SerializeField, HideInInspector]
         private bool m_screenSpaceRasterization = true;
@@ -41,6 +44,64 @@ namespace Milestro.Components.Internal
         [NonSerialized] private RectTransform? rectTransformCache;
         [NonSerialized] private readonly Vector3[] worldCorners = new Vector3[4];
         [NonSerialized] private ITextBoxRenderTarget? renderTarget;
+        [NonSerialized] private TextBoxIntrinsicMeasurement? intrinsicMeasurement;
+        [NonSerialized] private TextSizingResult? lastSizing;
+
+        public float effectiveFontSize => ResolveSizingAtLayoutWidth().EffectiveFontSize;
+
+        public TextIntrinsicMetrics Measure(float fontSize, float contentWidth)
+        {
+            var rect = RectTransformComponent();
+            var available = rect != null
+                ? TextSizingBounds.ExternalAvailableSize(rect)
+                : Vector2.zero;
+            return Measurement(available).Measure(fontSize, contentWidth);
+        }
+
+        private TextBoxIntrinsicMeasurement Measurement(Vector2 available)
+        {
+            HookStyleModels();
+            if (intrinsicMeasurement == null)
+                intrinsicMeasurement = new TextBoxIntrinsicMeasurement(TextBoxRenderTargetSettingsBuilder.BuildFrom(this));
+            intrinsicMeasurement.SetAvailableSize(available);
+            return intrinsicMeasurement;
+        }
+
+        public TextSizingResult ResolveSizing()
+        {
+            return ResolveSizing(null);
+        }
+
+        internal TextSizingResult ResolveSizingAtLayoutWidth()
+        {
+            return ResolveSizing(RectTransformComponent()?.rect.width);
+        }
+
+        private TextSizingResult ResolveSizing(float? assignedWidth)
+        {
+            var rect = RectTransformComponent();
+            var layout = GetComponent<TextBoxLayoutElement>();
+            var widthMode = layout != null && layout.isActiveAndEnabled ? layout.widthMode : TextWidthMode.Fixed;
+            var heightMode = layout != null && layout.isActiveAndEnabled ? layout.heightMode : TextHeightMode.Fixed;
+            var size = rect != null ? rect.rect.size : Vector2.zero;
+            var available = rect != null ? TextSizingBounds.ExternalAvailableSize(rect) : Vector2.zero;
+            var request = new TextSizingRequest(widthMode, heightMode, size.x, size.y,
+                rect != null ? TextSizingBounds.AvailableWidth(rect) : float.PositiveInfinity,
+                m_wrapMode == TextBoxWrapMode.Wrap && !m_paragraphStyle.singleLine,
+                m_textStyle.size, m_autoFontSize.enabled && m_textOverflow != TextOverflow.Ellipsis,
+                m_autoFontSize.fontSizeMin, m_autoFontSize.fontSizeMax,
+                widthCap: widthMode == TextWidthMode.FitContent
+                    ? rect != null ? TextSizingBounds.AvailableWidth(rect) : float.PositiveInfinity
+                    : float.PositiveInfinity);
+            return TextSizingResolver.Resolve(this, request,
+                fontSize => m_margin.Resolve(new MarginResolveContext(available.x, available.y, fontSize)),
+                assignedWidth);
+        }
+
+        internal void InvalidateSizing()
+        {
+            RenderTarget.MarkPropertiesChanged();
+        }
         [NonSerialized] internal Func<ITextBoxRenderTarget>? renderTargetFactory;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
         [NonSerialized] private float m_scrollX;
@@ -181,51 +242,51 @@ namespace Milestro.Components.Internal
             }
         }
 
-        public bool enableAutoSizing
+        public bool enableAutoFontSize
         {
-            get => m_autoSize.enabled;
+            get => m_autoFontSize.enabled;
             set
             {
-                if (m_autoSize.enabled == value)
+                if (m_autoFontSize.enabled == value)
                 {
                     return;
                 }
 
-                m_autoSize.enabled = value;
+                m_autoFontSize.enabled = value;
                 MarkPropertiesChanged();
             }
         }
 
         public float fontSizeMin
         {
-            get => m_autoSize.fontSizeMin;
+            get => m_autoFontSize.fontSizeMin;
             set
             {
-                var nextValue = TextAutoSizeSettings.NormalizeBound(value);
-                if (Mathf.Approximately(m_autoSize.fontSizeMin, nextValue))
+                var nextValue = TextAutoFontSizeSettings.NormalizeBound(value);
+                if (Mathf.Approximately(m_autoFontSize.fontSizeMin, nextValue))
                 {
                     return;
                 }
 
-                m_autoSize.fontSizeMin = nextValue;
-                m_autoSize.Normalize();
+                m_autoFontSize.fontSizeMin = nextValue;
+                m_autoFontSize.Normalize();
                 MarkPropertiesChanged();
             }
         }
 
         public float fontSizeMax
         {
-            get => m_autoSize.fontSizeMax;
+            get => m_autoFontSize.fontSizeMax;
             set
             {
-                var nextValue = TextAutoSizeSettings.NormalizeBound(value);
-                if (Mathf.Approximately(m_autoSize.fontSizeMax, nextValue))
+                var nextValue = TextAutoFontSizeSettings.NormalizeBound(value);
+                if (Mathf.Approximately(m_autoFontSize.fontSizeMax, nextValue))
                 {
                     return;
                 }
 
-                m_autoSize.fontSizeMax = nextValue;
-                m_autoSize.Normalize();
+                m_autoFontSize.fontSizeMax = nextValue;
+                m_autoFontSize.Normalize();
                 MarkPropertiesChanged();
             }
         }
@@ -368,6 +429,8 @@ namespace Milestro.Components.Internal
         {
             m_visualScrollOffset = Vector2.zero;
             DisposeRenderTarget();
+            intrinsicMeasurement?.Dispose();
+            intrinsicMeasurement = null;
         }
 
         private void Update()
@@ -394,7 +457,7 @@ namespace Milestro.Components.Internal
             m_margin.Normalize();
             m_scrollX = FloatUtil.IsFinite(m_scrollX) ? Mathf.Max(0f, m_scrollX) : 0f;
             m_scrollY = FloatUtil.IsFinite(m_scrollY) ? Mathf.Max(0f, m_scrollY) : 0f;
-            m_autoSize.Normalize();
+            m_autoFontSize.Normalize();
             MarkPropertiesChanged();
             if (isActiveAndEnabled)
             {
@@ -410,7 +473,7 @@ namespace Milestro.Components.Internal
                 return;
             }
 
-            MarkPropertiesChanged();
+            RenderTarget.MarkPropertiesChanged();
 #if UNITY_EDITOR
             QueueEditorRebuild();
 #endif
@@ -443,7 +506,6 @@ namespace Milestro.Components.Internal
         private void RebuildResources(bool forceText)
         {
             var settings = CurrentSettings();
-            var hadPreviousMeasurement = TryBuildLayoutMeasurement(settings, out var previousMeasurement);
             var currentSize = CurrentSize();
 
             var rebuilt = RenderTarget.Rebuild(CurrentViewportWithRasterization(currentSize),
@@ -476,14 +538,6 @@ namespace Milestro.Components.Internal
                 }
             }
 
-            var hasNextMeasurement = TryBuildLayoutMeasurement(settings, out var nextMeasurement);
-            if (LayoutMeasurementChanged(hadPreviousMeasurement,
-                    previousMeasurement,
-                    hasNextMeasurement,
-                    nextMeasurement))
-            {
-                NotifyLayoutChanged();
-            }
         }
 
         public void RebuildOutput(bool forceText)
@@ -525,11 +579,6 @@ namespace Milestro.Components.Internal
             return renderTarget.TryGetLinkGeometrySnapshot(out snapshot, out generation);
         }
 
-        internal bool TryGetLayoutMeasurement(out TextBoxLayoutMeasurement measurement)
-        {
-            return TryBuildLayoutMeasurement(CurrentSettings(), out measurement);
-        }
-
         private Vector2Int CurrentSize()
         {
             var rectTransform = RectTransformComponent();
@@ -548,10 +597,28 @@ namespace Milestro.Components.Internal
             return m_colorSpaceOverride ?? UnitySkiaRenderTextureDescriptor.DefaultColorSpace;
         }
 
-        private TextBoxRenderTargetSettings CurrentSettings()
+        internal TextBoxRenderTargetSettings CurrentSettings()
         {
             HookStyleModels();
-            return TextBoxRenderTargetSettingsBuilder.BuildFrom(this);
+            var settings = TextBoxRenderTargetSettingsBuilder.BuildFrom(this);
+            var layout = GetComponent<TextBoxLayoutElement>();
+            if (layout != null && layout.isActiveAndEnabled &&
+                ((enableAutoFontSize && textOverflow != TextOverflow.Ellipsis) ||
+                 layout.widthMode != TextWidthMode.Fixed ||
+                 layout.heightMode != TextHeightMode.Fixed))
+            {
+                var sizing = ResolveSizingAtLayoutWidth();
+                var available = TextSizingBounds.ExternalAvailableSize(RectTransformComponent()!);
+                settings = settings.WithSizing(sizing, available);
+                if (!lastSizing.HasValue ||
+                    !Mathf.Approximately(lastSizing.Value.PreferredWidth, sizing.PreferredWidth) ||
+                    !Mathf.Approximately(lastSizing.Value.PreferredHeight, sizing.PreferredHeight))
+                {
+                    lastSizing = sizing;
+                    NotifyLayoutChanged();
+                }
+            }
+            return settings;
         }
 
         private void HookStyleModels()
@@ -580,8 +647,10 @@ namespace Milestro.Components.Internal
 
         private ResolvedMargin ResolveMargin(TextBoxRenderTargetSettings settings, Vector2Int containerSizePixels)
         {
-            return settings.Margin.Resolve(new MarginResolveContext(containerSizePixels.x,
-                containerSizePixels.y,
+            var referenceSize = settings.Sizing.HasValue ? settings.MarginReferenceSize :
+                new Vector2(containerSizePixels.x, containerSizePixels.y);
+            return settings.Margin.Resolve(new MarginResolveContext(referenceSize.x,
+                referenceSize.y,
                 settings.TextStyle.size));
         }
 
@@ -613,6 +682,11 @@ namespace Milestro.Components.Internal
 
         private void OnRenderEventCompleted(UnitySkiaRenderTextureSurface.RenderSubmissionStatus status)
         {
+            if (!this)
+            {
+                return;
+            }
+
             if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn)
             {
 #if UNITY_EDITOR
@@ -639,6 +713,9 @@ namespace Milestro.Components.Internal
 #if UNITY_EDITOR
             m_editorSkippedRenderRetries = 0;
 #endif
+            intrinsicMeasurement?.Dispose();
+            intrinsicMeasurement = null;
+            lastSizing = null;
             RenderTarget.MarkPropertiesChanged();
             NotifyLayoutChanged();
         }
@@ -680,77 +757,6 @@ namespace Milestro.Components.Internal
             m_editorSkippedRenderRetries = 0;
 #endif
             RenderTarget.MarkPaintChanged();
-        }
-
-        private bool TryBuildLayoutMeasurement(TextBoxRenderTargetSettings settings,
-            out TextBoxLayoutMeasurement measurement)
-        {
-            if (renderTarget == null)
-            {
-                measurement = default;
-                return false;
-            }
-
-            var margin = ResolveMargin(settings, CurrentSize());
-            var preferredHeight = SanitizePreferredSize(contentHeight + margin.FixedVerticalSize);
-            var hasPreferredWidth = ShouldUseContentPreferredWidth(settings);
-            var preferredWidth = hasPreferredWidth
-                ? SanitizePreferredSize(contentWidth + margin.FixedHorizontalSize)
-                : SanitizePreferredSize(viewportWidth + margin.FixedHorizontalSize);
-
-            measurement = new TextBoxLayoutMeasurement(preferredWidth,
-                preferredHeight,
-                hasPreferredWidth,
-                contentWidth,
-                contentHeight,
-                viewportWidth,
-                viewportHeight);
-            return true;
-        }
-
-        private static bool LayoutMeasurementChanged(bool hadPreviousMeasurement,
-            TextBoxLayoutMeasurement previousMeasurement,
-            bool hasNextMeasurement,
-            TextBoxLayoutMeasurement nextMeasurement)
-        {
-            if (hadPreviousMeasurement != hasNextMeasurement)
-            {
-                return true;
-            }
-
-            if (!hasNextMeasurement)
-            {
-                return false;
-            }
-
-            return previousMeasurement.HasContentPreferredWidth != nextMeasurement.HasContentPreferredWidth ||
-                   !Approximately(previousMeasurement.PreferredWidth, nextMeasurement.PreferredWidth) ||
-                   !Approximately(previousMeasurement.PreferredHeight, nextMeasurement.PreferredHeight);
-        }
-
-        private static bool Approximately(float a, float b)
-        {
-            return Mathf.Approximately(a, b);
-        }
-
-        private static bool ShouldUseContentPreferredWidth(TextBoxRenderTargetSettings settings)
-        {
-            if (settings.ParagraphStyle.singleLine)
-            {
-                return settings.TextOverflow != TextOverflow.Ellipsis;
-            }
-
-            return settings.WrapMode == TextBoxWrapMode.NoWrap;
-        }
-
-        private static float SanitizePreferredSize(float value)
-        {
-            if (!FloatUtil.IsFinite(value) || value < 0f)
-            {
-                return 0f;
-            }
-
-            return value;
         }
 
         private void NotifyLayoutChanged()

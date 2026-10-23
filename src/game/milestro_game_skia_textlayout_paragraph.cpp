@@ -37,6 +37,14 @@ int64_t MilestroSkiaTextlayoutParagraphGetLongestLine(milestro::skia::textlayout
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutParagraphGetMinIntrinsicWidth(milestro::skia::textlayout::Paragraph *p,
+                                                            float &minIntrinsicWidth) try {
+    minIntrinsicWidth = p->getMinIntrinsicWidth();
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutParagraphGetMaxIntrinsicWidth(milestro::skia::textlayout::Paragraph *p,
                                                             float &maxIntrinsicWidth) try {
     maxIntrinsicWidth = p->getMaxIntrinsicWidth();

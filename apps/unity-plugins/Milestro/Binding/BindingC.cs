@@ -654,6 +654,12 @@ out float longestLine);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphGetMinIntrinsicWidth")]
+        internal static extern unsafe long SkiaTextlayoutParagraphGetMinIntrinsicWidth(IntPtr p,
+out float minIntrinsicWidth);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphGetMaxIntrinsicWidth")]
         internal static extern unsafe long SkiaTextlayoutParagraphGetMaxIntrinsicWidth(IntPtr p,
 out float maxIntrinsicWidth);

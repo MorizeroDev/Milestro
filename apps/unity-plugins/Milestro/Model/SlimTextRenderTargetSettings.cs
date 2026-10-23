@@ -13,9 +13,10 @@ namespace Milestro.Model
             SlimTextHorizontalAlign horizontalAlign,
             SlimTextVerticalAlign verticalAlign,
             bool fallbackToSystemFont,
-            bool autoSize = false,
+            bool autoFontSize = false,
             float minSize = 0f,
-            float maxSize = 0f)
+            float maxSize = 0f,
+            TextSizingResult? sizing = null)
         {
             Text = text ?? "";
             FontFamily = fontFamily ?? "";
@@ -29,9 +30,10 @@ namespace Milestro.Model
             HorizontalAlign = horizontalAlign;
             VerticalAlign = verticalAlign;
             FallbackToSystemFont = fallbackToSystemFont;
-            AutoSize = autoSize;
+            AutoFontSize = autoFontSize;
             MinSize = minSize;
             MaxSize = maxSize;
+            Sizing = sizing;
         }
 
         public SlimTextRenderTargetSettings WithFontSize(float newFontSize)
@@ -45,9 +47,27 @@ namespace Milestro.Model
                 HorizontalAlign,
                 VerticalAlign,
                 FallbackToSystemFont,
-                AutoSize,
+                AutoFontSize,
                 MinSize,
-                MaxSize);
+                MaxSize,
+                Sizing);
+        }
+
+        public SlimTextRenderTargetSettings WithSizing(TextSizingResult sizing)
+        {
+            return new SlimTextRenderTargetSettings(Text,
+                FontFamily,
+                FontWeight,
+                FontSize,
+                TextColor,
+                new RectOffset(RectOffsetLeft, RectOffsetRight, RectOffsetTop, RectOffsetBottom),
+                HorizontalAlign,
+                VerticalAlign,
+                FallbackToSystemFont,
+                AutoFontSize,
+                MinSize,
+                MaxSize,
+                sizing);
         }
 
         public string Text { get; }
@@ -62,8 +82,9 @@ namespace Milestro.Model
         public SlimTextHorizontalAlign HorizontalAlign { get; }
         public SlimTextVerticalAlign VerticalAlign { get; }
         public bool FallbackToSystemFont { get; }
-        public bool AutoSize { get; }
+        public bool AutoFontSize { get; }
         public float MinSize { get; }
         public float MaxSize { get; }
+        public TextSizingResult? Sizing { get; }
     }
 }

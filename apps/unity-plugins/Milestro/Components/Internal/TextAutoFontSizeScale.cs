@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Milestro.Components.Internal
 {
-    internal static class TextAutoSizeScale
+    internal static class TextAutoFontSizeScale
     {
         public static float Resolve(float contentWidth,
             float contentHeight,

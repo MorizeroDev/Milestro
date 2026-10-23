@@ -67,11 +67,11 @@ namespace Milestro.Tests
         }
 
         [Test]
-        public void TextSetterUpdatesAutoFitTextureSize()
+        public void TextSetterUpdatesMaxContentTextureSize()
         {
             root = new GameObject("Slim Text", typeof(RectTransform));
             var text = root.AddComponent<WorldSpaceSlimText>();
-            text.autoFitTexture = true;
+            text.widthMode = Milestro.Model.TextWidthMode.MaxContent;
             text.text = "A";
             var initialSize = ((RectTransform)root.transform).sizeDelta;
 

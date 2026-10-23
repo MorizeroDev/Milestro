@@ -187,6 +187,89 @@ namespace Milestro.Tests
             Assert.That(vertices, Has.Length.EqualTo(25));
         }
 
+        [TestCase(TextWidthMode.Fixed, TextGradientMode.FourCorners)]
+        [TestCase(TextWidthMode.Fixed, TextGradientMode.Linear)]
+        [TestCase(TextWidthMode.Fixed, TextGradientMode.Radial)]
+        [TestCase(TextWidthMode.MaxContent, TextGradientMode.FourCorners)]
+        [TestCase(TextWidthMode.MaxContent, TextGradientMode.Linear)]
+        [TestCase(TextWidthMode.MaxContent, TextGradientMode.Radial)]
+        [TestCase(TextWidthMode.FitContent, TextGradientMode.FourCorners)]
+        [TestCase(TextWidthMode.FitContent, TextGradientMode.Linear)]
+        [TestCase(TextWidthMode.FitContent, TextGradientMode.Radial)]
+        public void LayoutElementPreservesGradientColorsAndAtlasUvs(TextWidthMode widthMode,
+            TextGradientMode gradientMode)
+        {
+            var textBox = CreateTextBox();
+            var layout = textBox.gameObject.AddComponent<TextBoxLayoutElement>();
+            layout.widthMode = widthMode;
+            layout.heightMode = TextHeightMode.Fixed;
+            textBox.SetFlowModeActive(true);
+            textBox.SetFlowVisibleRange(true, 0f, 100f);
+            textBox.Texture = texture;
+            textBox.UvRect = new Rect(0.2f, 0.3f, 0.4f, 0.5f);
+            textBox.color = new Color(0.8f, 0.6f, 0.4f, 0.5f);
+            textBox.enableColorGradient = true;
+            textBox.colorGradient = CreateGradient(gradientMode);
+
+            var (vertices, colors) = RebuildMesh(textBox);
+
+            AssertGradientMatchesRect(textBox, vertices, colors);
+            var mesh = textBox.canvasRenderer.GetMesh();
+            Assert.That(mesh.uv[0].x, Is.EqualTo(0.2f).Within(0.0001f));
+            Assert.That(mesh.uv[0].y, Is.EqualTo(0.3f).Within(0.0001f));
+            var expectedVertices = gradientMode == TextGradientMode.FourCorners ? 4 : 289;
+            Assert.That(vertices, Has.Length.EqualTo(expectedVertices));
+        }
+
+        [TestCase(TextGradientMode.FourCorners)]
+        [TestCase(TextGradientMode.Linear)]
+        [TestCase(TextGradientMode.Radial)]
+        public void VisibleSliceKeepsGradientAnchoredToFullRect(TextGradientMode gradientMode)
+        {
+            var textBox = CreateTextBox();
+            textBox.gameObject.AddComponent<TextBoxLayoutElement>();
+            textBox.SetFlowModeActive(true);
+            textBox.SetFlowVisibleRange(true, 25f, 75f);
+            textBox.Texture = texture;
+            textBox.enableColorGradient = true;
+            textBox.colorGradient = CreateGradient(gradientMode);
+
+            var (vertices, colors) = RebuildMesh(textBox);
+
+            AssertGradientMatchesRect(textBox, vertices, colors);
+            var bounds = textBox.canvasRenderer.GetMesh().bounds;
+            Assert.That(bounds.size.y, Is.EqualTo(50f));
+            textBox.SetFlowVisibleRange(true, 0f, 50f);
+            textBox.Texture = texture;
+            (vertices, colors) = RebuildMesh(textBox);
+            AssertGradientMatchesRect(textBox, vertices, colors);
+        }
+
+        private static TextGradient CreateGradient(TextGradientMode mode)
+        {
+            if (mode == TextGradientMode.Linear)
+                return TextGradient.Linear(CreateTwoStopGradient(Color.red, Color.blue), 90f);
+            if (mode == TextGradientMode.Radial)
+                return TextGradient.Radial(CreateTwoStopGradient(Color.white, Color.black));
+            return TextGradient.ForCorners(new TextColorGradient(
+                Color.red, Color.green, Color.blue, Color.yellow));
+        }
+
+        private static void AssertGradientMatchesRect(TextBox textBox, Vector3[] vertices, Color32[] colors)
+        {
+            Assert.That(vertices, Is.Not.Empty);
+            var rect = textBox.GetPixelAdjustedRect();
+            for (var index = 0; index < vertices.Length; ++index)
+            {
+                var position = vertices[index];
+                var expected = Milestro.Components.Internal.RenderTextureGraphic.SampleGradient(
+                    textBox.colorGradient,
+                    (position.x - rect.xMin) / rect.width,
+                    (position.y - rect.yMin) / rect.height);
+                AssertColorClose(colors[index], textBox.color * expected);
+            }
+        }
+
         private TextBox CreateTextBox()
         {
             root = new GameObject("Test Canvas", typeof(RectTransform), typeof(Canvas));

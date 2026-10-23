@@ -169,7 +169,7 @@ namespace Milestro.Components.Internal
                 phaseStart = SlimTextPipelineProfiler.Timestamp;
             }
 
-            settings = ResolveAutoSizeSettings(settings);
+            settings = ResolveAutoFontSizeSettings(settings);
 
             var needsDraw = surfaceChanged;
             var fontChanged = EnsureFont(settings);
@@ -285,9 +285,17 @@ namespace Milestro.Components.Internal
             return ready;
         }
 
-        private SlimTextRenderTargetSettings ResolveAutoSizeSettings(SlimTextRenderTargetSettings settings)
+        private SlimTextRenderTargetSettings ResolveAutoFontSizeSettings(SlimTextRenderTargetSettings settings)
         {
-            if (!settings.AutoSize || noAllocMode || settings.Text.Length == 0)
+            if (settings.Sizing.HasValue)
+            {
+                var effectiveFontSize = settings.Sizing.Value.EffectiveFontSize;
+                return Mathf.Approximately(effectiveFontSize, settings.FontSize)
+                    ? settings
+                    : settings.WithFontSize(effectiveFontSize);
+            }
+
+            if (!settings.AutoFontSize || noAllocMode || settings.Text.Length == 0)
             {
                 return settings;
             }
@@ -301,7 +309,7 @@ namespace Milestro.Components.Internal
             var measurement = font.MeasureText(settings.Text);
             var availableWidth = logicalSizePixels.x - settings.RectOffsetLeft - settings.RectOffsetRight;
             var availableHeight = logicalSizePixels.y - settings.RectOffsetTop - settings.RectOffsetBottom;
-            var scale = TextAutoSizeScale.Resolve(MeasureContentWidth(measurement),
+            var scale = TextAutoFontSizeScale.Resolve(MeasureContentWidth(measurement),
                 MeasureContentHeight(measurement),
                 availableWidth,
                 availableHeight,

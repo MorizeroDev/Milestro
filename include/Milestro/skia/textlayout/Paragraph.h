@@ -31,6 +31,10 @@ public :
         return paragraph->getLongestLine();
     }
 
+    SkScalar getMinIntrinsicWidth() const {
+        return paragraph->getMinIntrinsicWidth();
+    }
+
     SkScalar getMaxIntrinsicWidth() const {
         return paragraph->getMaxIntrinsicWidth();
     }

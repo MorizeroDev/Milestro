@@ -1,6 +1,7 @@
 using System;
 using Milestro.Components.Internal;
 using Milestro.Util;
+using Milestro.Model;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -12,8 +13,12 @@ namespace Milestro.Components
     [AddComponentMenu("Milestro/Text Box Layout Element")]
     public class TextBoxLayoutElement : UIBehaviour, ILayoutElement
     {
-        [SerializeField] private bool m_providePreferredWidth;
-        [SerializeField] private bool m_providePreferredHeight = true;
+        [Tooltip("Preferred box width: Fixed uses the assigned width; MaxContent requests the full unwrapped width; " +
+                 "FitContent fits the parent width down to the smallest allowed line. Paragraph Wrap Mode controls line breaks. " +
+                 "With NoWrap, FitContent and MaxContent request the same natural width.")]
+        [SerializeField] private TextWidthMode m_widthMode;
+        [Tooltip("Fixed uses the assigned height. Auto requests the complete content height after wrapping at the actual assigned width.")]
+        [SerializeField] private TextHeightMode m_heightMode = TextHeightMode.Auto;
         [SerializeField] private bool m_forwardPointerScrollToParent = true;
         [SerializeField] private int m_layoutPriority = 1;
         [SerializeField] private RectTransform? m_viewport;
@@ -23,37 +28,45 @@ namespace Milestro.Components
 
         [NonSerialized] private TextBox? textBoxCache;
         [NonSerialized] private bool subscribed;
-        [NonSerialized] private bool hasCachedMeasurement;
-        [NonSerialized] private TextBoxLayoutMeasurement cachedMeasurement;
+        [NonSerialized] private bool hasHorizontalMeasurement;
+        [NonSerialized] private bool hasVerticalMeasurement;
+        [NonSerialized] private TextSizingResult horizontalMeasurement;
+        [NonSerialized] private TextSizingResult verticalMeasurement;
         [NonSerialized] private ScrollRect? scrollRectCache;
         [NonSerialized] private readonly Vector3[] worldCorners = new Vector3[4];
 
-        public bool providePreferredWidth
+        public TextWidthMode widthMode
         {
-            get => m_providePreferredWidth;
+            get => m_widthMode;
             set
             {
-                if (m_providePreferredWidth == value)
+                var nextValue = Enum.IsDefined(typeof(TextWidthMode), value)
+                    ? value
+                    : TextWidthMode.Fixed;
+                if (m_widthMode == nextValue)
                 {
                     return;
                 }
 
-                m_providePreferredWidth = value;
+                m_widthMode = nextValue;
                 SetLayoutDirty();
             }
         }
 
-        public bool providePreferredHeight
+        public TextHeightMode heightMode
         {
-            get => m_providePreferredHeight;
+            get => m_heightMode;
             set
             {
-                if (m_providePreferredHeight == value)
+                var nextValue = Enum.IsDefined(typeof(TextHeightMode), value)
+                    ? value
+                    : TextHeightMode.Fixed;
+                if (m_heightMode == nextValue)
                 {
                     return;
                 }
 
-                m_providePreferredHeight = value;
+                m_heightMode = nextValue;
                 SetLayoutDirty();
             }
         }
@@ -96,15 +109,18 @@ namespace Milestro.Components
         }
 #endif
 
-        public float minWidth => -1f;
-        public float preferredWidth => m_providePreferredWidth &&
-                                       TryGetMeasurement(out var measurement) &&
-                                       measurement.HasContentPreferredWidth
+        public float minWidth => TryGetHorizontalMeasurement(out var measurement)
+            ? measurement.MinWidth
+            : -1f;
+        public float preferredWidth => m_widthMode != TextWidthMode.Fixed &&
+                                       TryGetHorizontalMeasurement(out var measurement) &&
+                                       measurement.PreferredWidth >= 0f
             ? measurement.PreferredWidth
             : -1f;
         public float flexibleWidth => -1f;
         public float minHeight => -1f;
-        public float preferredHeight => m_providePreferredHeight && TryGetMeasurement(out var measurement)
+        public float preferredHeight => m_heightMode == TextHeightMode.Auto &&
+                                        TryGetVerticalMeasurement(out var measurement)
             ? measurement.PreferredHeight
             : -1f;
         public float flexibleHeight => -1f;
@@ -112,6 +128,7 @@ namespace Milestro.Components
         protected override void OnEnable()
         {
             base.OnEnable();
+            NormalizeModes();
             Subscribe();
             var textBox = TextBoxComponent();
             textBox?.EnsureLayoutProducerObserved();
@@ -135,6 +152,7 @@ namespace Milestro.Components
         protected override void OnValidate()
         {
             base.OnValidate();
+            NormalizeModes();
             SetLayoutDirty();
         }
 #endif
@@ -145,7 +163,8 @@ namespace Milestro.Components
             // Rect changes are usually the result of the current layout pass.
             // The producer will mark layout dirty after updated metrics change
             // an exposed preferred size.
-            hasCachedMeasurement = false;
+            hasHorizontalMeasurement = false;
+            hasVerticalMeasurement = false;
         }
 
         protected override void OnTransformParentChanged()
@@ -162,12 +181,12 @@ namespace Milestro.Components
 
         public void CalculateLayoutInputHorizontal()
         {
-            RefreshMeasurement();
+            RefreshHorizontalMeasurement();
         }
 
         public void CalculateLayoutInputVertical()
         {
-            RefreshMeasurement();
+            RefreshVerticalMeasurement();
         }
 
         internal bool ShouldForwardPointerScrollToParent()
@@ -175,26 +194,64 @@ namespace Milestro.Components
             return isActiveAndEnabled && m_forwardPointerScrollToParent;
         }
 
-        private bool TryGetMeasurement(out TextBoxLayoutMeasurement measurement)
+        private bool TryGetHorizontalMeasurement(out TextSizingResult measurement)
         {
-            if (!hasCachedMeasurement)
+            if (!hasHorizontalMeasurement)
             {
-                RefreshMeasurement();
+                RefreshHorizontalMeasurement();
             }
 
-            measurement = cachedMeasurement;
-            return hasCachedMeasurement;
+            measurement = horizontalMeasurement;
+            return hasHorizontalMeasurement;
         }
 
-        private void RefreshMeasurement()
+        private bool TryGetVerticalMeasurement(out TextSizingResult measurement)
         {
-            var textBox = TextBoxComponent();
-            hasCachedMeasurement = textBox != null &&
-                                   textBox.TryGetLayoutMeasurement(out cachedMeasurement);
-            if (!hasCachedMeasurement)
+            if (!hasVerticalMeasurement)
             {
-                cachedMeasurement = default;
+                RefreshVerticalMeasurement();
             }
+
+            measurement = verticalMeasurement;
+            return hasVerticalMeasurement;
+        }
+
+        private void RefreshHorizontalMeasurement()
+        {
+            Subscribe();
+            var textBox = TextBoxComponent();
+            hasHorizontalMeasurement = textBox != null &&
+                                       TryResolveMeasurement(textBox,
+                                           assignedWidth: false,
+                                           out horizontalMeasurement);
+            if (!hasHorizontalMeasurement)
+            {
+                horizontalMeasurement = default;
+            }
+        }
+
+        private void RefreshVerticalMeasurement()
+        {
+            Subscribe();
+            var textBox = TextBoxComponent();
+            hasVerticalMeasurement = textBox != null &&
+                                     TryResolveMeasurement(textBox,
+                                         assignedWidth: true,
+                                         out verticalMeasurement);
+            if (!hasVerticalMeasurement)
+            {
+                verticalMeasurement = default;
+            }
+        }
+
+        private static bool TryResolveMeasurement(TextBox textBox,
+            bool assignedWidth,
+            out TextSizingResult measurement)
+        {
+            textBox.EnsureLayoutProducerObserved();
+            var producer = textBox.GetComponent<TextBoxRenderTextureProducer>();
+            measurement = assignedWidth ? producer.ResolveSizingAtLayoutWidth() : producer.ResolveSizing();
+            return true;
         }
 
         private TextBox? TextBoxComponent()
@@ -372,7 +429,8 @@ namespace Milestro.Components
 
         private void SetLayoutDirty(bool requireActive = true)
         {
-            hasCachedMeasurement = false;
+            hasHorizontalMeasurement = false;
+            hasVerticalMeasurement = false;
             var targetRectTransform = transform as RectTransform;
             if ((requireActive && !IsActive()) || targetRectTransform == null)
             {
@@ -380,6 +438,18 @@ namespace Milestro.Components
             }
 
             LayoutRebuilder.MarkLayoutForRebuild(targetRectTransform);
+        }
+
+        private void NormalizeModes()
+        {
+            if (!Enum.IsDefined(typeof(TextWidthMode), m_widthMode))
+            {
+                m_widthMode = TextWidthMode.Fixed;
+            }
+            if (!Enum.IsDefined(typeof(TextHeightMode), m_heightMode))
+            {
+                m_heightMode = TextHeightMode.Fixed;
+            }
         }
 
         [System.Diagnostics.Conditional("MILESTRO_FLOW_TEXTBOX_DEBUG")]

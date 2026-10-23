@@ -4,17 +4,19 @@ using UnityEngine;
 namespace Milestro.Model
 {
     /// <summary>
-    /// Serialized auto-size configuration shared by text producers. Rendered as a single
+    /// Serialized auto font size configuration shared by text producers. Rendered as a single
     /// foldout in the inspector instead of loose flat fields.
     /// </summary>
     [Serializable]
-    public struct TextAutoSizeSettings
+    public struct TextAutoFontSizeSettings
     {
         public const float DefaultFontSizeMin = 12f;
         public const float DefaultFontSizeMax = 72f;
 
         private const float MinFontSizeBound = 0.1f;
 
+        [Tooltip("Fits the font to fixed bounds. With content sizing enabled, only shrinks against hard constraints; " +
+                 "content-sized dimensions never cause font growth. TextBox uses the paragraph Wrap Mode while fitting.")]
         [SerializeField]
         private bool m_enabled;
 
@@ -24,7 +26,7 @@ namespace Milestro.Model
         [SerializeField]
         private float m_fontSizeMax;
 
-        public static TextAutoSizeSettings Default => new TextAutoSizeSettings
+        public static TextAutoFontSizeSettings Default => new TextAutoFontSizeSettings
         {
             m_fontSizeMin = DefaultFontSizeMin,
             m_fontSizeMax = DefaultFontSizeMax,
