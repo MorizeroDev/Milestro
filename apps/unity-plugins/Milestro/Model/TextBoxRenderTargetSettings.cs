@@ -10,8 +10,7 @@ namespace Milestro.Model
             TextOverflow textOverflow,
             bool autoSize = false,
             float minSize = 0f,
-            float maxSize = 0f,
-            TextAutoSizeWrapMode autoSizeWrapMode = TextAutoSizeWrapMode.NoWrap)
+            float maxSize = 0f)
         {
             Content = content ?? "";
             Margin = margin ?? Margin.FixedZero();
@@ -23,7 +22,6 @@ namespace Milestro.Model
             AutoSize = autoSize;
             MinSize = minSize;
             MaxSize = maxSize;
-            AutoSizeWrapMode = autoSizeWrapMode;
         }
 
         public string Content { get; }
@@ -35,6 +33,5 @@ namespace Milestro.Model
         public bool AutoSize { get; }
         public float MinSize { get; }
         public float MaxSize { get; }
-        public TextAutoSizeWrapMode AutoSizeWrapMode { get; }
     }
 }
