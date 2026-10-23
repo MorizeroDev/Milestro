@@ -6,12 +6,13 @@ using Milestro.Util;
 using UnityEditor;
 #endif
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Milestro.Components.Internal
 {
     [DisallowMultipleComponent]
     [AddComponentMenu("Milestro/Internal/Slim Text Render Texture Producer")]
-    public class SlimTextRenderTextureProducer : RenderTextureProducer
+    public class SlimTextRenderTextureProducer : RenderTextureProducer, ILayoutElement
     {
         private const string DefaultFontFamily = "system-ui";
 
@@ -24,7 +25,13 @@ namespace Milestro.Components.Internal
         [SerializeField] private SlimTextHorizontalAlign m_horizontalAlign = SlimTextHorizontalAlign.Left;
         [SerializeField] private SlimTextVerticalAlign m_verticalAlign = SlimTextVerticalAlign.Top;
         [SerializeField] private bool m_fallbackToSystemFont = true;
-        [SerializeField] private TextAutoSizeSettings m_autoSize = TextAutoSizeSettings.Default;
+        [SerializeField] private TextAutoFontSizeSettings m_autoFontSize = TextAutoFontSizeSettings.Default;
+        [Tooltip("Fixed uses the assigned width. SlimText is always single-line, so MaxContent and FitContent both request " +
+                 "the natural text width including margins. Auto Font Size can shrink the text against fixed bounds or a FitContent parent constraint.")]
+        [SerializeField] private TextWidthMode m_widthMode;
+        [Tooltip("Fixed uses the assigned height. Auto requests the complete line height including margins.")]
+        [SerializeField] private TextHeightMode m_heightMode;
+        [SerializeField] private int m_layoutPriority = 1;
         [SerializeField, HideInInspector] private bool m_screenSpaceRasterization = true;
 
         [NonSerialized] private RectTransform? rectTransformCache;
@@ -32,6 +39,7 @@ namespace Milestro.Components.Internal
         [NonSerialized] private bool sizeDirty = true;
         [NonSerialized] private readonly Vector3[] worldCorners = new Vector3[4];
         [NonSerialized] private SlimTextRenderTarget? renderTarget;
+        [NonSerialized] private SlimTextIntrinsicMeasurement? intrinsicMeasurement;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
 #if UNITY_EDITOR
         private const int MaxEditorSkippedRenderRetries = 2;
@@ -45,6 +53,115 @@ namespace Milestro.Components.Internal
         public override int OutputHeight => renderTarget?.OutputHeight ?? 0;
         public override bool HasOutput => renderTarget?.HasOutput ?? false;
         public override long OutputVersion => renderTarget?.OutputVersion ?? 0;
+
+        public float effectiveFontSize => ResolveSizing().EffectiveFontSize;
+
+        public TextWidthMode widthMode
+        {
+            get => m_widthMode;
+            set
+            {
+                var nextValue = Enum.IsDefined(typeof(TextWidthMode), value)
+                    ? value
+                    : TextWidthMode.Fixed;
+                if (m_widthMode == nextValue) return;
+                m_widthMode = nextValue;
+                MarkPropertiesChanged();
+            }
+        }
+
+        public TextHeightMode heightMode
+        {
+            get => m_heightMode;
+            set
+            {
+                var nextValue = Enum.IsDefined(typeof(TextHeightMode), value)
+                    ? value
+                    : TextHeightMode.Fixed;
+                if (m_heightMode == nextValue) return;
+                m_heightMode = nextValue;
+                MarkPropertiesChanged();
+            }
+        }
+
+        public int layoutPriority
+        {
+            get => m_layoutPriority;
+            set
+            {
+                if (m_layoutPriority == value)
+                {
+                    return;
+                }
+
+                m_layoutPriority = value;
+                SetLayoutDirty();
+            }
+        }
+
+        public float minWidth => m_widthMode == TextWidthMode.Fixed ? -1f : ResolveSizing().MinWidth;
+        public float preferredWidth => m_widthMode == TextWidthMode.Fixed ? -1f : ResolveSizing().PreferredWidth;
+        public float flexibleWidth => -1f;
+        public float minHeight => -1f;
+        public float preferredHeight => m_heightMode == TextHeightMode.Auto ? ResolveSizing().PreferredHeight : -1f;
+        public float flexibleHeight => -1f;
+
+        public void CalculateLayoutInputHorizontal()
+        {
+            ResolveSizing();
+        }
+
+        public void CalculateLayoutInputVertical()
+        {
+            ResolveSizing();
+        }
+
+        private void OnDidApplyAnimationProperties()
+        {
+            NormalizeSerializedValues();
+            MarkPropertiesChanged();
+        }
+
+        public TextSizingResult ResolveSizing()
+        {
+            var rectTransform = RectTransformComponent();
+            return ResolveSizing(rectTransform != null ? rectTransform.rect.size : Vector2.one);
+        }
+
+        internal TextSizingResult ResolveSizing(Vector2 fixedSize)
+        {
+            var rectTransform = RectTransformComponent();
+            var available = rectTransform != null
+                ? TextSizingBounds.ExternalAvailableSize(rectTransform)
+                : Vector2.zero;
+            return ResolveSizing(fixedSize, available);
+        }
+
+        internal TextSizingResult ResolveSizing(Vector2 fixedSize, Vector2 available)
+        {
+            EnsureRectOffset();
+            var rectTransform = RectTransformComponent();
+            var hasParentBounds = rectTransform != null && rectTransform.parent is RectTransform;
+            var availableWidth = hasParentBounds ? available.x : float.PositiveInfinity;
+            var request = new TextSizingRequest(m_widthMode,
+                m_heightMode,
+                fixedSize.x,
+                fixedSize.y,
+                availableWidth,
+                false,
+                m_fontSize,
+                m_autoFontSize.enabled,
+                m_autoFontSize.fontSizeMin,
+                m_autoFontSize.fontSizeMax,
+                widthCap: m_widthMode == TextWidthMode.FitContent && hasParentBounds
+                    ? available.x
+                    : float.PositiveInfinity);
+            return TextSizingResolver.Resolve(Measurement(), request, _ => new ResolvedMargin(
+                m_rectOffset.left,
+                m_rectOffset.top,
+                m_rectOffset.right,
+                m_rectOffset.bottom));
+        }
 
         internal bool screenSpaceRasterization
         {
@@ -149,7 +266,7 @@ namespace Milestro.Components.Internal
                 }
 
                 m_rectOffset = nextValue;
-                MarkPaintChanged();
+                MarkPropertiesChanged();
             }
         }
 
@@ -183,51 +300,51 @@ namespace Milestro.Components.Internal
             }
         }
 
-        public bool enableAutoSizing
+        public bool enableAutoFontSize
         {
-            get => m_autoSize.enabled;
+            get => m_autoFontSize.enabled;
             set
             {
-                if (m_autoSize.enabled == value)
+                if (m_autoFontSize.enabled == value)
                 {
                     return;
                 }
 
-                m_autoSize.enabled = value;
+                m_autoFontSize.enabled = value;
                 MarkPropertiesChanged();
             }
         }
 
         public float fontSizeMin
         {
-            get => m_autoSize.fontSizeMin;
+            get => m_autoFontSize.fontSizeMin;
             set
             {
-                var nextValue = TextAutoSizeSettings.NormalizeBound(value);
-                if (Mathf.Approximately(m_autoSize.fontSizeMin, nextValue))
+                var nextValue = TextAutoFontSizeSettings.NormalizeBound(value);
+                if (Mathf.Approximately(m_autoFontSize.fontSizeMin, nextValue))
                 {
                     return;
                 }
 
-                m_autoSize.fontSizeMin = nextValue;
-                m_autoSize.Normalize();
+                m_autoFontSize.fontSizeMin = nextValue;
+                m_autoFontSize.Normalize();
                 MarkPropertiesChanged();
             }
         }
 
         public float fontSizeMax
         {
-            get => m_autoSize.fontSizeMax;
+            get => m_autoFontSize.fontSizeMax;
             set
             {
-                var nextValue = TextAutoSizeSettings.NormalizeBound(value);
-                if (Mathf.Approximately(m_autoSize.fontSizeMax, nextValue))
+                var nextValue = TextAutoFontSizeSettings.NormalizeBound(value);
+                if (Mathf.Approximately(m_autoFontSize.fontSizeMax, nextValue))
                 {
                     return;
                 }
 
-                m_autoSize.fontSizeMax = nextValue;
-                m_autoSize.Normalize();
+                m_autoFontSize.fontSizeMax = nextValue;
+                m_autoFontSize.Normalize();
                 MarkPropertiesChanged();
             }
         }
@@ -303,7 +420,10 @@ namespace Milestro.Components.Internal
                 return;
             }
 
-            MarkPaintChanged();
+            // This callback is commonly caused by ContentSizeFitter applying the current
+            // preferred size. Invalidate rendering, but do not dirty layout from the
+            // resulting RectTransform change or the fitter can request another pass.
+            renderTarget?.MarkPropertiesChanged();
 #if UNITY_EDITOR
             QueueEditorRebuild();
 #endif
@@ -326,7 +446,7 @@ namespace Milestro.Components.Internal
             m_text = nextValue;
             if (RenderTarget.UseManagedStringText() || changed)
             {
-                MarkPaintChanged();
+                MarkPropertiesChanged();
             }
         }
 
@@ -339,7 +459,7 @@ namespace Milestro.Components.Internal
             }
 
             m_text = nextValue;
-            MarkPaintChanged();
+            MarkPropertiesChanged();
         }
 
         public void PrepareTextUtf8NoAlloc(int capacity)
@@ -501,9 +621,22 @@ namespace Milestro.Components.Internal
                 m_horizontalAlign,
                 m_verticalAlign,
                 m_fallbackToSystemFont,
-                m_autoSize.enabled,
-                m_autoSize.fontSizeMin,
-                m_autoSize.fontSizeMax);
+                m_autoFontSize.enabled,
+                m_autoFontSize.fontSizeMin,
+                m_autoFontSize.fontSizeMax).WithSizing(ResolveSizing());
+        }
+
+        private SlimTextIntrinsicMeasurement Measurement()
+        {
+            if (intrinsicMeasurement == null)
+            {
+                intrinsicMeasurement = new SlimTextIntrinsicMeasurement(m_text,
+                    m_fontFamily,
+                    m_fontWeight,
+                    m_fallbackToSystemFont);
+            }
+
+            return intrinsicMeasurement;
         }
 
         private RectTransform? RectTransformComponent()
@@ -532,6 +665,8 @@ namespace Milestro.Components.Internal
 
         private void DisposeRenderTarget()
         {
+            intrinsicMeasurement?.Dispose();
+            intrinsicMeasurement = null;
             if (renderTarget == null)
             {
                 return;
@@ -544,6 +679,11 @@ namespace Milestro.Components.Internal
 
         private void OnRenderEventCompleted(UnitySkiaRenderTextureSurface.RenderSubmissionStatus status)
         {
+            if (!this)
+            {
+                return;
+            }
+
             if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn)
             {
 #if UNITY_EDITOR
@@ -570,6 +710,9 @@ namespace Milestro.Components.Internal
 #if UNITY_EDITOR
             m_editorSkippedRenderRetries = 0;
 #endif
+            intrinsicMeasurement?.Dispose();
+            intrinsicMeasurement = null;
+            SetLayoutDirty();
             RenderTarget.MarkPropertiesChanged();
 #if UNITY_EDITOR
             if (isActiveAndEnabled)
@@ -607,8 +750,25 @@ namespace Milestro.Components.Internal
 
             m_fontWeight = NormalizeFontWeight(m_fontWeight);
             m_fontSize = NormalizeFontSize(m_fontSize);
-            m_autoSize.Normalize();
+            m_autoFontSize.Normalize();
+            if (!Enum.IsDefined(typeof(TextWidthMode), m_widthMode))
+            {
+                m_widthMode = TextWidthMode.Fixed;
+            }
+            if (!Enum.IsDefined(typeof(TextHeightMode), m_heightMode))
+            {
+                m_heightMode = TextHeightMode.Fixed;
+            }
             NormalizeRectOffsetInPlace();
+        }
+
+        private void SetLayoutDirty()
+        {
+            var rectTransform = RectTransformComponent();
+            if (isActiveAndEnabled && rectTransform != null)
+            {
+                LayoutRebuilder.MarkLayoutForRebuild(rectTransform);
+            }
         }
 
         private static int NormalizeFontWeight(int weight)

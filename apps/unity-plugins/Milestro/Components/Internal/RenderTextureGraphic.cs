@@ -130,6 +130,12 @@ namespace Milestro.Components.Internal
 
         protected override void OnPopulateMesh(VertexHelper vh)
         {
+            var rect = GetPixelAdjustedRect();
+            PopulateDisplayMesh(vh, rect, rect);
+        }
+
+        protected void PopulateDisplayMesh(VertexHelper vh, Rect displayRect, Rect gradientRect)
+        {
             vh.Clear();
 
             var targetTexture = Texture;
@@ -138,8 +144,7 @@ namespace Milestro.Components.Internal
                 return;
             }
 
-            var rect = GetPixelAdjustedRect();
-            var bounds = new Vector4(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
+            var bounds = new Vector4(displayRect.xMin, displayRect.yMin, displayRect.xMax, displayRect.yMax);
             var texelSize = targetTexture.texelSize;
             var scaleX = targetTexture.width * texelSize.x;
             var scaleY = targetTexture.height * texelSize.y;
@@ -153,13 +158,18 @@ namespace Milestro.Components.Internal
             var gradient = m_colorGradientPreset != null
                 ? m_colorGradientPreset.Gradient
                 : m_colorGradient;
+            var gradientBounds = new Vector4(
+                Mathf.InverseLerp(gradientRect.xMin, gradientRect.xMax, displayRect.xMin),
+                Mathf.InverseLerp(gradientRect.yMin, gradientRect.yMax, displayRect.yMin),
+                Mathf.InverseLerp(gradientRect.xMin, gradientRect.xMax, displayRect.xMax),
+                Mathf.InverseLerp(gradientRect.yMin, gradientRect.yMax, displayRect.yMax));
             if (gradient.Mode == TextGradientMode.FourCorners)
             {
-                PopulateFourCornersQuad(vh, bounds, color, gradient.FourCorners, scaleX, scaleY);
+                PopulateFourCornersQuad(vh, bounds, color, gradient, gradientBounds, scaleX, scaleY);
                 return;
             }
 
-            PopulateGradientGrid(vh, bounds, color, gradient, scaleX, scaleY);
+            PopulateGradientGrid(vh, bounds, color, gradient, gradientBounds, scaleX, scaleY);
         }
 
         private void PopulateUniformQuad(VertexHelper vh, Vector4 bounds, Color baseColor, float scaleX,
@@ -180,15 +190,19 @@ namespace Milestro.Components.Internal
         }
 
         private void PopulateFourCornersQuad(VertexHelper vh, Vector4 bounds, Color baseColor,
-            TextColorGradient corners, float scaleX, float scaleY)
+            in TextGradient gradient, Vector4 gradientBounds, float scaleX, float scaleY)
         {
-            vh.AddVert(new Vector3(bounds.x, bounds.y), baseColor * corners.BottomLeft,
+            vh.AddVert(new Vector3(bounds.x, bounds.y),
+                baseColor * SampleGradient(gradient, gradientBounds.x, gradientBounds.y),
                 new Vector4(uvRect.xMin * scaleX, uvRect.yMin * scaleY));
-            vh.AddVert(new Vector3(bounds.x, bounds.w), baseColor * corners.TopLeft,
+            vh.AddVert(new Vector3(bounds.x, bounds.w),
+                baseColor * SampleGradient(gradient, gradientBounds.x, gradientBounds.w),
                 new Vector4(uvRect.xMin * scaleX, uvRect.yMax * scaleY));
-            vh.AddVert(new Vector3(bounds.z, bounds.w), baseColor * corners.TopRight,
+            vh.AddVert(new Vector3(bounds.z, bounds.w),
+                baseColor * SampleGradient(gradient, gradientBounds.z, gradientBounds.w),
                 new Vector4(uvRect.xMax * scaleX, uvRect.yMax * scaleY));
-            vh.AddVert(new Vector3(bounds.z, bounds.y), baseColor * corners.BottomRight,
+            vh.AddVert(new Vector3(bounds.z, bounds.y),
+                baseColor * SampleGradient(gradient, gradientBounds.z, gradientBounds.y),
                 new Vector4(uvRect.xMax * scaleX, uvRect.yMin * scaleY));
 
             vh.AddTriangle(0, 1, 2);
@@ -196,7 +210,7 @@ namespace Milestro.Components.Internal
         }
 
         private void PopulateGradientGrid(VertexHelper vh, Vector4 bounds, Color baseColor,
-            in TextGradient gradient, float scaleX, float scaleY)
+            in TextGradient gradient, Vector4 gradientBounds, float scaleX, float scaleY)
         {
             var resolution = Mathf.Clamp(gradient.MeshResolution,
                 TextGradient.MinMeshResolution,
@@ -207,13 +221,15 @@ namespace Milestro.Components.Internal
                 var v = (float)row / resolution;
                 var y = Mathf.Lerp(bounds.y, bounds.w, v);
                 var uvY = Mathf.Lerp(uvRect.yMin, uvRect.yMax, v) * scaleY;
+                var gradientV = Mathf.Lerp(gradientBounds.y, gradientBounds.w, v);
                 for (var column = 0; column <= resolution; ++column)
                 {
                     var u = (float)column / resolution;
                     var x = Mathf.Lerp(bounds.x, bounds.z, u);
                     var uvX = Mathf.Lerp(uvRect.xMin, uvRect.xMax, u) * scaleX;
+                    var gradientU = Mathf.Lerp(gradientBounds.x, gradientBounds.z, u);
                     vh.AddVert(new Vector3(x, y),
-                        baseColor * SampleGradient(gradient, u, v),
+                        baseColor * SampleGradient(gradient, gradientU, gradientV),
                         new Vector4(uvX, uvY));
                 }
             }

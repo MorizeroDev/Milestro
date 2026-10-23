@@ -12,7 +12,7 @@ namespace Milestro.Components.Internal
                 producer.textStyle,
                 producer.wrapMode,
                 producer.textOverflow,
-                producer.enableAutoSizing,
+                producer.enableAutoFontSize,
                 producer.fontSizeMin,
                 producer.fontSizeMax);
         }

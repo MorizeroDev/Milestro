@@ -978,24 +978,6 @@ namespace Milestro.Components
             }
         }
 
-        internal bool TryGetLayoutMeasurement(out TextBoxLayoutMeasurement measurement)
-        {
-            if (!isActiveAndEnabled)
-            {
-                measurement = default;
-                return false;
-            }
-
-            var producer = ProducerComponent();
-            if (!producer.TryGetLayoutMeasurement(out measurement))
-            {
-                return false;
-            }
-
-            ApplyProducerOutput(producer, force: false);
-            return true;
-        }
-
         protected override void OnPopulateMesh(VertexHelper vh)
         {
             if (!flowModeActive)
@@ -1559,27 +1541,13 @@ namespace Milestro.Components
             }
 
             var bounds = new Vector4(rect.xMin, bottom, rect.xMax, top);
-            var texelSize = targetTexture.texelSize;
-            var scaleX = targetTexture.width * texelSize.x;
-            var scaleY = targetTexture.height * texelSize.y;
-            var color32 = color;
             var uvRect = UvRect;
             DebugFlow("mesh submit " +
                       $"range=[{flowVisibleStartY:F3},{flowVisibleEndY:F3}] " +
                       $"bounds=({bounds.x:F3},{bounds.y:F3},{bounds.z:F3},{bounds.w:F3}) " +
                       $"texture={targetTexture.width}x{targetTexture.height} uv={uvRect}");
 
-            vh.AddVert(new Vector3(bounds.x, bounds.y), color32,
-                new Vector4(uvRect.xMin * scaleX, uvRect.yMin * scaleY));
-            vh.AddVert(new Vector3(bounds.x, bounds.w), color32,
-                new Vector4(uvRect.xMin * scaleX, uvRect.yMax * scaleY));
-            vh.AddVert(new Vector3(bounds.z, bounds.w), color32,
-                new Vector4(uvRect.xMax * scaleX, uvRect.yMax * scaleY));
-            vh.AddVert(new Vector3(bounds.z, bounds.y), color32,
-                new Vector4(uvRect.xMax * scaleX, uvRect.yMin * scaleY));
-
-            vh.AddTriangle(0, 1, 2);
-            vh.AddTriangle(2, 3, 0);
+            PopulateDisplayMesh(vh, Rect.MinMaxRect(bounds.x, bounds.y, bounds.z, bounds.w), rect);
         }
 
         private bool FlowVisibleRangeContainsScreenPoint(Vector2 screenPoint, Camera? eventCamera)

@@ -655,48 +655,87 @@ Unknown tags throw during conversion. In the Unity editor, parser errors are
 returned as visible error text; in player builds the fallback text is
 `Render Error`.
 
-## Auto Sizing
+## Content Sizing
+
+`TextBoxLayoutElement` exposes the CSS-like sizing modes for TextBox. SlimText
+exposes the same width and height modes on `SlimTextRenderTextureProducer`;
+`WorldSpaceSlimText` mirrors them on its host wrapper.
+
+- Width `Fixed` leaves the assigned `RectTransform` width in control and reports
+  no preferred width.
+- Width `MaxContent` requests the complete unwrapped content width. Paragraph
+  `Wrap Mode` still controls the renderer when a parent assigns a narrower
+  width.
+- Width `FitContent` requests `max(min-content, min(max-content, parent
+  available width))`. Paragraph `Wrap Mode` remains the only line-breaking
+  control. With `NoWrap`, FitContent and MaxContent therefore request the same
+  single-line width.
+- Height `Fixed` leaves the assigned height in control and reports no preferred
+  height.
+- Height `Auto` reports the complete content height after wrapping at the
+  width Unity assigns, including margins and rich-text block spacing.
+
+Fixed axes report `-1` through `ILayoutElement`, so a parent `LayoutGroup` keeps
+control of those axes. Content-sized axes report `minWidth` and
+`preferredWidth`; Auto height reports `preferredHeight`. Unity's standard
+`ContentSizeFitter` can apply the result:
+
+```csharp
+var layout = textBox.gameObject.AddComponent<TextBoxLayoutElement>();
+layout.widthMode = TextWidthMode.FitContent;
+layout.heightMode = TextHeightMode.Auto;
+
+var fitter = textBox.gameObject.AddComponent<ContentSizeFitter>();
+fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+```
+
+For a fixed axis, leave that fitter axis `Unconstrained` or omit the fitter
+and let its parent assign the size. A parent `LayoutGroup` can use the same
+layout inputs directly. The text component skips content-sized ancestors when
+resolving the external width used by FitContent, so a self-sizing hierarchy
+does not consume its own output as a constraint.
+
+`MaxContent` is useful for a label that should always stay on one line.
+`FitContent` is useful when a label should be compact until its parent becomes
+too narrow, at which point wrapping is allowed. SlimText is always single-line,
+so its min-content and max-content widths are equal and both modes produce the
+natural text width.
+
+Intrinsic measurement is performed from parsed text and font metrics, before
+rasterization. It includes configured margins, CJK and emoji glyph widths,
+rich-text blocks, and paragraph spacing. Ellipsis and line truncation do not
+change intrinsic measurement.
+
+## Auto Font Size
 
 `TextBoxRenderTextureProducer` and `SlimTextRenderTextureProducer` can scale
-text to fit the available rect, equivalent to TextMesh Pro's Auto Size. Enable
-`Enable Auto Sizing` and set `Font Size Min` / `Font Size Max`; the producer's
-base font size acts as the design size, and the rendered content is uniformly
-scaled so it lands inside the `[min, max]` range. The resolved scale is exposed
-to layout through the usual content-size measurement, so
-`TextBoxLayoutElement` reports the scaled result.
+text within the available bounds. `Auto Font Size` is separate from Content
+Sizing: it changes glyph size, while Content Sizing changes the box size.
 
-Semantics notes:
+Use `enableAutoFontSize`, `fontSizeMin`, and `fontSizeMax` (or the matching
+inspector fields). The producer's base font size is the design size.
 
-- `Auto Size Wrap Mode` controls how wrapping interacts with fitting:
-  - `NoWrap` (default) lays the paragraph out once at the base font size and
-    freezes the resulting line breaks, then scales the laid-out block
-    uniformly. This matches the "grow my label to fill the rect" mental model
-    and never introduces new line breaks (PowerPoint-style).
-  - `Wrap` rebalances line breaking while fitting, probing progressively
-    narrower virtual widths, and returns the largest scale whose re-wrapped
-    layout fits. This matches TextMesh Pro Best Fit and can reach larger
-    glyph sizes for multi-line content, but may break unspaced text (CJK,
-    digit strings) mid-run.
-- In `Wrap` mode TextBox re-lays out the paragraph at a compensated virtual
-  width and paints it with a matching output scale, so wrapping rebalances as
-  the content shrinks or grows and horizontal alignment stays correct at any
-  scale. Rich text scales uniformly in both modes, including absolute inline
-  `<font size>` runs and Ruby annotations.
-- SlimText measures its single line and derives the effective font size
-  directly, which is exact for unwrapped text.
-- `TextOverflow.Ellipsis` disables auto sizing on TextBox: truncation already
-  keeps content inside the viewport, matching TextMesh Pro behavior where such
-  text always "fits".
-- Empty content resolves to the maximum scale.
-- Auto sizing is ignored on the SlimText no-alloc UTF-8 path; texts using
-  `SetTextUtf8NoAlloc` keep their configured font size.
-- Auto sizing recomputes only when content, settings, or the rect change. The
-  wrapped TextBox case resolves the scale with a deterministic binary search
-  over `[min, max]`, probing paragraph layouts per unique virtual width, so
-  the result cannot oscillate between frames at a line-break boundary.
-- Do not combine auto sizing with a `ContentSizeFitter` on the same axis; the
-  fitted size feeds back into the fitting constraint.
+- Fully fixed boxes retain grow-and-shrink fitting within the configured font
+  range.
+- Enabling any content-sized axis caps fitting at the design font size, so
+  content sizing can only cause shrinking.
+- MaxContent/FitContent width with Auto height and no external cap makes Auto
+  Font Size a no-op.
+- A wrapped fixed width reflows to satisfy width. It shrinks the font only when
+  a fixed height also cannot contain the reflowed content.
+- NoWrap text can shrink against a fixed width, and any fixed height can cause
+  shrinking.
+- Both width and height resolve at the effective font size before Auto height
+  is computed. The final content-sized dimensions are not fed back into font
+  fitting, which prevents cross-frame growth loops.
+- Fitting stops at `fontSizeMin`; any remaining overflow uses the configured
+  clip, ellipsis, or scroll behavior.
+- Ellipsis keeps its existing behavior and does not enable Auto Font Size.
+- SlimText's no-alloc UTF-8 path keeps the configured font size.
 
+Paragraph `Wrap Mode` is the only wrapping control used by rendering and Auto
+Font Size. There is no separate Auto Font Size wrap mode.
 ## Text Spacing
 
 `TextStyleSettings` on `TextBoxRenderTextureProducer.textStyle` exposes

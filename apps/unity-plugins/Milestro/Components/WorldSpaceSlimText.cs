@@ -30,9 +30,13 @@ namespace Milestro.Components
         [SerializeField] private RectOffset m_rectOffset = new RectOffset();
         [SerializeField] private SlimTextHorizontalAlign m_horizontalAlign = SlimTextHorizontalAlign.Left;
         [SerializeField] private SlimTextVerticalAlign m_verticalAlign = SlimTextVerticalAlign.Top;
-        [SerializeField] private bool m_autoFitTexture;
+        [Tooltip("Fixed uses the configured width. SlimText is always single-line, so MaxContent and FitContent both use " +
+                 "the natural text width including margins. Auto Font Size can shrink the text against fixed bounds or a FitContent parent constraint.")]
+        [SerializeField] private TextWidthMode m_widthMode;
+        [Tooltip("Fixed uses the configured height. Auto uses the complete line height including margins.")]
+        [SerializeField] private TextHeightMode m_heightMode;
         [SerializeField] private bool m_fallbackToSystemFont = true;
-        [SerializeField] private TextAutoSizeSettings m_autoSize = TextAutoSizeSettings.Default;
+        [SerializeField] private TextAutoFontSizeSettings m_autoFontSize = TextAutoFontSizeSettings.Default;
         [SerializeField] private Material? m_material;
         [SerializeField] private string m_texturePropertyName = DefaultTexturePropertyName;
         [SerializeField] private bool m_disableRendererWhenNoOutput;
@@ -101,34 +105,39 @@ namespace Milestro.Components
             }
         }
 
-        public bool enableAutoSizing
+        public bool enableAutoFontSize
         {
-            get => m_autoSize.enabled;
+            get => m_autoFontSize.enabled;
             set
             {
-                m_autoSize.enabled = value;
+                if (m_autoFontSize.enabled == value)
+                {
+                    return;
+                }
+
+                m_autoFontSize.enabled = value;
                 ApplyConfiguration();
             }
         }
 
         public float fontSizeMin
         {
-            get => m_autoSize.fontSizeMin;
+            get => m_autoFontSize.fontSizeMin;
             set
             {
-                m_autoSize.fontSizeMin = TextAutoSizeSettings.NormalizeBound(value);
-                m_autoSize.Normalize();
+                m_autoFontSize.fontSizeMin = TextAutoFontSizeSettings.NormalizeBound(value);
+                m_autoFontSize.Normalize();
                 ApplyConfiguration();
             }
         }
 
         public float fontSizeMax
         {
-            get => m_autoSize.fontSizeMax;
+            get => m_autoFontSize.fontSizeMax;
             set
             {
-                m_autoSize.fontSizeMax = TextAutoSizeSettings.NormalizeBound(value);
-                m_autoSize.Normalize();
+                m_autoFontSize.fontSizeMax = TextAutoFontSizeSettings.NormalizeBound(value);
+                m_autoFontSize.Normalize();
                 ApplyConfiguration();
             }
         }
@@ -187,12 +196,38 @@ namespace Milestro.Components
             }
         }
 
-        public bool autoFitTexture
+        public TextWidthMode widthMode
         {
-            get => m_autoFitTexture;
+            get => m_widthMode;
             set
             {
-                m_autoFitTexture = value;
+                var nextValue = Enum.IsDefined(typeof(TextWidthMode), value)
+                    ? value
+                    : TextWidthMode.Fixed;
+                if (m_widthMode == nextValue)
+                {
+                    return;
+                }
+
+                m_widthMode = nextValue;
+                ApplyConfiguration();
+            }
+        }
+
+        public TextHeightMode heightMode
+        {
+            get => m_heightMode;
+            set
+            {
+                var nextValue = Enum.IsDefined(typeof(TextHeightMode), value)
+                    ? value
+                    : TextHeightMode.Fixed;
+                if (m_heightMode == nextValue)
+                {
+                    return;
+                }
+
+                m_heightMode = nextValue;
                 ApplyConfiguration();
             }
         }
@@ -308,7 +343,7 @@ namespace Milestro.Components
                 return;
             }
 
-            if (!m_autoFitTexture &&
+            if (m_widthMode == TextWidthMode.Fixed && m_heightMode == TextHeightMode.Fixed &&
                 isActiveAndEnabled &&
                 producerCache != null && producerCache.enabled &&
                 presenterCache != null &&
@@ -330,10 +365,10 @@ namespace Milestro.Components
             var presenter = PresenterComponent();
             var meshFilter = MeshFilterComponent();
             var meshRenderer = MeshRendererComponent();
-            var targetTextureSizePixels = CurrentTextureSizePixels();
+            ApplyProducerSettings(producer, useManagedStringText);
+            var targetTextureSizePixels = CurrentTextureSizePixels(producer);
 
             ApplyRectTransformSettings(rectTransform, targetTextureSizePixels);
-            ApplyProducerSettings(producer, useManagedStringText);
             ApplyPresenterSettings(presenter, producer);
             ApplyMesh(meshFilter, targetTextureSizePixels);
             ApplyMaterial(meshRenderer);
@@ -367,9 +402,11 @@ namespace Milestro.Components
             producer.horizontalAlign = m_horizontalAlign;
             producer.verticalAlign = m_verticalAlign;
             producer.fallbackToSystemFont = m_fallbackToSystemFont;
-            producer.enableAutoSizing = m_autoSize.enabled;
-            producer.fontSizeMin = m_autoSize.fontSizeMin;
-            producer.fontSizeMax = m_autoSize.fontSizeMax;
+            producer.enableAutoFontSize = m_autoFontSize.enabled;
+            producer.fontSizeMin = m_autoFontSize.fontSizeMin;
+            producer.fontSizeMax = m_autoFontSize.fontSizeMax;
+            producer.widthMode = m_widthMode;
+            producer.heightMode = m_heightMode;
         }
 
         private void ApplyPresenterSettings(RenderTextureMeshPresenter presenter,
@@ -706,35 +743,38 @@ namespace Milestro.Components
 #endif
         }
 
-        private Vector2Int CurrentTextureSizePixels()
+        private Vector2Int CurrentTextureSizePixels(SlimTextRenderTextureProducer producer)
         {
             var manualSize = NormalizeTextureSize(m_textureSizePixels);
-            if (!m_autoFitTexture || string.IsNullOrEmpty(m_text))
+            if (m_widthMode == TextWidthMode.Fixed && m_heightMode == TextHeightMode.Fixed)
             {
                 return manualSize;
             }
 
             try
             {
-                using var font = FontRegistry.ResolveFont(m_fontFamily,
-                    m_fontWeight,
-                    m_fontSize,
-                    m_fallbackToSystemFont);
-                var measurement = font.MeasureText(m_text);
-                EnsureRectOffset();
-                var rectOffset = m_rectOffset;
-                var width = Mathf.CeilToInt(MeasureContentWidth(measurement) +
-                                            rectOffset.left +
-                                            rectOffset.right);
-                var height = Mathf.CeilToInt(MeasureContentHeight(measurement) +
-                                             rectOffset.top +
-                                             rectOffset.bottom);
+                var available = ExternalAvailablePixelSize();
+                var sizing = producer.ResolveSizing(new Vector2(manualSize.x, manualSize.y), available);
+                var width = m_widthMode == TextWidthMode.Fixed
+                    ? manualSize.x
+                    : Mathf.CeilToInt(sizing.UsedWidth);
+                var height = m_heightMode == TextHeightMode.Fixed
+                    ? manualSize.y
+                    : Mathf.CeilToInt(sizing.UsedHeight);
                 return NormalizeTextureSize(new Vector2Int(width, height));
             }
             catch (Exception)
             {
                 return manualSize;
             }
+        }
+
+        private Vector2 ExternalAvailablePixelSize()
+        {
+            var rectTransform = RectTransformComponent();
+            return rectTransform != null
+                ? TextSizingBounds.ExternalAvailableSize(rectTransform)
+                : new Vector2(float.PositiveInfinity, float.PositiveInfinity);
         }
 
         private void NormalizeSerializedValues()
@@ -751,7 +791,15 @@ namespace Milestro.Components
 
             m_fontWeight = NormalizeFontWeight(m_fontWeight);
             m_fontSize = NormalizeFontSize(m_fontSize);
-            m_autoSize.Normalize();
+            m_autoFontSize.Normalize();
+            if (!Enum.IsDefined(typeof(TextWidthMode), m_widthMode))
+            {
+                m_widthMode = TextWidthMode.Fixed;
+            }
+            if (!Enum.IsDefined(typeof(TextHeightMode), m_heightMode))
+            {
+                m_heightMode = TextHeightMode.Fixed;
+            }
             m_textureSizePixels = NormalizeTextureSize(m_textureSizePixels);
             m_pixelsPerUnit = NormalizePixelsPerUnit(m_pixelsPerUnit);
             NormalizeRectOffsetInPlace();
@@ -811,28 +859,5 @@ namespace Milestro.Components
                 Mathf.Max(0, rectOffset.bottom));
         }
 
-        private static float MeasureContentWidth(FontTextMeasurement measurement)
-        {
-            var bounds = measurement.Bounds;
-            if (!FloatUtil.IsFinite(bounds.xMin) ||
-                !FloatUtil.IsFinite(bounds.xMax) ||
-                !FloatUtil.IsFinite(measurement.AdvanceX))
-            {
-                return 0f;
-            }
-
-            return Mathf.Max(0f, Mathf.Max(bounds.xMax, measurement.AdvanceX) - bounds.xMin);
-        }
-
-        private static float MeasureContentHeight(FontTextMeasurement measurement)
-        {
-            var bounds = measurement.Bounds;
-            if (!FloatUtil.IsFinite(bounds.yMin) || !FloatUtil.IsFinite(bounds.yMax))
-            {
-                return 0f;
-            }
-
-            return Mathf.Max(0f, bounds.yMax - bounds.yMin);
-        }
     }
 }

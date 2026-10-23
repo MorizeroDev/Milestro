@@ -1,3 +1,5 @@
+using UnityEngine;
+
 namespace Milestro.Model
 {
     internal readonly struct TextBoxRenderTargetSettings
@@ -8,9 +10,10 @@ namespace Milestro.Model
             TextStyleSettings textStyle,
             TextBoxWrapMode wrapMode,
             TextOverflow textOverflow,
-            bool autoSize = false,
+            bool autoFontSize = false,
             float minSize = 0f,
-            float maxSize = 0f)
+            float maxSize = 0f,
+            TextSizingResult? sizing = null, Vector2 marginReferenceSize = default)
         {
             Content = content ?? "";
             Margin = margin ?? Margin.FixedZero();
@@ -19,9 +22,20 @@ namespace Milestro.Model
             TextStyle = textStyle ?? new TextStyleSettings();
             WrapMode = wrapMode;
             TextOverflow = textOverflow;
-            AutoSize = autoSize;
+            AutoFontSize = autoFontSize;
             MinSize = minSize;
             MaxSize = maxSize;
+            Sizing = sizing;
+            MarginReferenceSize = marginReferenceSize;
+        }
+
+        public TextSizingResult? Sizing { get; }
+        public Vector2 MarginReferenceSize { get; }
+
+        public TextBoxRenderTargetSettings WithSizing(TextSizingResult sizing, Vector2 referenceSize)
+        {
+            return new TextBoxRenderTargetSettings(Content, Margin, ParagraphStyle, TextStyle,
+                WrapMode, TextOverflow, AutoFontSize, MinSize, MaxSize, sizing, referenceSize);
         }
 
         public string Content { get; }
@@ -30,7 +44,7 @@ namespace Milestro.Model
         public TextStyleSettings TextStyle { get; }
         public TextBoxWrapMode WrapMode { get; }
         public TextOverflow TextOverflow { get; }
-        public bool AutoSize { get; }
+        public bool AutoFontSize { get; }
         public float MinSize { get; }
         public float MaxSize { get; }
     }

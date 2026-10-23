@@ -609,6 +609,11 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphGetLongestLine(milestro::
     return MilestroSkiaTextlayoutParagraphGetLongestLine(p, longestLine);
 }
 
+int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphGetMinIntrinsicWidth(milestro::skia::textlayout::Paragraph* p,
+                                                                            float& minIntrinsicWidth) {
+    return MilestroSkiaTextlayoutParagraphGetMinIntrinsicWidth(p, minIntrinsicWidth);
+}
+
 int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphGetMaxIntrinsicWidth(milestro::skia::textlayout::Paragraph* p,
                                                                             float& maxIntrinsicWidth) {
     return MilestroSkiaTextlayoutParagraphGetMaxIntrinsicWidth(p, maxIntrinsicWidth);

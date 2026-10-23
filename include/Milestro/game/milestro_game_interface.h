@@ -295,6 +295,8 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphLayout(milestro::skia::textl
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetHeight(milestro::skia::textlayout::Paragraph* p, float& height);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetLongestLine(milestro::skia::textlayout::Paragraph* p,
                                                                    float& longestLine);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetMinIntrinsicWidth(milestro::skia::textlayout::Paragraph* p,
+                                                                         float& minIntrinsicWidth);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetMaxIntrinsicWidth(milestro::skia::textlayout::Paragraph* p,
                                                                          float& maxIntrinsicWidth);
 MILESTRO_API int64_t
