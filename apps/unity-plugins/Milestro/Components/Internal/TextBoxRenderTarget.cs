@@ -749,7 +749,7 @@ namespace Milestro.Components.Internal
             ResolveBlockMargins(settings, layoutSizePixels);
             float scale;
             var finalVirtualWidth = Mathf.Max(1, viewportWidth);
-            if (settings.AutoSizeWrapMode == TextAutoSizeWrapMode.Wrap)
+            if (settings.WrapMode == TextBoxWrapMode.Wrap)
             {
                 var probeWidth = -1;
                 var probeSize = Vector2.zero;

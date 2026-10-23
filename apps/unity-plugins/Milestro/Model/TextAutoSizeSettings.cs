@@ -5,8 +5,7 @@ namespace Milestro.Model
 {
     /// <summary>
     /// Serialized auto-size configuration shared by text producers. Rendered as a single
-    /// foldout in the inspector instead of loose flat fields. <see cref="wrapMode"/> only
-    /// applies to TextBox layout; SlimText producers ignore it.
+    /// foldout in the inspector instead of loose flat fields.
     /// </summary>
     [Serializable]
     public struct TextAutoSizeSettings
@@ -24,9 +23,6 @@ namespace Milestro.Model
 
         [SerializeField]
         private float m_fontSizeMax;
-
-        [SerializeField]
-        private TextAutoSizeWrapMode m_wrapMode;
 
         public static TextAutoSizeSettings Default => new TextAutoSizeSettings
         {
@@ -50,12 +46,6 @@ namespace Milestro.Model
         {
             get => m_fontSizeMax;
             set => m_fontSizeMax = value;
-        }
-
-        public TextAutoSizeWrapMode wrapMode
-        {
-            get => m_wrapMode;
-            set => m_wrapMode = value;
         }
 
         /// <summary>

@@ -230,21 +230,6 @@ namespace Milestro.Components.Internal
             }
         }
 
-        public TextAutoSizeWrapMode autoSizeWrapMode
-        {
-            get => m_autoSize.wrapMode;
-            set
-            {
-                if (m_autoSize.wrapMode == value)
-                {
-                    return;
-                }
-
-                m_autoSize.wrapMode = value;
-                MarkPropertiesChanged();
-            }
-        }
-
         public bool srgb
         {
             get => SurfaceColorSpace() == ColorSpace.Linear;
