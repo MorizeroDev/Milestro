@@ -259,6 +259,30 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void ExternalSizeSubtractsStableOuterLayoutGroupPaddingThroughContentSizedParent()
+        {
+            root = new GameObject("Padded stable root", typeof(RectTransform));
+            var rootRect = (RectTransform)root.transform;
+            rootRect.sizeDelta = new Vector2(400f, 200f);
+            var group = root.AddComponent<HorizontalLayoutGroup>();
+            group.padding = new RectOffset(11, 17, 5, 7);
+
+            var contentSizedParent = new GameObject("Content-sized parent", typeof(RectTransform));
+            contentSizedParent.transform.SetParent(root.transform, false);
+            var parentRect = (RectTransform)contentSizedParent.transform;
+            parentRect.sizeDelta = new Vector2(75f, 200f);
+            contentSizedParent.AddComponent<ContentSizeFitter>().horizontalFit =
+                ContentSizeFitter.FitMode.PreferredSize;
+
+            var child = new GameObject("Child", typeof(RectTransform));
+            child.transform.SetParent(contentSizedParent.transform, false);
+
+            var available = TextSizingBounds.ExternalAvailableSize((RectTransform)child.transform);
+
+            Assert.That(available.x, Is.EqualTo(372f).Within(0.01f));
+        }
+
+        [Test]
         public void ExternalSizeSubtractsOwningLayoutGroupPadding()
         {
             root = new GameObject("Padded root", typeof(RectTransform));
