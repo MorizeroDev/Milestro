@@ -15,6 +15,13 @@ namespace Milestro.Components.Internal
         private float stableDesiredScale;
         private ulong attemptTick;
         private bool hasCompletedOutput;
+        private bool hasScreenSpaceRequest;
+        private Vector2Int screenSpaceLogicalSize;
+        private float screenSpaceScale;
+        private ColorSpace screenSpaceColorSpace;
+        private UnitySkiaGraphicsBackend screenSpaceBackend;
+        private ulong screenSpaceDeviceEpoch;
+        private ulong screenSpaceConfigurationFingerprint;
 
         internal event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus>? RenderEventCompleted;
 
@@ -34,6 +41,7 @@ namespace Milestro.Components.Internal
         {
             changed = false;
             sizePixels = NormalizeSize(sizePixels);
+            hasScreenSpaceRequest = false;
             stableDesiredScale = 0f;
             var configuration = MilestroConfiguration.Configuration?.RenderSurface;
             var pixels = (long)sizePixels.x * sizePixels.y;
@@ -126,6 +134,35 @@ namespace Milestro.Components.Internal
             }
 
             logicalSize = NormalizeSize(logicalSize);
+            var configurationFingerprint = RenderSurfaceConfigurationFingerprint.Compute(configuration);
+            ulong deviceEpoch;
+            try
+            {
+                deviceEpoch = UnityAutoRenderTextureSurface.ReadCurrentDeviceEpoch();
+            }
+            catch
+            {
+                EmitDiagnostic(RenderSurfaceFailureReason.DeviceEpoch,
+                    backend,
+                    quantizedScale,
+                    0f,
+                    0f,
+                    -1,
+                    0,
+                    logContext);
+                return false;
+            }
+
+            if (MatchesScreenSpaceRequest(logicalSize,
+                    quantizedScale,
+                    colorSpace,
+                    backend,
+                    deviceEpoch,
+                    configurationFingerprint))
+            {
+                return true;
+            }
+
             var request = new RenderSurfaceRasterRequest(logicalSize.x, logicalSize.y, quantizedScale);
             var textureDescriptor = new UnitySkiaRenderTextureDescriptor(logicalSize.x,
                 logicalSize.y,
@@ -153,29 +190,11 @@ namespace Milestro.Components.Internal
             }
 
             var budget = UnitySkiaRenderTextureSurface.BudgetLedger.Snapshot();
-            ulong deviceEpoch;
-            try
-            {
-                deviceEpoch = UnityAutoRenderTextureSurface.ReadCurrentDeviceEpoch();
-            }
-            catch
-            {
-                EmitDiagnostic(RenderSurfaceFailureReason.DeviceEpoch,
-                    backend,
-                    plan.RequestedScale,
-                    plan.ClampedScale,
-                    0f,
-                    -1,
-                    0,
-                    logContext);
-                return false;
-            }
-
             var recoveryKey = new RenderSurfaceRecoveryKey(request,
                 descriptor,
                 deviceEpoch,
                 budget.Generation,
-                RenderSurfaceConfigurationFingerprint.Compute(configuration));
+                configurationFingerprint);
             if (!recoveryController.TryBeginAttempt(recoveryKey,
                     attemptTick,
                     configuration.MaxAttemptsPerRequestAndEpoch,
@@ -192,6 +211,12 @@ namespace Milestro.Components.Internal
                 if (TryApplyCandidate(candidate, colorSpace, configuration, out changed, out lastFailure))
                 {
                     stableDesiredScale = quantizedScale;
+                    RememberScreenSpaceRequest(logicalSize,
+                        quantizedScale,
+                        colorSpace,
+                        backend,
+                        deviceEpoch,
+                        configurationFingerprint);
                     recoveryController.RecordSuccess(recoveryAttempt);
                     return true;
                 }
@@ -434,6 +459,43 @@ namespace Milestro.Components.Internal
             var backendEdge = backend == UnitySkiaGraphicsBackend.OpenGLES ? 8192 : 16384;
             return new RenderSurfaceRuntimeCaps(SystemInfo.maxTextureSize, backendEdge);
         }
+
+        private bool MatchesScreenSpaceRequest(Vector2Int logicalSize,
+            float scale,
+            ColorSpace colorSpace,
+            UnitySkiaGraphicsBackend backend,
+            ulong deviceEpoch,
+            ulong configurationFingerprint)
+        {
+            return hasScreenSpaceRequest &&
+                   screenSpaceLogicalSize == logicalSize &&
+                   screenSpaceScale == scale &&
+                   screenSpaceColorSpace == colorSpace &&
+                   screenSpaceBackend == backend &&
+                   screenSpaceDeviceEpoch == deviceEpoch &&
+                   screenSpaceConfigurationFingerprint == configurationFingerprint &&
+                   HasLiveOutput;
+        }
+
+        private void RememberScreenSpaceRequest(Vector2Int logicalSize,
+            float scale,
+            ColorSpace colorSpace,
+            UnitySkiaGraphicsBackend backend,
+            ulong deviceEpoch,
+            ulong configurationFingerprint)
+        {
+            screenSpaceLogicalSize = logicalSize;
+            screenSpaceScale = scale;
+            screenSpaceColorSpace = colorSpace;
+            screenSpaceBackend = backend;
+            screenSpaceDeviceEpoch = deviceEpoch;
+            screenSpaceConfigurationFingerprint = configurationFingerprint;
+            hasScreenSpaceRequest = true;
+        }
+
+        private bool HasLiveOutput => atlasLease != null
+            ? atlasLease.IsLive && atlasLease.Texture != null
+            : surface != null && surface.Texture != null;
 
         private void AdvanceAttemptTick()
         {

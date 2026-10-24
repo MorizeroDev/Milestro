@@ -12,6 +12,7 @@ namespace Milestro.Components.Internal
         public abstract int OutputHeight { get; }
         public abstract bool HasOutput { get; }
         public abstract long OutputVersion { get; }
+        public virtual long VisualVersion => OutputVersion;
 
         protected void NotifyOutputChanged()
         {

@@ -20,11 +20,22 @@ namespace Milestro.Components
             new Dictionary<MeshRenderer, bool>();
         private readonly List<GroupKey> staleKeys = new List<GroupKey>();
         private readonly List<Vector2> combinedUvs = new List<Vector2>();
+        private readonly HashSet<RenderTextureMeshPresenter> subscribedPresenters =
+            new HashSet<RenderTextureMeshPresenter>();
+        private readonly HashSet<RenderTextureMeshPresenter> presenterSetScratch =
+            new HashSet<RenderTextureMeshPresenter>();
+        private readonly List<RenderTextureMeshPresenter> stalePresenterSubscriptions =
+            new List<RenderTextureMeshPresenter>();
+        private readonly HashSet<RenderTextureMeshPresenter> changedPresenters =
+            new HashSet<RenderTextureMeshPresenter>();
         private List<Observation> observations = new List<Observation>();
         private List<Observation> scratchObservations = new List<Observation>();
-        private bool dirty = true;
+        private bool hierarchyDirty = true;
+        private bool visualDirty = true;
         private bool rebuilding;
         private int lastFrame = -1;
+        private int nextPresenterRescanFrame;
+        private int nextFullObservationFrame;
 
         public int BatchedRendererCount { get; private set; }
         public int BatchedTextCount { get; private set; }
@@ -36,7 +47,8 @@ namespace Milestro.Components
 
         private void OnEnable()
         {
-            dirty = true;
+            hierarchyDirty = true;
+            visualDirty = true;
             lastFrame = -1;
             Camera.onPreCull += BeforeCamera;
             RenderPipelineManager.beginContextRendering += BeforeRenderPipeline;
@@ -47,6 +59,7 @@ namespace Milestro.Components
             Camera.onPreCull -= BeforeCamera;
             RenderPipelineManager.beginContextRendering -= BeforeRenderPipeline;
             RestoreObservations(observations);
+            ClearPresenterSubscriptions();
             foreach (var group in groups.Values)
             {
                 DestroyGenerated(group);
@@ -71,13 +84,13 @@ namespace Milestro.Components
         {
             if (!rebuilding)
             {
-                dirty = true;
+                hierarchyDirty = true;
             }
         }
 
         private void OnValidate()
         {
-            dirty = true;
+            hierarchyDirty = true;
         }
 
         private void BeforeCamera(Camera camera)
@@ -92,38 +105,149 @@ namespace Milestro.Components
 
         internal void UpdateBatches(bool force)
         {
-            if (!force && lastFrame == Time.frameCount && !dirty)
+            var profiling = SlimTextPipelineProfiler.Enabled;
+            using var profilerScope = profiling
+                ? SlimTextPipelineProfiler.WorldTextBatchUpdateMarker.Auto()
+                : default;
+            var phaseStart = profiling ? SlimTextPipelineProfiler.Timestamp : 0;
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.WorldTextBatchUpdateCalls++;
+            }
+
+            try
+            {
+                UpdateBatchesCore(force);
+            }
+            finally
+            {
+                if (profiling)
+                {
+                    SlimTextPipelineProfiler.WorldTextBatchUpdateMs +=
+                        SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+                }
+            }
+        }
+
+        private void UpdateBatchesCore(bool force)
+        {
+            if (!force && lastFrame == Time.frameCount && !hierarchyDirty && !visualDirty)
             {
                 DisableManagedOriginals(observations);
                 return;
             }
             lastFrame = Time.frameCount;
-            GetComponentsInChildren(true, presenters);
+            var needsPresenterRescan = force || hierarchyDirty || presenters.Count == 0 ||
+                                       Time.frameCount >= nextPresenterRescanFrame;
+            if (!needsPresenterRescan)
+            {
+                for (var index = 0; index < presenters.Count; ++index)
+                {
+                    if (presenters[index] == null)
+                    {
+                        needsPresenterRescan = true;
+                        break;
+                    }
+                }
+            }
+            if (needsPresenterRescan)
+            {
+                GetComponentsInChildren(true, presenters);
+                nextPresenterRescanFrame = Time.frameCount + 30;
+                SyncPresenterSubscriptions();
+            }
+            var periodicObservationScan = Time.frameCount >= nextFullObservationFrame;
+            if (!force && !hierarchyDirty && !visualDirty && !needsPresenterRescan &&
+                !periodicObservationScan)
+            {
+                if (!PresenterTransformsChanged())
+                {
+                    return;
+                }
+                visualDirty = true;
+            }
+            var fullObservationScan = force || hierarchyDirty || needsPresenterRescan ||
+                                      periodicObservationScan;
+            if (fullObservationScan)
+            {
+                nextFullObservationFrame = Time.frameCount + 30;
+            }
             scratchObservations.Clear();
-            var changed = force || dirty || observations.Count != presenters.Count;
+            var changed = force || hierarchyDirty || observations.Count != presenters.Count;
             var worldToLocal = transform.worldToLocalMatrix;
+            var profiling = SlimTextPipelineProfiler.Enabled;
+            var observeStart = profiling ? SlimTextPipelineProfiler.Timestamp : 0;
+            using var observeScope = profiling
+                ? SlimTextPipelineProfiler.WorldTextBatchObserveMarker.Auto()
+                : default;
             for (var index = 0; index < presenters.Count; ++index)
             {
                 var presenter = presenters[index];
                 Observation? previous = index < observations.Count ? observations[index] : null;
-                var current = Observation.Create(presenter, previous, worldToLocal);
+                Observation current;
+                if (fullObservationScan || !previous.HasValue)
+                {
+                    current = Observation.Create(presenter, previous, worldToLocal);
+                }
+                else if (changedPresenters.Contains(presenter))
+                {
+                    current = previous.Value.Valid
+                        ? Observation.Refresh(presenter, previous.Value, worldToLocal)
+                        : Observation.Create(presenter, previous, worldToLocal);
+                }
+                else if (ReferenceEquals(presenter, previous.Value.Presenter) &&
+                         !previous.Value.Transform.hasChanged)
+                {
+                    current = previous.Value;
+                }
+                else if (ReferenceEquals(presenter, previous.Value.Presenter) &&
+                         (worldToLocal * previous.Value.Transform.localToWorldMatrix).Equals(
+                             previous.Value.RelativeTransform))
+                {
+                    previous.Value.Transform.hasChanged = false;
+                    current = previous.Value;
+                }
+                else if (previous.Value.Valid)
+                {
+                    previous.Value.Transform.hasChanged = false;
+                    current = Observation.Refresh(presenter, previous.Value, worldToLocal);
+                }
+                else
+                {
+                    current = Observation.Create(presenter, previous, worldToLocal);
+                }
                 scratchObservations.Add(current);
-                if (!changed && !current.Equals(previous!.Value))
+                if (!changed && !current.VisualEquals(previous!.Value))
                 {
                     changed = true;
                 }
             }
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.WorldTextBatchObserveMs +=
+                    SlimTextPipelineProfiler.ElapsedMs(observeStart);
+            }
+            changedPresenters.Clear();
             if (!changed)
             {
-                DisableManagedOriginals(scratchObservations);
+                if (fullObservationScan)
+                {
+                    DisableManagedOriginals(scratchObservations);
+                }
+                hierarchyDirty = false;
+                visualDirty = false;
+                var unusedObservations = observations;
+                observations = scratchObservations;
+                scratchObservations = unusedObservations;
                 return;
             }
 
-            dirty = false;
+            hierarchyDirty = false;
+            visualDirty = false;
             rebuilding = true;
             try
             {
-                RebuildGroups(scratchObservations);
+                RebuildGroups(scratchObservations, force);
             }
             finally
             {
@@ -134,16 +258,47 @@ namespace Milestro.Components
             scratchObservations = previousObservations;
         }
 
-        private void RebuildGroups(List<Observation> currentObservations)
+        private void RebuildGroups(List<Observation> currentObservations, bool forceRebuild)
         {
-            RestoreObservations(observations);
+            var profiling = SlimTextPipelineProfiler.Enabled;
+            var stateStart = profiling ? SlimTextPipelineProfiler.Timestamp : 0;
+            var samePresenters = observations.Count == currentObservations.Count;
+            if (samePresenters)
+            {
+                for (var index = 0; index < observations.Count; ++index)
+                {
+                    if (!ReferenceEquals(observations[index].Presenter,
+                            currentObservations[index].Presenter))
+                    {
+                        samePresenters = false;
+                        break;
+                    }
+                }
+            }
+            if (!samePresenters)
+            {
+                using (profiling
+                           ? SlimTextPipelineProfiler.WorldTextBatchOriginalStateMarker.Auto()
+                           : default)
+                {
+                    RestoreObservations(observations);
+                }
+            }
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.WorldTextBatchOriginalStateMs +=
+                    SlimTextPipelineProfiler.ElapsedMs(stateStart);
+                stateStart = SlimTextPipelineProfiler.Timestamp;
+            }
             foreach (var group in groups.Values)
             {
                 group.Seen = false;
                 group.Entries.Clear();
+                group.PendingUpdate = GroupUpdate.None;
             }
-            foreach (var observation in currentObservations)
+            for (var index = 0; index < currentObservations.Count; ++index)
             {
+                var observation = currentObservations[index];
                 if (!observation.Valid)
                 {
                     continue;
@@ -152,6 +307,23 @@ namespace Milestro.Components
                 {
                     group = new Group(observation.Key);
                     groups.Add(observation.Key, group);
+                }
+                var update = GroupUpdate.Mesh;
+                if (!forceRebuild && index < observations.Count)
+                {
+                    var previous = observations[index];
+                    if (observation.VisualEquals(previous))
+                    {
+                        update = GroupUpdate.None;
+                    }
+                    else if (group.GeneratedRenderer != null && observation.CanUpdateUvsOnly(previous))
+                    {
+                        update = GroupUpdate.Uvs;
+                    }
+                }
+                if ((int)update > (int)group.PendingUpdate)
+                {
+                    group.PendingUpdate = update;
                 }
                 group.Seen = true;
                 group.Entries.Add(observation);
@@ -174,8 +346,16 @@ namespace Milestro.Components
                     DestroyGenerated(group);
                     continue;
                 }
+                var hadGeneratedMesh = group.GeneratedRenderer != null;
                 EnsureGenerated(group);
-                RebuildMesh(group);
+                if (!hadGeneratedMesh || group.PendingUpdate == GroupUpdate.Mesh)
+                {
+                    RebuildMesh(group);
+                }
+                else if (group.PendingUpdate == GroupUpdate.Uvs && !UpdateMeshUvs(group))
+                {
+                    RebuildMesh(group);
+                }
                 ++BatchedRendererCount;
                 BatchedTextCount += group.Entries.Count;
             }
@@ -184,30 +364,138 @@ namespace Milestro.Components
                 groups.Remove(key);
             }
 
-            foreach (var observation in currentObservations)
+            using (profiling
+                       ? SlimTextPipelineProfiler.WorldTextBatchOriginalStateMarker.Auto()
+                       : default)
             {
-                if (observation.Valid && groups.TryGetValue(observation.Key, out var group) &&
-                    group.Entries.Count >= 2 && group.GeneratedRenderer != null)
+                foreach (var observation in currentObservations)
                 {
-                    DisableOriginal(observation);
+                    if (observation.Valid && groups.TryGetValue(observation.Key, out var group) &&
+                        group.Entries.Count >= 2 && group.GeneratedRenderer != null)
+                    {
+                        DisableOriginal(observation);
+                    }
+                    else
+                    {
+                        RestoreOriginal(observation);
+                    }
                 }
-                else
-                {
-                    RestoreOriginal(observation);
-                }
+            }
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.WorldTextBatchOriginalStateMs +=
+                    SlimTextPipelineProfiler.ElapsedMs(stateStart);
             }
         }
 
         private void DisableManagedOriginals(List<Observation> currentObservations)
         {
+            var profiling = SlimTextPipelineProfiler.Enabled;
+            var phaseStart = profiling ? SlimTextPipelineProfiler.Timestamp : 0;
+            using var profilerScope = profiling
+                ? SlimTextPipelineProfiler.WorldTextBatchOriginalStateMarker.Auto()
+                : default;
             foreach (var observation in currentObservations)
             {
                 if (observation.Valid && groups.TryGetValue(observation.Key, out var group) &&
                     group.Entries.Count >= 2 && group.GeneratedRenderer != null)
                 {
-                    DisableOriginal(observation);
+                    DisableOriginal(observation, verifyEnabled: true);
                 }
             }
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.WorldTextBatchOriginalStateMs +=
+                    SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+            }
+        }
+
+        private bool PresenterTransformsChanged()
+        {
+            if (observations.Count != presenters.Count)
+            {
+                return true;
+            }
+
+            var worldToLocal = transform.worldToLocalMatrix;
+            for (var index = 0; index < presenters.Count; ++index)
+            {
+                var presenter = presenters[index];
+                var previous = observations[index];
+                if (presenter == null || !ReferenceEquals(presenter, previous.Presenter))
+                {
+                    return true;
+                }
+
+                if (!previous.Transform.hasChanged)
+                {
+                    continue;
+                }
+
+                previous.Transform.hasChanged = false;
+                var relativeTransform = worldToLocal * previous.Transform.localToWorldMatrix;
+                if (!relativeTransform.Equals(previous.RelativeTransform))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void SyncPresenterSubscriptions()
+        {
+            presenterSetScratch.Clear();
+            foreach (var presenter in presenters)
+            {
+                if (presenter == null || !presenterSetScratch.Add(presenter))
+                {
+                    continue;
+                }
+
+                if (subscribedPresenters.Add(presenter))
+                {
+                    presenter.VisualStateChanged += OnPresenterVisualStateChanged;
+                }
+            }
+
+            stalePresenterSubscriptions.Clear();
+            foreach (var presenter in subscribedPresenters)
+            {
+                if (!presenterSetScratch.Contains(presenter))
+                {
+                    stalePresenterSubscriptions.Add(presenter);
+                }
+            }
+            foreach (var presenter in stalePresenterSubscriptions)
+            {
+                if (presenter != null)
+                {
+                    presenter.VisualStateChanged -= OnPresenterVisualStateChanged;
+                }
+                subscribedPresenters.Remove(presenter!);
+            }
+        }
+
+        private void ClearPresenterSubscriptions()
+        {
+            foreach (var presenter in subscribedPresenters)
+            {
+                if (presenter != null)
+                {
+                    presenter.VisualStateChanged -= OnPresenterVisualStateChanged;
+                }
+            }
+            subscribedPresenters.Clear();
+            presenterSetScratch.Clear();
+            stalePresenterSubscriptions.Clear();
+            changedPresenters.Clear();
+        }
+
+        private void OnPresenterVisualStateChanged(RenderTextureMeshPresenter presenter)
+        {
+            visualDirty = true;
+            changedPresenters.Add(presenter);
         }
 
         private void EnsureGenerated(Group group)
@@ -250,6 +538,16 @@ namespace Milestro.Components
 
         private void RebuildMesh(Group group)
         {
+            var profiling = SlimTextPipelineProfiler.Enabled;
+            using var profilerScope = profiling
+                ? SlimTextPipelineProfiler.WorldTextBatchMeshMarker.Auto()
+                : default;
+            var phaseStart = profiling ? SlimTextPipelineProfiler.Timestamp : 0;
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.WorldTextBatchMeshCalls++;
+            }
+
             var mesh = group.Mesh!;
             mesh.Clear();
             mesh.indexFormat = IndexFormat.UInt32;
@@ -267,26 +565,77 @@ namespace Milestro.Components
                 expectedVertexCount += entry.Mesh!.vertexCount;
             }
             mesh.CombineMeshes(instances, true, true, false);
-            mesh.GetUVs(0, combinedUvs);
-            if (mesh.vertexCount == expectedVertexCount && combinedUvs.Count == expectedVertexCount)
+            group.BaseUvs.Clear();
+            mesh.GetUVs(0, group.BaseUvs);
+            if (mesh.vertexCount == expectedVertexCount && group.BaseUvs.Count == expectedVertexCount)
             {
-                var vertexOffset = 0;
-                foreach (var entry in group.Entries)
-                {
-                    var uvRect = entry.UvRect;
-                    var vertexCount = entry.Mesh!.vertexCount;
-                    for (var index = 0; index < vertexCount; ++index)
-                    {
-                        var uv = combinedUvs[vertexOffset + index];
-                        combinedUvs[vertexOffset + index] = new Vector2(
-                            uv.x * uvRect.width + uvRect.x,
-                            uv.y * uvRect.height + uvRect.y);
-                    }
-                    vertexOffset += vertexCount;
-                }
-                mesh.SetUVs(0, combinedUvs);
+                ApplyGroupUvs(group);
             }
             mesh.RecalculateBounds();
+
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.WorldTextBatchMeshMs +=
+                    SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+            }
+        }
+
+        private bool UpdateMeshUvs(Group group)
+        {
+            var profiling = SlimTextPipelineProfiler.Enabled;
+            using var profilerScope = profiling
+                ? SlimTextPipelineProfiler.WorldTextBatchUvMarker.Auto()
+                : default;
+            var phaseStart = profiling ? SlimTextPipelineProfiler.Timestamp : 0;
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.WorldTextBatchUvCalls++;
+            }
+
+            var updated = group.Mesh != null && ApplyGroupUvs(group);
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.WorldTextBatchUvMs +=
+                    SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+            }
+
+            return updated;
+        }
+
+        private bool ApplyGroupUvs(Group group)
+        {
+            var mesh = group.Mesh;
+            if (mesh == null || group.BaseUvs.Count == 0 || mesh.vertexCount != group.BaseUvs.Count)
+            {
+                return false;
+            }
+
+            combinedUvs.Clear();
+            combinedUvs.AddRange(group.BaseUvs);
+            var vertexOffset = 0;
+            foreach (var entry in group.Entries)
+            {
+                var uvRect = entry.UvRect;
+                var vertexCount = entry.Mesh!.vertexCount;
+                if (vertexOffset + vertexCount > combinedUvs.Count)
+                {
+                    return false;
+                }
+                for (var index = 0; index < vertexCount; ++index)
+                {
+                    var uv = combinedUvs[vertexOffset + index];
+                    combinedUvs[vertexOffset + index] = new Vector2(
+                        uv.x * uvRect.width + uvRect.x,
+                        uv.y * uvRect.height + uvRect.y);
+                }
+                vertexOffset += vertexCount;
+            }
+            if (vertexOffset != combinedUvs.Count)
+            {
+                return false;
+            }
+            mesh.SetUVs(0, combinedUvs);
+            return true;
         }
 
         private void DestroyGenerated(Group group)
@@ -306,19 +655,25 @@ namespace Milestro.Components
             group.GeneratedFilter = null;
             group.GeneratedRenderer = null;
             group.Mesh = null;
+            group.BaseUvs.Clear();
         }
 
-        private void DisableOriginal(Observation observation)
+        private void DisableOriginal(Observation observation, bool verifyEnabled = false)
         {
             var targetRenderer = observation.Renderer;
             if (targetRenderer == null)
             {
                 return;
             }
-            if (!originalRendererStates.ContainsKey(targetRenderer))
+            if (originalRendererStates.ContainsKey(targetRenderer))
             {
-                originalRendererStates.Add(targetRenderer, targetRenderer.enabled);
+                if (verifyEnabled && targetRenderer.enabled)
+                {
+                    targetRenderer.enabled = false;
+                }
+                return;
             }
+            originalRendererStates.Add(targetRenderer, targetRenderer.enabled);
             targetRenderer.enabled = false;
         }
 
@@ -365,7 +720,9 @@ namespace Milestro.Components
         {
             internal readonly GroupKey Key;
             internal readonly List<Observation> Entries = new List<Observation>();
+            internal readonly List<Vector2> BaseUvs = new List<Vector2>();
             internal bool Seen;
+            internal GroupUpdate PendingUpdate;
             internal MeshFilter? GeneratedFilter;
             internal MeshRenderer? GeneratedRenderer;
             internal Mesh? Mesh;
@@ -376,42 +733,61 @@ namespace Milestro.Components
             }
         }
 
+        private enum GroupUpdate
+        {
+            None,
+            Uvs,
+            Mesh
+        }
+
         private readonly struct Observation
         {
             internal readonly RenderTextureMeshPresenter Presenter;
+            internal readonly Transform Transform;
             internal readonly RenderTextureProducer? Producer;
             internal readonly MeshFilter? Filter;
             internal readonly MeshRenderer? Renderer;
             internal readonly Mesh? Mesh;
             internal readonly Rect UvRect;
+            internal readonly Matrix4x4 LocalToWorld;
             internal readonly Matrix4x4 RelativeTransform;
             internal readonly Bounds MeshBounds;
+            internal readonly int VertexCount;
+            internal readonly long VisualVersion;
             internal readonly GroupKey Key;
             internal readonly bool Active;
             internal readonly bool HasOutput;
             internal readonly bool Valid;
 
             private Observation(RenderTextureMeshPresenter presenter,
+                Transform transform,
                 RenderTextureProducer? producer,
                 MeshFilter? filter,
                 MeshRenderer? renderer,
                 Mesh? mesh,
                 Rect uvRect,
+                Matrix4x4 localToWorld,
                 Matrix4x4 relativeTransform,
                 Bounds meshBounds,
+                int vertexCount,
+                long visualVersion,
                 GroupKey key,
                 bool active,
                 bool hasOutput,
                 bool valid)
             {
                 Presenter = presenter;
+                Transform = transform;
                 Producer = producer;
                 Filter = filter;
                 Renderer = renderer;
                 Mesh = mesh;
                 UvRect = uvRect;
+                LocalToWorld = localToWorld;
                 RelativeTransform = relativeTransform;
                 MeshBounds = meshBounds;
+                VertexCount = vertexCount;
+                VisualVersion = visualVersion;
                 Key = key;
                 Active = active;
                 HasOutput = hasOutput;
@@ -445,16 +821,46 @@ namespace Milestro.Components
                 var mesh = filter != null ? filter.sharedMesh : null;
                 var material = targetRenderer != null ? targetRenderer.sharedMaterial : null;
                 var meshBounds = mesh != null ? mesh.bounds : new Bounds();
+                var vertexCount = mesh != null ? mesh.vertexCount : 0;
                 var valid = active && hasOutput && filter != null && targetRenderer != null &&
                             mesh != null && material != null && mesh.subMeshCount == 1;
                 var key = GroupKey.Create(material, texture, presenter.TexturePropertyName,
                     presenter.gameObject.layer, targetRenderer);
-                return new Observation(presenter, producer, filter, targetRenderer, mesh, uvRect,
-                    worldToLocal * presenter.transform.localToWorldMatrix, meshBounds, key,
-                    active, hasOutput, valid);
+                var transform = presenter.transform;
+                var localToWorld = transform.localToWorldMatrix;
+                transform.hasChanged = false;
+                var visualVersion = producer != null ? producer.VisualVersion : 0;
+                return new Observation(presenter, transform, producer, filter, targetRenderer, mesh, uvRect,
+                    localToWorld, worldToLocal * localToWorld, meshBounds, vertexCount,
+                    visualVersion, key, active, hasOutput, valid);
             }
 
-            internal bool Equals(Observation other)
+            internal static Observation Refresh(RenderTextureMeshPresenter presenter,
+                Observation previous,
+                Matrix4x4 worldToLocal)
+            {
+                var transform = presenter.transform;
+                var localToWorld = transform.localToWorldMatrix;
+                transform.hasChanged = false;
+                var producer = presenter.Producer ?? previous.Producer;
+                var active = presenter.isActiveAndEnabled;
+                var texture = producer != null && producer.HasOutput ? producer.OutputTexture : null;
+                var hasOutput = texture != null;
+                var uvRect = hasOutput ? producer!.OutputUvRect : DefaultUvRect;
+                var targetRenderer = previous.Renderer;
+                var material = targetRenderer != null ? targetRenderer.sharedMaterial : null;
+                var valid = active && hasOutput && previous.Filter != null && targetRenderer != null &&
+                            previous.Mesh != null && material != null && previous.Mesh.subMeshCount == 1;
+                var key = GroupKey.Create(material, texture, presenter.TexturePropertyName,
+                    presenter.gameObject.layer, targetRenderer);
+                var visualVersion = producer != null ? producer.VisualVersion : 0;
+                return new Observation(presenter, transform, producer, previous.Filter, targetRenderer,
+                    previous.Mesh, uvRect, localToWorld, worldToLocal * localToWorld,
+                    previous.MeshBounds, previous.VertexCount, visualVersion, key, active,
+                    hasOutput, valid);
+            }
+
+            internal bool VisualEquals(Observation other)
             {
                 return ReferenceEquals(Presenter, other.Presenter) &&
                        ReferenceEquals(Producer, other.Producer) &&
@@ -462,10 +868,41 @@ namespace Milestro.Components
                        ReferenceEquals(Renderer, other.Renderer) &&
                        ReferenceEquals(Mesh, other.Mesh) &&
                        UvRect.Equals(other.UvRect) &&
+                       LocalToWorld.Equals(other.LocalToWorld) &&
                        RelativeTransform.Equals(other.RelativeTransform) &&
                        MeshBounds.Equals(other.MeshBounds) &&
+                       VertexCount == other.VertexCount &&
+                       VisualVersion == other.VisualVersion &&
                        Key.Equals(other.Key) &&
                        Active == other.Active &&
+                       HasOutput == other.HasOutput &&
+                       Valid == other.Valid;
+            }
+
+            internal bool CanUpdateUvsOnly(Observation other)
+            {
+                return !UvRect.Equals(other.UvRect) &&
+                       TopologyEquals(other) &&
+                       CanRemainInGroup(other);
+            }
+
+            private bool TopologyEquals(Observation other)
+            {
+                return ReferenceEquals(Presenter, other.Presenter) &&
+                       ReferenceEquals(Producer, other.Producer) &&
+                       ReferenceEquals(Filter, other.Filter) &&
+                       ReferenceEquals(Renderer, other.Renderer) &&
+                       ReferenceEquals(Mesh, other.Mesh) &&
+                       LocalToWorld.Equals(other.LocalToWorld) &&
+                       RelativeTransform.Equals(other.RelativeTransform) &&
+                       MeshBounds.Equals(other.MeshBounds) &&
+                       VertexCount == other.VertexCount &&
+                       Key.Equals(other.Key);
+            }
+
+            private bool CanRemainInGroup(Observation other)
+            {
+                return Active == other.Active &&
                        HasOutput == other.HasOutput &&
                        Valid == other.Valid;
             }

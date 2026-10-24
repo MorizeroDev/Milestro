@@ -33,6 +33,9 @@ namespace Milestro.Components.Internal
         private UnitySkiaRenderTextureSurface.SlimTextNoAllocSubmission? retiredNoAllocSubmission;
         private UnitySkiaRenderTextureSurface.SlimTextNoAllocSubmission? noAllocSubmission;
         private long outputVersion;
+        private long visualVersion;
+        private Texture? visibleTexture;
+        private Rect visibleUvRect = DefaultUvRect;
         private Vector2Int logicalSizePixels = Vector2Int.one;
 
         public Texture? OutputTexture => surface?.Texture;
@@ -41,6 +44,12 @@ namespace Milestro.Components.Internal
         public int OutputHeight => surface?.Height ?? 0;
         public bool HasOutput => surface?.HasCompletedOutput ?? false;
         public long OutputVersion => outputVersion;
+        public long VisualVersion => visualVersion;
+        internal bool HasPendingWork => surface == null ||
+                                        !surface.HasCompletedOutput ||
+                                        styleChanged ||
+                                        paintChanged ||
+                                        noAllocMode && noAllocTextChanged;
 
         public event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus>? RenderEventCompleted;
 
@@ -326,9 +335,11 @@ namespace Milestro.Components.Internal
 
         private bool EnsureFont(SlimTextRenderTargetSettings settings)
         {
+            using var profilerScope = SlimTextPipelineProfiler.Enabled
+                ? SlimTextPipelineProfiler.EnsureFontMarker.Auto()
+                : default;
             var nextFontSize = NormalizeFontSize(settings.FontSize);
             var needsResolve = font == null ||
-                               styleChanged ||
                                resolvedFontFamily != settings.FontFamily ||
                                resolvedFontWeight != settings.FontWeight ||
                                !Mathf.Approximately(resolvedFontSize, nextFontSize) ||
@@ -437,6 +448,9 @@ namespace Milestro.Components.Internal
         private bool RebuildFastManaged(SlimTextRenderTargetSettings settings, bool fontChanged)
         {
             var profiling = SlimTextPipelineProfiler.Enabled;
+            using var profilerScope = profiling
+                ? SlimTextPipelineProfiler.RebuildFastManagedMarker.Auto()
+                : default;
             var phaseStart = profiling ? SlimTextPipelineProfiler.Timestamp : 0;
 
             var text = settings.Text;
@@ -460,21 +474,41 @@ namespace Milestro.Components.Internal
             }
 
             var byteCount = Encoding.UTF8.GetByteCount(text);
-            EnsureFastSnapshot(settings, fontChanged, byteCount);
-            var snapshot = fastSnapshot!;
-            if (byteCount <= 512)
+            using (profiling ? SlimTextPipelineProfiler.EnsureSnapshotMarker.Auto() : default)
             {
-                Span<byte> buffer = stackalloc byte[512];
-                var written = Encoding.UTF8.GetBytes(text.AsSpan(), buffer);
-                snapshot.UpdateText(buffer.Slice(0, written));
+                EnsureFastSnapshot(settings, fontChanged, byteCount);
             }
-            else
+            if (profiling)
             {
-                var payload = Encoding.UTF8.GetBytes(text);
-                snapshot.UpdateText(payload, 0, payload.Length);
+                SlimTextPipelineProfiler.EnsureSnapshotMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+                phaseStart = SlimTextPipelineProfiler.Timestamp;
+            }
+            var snapshot = fastSnapshot!;
+            using (profiling ? SlimTextPipelineProfiler.EncodeUpdateTextMarker.Auto() : default)
+            {
+                if (byteCount <= 512)
+                {
+                    Span<byte> buffer = stackalloc byte[512];
+                    var written = Encoding.UTF8.GetBytes(text.AsSpan(), buffer);
+                    snapshot.UpdateText(buffer.Slice(0, written));
+                }
+                else
+                {
+                    var payload = Encoding.UTF8.GetBytes(text);
+                    snapshot.UpdateText(payload, 0, payload.Length);
+                }
+            }
+            if (profiling)
+            {
+                SlimTextPipelineProfiler.EncodeUpdateTextMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+                phaseStart = SlimTextPipelineProfiler.Timestamp;
             }
 
-            var measurement = snapshot.MeasureText();
+            FontTextMeasurement measurement;
+            using (profiling ? SlimTextPipelineProfiler.MeasureTextMarker.Auto() : default)
+            {
+                measurement = snapshot.MeasureText();
+            }
             if (profiling)
             {
                 SlimTextPipelineProfiler.FastPathCalls++;
@@ -483,7 +517,12 @@ namespace Milestro.Components.Internal
             }
 
             var baseline = ResolveBaseline(settings, measurement);
-            if (!surface!.TrySubmitSlimTextFast(snapshot, baseline))
+            bool submitted;
+            using (profiling ? SlimTextPipelineProfiler.SubmitFastMarker.Auto() : default)
+            {
+                submitted = surface!.TrySubmitSlimTextFast(snapshot, baseline);
+            }
+            if (!submitted)
             {
                 paintChanged = true;
                 return false;
@@ -627,6 +666,12 @@ namespace Milestro.Components.Internal
                 paintChanged = true;
                 noAllocTextChanged = noAllocMode || noAllocTextChanged;
             }
+            else if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Failed)
+            {
+                styleChanged = true;
+                paintChanged = true;
+                noAllocTextChanged = noAllocMode || noAllocTextChanged;
+            }
 
             RenderEventCompleted?.Invoke(status);
 
@@ -681,6 +726,14 @@ namespace Milestro.Components.Internal
             unchecked
             {
                 ++outputVersion;
+                var nextTexture = OutputTexture;
+                var nextUvRect = OutputUvRect;
+                if (!ReferenceEquals(visibleTexture, nextTexture) || visibleUvRect != nextUvRect)
+                {
+                    visibleTexture = nextTexture;
+                    visibleUvRect = nextUvRect;
+                    ++visualVersion;
+                }
             }
         }
 

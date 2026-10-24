@@ -7,6 +7,8 @@ namespace Milestro.Skia
 {
     public sealed class UnityAutoRenderTextureSurface : IDisposable
     {
+        private static ulong cachedDeviceEpoch;
+        private static int cachedDeviceEpochFrame = int.MinValue;
         private readonly UnitySkiaRenderTextureSurface surface;
 
         public UnitySkiaGraphicsBackend Backend => surface.Backend;
@@ -79,7 +81,16 @@ namespace Milestro.Skia
 
         internal static ulong ReadCurrentDeviceEpoch()
         {
-            return UnitySkiaRenderTextureSurface.ReadCurrentDeviceEpoch();
+            var frame = Time.frameCount;
+            if (cachedDeviceEpochFrame == frame)
+            {
+                return cachedDeviceEpoch;
+            }
+
+            var deviceEpoch = UnitySkiaRenderTextureSurface.ReadCurrentDeviceEpoch();
+            cachedDeviceEpoch = deviceEpoch;
+            cachedDeviceEpochFrame = frame;
+            return deviceEpoch;
         }
 
         public static UnitySkiaGraphicsBackend SelectBackendForCurrentGraphicsDevice()
