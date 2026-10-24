@@ -8,8 +8,21 @@
 
 extern "C" {
 int64_t MilestroSkiaTextlayoutParagraphDestroy(milestro::skia::textlayout::Paragraph *&ret) try {
-    delete ret;
+    if (ret != nullptr) {
+        ret->release();
+    }
     ret = nullptr;
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutParagraphRetain(milestro::skia::textlayout::Paragraph *p) try {
+    if (p == nullptr) {
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    p->retain();
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;

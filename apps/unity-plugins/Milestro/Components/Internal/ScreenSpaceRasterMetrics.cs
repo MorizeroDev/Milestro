@@ -186,5 +186,102 @@ namespace Milestro.Components.Internal
         {
             return FloatUtil.IsFinite(value) && value > MinimumEdgeLength;
         }
+
+        internal static bool TryCapture(RectTransform rectTransform,
+            Canvas? canvas,
+            out RasterizationContext context)
+        {
+            context = default;
+            if (rectTransform == null || canvas == null)
+            {
+                return false;
+            }
+
+            var rootCanvas = canvas.rootCanvas != null ? canvas.rootCanvas : canvas;
+            var eventCamera = ResolveEventCamera(rootCanvas);
+            var targetDisplay = ResolveTargetDisplay(rootCanvas, eventCamera);
+            if (targetDisplay < 0)
+            {
+                return false;
+            }
+
+            context = new RasterizationContext(rootCanvas,
+                eventCamera,
+                rootCanvas.renderMode,
+                targetDisplay,
+                rectTransform.localToWorldMatrix,
+                rootCanvas.transform.localToWorldMatrix,
+                eventCamera != null ? eventCamera.transform.localToWorldMatrix : Matrix4x4.identity,
+                eventCamera != null ? eventCamera.projectionMatrix : Matrix4x4.identity,
+                rootCanvas.pixelRect,
+                eventCamera != null ? eventCamera.pixelRect : default,
+                rootCanvas.scaleFactor,
+                Screen.width,
+                Screen.height);
+            return true;
+        }
+
+        internal readonly struct RasterizationContext
+        {
+            internal RasterizationContext(Canvas rootCanvas,
+                Camera? eventCamera,
+                RenderMode renderMode,
+                int targetDisplay,
+                Matrix4x4 rectToWorld,
+                Matrix4x4 canvasToWorld,
+                Matrix4x4 cameraToWorld,
+                Matrix4x4 cameraProjection,
+                Rect canvasPixelRect,
+                Rect cameraPixelRect,
+                float canvasScaleFactor,
+                int screenWidth,
+                int screenHeight)
+            {
+                RootCanvas = rootCanvas;
+                EventCamera = eventCamera;
+                RenderMode = renderMode;
+                TargetDisplay = targetDisplay;
+                RectToWorld = rectToWorld;
+                CanvasToWorld = canvasToWorld;
+                CameraToWorld = cameraToWorld;
+                CameraProjection = cameraProjection;
+                CanvasPixelRect = canvasPixelRect;
+                CameraPixelRect = cameraPixelRect;
+                CanvasScaleFactor = canvasScaleFactor;
+                ScreenWidth = screenWidth;
+                ScreenHeight = screenHeight;
+            }
+
+            internal Canvas RootCanvas { get; }
+            internal Camera? EventCamera { get; }
+            internal RenderMode RenderMode { get; }
+            internal int TargetDisplay { get; }
+            internal Matrix4x4 RectToWorld { get; }
+            internal Matrix4x4 CanvasToWorld { get; }
+            internal Matrix4x4 CameraToWorld { get; }
+            internal Matrix4x4 CameraProjection { get; }
+            internal Rect CanvasPixelRect { get; }
+            internal Rect CameraPixelRect { get; }
+            internal float CanvasScaleFactor { get; }
+            internal int ScreenWidth { get; }
+            internal int ScreenHeight { get; }
+
+            internal bool Matches(in RasterizationContext other)
+            {
+                return RootCanvas == other.RootCanvas &&
+                       EventCamera == other.EventCamera &&
+                       RenderMode == other.RenderMode &&
+                       TargetDisplay == other.TargetDisplay &&
+                       RectToWorld == other.RectToWorld &&
+                       CanvasToWorld == other.CanvasToWorld &&
+                       CameraToWorld == other.CameraToWorld &&
+                       CameraProjection == other.CameraProjection &&
+                       CanvasPixelRect == other.CanvasPixelRect &&
+                       CameraPixelRect == other.CameraPixelRect &&
+                       CanvasScaleFactor == other.CanvasScaleFactor &&
+                       ScreenWidth == other.ScreenWidth &&
+                       ScreenHeight == other.ScreenHeight;
+            }
+        }
     }
 }

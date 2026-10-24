@@ -12,6 +12,7 @@ namespace Milestro.Components.Internal
         int OutputWidth { get; }
         int OutputHeight { get; }
         bool HasOutput { get; }
+        bool HasPendingWork { get; }
         long OutputVersion { get; }
         Vector2 ScrollOffset { get; }
         Vector2 ContentSize { get; }
@@ -22,6 +23,7 @@ namespace Milestro.Components.Internal
         event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus>? RenderEventCompleted;
 
         void MarkPropertiesChanged();
+        void MarkContentChanged();
         void MarkPaintChanged();
         bool TryHitLink(Vector2 normalizedViewportPoint, out TextBoxLinkHit hit);
         bool TryGetContentSnapshot(out TextBoxContentSnapshot snapshot);

@@ -110,6 +110,13 @@ namespace Milestro.RichTextParser
 
         public void ParseText(string str)
         {
+            str ??= "";
+            if (str.IndexOf('<') < 0 && str.IndexOf('&') < 0)
+            {
+                RootNode = new XmlTextNode(str);
+                return;
+            }
+
             str = $"<root>{str}</root>";
             var data = new MemoryStream(Encoding.UTF8.GetBytes(str));
             try

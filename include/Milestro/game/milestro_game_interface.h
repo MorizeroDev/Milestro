@@ -291,6 +291,7 @@ MILESTRO_API int64_t MilestroSkiaImageGetHeight(milestro::skia::Image* img, int3
 MILESTRO_API int64_t MilestroSkiaImageDestroy(milestro::skia::Image*& ret);
 
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphDestroy(milestro::skia::textlayout::Paragraph*& ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphRetain(milestro::skia::textlayout::Paragraph* p);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphLayout(milestro::skia::textlayout::Paragraph* p, float width);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetHeight(milestro::skia::textlayout::Paragraph* p, float& height);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetLongestLine(milestro::skia::textlayout::Paragraph* p,

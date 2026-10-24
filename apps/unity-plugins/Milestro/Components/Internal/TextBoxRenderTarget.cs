@@ -53,6 +53,9 @@ namespace Milestro.Components.Internal
         private long contentVersion;
         private bool hasContentSource;
         private TextBoxLinkGeometryPublication linkGeometryPublication;
+        private ParagraphStyle? cachedParagraphStyle;
+        private TextStyle? cachedTextStyle;
+        private bool stylesChanged = true;
         private long pendingCompletionToken;
         private TextBoxRenderViewport pendingViewport;
         private ColorSpace pendingColorSpace;
@@ -68,6 +71,11 @@ namespace Milestro.Components.Internal
         public int OutputWidth => surface?.Width ?? 0;
         public int OutputHeight => surface?.Height ?? 0;
         public bool HasOutput => surface?.HasCompletedOutput ?? false;
+        public bool HasPendingWork => layoutChanged ||
+                                      paintChanged ||
+                                      linkGeometryPublication.HasPending ||
+                                      surface == null ||
+                                      !surface.HasCompletedOutput;
         public long OutputVersion => outputVersion;
         public Vector2 ScrollOffset => scrollOffset;
         public Vector2 ContentSize => contentSize;
@@ -78,6 +86,15 @@ namespace Milestro.Components.Internal
         public event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus>? RenderEventCompleted;
 
         public void MarkPropertiesChanged()
+        {
+            stylesChanged = true;
+            layoutChanged = true;
+            paintChanged = true;
+            linkGeometryPublication.InvalidatePublished();
+            linkGeometryPublication.RequestRebuild();
+        }
+
+        public void MarkContentChanged()
         {
             layoutChanged = true;
             paintChanged = true;
@@ -168,6 +185,7 @@ namespace Milestro.Components.Internal
             ValidateMargin(settings.Margin);
             if (forceText)
             {
+                stylesChanged = true;
                 layoutChanged = true;
                 paintChanged = true;
                 linkGeometryPublication.InvalidatePublished();
@@ -183,6 +201,7 @@ namespace Milestro.Components.Internal
                 return false;
             }
 
+            var profiling = TextBoxPipelineProfiler.Enabled;
             var layoutSizePixels = NormalizeSize(viewport.LayoutSizePixels);
             var outputSizePixels = NormalizeSize(viewport.OutputSizePixels);
             var visibleOutputSizePixels = ClampVisibleOutputSize(NormalizeSize(viewport.VisibleOutputSizePixels),
@@ -213,9 +232,19 @@ namespace Milestro.Components.Internal
                 ClearSurfaceOutput();
             }
 
+            var paragraphsRebuilt = false;
             if (forceText || paragraphs.Count == 0 || layoutChanged)
             {
-                ReplaceParagraphs(BuildParagraphs(settings, layoutSizePixels));
+                List<Paragraph> nextParagraphs;
+                using (profiling ? TextBoxPipelineProfiler.BuildParagraphsMarker.Auto() : default)
+                {
+                    nextParagraphs = BuildParagraphs(settings, layoutSizePixels);
+                }
+                using (profiling ? TextBoxPipelineProfiler.RetireParagraphsMarker.Auto() : default)
+                {
+                    ReplaceParagraphs(nextParagraphs);
+                }
+                paragraphsRebuilt = true;
                 needsDraw = true;
             }
             if (linkAnnotations.Count > 0)
@@ -223,7 +252,10 @@ namespace Milestro.Components.Internal
                 linkGeometryPublication.RequireControlledSubmission();
             }
 
-            needsDraw |= ResizeParagraphs(paragraphs, settings, layoutSizePixels);
+            using (profiling ? TextBoxPipelineProfiler.ResizeParagraphsMarker.Auto() : default)
+            {
+                needsDraw |= ResizeParagraphs(paragraphs, settings, layoutSizePixels, paragraphsRebuilt);
+            }
             needsDraw |= UpdateScrollMetrics(settings,
                 layoutSizePixels,
                 visibleOutputSizePixels,
@@ -258,13 +290,19 @@ namespace Milestro.Components.Internal
                 return false;
             }
 
-            var commands = BuildRenderCommands(settings,
-                viewport,
-                layoutSizePixels,
-                visibleOutputSizePixels,
-                logContext,
-                out var paintPosition,
-                out var clipRect);
+            Vector2 paintPosition;
+            Rect clipRect;
+            UnitySkiaRenderCommandList commands;
+            using (profiling ? TextBoxPipelineProfiler.BuildCommandsMarker.Auto() : default)
+            {
+                commands = BuildRenderCommands(settings,
+                    viewport,
+                    layoutSizePixels,
+                    visibleOutputSizePixels,
+                    logContext,
+                    out paintPosition,
+                    out clipRect);
+            }
             var hasHitGeometry = paragraphs.Count > 0 &&
                                  linkAnnotations.Count > 0 &&
                                  clipRect.width > 0f &&
@@ -279,7 +317,12 @@ namespace Milestro.Components.Internal
                     visibleOutputSizePixels,
                     fitScale)
                 : default;
-            if (!TrySubmit(commands, hasHitGeometry, hitGeometry))
+            bool submitted;
+            using (profiling ? TextBoxPipelineProfiler.SubmitMarker.Auto() : default)
+            {
+                submitted = TrySubmit(commands, hasHitGeometry, hitGeometry);
+            }
+            if (!submitted)
             {
                 paintChanged = true;
                 return false;
@@ -296,6 +339,11 @@ namespace Milestro.Components.Internal
         {
             RetireParagraphs();
             DisposeSurface();
+            cachedParagraphStyle?.Dispose();
+            cachedTextStyle?.Dispose();
+            cachedParagraphStyle = null;
+            cachedTextStyle = null;
+            stylesChanged = true;
             layoutChanged = true;
             paintChanged = true;
             paragraphHeight = 0f;
@@ -467,28 +515,38 @@ namespace Milestro.Components.Internal
 
         private List<Paragraph> BuildParagraphs(TextBoxRenderTargetSettings settings, Vector2Int layoutSizePixels)
         {
+            var profiling = TextBoxPipelineProfiler.Enabled;
             var result = CreateParagraphs(settings, out var payload);
-            var plainText = PlainText(payload);
+            string plainText;
+            using (profiling ? TextBoxPipelineProfiler.PlainTextMarker.Auto() : default)
+            {
+                plainText = PlainText(payload);
+            }
             linkAnnotations = payload.Links.Count == 0
                 ? Array.Empty<RichTextParser.LinkAnnotation>()
                 : new List<RichTextParser.LinkAnnotation>(payload.Links);
-            CaptureBlockMetadata(payload, settings);
-            if (!hasContentSource || !string.Equals(contentSource, settings.Content, StringComparison.Ordinal))
+            using (profiling ? TextBoxPipelineProfiler.BlockMetadataMarker.Auto() : default)
             {
-                unchecked
+                CaptureBlockMetadata(payload, settings);
+            }
+            using (profiling ? TextBoxPipelineProfiler.ContentSnapshotMarker.Auto() : default)
+            {
+                if (!hasContentSource || !string.Equals(contentSource, settings.Content, StringComparison.Ordinal))
                 {
-                    ++contentVersion;
-                    if (contentVersion == 0)
+                    unchecked
                     {
                         ++contentVersion;
+                        if (contentVersion == 0)
+                        {
+                            ++contentVersion;
+                        }
                     }
+                    contentSource = settings.Content;
+                    hasContentSource = true;
                 }
-                contentSource = settings.Content;
-                hasContentSource = true;
+                contentSnapshot = new TextBoxContentSnapshot(contentVersion, plainText, linkAnnotations);
+                hasContentSnapshot = true;
             }
-            contentSnapshot = new TextBoxContentSnapshot(contentVersion, plainText, linkAnnotations);
-            hasContentSnapshot = true;
-            ResizeParagraphs(result, settings, layoutSizePixels, true);
             return result;
         }
 
@@ -591,28 +649,38 @@ namespace Milestro.Components.Internal
             return geometry;
         }
 
-        private List<Paragraph> BuildPaintParagraphs(TextBoxRenderTargetSettings settings)
-        {
-            var result = CreateParagraphs(settings, out _);
-            var width = Math.Max(1, layoutWidth);
-            foreach (var paragraph in result)
-            {
-                paragraph.Layout(width);
-            }
-            return result;
-        }
-
         private List<Paragraph> CreateParagraphs(TextBoxRenderTargetSettings settings,
             out RichTextParser.ParagraphPayload payload)
         {
-            using var paragraphStyle = settings.ParagraphStyle.ToParagraphStyle(
-                settings.TextOverflow == TextOverflow.Ellipsis);
-            using var textStyle = settings.TextStyle.ToTextStyle();
+            var profiling = TextBoxPipelineProfiler.Enabled;
+            if (stylesChanged || cachedParagraphStyle == null || cachedTextStyle == null)
+            {
+                using (profiling ? TextBoxPipelineProfiler.CreateBaseStylesMarker.Auto() : default)
+                {
+                    cachedParagraphStyle?.Dispose();
+                    cachedTextStyle?.Dispose();
+                    cachedParagraphStyle = settings.ParagraphStyle.ToParagraphStyle(
+                        settings.TextOverflow == TextOverflow.Ellipsis);
+                    cachedTextStyle = settings.TextStyle.ToTextStyle();
+                }
+                stylesChanged = false;
+            }
+            var paragraphStyle = cachedParagraphStyle!;
+            var textStyle = cachedTextStyle!;
 
             var parser = new RichTextParser.RichTextParser();
-            parser.ParseText(settings.Content);
-            payload = parser.ConvertToSegments();
-            return payload.ToParagraphs(paragraphStyle, textStyle);
+            using (profiling ? TextBoxPipelineProfiler.ParseRichTextMarker.Auto() : default)
+            {
+                parser.ParseText(settings.Content);
+            }
+            using (profiling ? TextBoxPipelineProfiler.ConvertRichTextMarker.Auto() : default)
+            {
+                payload = parser.ConvertToSegments();
+            }
+            using (profiling ? TextBoxPipelineProfiler.CreateNativeParagraphsMarker.Auto() : default)
+            {
+                return payload.ToParagraphs(paragraphStyle, textStyle);
+            }
         }
 
         private static void ValidateMargin(Margin margin)
@@ -893,16 +961,23 @@ namespace Milestro.Components.Internal
             bool force)
         {
             var viewportWidth = ContentViewportWidth(settings, layoutSizePixels);
+            var profiling = TextBoxPipelineProfiler.Enabled;
             if (force)
             {
                 blockContentWidths.Clear();
                 for (var index = 0; index < targetParagraphs.Count; ++index)
                 {
                     var plainText = index < blockPlainTexts.Count ? blockPlainTexts[index] : "";
-                    targetParagraphs[index].Layout(Paragraph.ResolveNoWrapProbeLayoutWidth(plainText,
-                        settings.TextStyle.size,
-                        viewportWidth));
-                    blockContentWidths.Add(targetParagraphs[index].ResolveNoWrapContentWidth(plainText));
+                    using (profiling ? TextBoxPipelineProfiler.NoWrapProbeLayoutMarker.Auto() : default)
+                    {
+                        targetParagraphs[index].Layout(Paragraph.ResolveNoWrapProbeLayoutWidth(plainText,
+                            settings.TextStyle.size,
+                            viewportWidth));
+                    }
+                    using (profiling ? TextBoxPipelineProfiler.NoWrapMeasureMarker.Auto() : default)
+                    {
+                        blockContentWidths.Add(targetParagraphs[index].ResolveNoWrapContentWidth(plainText));
+                    }
                 }
             }
 
@@ -913,12 +988,18 @@ namespace Milestro.Components.Internal
             }
 
             ResolveBlockMargins(settings, layoutSizePixels);
-            var unscaledHeight = RestackBlocks(targetParagraphs, settings);
+            var unscaledHeight = 0f;
+            var needsHeightProbe = !settings.Sizing.HasValue && ShouldApplyAutoFontSize(settings);
+            if (needsHeightProbe)
+            {
+                unscaledHeight = RestackBlocks(targetParagraphs, settings);
+            }
+
             paragraphContentWidth = contentWidth;
             var scale = settings.Sizing.HasValue
                 ? settings.Sizing.Value.EffectiveFontSize / Mathf.Max(0.1f, settings.TextStyle.size)
                 : 1f;
-            if (!settings.Sizing.HasValue && ShouldApplyAutoFontSize(settings))
+            if (needsHeightProbe)
             {
                 scale = TextAutoFontSizeScale.Resolve(contentWidth,
                     unscaledHeight,
@@ -935,11 +1016,17 @@ namespace Milestro.Components.Internal
             if (widthChanged || force)
             {
                 layoutWidth = newLayoutWidth;
-                foreach (var targetParagraph in targetParagraphs)
+                using (profiling ? TextBoxPipelineProfiler.NoWrapFinalLayoutMarker.Auto() : default)
                 {
-                    targetParagraph.Layout(layoutWidth);
+                    foreach (var targetParagraph in targetParagraphs)
+                    {
+                        targetParagraph.Layout(layoutWidth);
+                    }
                 }
-                RestackBlocks(targetParagraphs, settings);
+            }
+            using (profiling ? TextBoxPipelineProfiler.NoWrapHeightMarker.Auto() : default)
+            {
+                unscaledHeight = RestackBlocks(targetParagraphs, settings);
             }
 
             var scaleChanged = !Mathf.Approximately(fitScale, scale);
@@ -1125,10 +1212,8 @@ namespace Milestro.Components.Internal
                 clipRect = ResolveClipRect(settings, viewport, margin, outputSizePixels);
                 paintPosition = new Vector2(basePaintX, basePaintY);
 
-                List<Paragraph>? paintParagraphs = null;
                 for (var index = 0; index < paragraphs.Count; ++index)
                 {
-                    var blockIndex = index;
                     var offsetX = TextBoxNoWrapHorizontalLayout.ResolvePaintOffsetX(
                         index < blockAlignmentOffsetsX.Count ? blockAlignmentOffsetsX[index] : 0f,
                         scrollOffset.x,
@@ -1137,16 +1222,10 @@ namespace Milestro.Components.Internal
                     var blockPaintPosition = new Vector2(basePaintX + offsetX,
                         basePaintY + blockTop * fitScale);
 
-                    commands.DrawParagraphSnapshot(() => PaintParagraphAt(blockIndex),
+                    commands.DrawParagraph(paragraphs[index],
                         blockPaintPosition,
                         clipRect,
                         fitScale);
-                }
-
-                Paragraph PaintParagraphAt(int blockIndex)
-                {
-                    paintParagraphs ??= BuildPaintParagraphs(settings);
-                    return paintParagraphs[blockIndex];
                 }
             }
             else

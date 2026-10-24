@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Milestro.Binding;
 using Milestro.Util;
 using UnityEngine;
 using Paragraph = Milestro.Skia.TextLayout.Paragraph;
@@ -40,10 +41,8 @@ namespace Milestro.Skia
             public float ClipHeight;
             public float VisualOffsetX;
             public float VisualOffsetY;
-            public object KeepAlive;
+            public object? KeepAlive;
             public bool SnapshotInputBox;
-            public Func<Paragraph> ParagraphSnapshotFactory;
-            public bool SnapshotParagraph;
             public ResourceOwnership Ownership;
             public bool SnapshotSlimText;
             public string Text;
@@ -76,6 +75,11 @@ namespace Milestro.Skia
 
         public void DrawParagraph(Paragraph paragraph, Vector2 position, Rect clipRect)
         {
+            DrawParagraph(paragraph, position, clipRect, 1f);
+        }
+
+        internal void DrawParagraph(Paragraph paragraph, Vector2 position, Rect clipRect, float contentScale)
+        {
             if (paragraph == null)
             {
                 return;
@@ -91,32 +95,8 @@ namespace Milestro.Skia
                 ClipY = clipRect.y,
                 ClipWidth = clipRect.width,
                 ClipHeight = clipRect.height,
-                KeepAlive = paragraph
-            });
-        }
-
-        internal void DrawParagraphSnapshot(Func<Paragraph> paragraphFactory,
-            Vector2 position,
-            Rect clipRect,
-            float contentScale = 1f)
-        {
-            if (paragraphFactory == null)
-            {
-                return;
-            }
-
-            commands.Add(new Command
-            {
-                Kind = CommandKind.Paragraph,
-                X = position.x,
-                Y = position.y,
-                ClipX = clipRect.x,
-                ClipY = clipRect.y,
-                ClipWidth = clipRect.width,
-                ClipHeight = clipRect.height,
                 ContentScale = FloatUtil.IsFinite(contentScale) && contentScale > 0f ? contentScale : 1f,
-                ParagraphSnapshotFactory = paragraphFactory,
-                SnapshotParagraph = true
+                KeepAlive = paragraph
             });
         }
 
@@ -227,32 +207,59 @@ namespace Milestro.Skia
             foreach (var source in commands)
             {
                 var command = source;
-                if (command.SnapshotParagraph)
+                if (command.Kind == CommandKind.Paragraph && command.Resource != IntPtr.Zero)
                 {
-                    var snapshot = command.ParagraphSnapshotFactory();
-                    captured.OwnedResources.Add(snapshot);
-                    command.Resource = snapshot.NativePtr;
-                    command.KeepAlive = snapshot;
+                    ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphRetain(command.Resource));
+                    captured.OwnedResources.Add(new RetainedParagraph(command.Resource));
+                    command.KeepAlive = null;
                 }
                 else if (command.SnapshotInputBox)
                 {
-                    var snapshot = ((TextLayout.InputBox)command.KeepAlive).CreateDrawSnapshot();
+                    if (command.KeepAlive is not TextLayout.InputBox inputBox)
+                    {
+                        throw new InvalidOperationException("Milestro InputBox draw command is missing its editor model.");
+                    }
+                    var snapshot = inputBox.CreateDrawSnapshot();
                     captured.OwnedResources.Add(snapshot);
                     command.Resource = snapshot.NativePtr;
                     command.KeepAlive = snapshot;
                 }
                 else if (command.SnapshotSlimText)
                 {
-                    var snapshot = new TextDrawSnapshot((SkFont)command.KeepAlive, command.Text, command.Color);
+                    if (command.KeepAlive is not SkFont font)
+                    {
+                        throw new InvalidOperationException("Milestro slim text draw command is missing its font.");
+                    }
+                    var snapshot = new TextDrawSnapshot(font, command.Text, command.Color);
                     captured.OwnedResources.Add(snapshot);
                     command.Resource = snapshot.NativePtr;
                     command.KeepAlive = snapshot;
                 }
-                command.SnapshotParagraph = false;
                 command.SnapshotInputBox = false;
                 command.SnapshotSlimText = false;
-                command.ParagraphSnapshotFactory = null!;
                 captured.Commands.Add(command);
+            }
+        }
+
+        private sealed class RetainedParagraph : IDisposable
+        {
+            private IntPtr ptr;
+
+            internal RetainedParagraph(IntPtr ptr)
+            {
+                this.ptr = ptr;
+            }
+
+            public void Dispose()
+            {
+                var current = ptr;
+                if (current == IntPtr.Zero)
+                {
+                    return;
+                }
+
+                ptr = IntPtr.Zero;
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphDestroy(out current));
             }
         }
 

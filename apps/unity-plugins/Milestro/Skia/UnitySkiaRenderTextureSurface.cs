@@ -1120,20 +1120,10 @@ namespace Milestro.Skia
                     var resource = command.Resource;
                     var keepAlive = command.KeepAlive;
                     var ownership = command.Ownership;
-                    if (command.SnapshotParagraph)
+                    if (command.Kind == UnitySkiaRenderCommandList.CommandKind.Paragraph &&
+                        resource != IntPtr.Zero && ownership == UnitySkiaRenderCommandList.ResourceOwnership.None)
                     {
-                        if (command.ParagraphSnapshotFactory == null)
-                        {
-                            throw new InvalidOperationException("Milestro paragraph draw command is missing its snapshot factory.");
-                        }
-
-                        var snapshot = command.ParagraphSnapshotFactory();
-                        if (snapshot == null)
-                        {
-                            throw new InvalidOperationException("Milestro paragraph draw command snapshot factory returned null.");
-                        }
-
-                        resource = snapshot.DetachNativePtr();
+                        ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphRetain(resource));
                         ownership = UnitySkiaRenderCommandList.ResourceOwnership.Paragraph;
                         keepAlive = null;
                         nativeOwnedList.Add(new NativeOwnedResource(resource, ownership));

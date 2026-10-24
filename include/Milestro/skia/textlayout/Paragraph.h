@@ -11,12 +11,24 @@
 #include "TextStyle.h"
 #include "modules/skparagraph/include/ParagraphBuilder.h"
 
+#include <atomic>
+
 namespace milestro::skia::textlayout {
 
 class MILESTRO_API Paragraph {
 public :
     explicit Paragraph(std::unique_ptr<::skia::textlayout::Paragraph> paragraph) {
         this->paragraph = std::move(paragraph);
+    }
+
+    void retain() const {
+        refCount.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    void release() const {
+        if (refCount.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            delete const_cast<Paragraph*>(this);
+        }
     }
 
     void layout(SkScalar width) {
@@ -72,6 +84,7 @@ public :
 
 private:
     std::unique_ptr<::skia::textlayout::Paragraph> paragraph;
+    mutable std::atomic<int32_t> refCount{1};
 
     SkPath generateToSkPath(SkScalar x, SkScalar y);
 };

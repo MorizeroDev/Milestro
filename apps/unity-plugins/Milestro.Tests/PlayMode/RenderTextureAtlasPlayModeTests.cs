@@ -2,6 +2,7 @@ using System.Collections;
 using Milestro.Components.Internal;
 using Milestro.Configuration;
 using Milestro.Skia;
+using Milestro.Skia.TextLayout;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -173,6 +174,46 @@ namespace Milestro.Tests
             Assert.That(retired.Disposed, Is.True);
             Assert.That(RenderTextureAtlas.PageCount, Is.EqualTo(pages));
             Assert.That(UnitySkiaRenderTextureSurface.BudgetLedger.Snapshot().CommittedBytes, Is.EqualTo(committedBytes));
+        }
+
+        [UnityTest]
+        public IEnumerator ParagraphDrawCommandRetainsSourceUntilPendingAtlasSubmissionCompletes()
+        {
+            using var surface = new ManagedRenderTextureSurface();
+            Assert.That(surface.EnsureExact(new Vector2Int(64, 64), ColorSpace.Gamma, out _), Is.True);
+            using var paragraphStyle = new ParagraphStyle();
+            using var textStyle = new TextStyle { FontSize = 24 };
+            paragraphStyle.SetTextStyle(textStyle);
+            using var builder = new ParagraphBuilder(paragraphStyle);
+            builder.AddText("Retained paragraph");
+            var paragraph = builder.Build();
+            paragraph.Layout(60);
+            var commands = new UnitySkiaRenderCommandList();
+            commands.DrawParagraph(paragraph, Vector2.zero, new Rect(0, 0, 64, 64));
+            Assert.That(surface.TrySubmit(commands), Is.True);
+
+            paragraph.Dispose();
+            RenderTextureAtlas.Flush();
+            yield return WaitForOutput(surface);
+
+            var readback = ReadOutput(surface);
+            try
+            {
+                var hasVisiblePixel = false;
+                foreach (var pixel in readback.GetPixels32())
+                {
+                    if (pixel.a > 0)
+                    {
+                        hasVisiblePixel = true;
+                        break;
+                    }
+                }
+                Assert.That(hasVisiblePixel, Is.True);
+            }
+            finally
+            {
+                Object.Destroy(readback);
+            }
         }
 
         private sealed class RetirementProbe : System.IDisposable

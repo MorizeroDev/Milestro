@@ -6,6 +6,7 @@ using Milestro.Util;
 using UnityEditor;
 #endif
 using UnityEngine;
+using Canvas = UnityEngine.Canvas;
 
 namespace Milestro.Components.Internal
 {
@@ -43,6 +44,12 @@ namespace Milestro.Components.Internal
 
         [NonSerialized] private RectTransform? rectTransformCache;
         [NonSerialized] private readonly Vector3[] worldCorners = new Vector3[4];
+        [NonSerialized] private Canvas? canvasCache;
+        [NonSerialized] private bool canvasLookupAttempted;
+        [NonSerialized] private int canvasLookupRetryFrame;
+        [NonSerialized] private ScreenSpaceRasterMetrics.RasterizationContext rasterContextCache;
+        [NonSerialized] private float rasterDesiredScaleCache = 1f;
+        [NonSerialized] private bool rasterContextValid;
         [NonSerialized] private ITextBoxRenderTarget? renderTarget;
         [NonSerialized] private TextBoxIntrinsicMeasurement? intrinsicMeasurement;
         [NonSerialized] private TextSizingResult? lastSizing;
@@ -165,8 +172,14 @@ namespace Milestro.Components.Internal
             get => m_content;
             set
             {
-                m_content = value ?? "";
-                MarkPropertiesChanged();
+                var nextValue = value ?? "";
+                if (string.Equals(m_content, nextValue, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                m_content = nextValue;
+                MarkContentChanged();
             }
         }
 
@@ -422,6 +435,8 @@ namespace Milestro.Components.Internal
             {
                 m_screenSpaceRasterization = false;
             }
+
+            ResetRasterizationContext();
             RebuildResources(forceText: true);
         }
 
@@ -431,6 +446,14 @@ namespace Milestro.Components.Internal
             DisposeRenderTarget();
             intrinsicMeasurement?.Dispose();
             intrinsicMeasurement = null;
+            ResetRasterizationContext();
+        }
+
+        private void OnTransformParentChanged()
+        {
+            canvasCache = null;
+            canvasLookupAttempted = false;
+            rasterContextValid = false;
         }
 
         private void Update()
@@ -505,14 +528,45 @@ namespace Milestro.Components.Internal
 
         private void RebuildResources(bool forceText)
         {
-            var settings = CurrentSettings();
-            var currentSize = CurrentSize();
+            if (!forceText &&
+                renderTarget != null &&
+                !renderTarget.HasPendingWork &&
+                !RasterizationContextChanged())
+            {
+                return;
+            }
 
-            var rebuilt = RenderTarget.Rebuild(CurrentViewportWithRasterization(currentSize),
-                SurfaceColorSpace(),
-                settings,
-                forceText,
-                this);
+            var profiling = TextBoxPipelineProfiler.Enabled;
+            using var rebuildScope = profiling
+                ? TextBoxPipelineProfiler.RebuildMarker.Auto()
+                : default;
+            TextBoxRenderTargetSettings settings;
+            using (profiling ? TextBoxPipelineProfiler.SettingsMarker.Auto() : default)
+            {
+                settings = CurrentSettings();
+            }
+
+            Vector2Int currentSize;
+            using (profiling ? TextBoxPipelineProfiler.SizeMarker.Auto() : default)
+            {
+                currentSize = CurrentSize();
+            }
+
+            TextBoxRenderViewport viewport;
+            using (profiling ? TextBoxPipelineProfiler.ViewportMarker.Auto() : default)
+            {
+                viewport = CurrentViewportWithRasterization(currentSize);
+            }
+
+            bool rebuilt;
+            using (profiling ? TextBoxPipelineProfiler.TargetRebuildMarker.Auto() : default)
+            {
+                rebuilt = RenderTarget.Rebuild(viewport,
+                    SurfaceColorSpace(),
+                    settings,
+                    forceText,
+                    this);
+            }
             DebugFlow("rebuild " +
                       $"forceText={forceText} rebuilt={rebuilt} currentSize={currentSize.x}x{currentSize.y} " +
                       $"hasRange={m_hasVisibleRange} range=[{m_visibleStartY:F3},{m_visibleEndY:F3}] " +
@@ -720,6 +774,18 @@ namespace Milestro.Components.Internal
             NotifyLayoutChanged();
         }
 
+        private void MarkContentChanged()
+        {
+#if UNITY_EDITOR
+            m_editorSkippedRenderRetries = 0;
+#endif
+            intrinsicMeasurement?.Dispose();
+            intrinsicMeasurement = null;
+            lastSizing = null;
+            RenderTarget.MarkContentChanged();
+            NotifyLayoutChanged();
+        }
+
         private void SetScrollX(float value)
         {
             var nextScrollX = FloatUtil.IsFinite(value) ? Mathf.Max(0f, value) : 0f;
@@ -821,10 +887,85 @@ namespace Milestro.Components.Internal
             }
 
             var rectTransform = RectTransformComponent();
-            return rectTransform != null &&
-                   ScreenSpaceRasterMetrics.TryMeasure(rectTransform, worldCorners, out var measurement)
-                ? viewport.WithScreenSpaceRasterization(measurement.DesiredScale)
-                : viewport.WithScreenSpaceRasterization(0f);
+            if (rectTransform == null || !TryCaptureRasterizationContext(rectTransform, out var context))
+            {
+                rasterContextValid = false;
+                return viewport.WithScreenSpaceRasterization(0f);
+            }
+
+            if (rasterContextValid && context.Matches(rasterContextCache))
+            {
+                return viewport.WithScreenSpaceRasterization(rasterDesiredScaleCache);
+            }
+
+            ScreenSpaceRasterMeasurement measurement;
+            var profiling = TextBoxPipelineProfiler.Enabled;
+            using (profiling ? TextBoxPipelineProfiler.RasterMeasureMarker.Auto() : default)
+            {
+                if (!ScreenSpaceRasterMetrics.TryMeasure(rectTransform,
+                        context.RootCanvas,
+                        worldCorners,
+                        out measurement))
+                {
+                    rasterContextValid = false;
+                    return viewport.WithScreenSpaceRasterization(0f);
+                }
+            }
+
+            rasterContextCache = context;
+            rasterDesiredScaleCache = measurement.DesiredScale;
+            rasterContextValid = true;
+            return viewport.WithScreenSpaceRasterization(measurement.DesiredScale);
+        }
+
+        private bool RasterizationContextChanged()
+        {
+            if (!m_screenSpaceRasterization)
+            {
+                return false;
+            }
+
+            var rectTransform = RectTransformComponent();
+            if (rectTransform == null || !TryCaptureRasterizationContext(rectTransform, out var context))
+            {
+                return true;
+            }
+
+            return !rasterContextValid || !context.Matches(rasterContextCache);
+        }
+
+        private bool TryCaptureRasterizationContext(RectTransform rectTransform,
+            out ScreenSpaceRasterMetrics.RasterizationContext context)
+        {
+            var canvas = CanvasComponent();
+            return ScreenSpaceRasterMetrics.TryCapture(rectTransform, canvas, out context);
+        }
+
+        private Canvas? CanvasComponent()
+        {
+            if (canvasCache != null)
+            {
+                return canvasCache;
+            }
+
+            var frame = Time.frameCount;
+            if (canvasLookupAttempted && frame < canvasLookupRetryFrame)
+            {
+                return null;
+            }
+
+            canvasLookupAttempted = true;
+            canvasLookupRetryFrame = frame + 30;
+            canvasCache = GetComponentInParent<Canvas>();
+            return canvasCache;
+        }
+
+        private void ResetRasterizationContext()
+        {
+            canvasCache = null;
+            canvasLookupAttempted = false;
+            canvasLookupRetryFrame = 0;
+            rasterContextValid = false;
         }
 
         private void MarkPaintChanged()

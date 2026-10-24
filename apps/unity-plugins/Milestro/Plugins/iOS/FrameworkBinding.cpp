@@ -595,6 +595,10 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphDestroy(milestro::skia::t
     return MilestroSkiaTextlayoutParagraphDestroy(ret);
 }
 
+int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphRetain(milestro::skia::textlayout::Paragraph* p) {
+    return MilestroSkiaTextlayoutParagraphRetain(p);
+}
+
 int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphLayout(milestro::skia::textlayout::Paragraph* p, float width) {
     return MilestroSkiaTextlayoutParagraphLayout(p, width);
 }

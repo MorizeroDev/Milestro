@@ -636,6 +636,11 @@ out int height);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphRetain")]
+        internal static extern unsafe long SkiaTextlayoutParagraphRetain(IntPtr p);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphLayout")]
         internal static extern unsafe long SkiaTextlayoutParagraphLayout(IntPtr p,
 float width);

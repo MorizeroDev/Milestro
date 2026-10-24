@@ -93,6 +93,7 @@ namespace Milestro.Tests
             public int OutputWidth => 0;
             public int OutputHeight => 0;
             public bool HasOutput => false;
+            public bool HasPendingWork => true;
             public long OutputVersion => 0;
             public Vector2 ScrollOffset => Vector2.zero;
             public Vector2 ContentSize => Vector2.zero;
@@ -105,6 +106,11 @@ namespace Milestro.Tests
                 RenderEventCompleted;
 
             public void MarkPropertiesChanged()
+            {
+                ++PropertiesChangedCount;
+            }
+
+            public void MarkContentChanged()
             {
                 ++PropertiesChangedCount;
             }

@@ -52,8 +52,35 @@ namespace Milestro.Tests
             using var setPass = ProfilerRecorder.StartNew(ProfilerCategory.Render, "SetPass Calls Count");
             using var mainThread = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "Main Thread");
             using var renderThread = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "Render Thread");
+            using var textBoxUpdate = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.Update");
+            using var textBoxRebuild = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.Rebuild");
+            using var textBoxApply = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.ApplyOutput");
+            using var textBoxRaster = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.RasterMeasure");
+            using var textBoxSettings = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.Settings");
+            using var textBoxViewport = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.Viewport");
+            using var textBoxTargetRebuild = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.TargetRebuild");
+            using var textBoxSize = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.Size");
+            using var textBoxBuildParagraphs = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.BuildParagraphs");
+            using var textBoxResizeParagraphs = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.ResizeParagraphs");
+            using var textBoxBuildCommands = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.BuildCommands");
+            using var textBoxSubmit = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.Submit");
+            using var textBoxParseRichText = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.ParseRichText");
+            using var textBoxConvertRichText = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.ConvertRichText");
+            using var textBoxCreateNativeParagraphs = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.CreateNativeParagraphs");
+            using var textBoxPlainText = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.PlainText");
+            using var textBoxBlockMetadata = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.BlockMetadata");
+            using var textBoxContentSnapshot = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.ContentSnapshot");
+            using var textBoxRetireParagraphs = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.RetireParagraphs");
+            using var textBoxCreateBaseStyles = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.CreateBaseStyles");
+            using var textBoxNoWrapProbeLayout = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.NoWrapProbeLayout");
+            using var textBoxNoWrapMeasure = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.NoWrapMeasure");
+            using var textBoxNoWrapFinalLayout = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.NoWrapFinalLayout");
+            using var textBoxNoWrapHeight = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Milestro.TextBox.NoWrapHeight");
             var smoke = Array.IndexOf(Environment.GetCommandLineArgs(), "-atlas-smoke") >= 0;
-            foreach (var count in smoke ? new[] { 100 } : new[] { 100, 500, 1000 })
+            var updateOnly = Array.IndexOf(Environment.GetCommandLineArgs(), "-atlas-update-only") >= 0;
+            TextBoxPipelineProfiler.Enabled =
+                Array.IndexOf(Environment.GetCommandLineArgs(), "-atlas-profile") >= 0;
+            foreach (var count in updateOnly ? new[] { 100 } : smoke ? new[] { 100 } : new[] { 100, 500, 1000 })
             {
                 foreach (var atlas in new[] { false, true })
                 {
@@ -94,7 +121,8 @@ namespace Milestro.Tests
                         Application.Quit(1);
                         yield break;
                     }
-                    foreach (var updatePercent in smoke ? new[] { 0 } : new[] { 0, 10, 100 })
+                    foreach (var updatePercent in updateOnly ? new[] { 0, 10, 100 } :
+                                 smoke ? new[] { 0 } : new[] { 0, 10, 100 })
                     {
                         var result = new Result { labels = count, atlas = atlas, updatePercent = updatePercent };
                         var beforeErrors = errorCount;
@@ -123,6 +151,30 @@ namespace Milestro.Tests
                             result.setPass += setPass.LastValue;
                             result.mainThreadMs += mainThread.LastValue / 1000000d;
                             result.renderThreadMs += renderThread.LastValue / 1000000d;
+                            result.textBoxUpdateMs += textBoxUpdate.LastValue / 1000000d;
+                            result.textBoxRebuildMs += textBoxRebuild.LastValue / 1000000d;
+                            result.textBoxApplyMs += textBoxApply.LastValue / 1000000d;
+                            result.textBoxRasterMs += textBoxRaster.LastValue / 1000000d;
+                            result.textBoxSettingsMs += textBoxSettings.LastValue / 1000000d;
+                            result.textBoxViewportMs += textBoxViewport.LastValue / 1000000d;
+                            result.textBoxTargetRebuildMs += textBoxTargetRebuild.LastValue / 1000000d;
+                            result.textBoxSizeMs += textBoxSize.LastValue / 1000000d;
+                            result.textBoxBuildParagraphsMs += textBoxBuildParagraphs.LastValue / 1000000d;
+                            result.textBoxResizeParagraphsMs += textBoxResizeParagraphs.LastValue / 1000000d;
+                            result.textBoxBuildCommandsMs += textBoxBuildCommands.LastValue / 1000000d;
+                            result.textBoxSubmitMs += textBoxSubmit.LastValue / 1000000d;
+                            result.textBoxParseRichTextMs += textBoxParseRichText.LastValue / 1000000d;
+                            result.textBoxConvertRichTextMs += textBoxConvertRichText.LastValue / 1000000d;
+                            result.textBoxCreateNativeParagraphsMs += textBoxCreateNativeParagraphs.LastValue / 1000000d;
+                            result.textBoxPlainTextMs += textBoxPlainText.LastValue / 1000000d;
+                            result.textBoxBlockMetadataMs += textBoxBlockMetadata.LastValue / 1000000d;
+                            result.textBoxContentSnapshotMs += textBoxContentSnapshot.LastValue / 1000000d;
+                            result.textBoxRetireParagraphsMs += textBoxRetireParagraphs.LastValue / 1000000d;
+                            result.textBoxCreateBaseStylesMs += textBoxCreateBaseStyles.LastValue / 1000000d;
+                            result.textBoxNoWrapProbeLayoutMs += textBoxNoWrapProbeLayout.LastValue / 1000000d;
+                            result.textBoxNoWrapMeasureMs += textBoxNoWrapMeasure.LastValue / 1000000d;
+                            result.textBoxNoWrapFinalLayoutMs += textBoxNoWrapFinalLayout.LastValue / 1000000d;
+                            result.textBoxNoWrapHeightMs += textBoxNoWrapHeight.LastValue / 1000000d;
                             result.frameMs += Time.unscaledDeltaTime * 1000d;
                             if (FrameTimingManager.GetLatestTimings(1, timings) > 0 && timings[0].gpuFrameTime > 0)
                             {
@@ -135,6 +187,30 @@ namespace Milestro.Tests
                         result.setPass /= SampleFrames;
                         result.mainThreadMs /= SampleFrames;
                         result.renderThreadMs /= SampleFrames;
+                        result.textBoxUpdateMs /= SampleFrames;
+                        result.textBoxRebuildMs /= SampleFrames;
+                        result.textBoxApplyMs /= SampleFrames;
+                        result.textBoxRasterMs /= SampleFrames;
+                        result.textBoxSettingsMs /= SampleFrames;
+                        result.textBoxViewportMs /= SampleFrames;
+                        result.textBoxTargetRebuildMs /= SampleFrames;
+                        result.textBoxSizeMs /= SampleFrames;
+                        result.textBoxBuildParagraphsMs /= SampleFrames;
+                        result.textBoxResizeParagraphsMs /= SampleFrames;
+                        result.textBoxBuildCommandsMs /= SampleFrames;
+                        result.textBoxSubmitMs /= SampleFrames;
+                        result.textBoxParseRichTextMs /= SampleFrames;
+                        result.textBoxConvertRichTextMs /= SampleFrames;
+                        result.textBoxCreateNativeParagraphsMs /= SampleFrames;
+                        result.textBoxPlainTextMs /= SampleFrames;
+                        result.textBoxBlockMetadataMs /= SampleFrames;
+                        result.textBoxContentSnapshotMs /= SampleFrames;
+                        result.textBoxRetireParagraphsMs /= SampleFrames;
+                        result.textBoxCreateBaseStylesMs /= SampleFrames;
+                        result.textBoxNoWrapProbeLayoutMs /= SampleFrames;
+                        result.textBoxNoWrapMeasureMs /= SampleFrames;
+                        result.textBoxNoWrapFinalLayoutMs /= SampleFrames;
+                        result.textBoxNoWrapHeightMs /= SampleFrames;
                         result.frameMs /= SampleFrames;
                         result.gpuMs /= Math.Max(1, result.gpuSamples);
                         result.nativeSubmissionsPerFrame =
@@ -172,6 +248,7 @@ namespace Milestro.Tests
                 totalErrors = errorCount,
                 results = results.ToArray()
             };
+            TextBoxPipelineProfiler.Enabled = false;
             var output = Environment.GetEnvironmentVariable("MILESTRO_ATLAS_REPORT");
             if (string.IsNullOrEmpty(output))
             {
@@ -222,6 +299,30 @@ namespace Milestro.Tests
             public double setPass;
             public double mainThreadMs;
             public double renderThreadMs;
+            public double textBoxUpdateMs;
+            public double textBoxRebuildMs;
+            public double textBoxApplyMs;
+            public double textBoxRasterMs;
+            public double textBoxSettingsMs;
+            public double textBoxViewportMs;
+            public double textBoxTargetRebuildMs;
+            public double textBoxSizeMs;
+            public double textBoxBuildParagraphsMs;
+            public double textBoxResizeParagraphsMs;
+            public double textBoxBuildCommandsMs;
+            public double textBoxSubmitMs;
+            public double textBoxParseRichTextMs;
+            public double textBoxConvertRichTextMs;
+            public double textBoxCreateNativeParagraphsMs;
+            public double textBoxPlainTextMs;
+            public double textBoxBlockMetadataMs;
+            public double textBoxContentSnapshotMs;
+            public double textBoxRetireParagraphsMs;
+            public double textBoxCreateBaseStylesMs;
+            public double textBoxNoWrapProbeLayoutMs;
+            public double textBoxNoWrapMeasureMs;
+            public double textBoxNoWrapFinalLayoutMs;
+            public double textBoxNoWrapHeightMs;
             public double frameMs;
             public double gpuMs;
             public int gpuSamples;

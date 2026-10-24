@@ -117,6 +117,10 @@ namespace Milestro.Components
 
         private void Update()
         {
+            var profiling = TextBoxPipelineProfiler.Enabled;
+            using var updateScope = profiling
+                ? TextBoxPipelineProfiler.UpdateMarker.Auto()
+                : default;
             var producer = ProducerComponent();
             producer.RebuildOutput(forceText: false);
             if (!flowModeActive)
@@ -1439,6 +1443,10 @@ namespace Milestro.Components
 
         private void ApplyProducerOutput(TextBoxRenderTextureProducer producer, bool force)
         {
+            var profiling = TextBoxPipelineProfiler.Enabled;
+            using var applyScope = profiling
+                ? TextBoxPipelineProfiler.ApplyOutputMarker.Auto()
+                : default;
             if (!producer.HasOutput)
             {
                 if (force || Texture != null)

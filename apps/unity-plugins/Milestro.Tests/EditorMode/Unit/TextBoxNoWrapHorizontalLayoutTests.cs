@@ -636,6 +636,7 @@ namespace Milestro.Tests
             public int OutputWidth => 0;
             public int OutputHeight => 0;
             public bool HasOutput => false;
+            public bool HasPendingWork => true;
             public long OutputVersion => 0;
             public Vector2 ScrollOffset { get; private set; }
             public Vector2 ContentSize => new Vector2(layout.ContentWidth, 0f);
@@ -650,6 +651,10 @@ namespace Milestro.Tests
                 RenderEventCompleted;
 
             public void MarkPropertiesChanged()
+            {
+            }
+
+            public void MarkContentChanged()
             {
             }
 

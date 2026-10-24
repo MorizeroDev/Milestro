@@ -155,7 +155,7 @@ void ReleaseSubmissionOwnedResources(MilestroUnityRenderSubmission* submission) 
         MilestroUnityDrawCommand& command = submission->commands[i];
         switch (static_cast<MilestroUnityDrawResourceOwnership>(command.resourceOwnership)) {
             case MilestroUnityDrawResourceOwnership::Paragraph:
-                delete static_cast<milestro::skia::textlayout::Paragraph*>(command.resource);
+                static_cast<milestro::skia::textlayout::Paragraph*>(command.resource)->release();
                 break;
             case MilestroUnityDrawResourceOwnership::InputBoxSnapshot:
                 delete static_cast<milestro::skia::textlayout::InputBoxDrawSnapshot*>(command.resource);
