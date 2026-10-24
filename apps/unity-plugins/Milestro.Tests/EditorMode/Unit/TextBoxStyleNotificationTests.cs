@@ -42,6 +42,16 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void FontFamilyMutationMarksProducerPropertiesChanged()
+        {
+            var before = target.PropertiesChangedCount;
+
+            producer.textStyle.fontFamilies.Add("sans-serif");
+
+            Assert.AreEqual(before + 1, target.PropertiesChangedCount);
+        }
+
+        [Test]
         public void ParagraphStyleMutationMarksProducerPropertiesChanged()
         {
             var before = target.PropertiesChangedCount;

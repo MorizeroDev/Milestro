@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Milestro.Model;
 using Milestro.Skia.TextLayout;
 
@@ -25,7 +26,7 @@ namespace Milestro.Extensions
         public static TextStyle ToTextStyle(this TextStyleSettings settings)
         {
             var ret = new TextStyle();
-            ret.SetFontFamilies(settings.fontFamilies);
+            ret.SetFontFamilies(new List<string>(settings.fontFamilies));
             ret.FontSize = settings.size;
             ret.Locale = settings.locale;
             ret.Color = settings.textColor;

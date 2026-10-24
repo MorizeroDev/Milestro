@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using UnityEngine;
 
 namespace Milestro.Model
@@ -11,6 +12,9 @@ namespace Milestro.Model
 
         [SerializeField]
         private List<string> m_fontFamilies = new List<string>() { "system-ui" };
+
+        [NonSerialized]
+        private FontFamilyList? m_fontFamiliesView;
 
         [SerializeField]
         private float m_size = 36;
@@ -40,12 +44,13 @@ namespace Milestro.Model
         [SerializeField]
         private string m_locale = "zh-Hans";
 
-        public List<string> fontFamilies
+        public IList<string> fontFamilies
         {
-            get => m_fontFamilies;
+            get => m_fontFamiliesView ??= new FontFamilyList(this, FontFamilies);
             set
             {
-                m_fontFamilies = value ?? new List<string>();
+                m_fontFamilies = value == null ? new List<string>() : new List<string>(value);
+                m_fontFamiliesView = null;
                 NotifyChanged();
             }
         }
@@ -128,6 +133,61 @@ namespace Milestro.Model
         private void NotifyChanged()
         {
             Changed?.Invoke();
+        }
+
+        private List<string> FontFamilies => m_fontFamilies ??= new List<string>();
+
+        private sealed class FontFamilyList : Collection<string>
+        {
+            private readonly TextStyleSettings m_owner;
+
+            internal FontFamilyList(TextStyleSettings owner, IList<string> families)
+                : base(families)
+            {
+                m_owner = owner;
+            }
+
+            protected override void InsertItem(int index, string item)
+            {
+                base.InsertItem(index, item);
+                NotifyOwner();
+            }
+
+            protected override void SetItem(int index, string item)
+            {
+                if (this[index] == item)
+                {
+                    return;
+                }
+
+                base.SetItem(index, item);
+                NotifyOwner();
+            }
+
+            protected override void RemoveItem(int index)
+            {
+                base.RemoveItem(index);
+                NotifyOwner();
+            }
+
+            protected override void ClearItems()
+            {
+                if (Count == 0)
+                {
+                    return;
+                }
+
+                base.ClearItems();
+                NotifyOwner();
+            }
+
+            private void NotifyOwner()
+            {
+                if (ReferenceEquals(m_owner.FontFamilies, Items))
+                {
+                    m_owner.NotifyChanged();
+                }
+            }
         }
     }
 }

@@ -46,6 +46,19 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void MutatingFontFamiliesRaisesChanged()
+        {
+            var style = new TextStyleSettings();
+            var notifications = 0;
+            style.Changed += () => notifications++;
+
+            style.fontFamilies.Add("sans-serif");
+
+            Assert.AreEqual(1, notifications);
+            CollectionAssert.AreEqual(new[] { "system-ui", "sans-serif" }, style.fontFamilies);
+        }
+
+        [Test]
         public void NoOpAssignmentDoesNotRaiseChanged()
         {
             var style = new TextStyleSettings();
