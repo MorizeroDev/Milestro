@@ -16,6 +16,8 @@ namespace Milestro.Components.Internal
             var result = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
             var hasWidth = false;
             var hasHeight = false;
+            RectTransform? widthSource = null;
+            RectTransform? heightSource = null;
             while (current != null)
             {
                 var fitter = current.GetComponent<ContentSizeFitter>();
@@ -33,6 +35,7 @@ namespace Milestro.Components.Internal
                     {
                         result.x = Mathf.Max(0f, width);
                         hasWidth = true;
+                        widthSource = current;
                     }
                 }
 
@@ -43,6 +46,7 @@ namespace Milestro.Components.Internal
                     {
                         result.y = Mathf.Max(0f, height);
                         hasHeight = true;
+                        heightSource = current;
                     }
                 }
 
@@ -54,28 +58,12 @@ namespace Milestro.Components.Internal
                 current = current.parent as RectTransform;
             }
 
-            // Padding belongs to the layout group that owns the child. It is irrelevant when
-            // the nearest ancestor on that axis is itself content-sized.
-            var parent = rect != null ? rect.parent as RectTransform : null;
-            if (parent != null)
-            {
-                var fitter = parent.GetComponent<ContentSizeFitter>();
-                var group = parent.GetComponent<LayoutGroup>();
-                if (group != null && group.isActiveAndEnabled)
-                {
-                    if ((fitter == null || !fitter.isActiveAndEnabled ||
-                         fitter.horizontalFit == ContentSizeFitter.FitMode.Unconstrained))
-                    {
-                        result.x = Mathf.Max(0f, result.x - group.padding.horizontal);
-                    }
-
-                    if ((fitter == null || !fitter.isActiveAndEnabled ||
-                         fitter.verticalFit == ContentSizeFitter.FitMode.Unconstrained))
-                    {
-                        result.y = Mathf.Max(0f, result.y - group.padding.vertical);
-                    }
-                }
-            }
+            // Padding belongs to the layout group that owns the constraining ancestor. Width
+            // and height can be constrained by different ancestors, so resolve each axis
+            // independently. This also handles a content-sized parent between the child and
+            // the stable layout group.
+            result.x = SubtractLayoutPadding(result.x, widthSource, horizontal: true);
+            result.y = SubtractLayoutPadding(result.y, heightSource, horizontal: false);
 
             return result;
         }
@@ -83,6 +71,18 @@ namespace Milestro.Components.Internal
         public static float AvailableWidth(RectTransform rect)
         {
             return ExternalAvailableSize(rect).x;
+        }
+
+        private static float SubtractLayoutPadding(float size, RectTransform? source, bool horizontal)
+        {
+            var group = source != null ? source.GetComponent<LayoutGroup>() : null;
+            if (group == null || !group.isActiveAndEnabled)
+            {
+                return size;
+            }
+
+            var padding = horizontal ? group.padding.horizontal : group.padding.vertical;
+            return Mathf.Max(0f, size - padding);
         }
     }
 }
