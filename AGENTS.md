@@ -1,5 +1,18 @@
 # Agent Instructions
 
+## Managed Code and Native Library Versions
+
+Milestro does not support upgrading only the managed Unity code under
+`apps/unity-plugins/` or only the native DLL/library built from `src/`. The
+managed code and native library must be upgraded together as a matching pair
+from the same revision.
+
+Therefore, when changing code across this boundary, update both sides in the
+same change and do not preserve compatibility with mixed versions. Do not add
+compatibility shims, version negotiation, legacy entry points, or fallback paths
+solely to support new managed code with an older native library, or old managed
+code with a newer native library.
+
 ## Public Repository Hygiene
 
 Milestro is a public repository. Treat every tracked file and every file that
