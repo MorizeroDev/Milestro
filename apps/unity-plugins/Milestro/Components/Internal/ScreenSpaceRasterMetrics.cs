@@ -12,6 +12,21 @@ namespace Milestro.Components.Internal
             Vector3[] worldCorners,
             out ScreenSpaceRasterMeasurement measurement)
         {
+            if (rectTransform == null)
+            {
+                measurement = default;
+                return false;
+            }
+
+            var canvas = rectTransform.GetComponentInParent<Canvas>();
+            return TryMeasure(rectTransform, canvas, worldCorners, out measurement);
+        }
+
+        internal static bool TryMeasure(RectTransform rectTransform,
+            Canvas? canvas,
+            Vector3[] worldCorners,
+            out ScreenSpaceRasterMeasurement measurement)
+        {
             measurement = default;
             if (rectTransform == null || worldCorners == null || worldCorners.Length < 4)
             {
@@ -29,7 +44,6 @@ namespace Milestro.Components.Internal
                 return false;
             }
 
-            var canvas = rectTransform.GetComponentInParent<Canvas>();
             if (canvas == null)
             {
                 return false;

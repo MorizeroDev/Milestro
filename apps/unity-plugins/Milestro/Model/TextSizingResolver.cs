@@ -164,6 +164,21 @@ namespace Milestro.Model
             Func<float, ResolvedMargin> resolveMargin,
             float? assignedWidth = null)
         {
+            if (request.WidthMode == TextWidthMode.Fixed &&
+                request.HeightMode == TextHeightMode.Fixed &&
+                !request.AutoFontSize)
+            {
+                var designFontSize = Positive(request.DesignFontSize);
+                return new TextSizingResult(request,
+                    NonNegative(request.FixedWidth),
+                    NonNegative(request.FixedHeight),
+                    designFontSize,
+                    resolveMargin(designFontSize),
+                    default,
+                    0f,
+                    0f);
+            }
+
             var width = ResolvePreferredWidth(measurement, request, resolveMargin);
             var fontSize = ResolveEffectiveFontSize(measurement,
                 request,

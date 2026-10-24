@@ -185,6 +185,13 @@ namespace Milestro.Tests
         private IEnumerator Measure(Case benchmark, int updatePercent, ProfilerRecorder drawCalls,
             ProfilerRecorder batches, ProfilerRecorder setPass, ProfilerRecorder mainThread)
         {
+            var producerUpdate = StartScriptRecorder("Milestro.SlimText.ProducerUpdate");
+            var rebuildFastManaged = StartScriptRecorder("Milestro.SlimText.RebuildFastManaged");
+            var ensureFont = StartScriptRecorder("Milestro.SlimText.EnsureFont");
+            var ensureSnapshot = StartScriptRecorder("Milestro.SlimText.EnsureSnapshot");
+            var encodeUpdateText = StartScriptRecorder("Milestro.SlimText.EncodeUpdateText");
+            var measureText = StartScriptRecorder("Milestro.SlimText.MeasureText");
+            var submitFast = StartScriptRecorder("Milestro.SlimText.SubmitFast");
             var result = new Result
             {
                 labels = benchmark.Count,
@@ -199,70 +206,104 @@ namespace Milestro.Tests
             var gen0Start = 0;
             ulong beforeSubmissions = 0;
             long beforeAtlasSubmissions = 0;
-            for (var frame = 0; frame < SampleFrames + 30; ++frame)
+            try
             {
-                var updateStart = profiling ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
-                try
+                for (var frame = 0; frame < SampleFrames + 30; ++frame)
                 {
-                    for (var index = 0; index < updates; ++index)
+                    ResetAndStart(producerUpdate);
+                    ResetAndStart(rebuildFastManaged);
+                    ResetAndStart(ensureFont);
+                    ResetAndStart(ensureSnapshot);
+                    ResetAndStart(encodeUpdateText);
+                    ResetAndStart(measureText);
+                    ResetAndStart(submitFast);
+                    var updateStart = profiling ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+                    try
                     {
-                        var label = benchmark.Labels[index];
-                        if (benchmark.Mode == WorldTextMode.NoAlloc)
+                        for (var index = 0; index < updates; ++index)
                         {
-                            var buffer = benchmark.Buffers[index];
-                            label.SetTextUtf8NoAlloc(buffer, 0, WriteText(buffer, frame + index));
-                        }
-                        else
-                        {
-                            label.text = "T" + (frame + index);
+                            var label = benchmark.Labels[index];
+                            if (benchmark.Mode == WorldTextMode.NoAlloc)
+                            {
+                                var buffer = benchmark.Buffers[index];
+                                label.SetTextUtf8NoAlloc(buffer, 0, WriteText(buffer, frame + index));
+                            }
+                            else
+                            {
+                                label.text = "T" + (frame + index);
+                            }
                         }
                     }
-                }
-                catch (Exception exception)
-                {
-                    result.failure = exception.GetType().Name + ": " + exception.Message;
-                    Debug.LogWarning("World text benchmark aborted " + benchmark.Mode + " at " +
-                                     benchmark.Count + " labels, " + updatePercent + "% updates: " + result.failure);
-                    break;
-                }
+                    catch (Exception exception)
+                    {
+                        result.failure = exception.GetType().Name + ": " + exception.Message;
+                        Debug.LogWarning("World text benchmark aborted " + benchmark.Mode + " at " +
+                                         benchmark.Count + " labels, " + updatePercent + "% updates: " + result.failure);
+                        break;
+                    }
 
-                if (profiling && frame >= 30)
-                {
-                    updateLoopMs += (System.Diagnostics.Stopwatch.GetTimestamp() - updateStart) * 1000.0 /
-                                    System.Diagnostics.Stopwatch.Frequency;
-                }
+                    if (profiling && frame >= 30)
+                    {
+                        updateLoopMs += (System.Diagnostics.Stopwatch.GetTimestamp() - updateStart) * 1000.0 /
+                                        System.Diagnostics.Stopwatch.Frequency;
+                    }
 
-                if (frame == 30)
-                {
-                    beforeSubmissions = UnitySkiaRenderTextureSurface.ReadNativeDiagnostics().AcceptedSubmissionCount;
-                    beforeAtlasSubmissions = RenderTextureAtlas.SubmissionCount;
-                    SlimTextPipelineProfiler.Reset();
-                    gcBytesStart = GC.GetAllocatedBytesForCurrentThread();
-                    gen0Start = GC.CollectionCount(0);
+                    if (frame == 30)
+                    {
+                        beforeSubmissions = UnitySkiaRenderTextureSurface.ReadNativeDiagnostics().AcceptedSubmissionCount;
+                        beforeAtlasSubmissions = RenderTextureAtlas.SubmissionCount;
+                        SlimTextPipelineProfiler.Reset();
+                        gcBytesStart = GC.GetAllocatedBytesForCurrentThread();
+                        gen0Start = GC.CollectionCount(0);
+                    }
+                    FrameTimingManager.CaptureFrameTimings();
+                    yield return null;
+                    if (frame < 30)
+                    {
+                        continue;
+                    }
+                    result.drawCalls += drawCalls.LastValue;
+                    result.batches += batches.LastValue;
+                    result.setPass += setPass.LastValue;
+                    result.mainThreadMs += mainThread.LastValue / 1000000d;
+                    result.profilerProducerUpdateMs += RecorderMilliseconds(producerUpdate);
+                    result.profilerRebuildFastManagedMs += RecorderMilliseconds(rebuildFastManaged);
+                    result.profilerEnsureFontMs += RecorderMilliseconds(ensureFont);
+                    result.profilerEnsureSnapshotMs += RecorderMilliseconds(ensureSnapshot);
+                    result.profilerEncodeUpdateTextMs += RecorderMilliseconds(encodeUpdateText);
+                    result.profilerMeasureTextMs += RecorderMilliseconds(measureText);
+                    result.profilerSubmitFastMs += RecorderMilliseconds(submitFast);
+                    result.frameMs += Time.unscaledDeltaTime * 1000d;
+                    if (FrameTimingManager.GetLatestTimings(1, timings) > 0 && timings[0].gpuFrameTime > 0)
+                    {
+                        result.gpuMs += timings[0].gpuFrameTime;
+                        ++result.gpuSamples;
+                    }
+                    ++result.sampledFrames;
                 }
-                FrameTimingManager.CaptureFrameTimings();
-                yield return null;
-                if (frame < 30)
-                {
-                    continue;
-                }
-                result.drawCalls += drawCalls.LastValue;
-                result.batches += batches.LastValue;
-                result.setPass += setPass.LastValue;
-                result.mainThreadMs += mainThread.LastValue / 1000000d;
-                result.frameMs += Time.unscaledDeltaTime * 1000d;
-                if (FrameTimingManager.GetLatestTimings(1, timings) > 0 && timings[0].gpuFrameTime > 0)
-                {
-                    result.gpuMs += timings[0].gpuFrameTime;
-                    ++result.gpuSamples;
-                }
-                ++result.sampledFrames;
+            }
+            finally
+            {
+                producerUpdate.Dispose();
+                rebuildFastManaged.Dispose();
+                ensureFont.Dispose();
+                ensureSnapshot.Dispose();
+                encodeUpdateText.Dispose();
+                measureText.Dispose();
+                submitFast.Dispose();
             }
             var sampledFrames = Math.Max(1, result.sampledFrames);
             result.drawCalls /= sampledFrames;
             result.batches /= sampledFrames;
             result.setPass /= sampledFrames;
             result.mainThreadMs /= sampledFrames;
+            result.profilerProducerUpdateMs /= sampledFrames;
+            result.profilerRebuildFastManagedMs /= sampledFrames;
+            result.profilerEnsureFontMs /= sampledFrames;
+            result.profilerEnsureSnapshotMs /= sampledFrames;
+            result.profilerEncodeUpdateTextMs /= sampledFrames;
+            result.profilerMeasureTextMs /= sampledFrames;
+            result.profilerSubmitFastMs /= sampledFrames;
             result.frameMs /= sampledFrames;
             result.fps = result.frameMs > 0 ? 1000d / result.frameMs : 0d;
             result.gpuMs /= Math.Max(1, result.gpuSamples);
@@ -286,6 +327,8 @@ namespace Milestro.Tests
                 result.rebuildSkippedPerFrame = SlimTextPipelineProfiler.RebuildSkippedNoDraw / frames;
                 result.ensureSurfaceMs = SlimTextPipelineProfiler.EnsureSurfaceMs / frames;
                 result.ensureFontMs = SlimTextPipelineProfiler.EnsureFontMs / frames;
+                result.ensureSnapshotMs = SlimTextPipelineProfiler.EnsureSnapshotMs / frames;
+                result.encodeUpdateTextMs = SlimTextPipelineProfiler.EncodeUpdateTextMs / frames;
                 result.buildCommandsMs = SlimTextPipelineProfiler.BuildCommandsMs / frames;
                 result.measureTextMs = SlimTextPipelineProfiler.MeasureTextMs / frames;
                 result.trySubmitMs = SlimTextPipelineProfiler.TrySubmitMs / frames;
@@ -297,6 +340,18 @@ namespace Milestro.Tests
                 result.producerRebuildMs = SlimTextPipelineProfiler.ProducerRebuildMs / frames;
                 result.presenterUpdateCallsPerFrame = SlimTextPipelineProfiler.PresenterUpdateCalls / frames;
                 result.presenterUpdateMs = SlimTextPipelineProfiler.PresenterUpdateMs / frames;
+                result.worldTextBatchUpdateCallsPerFrame =
+                    SlimTextPipelineProfiler.WorldTextBatchUpdateCalls / frames;
+                result.worldTextBatchUpdateMs = SlimTextPipelineProfiler.WorldTextBatchUpdateMs / frames;
+                result.worldTextBatchMeshCallsPerFrame =
+                    SlimTextPipelineProfiler.WorldTextBatchMeshCalls / frames;
+                result.worldTextBatchMeshMs = SlimTextPipelineProfiler.WorldTextBatchMeshMs / frames;
+                result.worldTextBatchUvCallsPerFrame =
+                    SlimTextPipelineProfiler.WorldTextBatchUvCalls / frames;
+                result.worldTextBatchUvMs = SlimTextPipelineProfiler.WorldTextBatchUvMs / frames;
+                result.worldTextBatchObserveMs = SlimTextPipelineProfiler.WorldTextBatchObserveMs / frames;
+                result.worldTextBatchOriginalStateMs =
+                    SlimTextPipelineProfiler.WorldTextBatchOriginalStateMs / frames;
                 result.completionCallsPerFrame = SlimTextPipelineProfiler.CompletionCalls / frames;
                 result.completionMs = SlimTextPipelineProfiler.CompletionMs / frames;
                 result.fastPathCallsPerFrame = SlimTextPipelineProfiler.FastPathCalls / frames;
@@ -357,6 +412,25 @@ namespace Milestro.Tests
                 }
             }
             return true;
+        }
+
+        private static ProfilerRecorder StartScriptRecorder(string markerName)
+        {
+            return ProfilerRecorder.StartNew(ProfilerCategory.Scripts,
+                markerName,
+                1,
+                ProfilerRecorderOptions.SumAllSamplesInFrame);
+        }
+
+        private static double RecorderMilliseconds(ProfilerRecorder recorder)
+        {
+            return recorder.Valid ? recorder.CurrentValue / 1000000d : 0d;
+        }
+
+        private static void ResetAndStart(ProfilerRecorder recorder)
+        {
+            recorder.Reset();
+            recorder.Start();
         }
 
         private static int WriteText(byte[] buffer, int value)
@@ -446,6 +520,8 @@ namespace Milestro.Tests
             public double rebuildSkippedPerFrame;
             public double ensureSurfaceMs;
             public double ensureFontMs;
+            public double ensureSnapshotMs;
+            public double encodeUpdateTextMs;
             public double buildCommandsMs;
             public double measureTextMs;
             public double trySubmitMs;
@@ -458,9 +534,24 @@ namespace Milestro.Tests
             public double producerRebuildMs;
             public double presenterUpdateCallsPerFrame;
             public double presenterUpdateMs;
+            public double worldTextBatchUpdateCallsPerFrame;
+            public double worldTextBatchUpdateMs;
+            public double worldTextBatchMeshCallsPerFrame;
+            public double worldTextBatchMeshMs;
+            public double worldTextBatchUvCallsPerFrame;
+            public double worldTextBatchUvMs;
+            public double worldTextBatchObserveMs;
+            public double worldTextBatchOriginalStateMs;
             public double completionCallsPerFrame;
             public double completionMs;
             public double fastPathCallsPerFrame;
+            public double profilerProducerUpdateMs;
+            public double profilerRebuildFastManagedMs;
+            public double profilerEnsureFontMs;
+            public double profilerEnsureSnapshotMs;
+            public double profilerEncodeUpdateTextMs;
+            public double profilerMeasureTextMs;
+            public double profilerSubmitFastMs;
         }
     }
 }

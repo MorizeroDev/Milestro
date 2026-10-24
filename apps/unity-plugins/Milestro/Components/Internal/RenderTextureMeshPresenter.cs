@@ -23,12 +23,15 @@ namespace Milestro.Components.Internal
         [NonSerialized] private Texture? observedOutputTexture;
         [NonSerialized] private Rect observedOutputUvRect = DefaultUvRect;
         [NonSerialized] private long observedOutputVersion = long.MinValue;
+        [NonSerialized] private long observedVisualVersion = long.MinValue;
         [NonSerialized] private string observedTexturePropertyName = DefaultTexturePropertyName;
         [NonSerialized] private bool rendererDisabledByPresenter;
         [NonSerialized] private RenderTextureProducer? observedProducer;
         [NonSerialized] private string cachedTexturePropertyName = "";
         [NonSerialized] private int cachedTexturePropertyId = -1;
         [NonSerialized] private int cachedTextureStPropertyId = -1;
+
+        internal event Action<RenderTextureMeshPresenter>? VisualStateChanged;
 
         public RenderTextureProducer? Producer
         {
@@ -85,6 +88,7 @@ namespace Milestro.Components.Internal
             ResetObservedOutput();
             SetObservedProducer(ResolveProducer());
             ApplyProducerOutput(force: true);
+            VisualStateChanged?.Invoke(this);
         }
 
         private void OnDisable()
@@ -98,6 +102,7 @@ namespace Milestro.Components.Internal
             }
 
             ResetObservedOutput();
+            VisualStateChanged?.Invoke(this);
         }
 
         private void Reset()
@@ -265,6 +270,15 @@ namespace Milestro.Components.Internal
 
         private void OnProducerOutputChanged()
         {
+            var producer = observedProducer ?? m_producer;
+            var visualVersion = producer != null ? producer.VisualVersion : 0;
+            if (visualVersion == observedVisualVersion)
+            {
+                return;
+            }
+
+            observedVisualVersion = visualVersion;
+            VisualStateChanged?.Invoke(this);
 #if UNITY_EDITOR
             if (!Application.isPlaying && this && isActiveAndEnabled)
             {
@@ -306,6 +320,7 @@ namespace Milestro.Components.Internal
             observedOutputTexture = null;
             observedOutputUvRect = DefaultUvRect;
             observedOutputVersion = long.MinValue;
+            observedVisualVersion = long.MinValue;
             observedTexturePropertyName = TexturePropertyNameOrDefault();
         }
     }

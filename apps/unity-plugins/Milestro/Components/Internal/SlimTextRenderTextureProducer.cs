@@ -7,6 +7,7 @@ using UnityEditor;
 #endif
 using UnityEngine;
 using UnityEngine.UI;
+using Canvas = UnityEngine.Canvas;
 
 namespace Milestro.Components.Internal
 {
@@ -40,6 +41,15 @@ namespace Milestro.Components.Internal
         [NonSerialized] private readonly Vector3[] worldCorners = new Vector3[4];
         [NonSerialized] private SlimTextRenderTarget? renderTarget;
         [NonSerialized] private SlimTextIntrinsicMeasurement? intrinsicMeasurement;
+        [NonSerialized] private TextSizingResult fixedSizingCache;
+        [NonSerialized] private bool fixedSizingValid;
+        [NonSerialized] private bool rebuildRequested = true;
+        [NonSerialized] private Canvas? canvasCache;
+        [NonSerialized] private bool canvasLookupAttempted;
+        [NonSerialized] private int canvasLookupRetryFrame;
+        [NonSerialized] private RasterizationContext rasterContextCache;
+        [NonSerialized] private float rasterDesiredScaleCache = 1f;
+        [NonSerialized] private bool rasterContextValid;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
 #if UNITY_EDITOR
         private const int MaxEditorSkippedRenderRetries = 2;
@@ -53,8 +63,13 @@ namespace Milestro.Components.Internal
         public override int OutputHeight => renderTarget?.OutputHeight ?? 0;
         public override bool HasOutput => renderTarget?.HasOutput ?? false;
         public override long OutputVersion => renderTarget?.OutputVersion ?? 0;
+        public override long VisualVersion => renderTarget?.VisualVersion ?? 0;
 
         public float effectiveFontSize => ResolveSizing().EffectiveFontSize;
+
+        private bool HasFixedLayout => m_widthMode == TextWidthMode.Fixed &&
+                                       m_heightMode == TextHeightMode.Fixed &&
+                                       !m_autoFontSize.enabled;
 
         public TextWidthMode widthMode
         {
@@ -108,11 +123,13 @@ namespace Milestro.Components.Internal
 
         public void CalculateLayoutInputHorizontal()
         {
+            rebuildRequested = true;
             ResolveSizing();
         }
 
         public void CalculateLayoutInputVertical()
         {
+            rebuildRequested = true;
             ResolveSizing();
         }
 
@@ -124,12 +141,31 @@ namespace Milestro.Components.Internal
 
         public TextSizingResult ResolveSizing()
         {
+            if (HasFixedLayout)
+            {
+                if (!fixedSizingValid)
+                {
+                    var fixedRectTransform = RectTransformComponent();
+                    var fixedSizeValue = fixedRectTransform != null ? fixedRectTransform.rect.size : Vector2.one;
+                    fixedSizingCache = ResolveSizing(fixedSizeValue, Vector2.zero);
+                    fixedSizingValid = true;
+                }
+
+                return fixedSizingCache;
+            }
+
             var rectTransform = RectTransformComponent();
-            return ResolveSizing(rectTransform != null ? rectTransform.rect.size : Vector2.one);
+            var fixedSize = rectTransform != null ? rectTransform.rect.size : Vector2.one;
+            return ResolveSizing(fixedSize);
         }
 
         internal TextSizingResult ResolveSizing(Vector2 fixedSize)
         {
+            if (HasFixedLayout)
+            {
+                return ResolveSizing(fixedSize, Vector2.zero);
+            }
+
             var rectTransform = RectTransformComponent();
             var available = rectTransform != null
                 ? TextSizingBounds.ExternalAvailableSize(rectTransform)
@@ -377,6 +413,11 @@ namespace Milestro.Components.Internal
         protected virtual void OnEnable()
         {
             sizeDirty = true;
+            fixedSizingValid = false;
+            rebuildRequested = true;
+            rasterContextValid = false;
+            canvasCache = null;
+            canvasLookupAttempted = false;
             rectTransformCache = GetComponent<RectTransform>();
             if (GetComponent<Milestro.Components.WorldSpaceSlimText>() != null)
             {
@@ -397,7 +438,29 @@ namespace Milestro.Components.Internal
 
         private void Update()
         {
+            if (!rebuildRequested &&
+                !RenderTarget.HasPendingWork &&
+                !RasterizationContextChanged())
+            {
+                return;
+            }
+
             RebuildResources();
+        }
+
+        private void OnTransformParentChanged()
+        {
+            fixedSizingValid = false;
+            rebuildRequested = true;
+            rasterContextValid = false;
+            canvasCache = null;
+            canvasLookupAttempted = false;
+#if UNITY_EDITOR
+            if (isActiveAndEnabled)
+            {
+                QueueEditorRebuild();
+            }
+#endif
         }
 
 #if UNITY_EDITOR
@@ -415,6 +478,9 @@ namespace Milestro.Components.Internal
         private void OnRectTransformDimensionsChange()
         {
             sizeDirty = true;
+            fixedSizingValid = false;
+            rebuildRequested = true;
+            rasterContextValid = false;
             if (!isActiveAndEnabled)
             {
                 return;
@@ -446,7 +512,7 @@ namespace Milestro.Components.Internal
             m_text = nextValue;
             if (RenderTarget.UseManagedStringText() || changed)
             {
-                MarkPropertiesChanged();
+                MarkTextChanged();
             }
         }
 
@@ -459,7 +525,7 @@ namespace Milestro.Components.Internal
             }
 
             m_text = nextValue;
-            MarkPropertiesChanged();
+            MarkTextChanged();
         }
 
         public void PrepareTextUtf8NoAlloc(int capacity)
@@ -536,7 +602,11 @@ namespace Milestro.Components.Internal
 
         private void RebuildResources()
         {
+            rebuildRequested = false;
             var profiling = SlimTextPipelineProfiler.Enabled;
+            using var profilerScope = profiling
+                ? SlimTextPipelineProfiler.ProducerUpdateMarker.Auto()
+                : default;
             var phaseStart = profiling ? SlimTextPipelineProfiler.Timestamp : 0;
             if (profiling)
             {
@@ -545,15 +615,17 @@ namespace Milestro.Components.Internal
 
             NormalizeSerializedValues();
             var size = CurrentSize();
-            ResolveRasterization(out var useScreenSpaceRasterization, out var desiredRasterScale);
+            var rasterizationResolved = ResolveRasterization(out var useScreenSpaceRasterization,
+                out var desiredRasterScale);
             var rebuilt = RenderTarget.Rebuild(size,
                 SurfaceColorSpace(),
                 CurrentSettings(),
                 useScreenSpaceRasterization,
                 desiredRasterScale,
                 this);
-            if (!rebuilt)
+            if (!rebuilt || useScreenSpaceRasterization && !rasterizationResolved)
             {
+                rebuildRequested = true;
 #if UNITY_EDITOR
                 QueueEditorRebuild();
 #endif
@@ -585,24 +657,113 @@ namespace Milestro.Components.Internal
             return cachedSize;
         }
 
-        private void ResolveRasterization(out bool useScreenSpaceRasterization, out float desiredRasterScale)
+        private bool ResolveRasterization(out bool useScreenSpaceRasterization, out float desiredRasterScale)
         {
             useScreenSpaceRasterization = m_screenSpaceRasterization;
             desiredRasterScale = 1f;
             if (!useScreenSpaceRasterization)
             {
-                return;
+                return true;
             }
 
             var rectTransform = RectTransformComponent();
-            if (rectTransform == null ||
-                !ScreenSpaceRasterMetrics.TryMeasure(rectTransform, worldCorners, out var measurement))
+            if (rectTransform == null || !TryCaptureRasterizationContext(rectTransform, out var context))
             {
                 desiredRasterScale = 0f;
-                return;
+                rasterContextValid = false;
+                return false;
             }
 
+            if (rasterContextValid && context.Matches(rasterContextCache))
+            {
+                desiredRasterScale = rasterDesiredScaleCache;
+                return true;
+            }
+
+            if (!ScreenSpaceRasterMetrics.TryMeasure(rectTransform,
+                    context.RootCanvas,
+                    worldCorners,
+                    out var measurement))
+            {
+                desiredRasterScale = 0f;
+                rasterContextValid = false;
+                return false;
+            }
+
+            rasterContextCache = context;
+            rasterDesiredScaleCache = measurement.DesiredScale;
+            rasterContextValid = true;
             desiredRasterScale = measurement.DesiredScale;
+            return true;
+        }
+
+        private bool RasterizationContextChanged()
+        {
+            if (!m_screenSpaceRasterization)
+            {
+                return false;
+            }
+
+            var rectTransform = RectTransformComponent();
+            if (rectTransform == null || !TryCaptureRasterizationContext(rectTransform, out var context))
+            {
+                return true;
+            }
+
+            return !rasterContextValid || !context.Matches(rasterContextCache);
+        }
+
+        private bool TryCaptureRasterizationContext(RectTransform rectTransform,
+            out RasterizationContext context)
+        {
+            context = default;
+            var canvas = CanvasComponent();
+            if (canvas == null)
+            {
+                return false;
+            }
+
+            var rootCanvas = canvas.rootCanvas != null ? canvas.rootCanvas : canvas;
+            var eventCamera = ScreenSpaceRasterMetrics.ResolveEventCamera(rootCanvas);
+            var targetDisplay = ScreenSpaceRasterMetrics.ResolveTargetDisplay(rootCanvas, eventCamera);
+            if (targetDisplay < 0)
+            {
+                return false;
+            }
+
+            context = new RasterizationContext(rootCanvas,
+                eventCamera,
+                rootCanvas.renderMode,
+                targetDisplay,
+                rectTransform.localToWorldMatrix,
+                rootCanvas.transform.localToWorldMatrix,
+                eventCamera != null ? eventCamera.transform.localToWorldMatrix : Matrix4x4.identity,
+                eventCamera != null ? eventCamera.projectionMatrix : Matrix4x4.identity,
+                rootCanvas.pixelRect,
+                eventCamera != null ? eventCamera.pixelRect : default,
+                rootCanvas.scaleFactor,
+                Screen.width,
+                Screen.height);
+            return true;
+        }
+
+        private Canvas? CanvasComponent()
+        {
+            if (canvasCache != null)
+            {
+                return canvasCache;
+            }
+
+            var frame = Time.frameCount;
+            if (canvasLookupAttempted && frame < canvasLookupRetryFrame)
+            {
+                return null;
+            }
+
+            canvasLookupAttempted = true;
+            canvasLookupRetryFrame = frame + 30;
+            canvasCache = GetComponentInParent<Canvas>();
+            return canvasCache;
         }
 
         private ColorSpace SurfaceColorSpace()
@@ -623,7 +784,7 @@ namespace Milestro.Components.Internal
                 m_fallbackToSystemFont,
                 m_autoFontSize.enabled,
                 m_autoFontSize.fontSizeMin,
-                m_autoFontSize.fontSizeMax).WithSizing(ResolveSizing());
+                m_autoFontSize.fontSizeMax, ResolveSizing());
         }
 
         private SlimTextIntrinsicMeasurement Measurement()
@@ -707,6 +868,8 @@ namespace Milestro.Components.Internal
 
         private void MarkPropertiesChanged()
         {
+            fixedSizingValid = false;
+            rebuildRequested = true;
 #if UNITY_EDITOR
             m_editorSkippedRenderRetries = 0;
 #endif
@@ -722,8 +885,32 @@ namespace Milestro.Components.Internal
 #endif
         }
 
+        private void MarkTextChanged()
+        {
+            rebuildRequested = true;
+#if UNITY_EDITOR
+            m_editorSkippedRenderRetries = 0;
+#endif
+            intrinsicMeasurement?.Dispose();
+            intrinsicMeasurement = null;
+            if (m_widthMode != TextWidthMode.Fixed ||
+                m_heightMode != TextHeightMode.Fixed ||
+                m_autoFontSize.enabled)
+            {
+                SetLayoutDirty();
+            }
+            RenderTarget.MarkPropertiesChanged();
+#if UNITY_EDITOR
+            if (isActiveAndEnabled)
+            {
+                QueueEditorRebuild();
+            }
+#endif
+        }
+
         private void MarkPaintChanged()
         {
+            rebuildRequested = true;
 #if UNITY_EDITOR
             m_editorSkippedRenderRetries = 0;
 #endif
@@ -751,11 +938,11 @@ namespace Milestro.Components.Internal
             m_fontWeight = NormalizeFontWeight(m_fontWeight);
             m_fontSize = NormalizeFontSize(m_fontSize);
             m_autoFontSize.Normalize();
-            if (!Enum.IsDefined(typeof(TextWidthMode), m_widthMode))
+            if ((uint)m_widthMode > (uint)TextWidthMode.FitContent)
             {
                 m_widthMode = TextWidthMode.Fixed;
             }
-            if (!Enum.IsDefined(typeof(TextHeightMode), m_heightMode))
+            if ((uint)m_heightMode > (uint)TextHeightMode.Auto)
             {
                 m_heightMode = TextHeightMode.Fixed;
             }
@@ -820,6 +1007,69 @@ namespace Milestro.Components.Internal
                    a.right == b.right &&
                    a.top == b.top &&
                    a.bottom == b.bottom;
+        }
+
+        private readonly struct RasterizationContext
+        {
+            internal RasterizationContext(Canvas rootCanvas,
+                Camera? eventCamera,
+                RenderMode renderMode,
+                int targetDisplay,
+                Matrix4x4 rectToWorld,
+                Matrix4x4 canvasToWorld,
+                Matrix4x4 cameraToWorld,
+                Matrix4x4 cameraProjection,
+                Rect canvasPixelRect,
+                Rect cameraPixelRect,
+                float canvasScaleFactor,
+                int screenWidth,
+                int screenHeight)
+            {
+                RootCanvas = rootCanvas;
+                EventCamera = eventCamera;
+                RenderMode = renderMode;
+                TargetDisplay = targetDisplay;
+                RectToWorld = rectToWorld;
+                CanvasToWorld = canvasToWorld;
+                CameraToWorld = cameraToWorld;
+                CameraProjection = cameraProjection;
+                CanvasPixelRect = canvasPixelRect;
+                CameraPixelRect = cameraPixelRect;
+                CanvasScaleFactor = canvasScaleFactor;
+                ScreenWidth = screenWidth;
+                ScreenHeight = screenHeight;
+            }
+
+            internal Canvas RootCanvas { get; }
+            internal Camera? EventCamera { get; }
+            internal RenderMode RenderMode { get; }
+            internal int TargetDisplay { get; }
+            internal Matrix4x4 RectToWorld { get; }
+            internal Matrix4x4 CanvasToWorld { get; }
+            internal Matrix4x4 CameraToWorld { get; }
+            internal Matrix4x4 CameraProjection { get; }
+            internal Rect CanvasPixelRect { get; }
+            internal Rect CameraPixelRect { get; }
+            internal float CanvasScaleFactor { get; }
+            internal int ScreenWidth { get; }
+            internal int ScreenHeight { get; }
+
+            internal bool Matches(in RasterizationContext other)
+            {
+                return RootCanvas == other.RootCanvas &&
+                       EventCamera == other.EventCamera &&
+                       RenderMode == other.RenderMode &&
+                       TargetDisplay == other.TargetDisplay &&
+                       RectToWorld == other.RectToWorld &&
+                       CanvasToWorld == other.CanvasToWorld &&
+                       CameraToWorld == other.CameraToWorld &&
+                       CameraProjection == other.CameraProjection &&
+                       CanvasPixelRect == other.CanvasPixelRect &&
+                       CameraPixelRect == other.CameraPixelRect &&
+                       CanvasScaleFactor == other.CanvasScaleFactor &&
+                       ScreenWidth == other.ScreenWidth &&
+                       ScreenHeight == other.ScreenHeight;
+            }
         }
     }
 }
