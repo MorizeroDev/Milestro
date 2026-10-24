@@ -22,9 +22,11 @@ namespace Milestro.RichTextParser
         public IReadOnlyList<ParagraphBlock> Blocks => blocks ??= new List<ParagraphBlock> { new ParagraphBlock() };
 
         /// <summary>
-        /// Flattened view of every block's segments, kept for single-paragraph consumers.
+        /// Read-only flattened snapshot of every block's segments, kept for single-paragraph
+        /// consumers. Paragraph structure and content mutations belong on <see cref="Blocks"/>
+        /// and each block's <see cref="ParagraphBlock.Segments"/> collection.
         /// </summary>
-        public List<TextSegment> Body
+        public IReadOnlyList<TextSegment> Body
         {
             get
             {
