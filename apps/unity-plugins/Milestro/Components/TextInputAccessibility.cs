@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Milestro.Components.Internal;
+using Milestro.Util;
 using UnityEngine;
 using UnityEngine.UI;
 #if UNITY_6000_3_OR_NEWER && MILESTRO_UNITY_ACCESSIBILITY
@@ -192,7 +193,7 @@ namespace Milestro.Components
             }
 
             var maskChar = target.maskChar == '\0' ? '*' : target.maskChar;
-            return new string(maskChar, text.Length);
+            return new string(maskChar, Utf16Util.CountGraphemeClusters(text));
         }
 
         private TextInputAccessibilityAnnouncementStrings BuildAnnouncementStrings(TextInput target)

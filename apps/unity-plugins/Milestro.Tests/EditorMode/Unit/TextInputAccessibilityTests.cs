@@ -171,6 +171,27 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void InsertedSurrogatePairCountsAsOneCharacter()
+        {
+            Assert.That(Diff(Caret("", 0), Caret("😀", 2), limit: 1),
+                Is.EqualTo(new[] { "😀" }));
+        }
+
+        [Test]
+        public void SelectedSurrogatePairsCountAsGraphemeClusters()
+        {
+            Assert.That(Diff(Caret("😀😀", 0), Selection("😀😀", 0, 4, 4), limit: 1),
+                Is.EqualTo(new[] { "2 characters selected" }));
+        }
+
+        [Test]
+        public void CombiningSequenceCountsAsOneCharacter()
+        {
+            Assert.That(Diff(Caret("", 0), Caret("e\u0301", 2), limit: 1),
+                Is.EqualTo(new[] { "e\u0301" }));
+        }
+
+        [Test]
         public void WordJumpAnnouncesWord()
         {
             Assert.That(Diff(Caret("foo bar", 0), Caret("foo bar", 4)),

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace Milestro.Util
@@ -17,6 +18,11 @@ namespace Milestro.Util
                 ++count;
             }
             return count;
+        }
+
+        internal static int CountGraphemeClusters(string text)
+        {
+            return string.IsNullOrEmpty(text) ? 0 : StringInfo.ParseCombiningCharacters(text).Length;
         }
 
         internal static int Utf8ToUtf16Offset(string text, ulong utf8Offset)

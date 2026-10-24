@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Milestro.Util;
 
 namespace Milestro.Components.Internal
 {
@@ -136,19 +137,21 @@ namespace Milestro.Components.Internal
         {
             var start = Math.Min(current.SelectionStartUtf16, current.Text.Length);
             var end = Math.Min(current.SelectionEndUtf16, current.Text.Length);
-            var length = end - start;
-            if (length <= 0)
+            var utf16Length = end - start;
+            if (utf16Length <= 0)
             {
                 return;
             }
 
-            if (strings.Masked || length > strings.TextEchoLimit)
+            var selectedText = current.Text.Substring(start, utf16Length);
+            var characterCount = Utf16Util.CountGraphemeClusters(selectedText);
+            if (strings.Masked || characterCount > strings.TextEchoLimit)
             {
-                output.Add(string.Format(strings.SelectedCountFormat, length));
+                output.Add(string.Format(strings.SelectedCountFormat, characterCount));
                 return;
             }
 
-            output.Add(current.Text.Substring(start, length));
+            output.Add(selectedText);
         }
 
         private static void AppendCaretMove(in TextInputAccessibilitySnapshot previous,
@@ -211,7 +214,8 @@ namespace Milestro.Components.Internal
 
         private static string EchoOrCount(string text, string countFormat, int limit)
         {
-            return text.Length <= limit ? text : string.Format(countFormat, text.Length);
+            var characterCount = Utf16Util.CountGraphemeClusters(text);
+            return characterCount <= limit ? text : string.Format(countFormat, characterCount);
         }
 
         private static string? ReadScalar(string text, int index)
