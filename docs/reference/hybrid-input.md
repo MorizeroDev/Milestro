@@ -1,4 +1,4 @@
-# Hybrid Input
+# Hybrid Input provider contract
 
 Milestro routes keyboard, committed text, IME composition, and IME ownership
 through one process-wide dispatcher. `TextInput` instances register private
@@ -140,12 +140,9 @@ Legacy-only projects do not receive this warning and retain ordinary
 This compatibility range follows Unity's package-version comparison. A valid
 1.x prerelease above the `1.16.0` floor therefore compiles and selects the same
 optional provider; prerelease contents are not separately runtime-certified.
-Official stable 1.x releases provide the API/runtime certification matrix.
-
-The Gradle release package recursively includes the complete `Milestro`,
-`Milestro.Editor`, `Milestro.Experimental`, `Milestro.InputSystem`, and
-`Resources` roots, including their existing top-level metadata. It excludes the
-`Milestro.Tests` and `Milestro.InputSystem.Tests` roots.
+Official stable 1.x releases provide the API/runtime certification matrix. See
+[the build guide](build.md#package-the-unity-plugin) for the packaged assembly
+roots and release output.
 
 ## Text And Composition Ordering
 

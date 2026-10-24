@@ -24,9 +24,15 @@ finished UPM package.
 
 ## Unity Installation
 
-The Unity assets live under `apps/unity-plugins/`. Treat this directory as the
-contents of a Unity `Assets/` folder, or copy/link the directories you need into
-your project.
+Download the prebuilt `milestro-unity-plugins.tar.gz` from a GitHub Release, or
+download the `milestro-unity-plugins` artifact from the **Formal Build and
+Release** workflow and extract its `.tar.gz` contents into the consuming Unity
+project's `Assets/` directory. Include `Resources/` and the `.meta` files.
+
+See [Install into a Unity project](docs/getting-started/install.md) for the
+complete download and extraction steps. When working from this repository
+instead, `apps/unity-plugins/` maps to the same `Assets/` layout; native plugin
+binaries must be built separately.
 
 Before importing Milestro, add the external ParaParty packages to the Unity
 project's `Packages/manifest.json`:
@@ -44,27 +50,19 @@ These are required by `Milestro.asmdef`: `party.para.util.colors` is used by the
 rich text color parser, and `party.para.util.unitynative` is used by managed
 native-object wrappers and native callback helpers.
 
-`com.unity.inputsystem` is optional. With a version in `[1.16.0,2.0.0-0)`, the
-packaged `Milestro.InputSystem` assembly serves projects using
-`InputSystemUIInputModule`. Without it, the base `Milestro` assembly remains
-importable and can use Unity's legacy `StandaloneInputModule` when the Legacy
-Input Manager is enabled.
+`com.unity.inputsystem` is optional for static text. Editable `TextInput`
+requires a version in `[1.16.0,2.0.0-0)` and an `InputSystemUIInputModule`. See
+[Add your first input field](docs/getting-started/first-input.md).
 
-If a consuming Unity project defines `MILEASE_HAS_NEWTONSOFT` and provides
+If a consuming Unity project defines `MILEASE_HAS_NEWTONSOFT_JSON` and provides
 `Newtonsoft.Json`, Milestro model DTOs include optional `JsonProperty` metadata.
+Defining `MILEASE_HAS_NEWTONSOFT` additionally annotates font-metadata types.
 Newtonsoft remains optional and is not required by default.
 
-Runtime assets needed by the current code:
-
-- Native plugin binary named for `DllImport("libMilestro")` on non-iOS targets.
-- iOS builds use `DllImport("__Internal")` with the `FrameworkBinding` entry-point prefix.
-- ICU data copied to `Assets/Resources/Milestro/icudtl.dat.bytes`. In this repo
-  the source data is `ext/icu-cmake/common/icudtl.dat`, and the Unity target path
-  maps to `apps/unity-plugins/Resources/Milestro/icudtl.dat.bytes`.
-
-See [docs/unity.md](docs/unity.md) for the full Unity integration notes and
-[docs/hybrid-input.md](docs/hybrid-input.md) for provider selection,
-capabilities, and migration from the removed legacy input components.
+See [docs/README.md](docs/README.md) for the Unity user manual and
+[docs/reference/hybrid-input.md](docs/reference/hybrid-input.md) for provider
+selection, capabilities, and migration from the removed legacy input
+components.
 
 ## Main Unity APIs
 
@@ -149,8 +147,8 @@ Format C# Unity sources:
 ./gradlew format
 ```
 
-See [docs/build.md](docs/build.md) for CMake options, test commands, and the
-current Windows build flow.
+See [docs/reference/build.md](docs/reference/build.md) for local build commands,
+CI packaging, and the platform workflow reference.
 
 ## Render Backend Status
 
@@ -168,8 +166,8 @@ The render-target path is platform-dependent:
 `UnityAutoRenderTextureSurface` currently auto-selects Metal, Direct3D 12,
 Vulkan, OpenGLES3, or OpenGLCore from Unity's active graphics device. Vulkan defaults
 to Direct; StagingCopy uses CPU rasterization followed by a Vulkan upload. MSAA
-render targets are not supported yet. See [docs/build.md](docs/build.md) for
-build commands and [tests/android_unity/README.md](tests/android_unity/README.md)
+render targets are not supported yet. See [docs/reference/build.md](docs/reference/build.md)
+for build commands and [tests/android_unity/README.md](tests/android_unity/README.md)
 for device validation.
 
 ## Repository Layout

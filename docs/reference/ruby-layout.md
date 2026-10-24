@@ -10,8 +10,10 @@ the upstream layout path.
 Add original base text, then register a half-open range of **UTF-8 byte offsets**:
 
 ```cpp
-builder.addText("漢字後");
-builder.addRuby({{0, 6}, "かんじ"});
+constexpr char base[] = "漢字後";
+constexpr char annotation[] = "かんじ";
+builder.addText(base, sizeof(base) - 1);
+builder.addRuby(0, 6, annotation, sizeof(annotation) - 1);
 auto paragraph = builder.Build();
 paragraph->layout(200);
 paragraph->paint(canvas, 0, 0);
@@ -44,7 +46,8 @@ Annotations can be registered out of order, but cannot overlap. Range validity i
 checked at `Build()`; Unicode, shaped-cluster and bidi validity are checked at
 `layout()`. C ABI calls return `MILESTRO_API_RET_FAILED` when validation throws.
 `AddRuby` therefore succeeding does not guarantee a later build/layout succeeds.
-`Reset()` clears annotations.
+To discard annotations and start over, create a new builder; the Milestro C++,
+C ABI, and managed wrappers do not expose Skia's `Reset()`.
 
 ## Width and breaks
 

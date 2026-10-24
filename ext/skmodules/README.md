@@ -27,7 +27,7 @@ First-line indentation also modifies `ParagraphStyle.h` and the paragraph layout
 These overlays are preserved by `scripts/vendor-skia-modules.sh`; its `overlay_paths`
 array supplies both upstream conflict detection and synchronization exclusions.
 
-See [horizontal Ruby](../../docs/ruby-layout.md) for the API and layout policy.
+See [horizontal Ruby](../../docs/reference/ruby-layout.md) for the API and layout policy.
 
 When updating Skia, compare the old and new upstream revisions for the preserved paths,
 merge those changes into the vendor tree, then run the vendor script with the new revision

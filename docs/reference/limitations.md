@@ -1,4 +1,4 @@
-# Known Limitations
+# Known limitations
 
 This page records stable, user-visible limitations caused by external platform
 or provider contracts. It does not track temporary test gaps or diagnostic

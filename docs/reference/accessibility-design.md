@@ -1,4 +1,4 @@
-# TextInput Accessibility Design
+# TextInput accessibility design
 
 Status: implemented by `Milestro.Components.TextInputAccessibility`
 (`apps/unity-plugins/Milestro/Components/TextInputAccessibility.cs`). Tracks
@@ -76,31 +76,29 @@ as Android's `TYPE_VIEW_TEXT_SELECTION_CHANGED` event — publishing selection a
 speech rather than as structured data is the industry-standard fallback when
 the host accessibility tree has no text-pattern equivalent.
 
-## Design
+## Implementation
 
-New component `Milestro.Components.TextInputAccessibility`, parallel to
-`TextBoxAccessibility`: a uGUI `Selectable` on the same GameObject as the
-`TextInput`, compiled behind `#if UNITY_6000_3_OR_NEWER &&
-MILESTRO_UNITY_ACCESSIBILITY` with the same warning-without-module fallback.
-Inspector fields follow the existing precedent (`m_screenReaderEnabled`,
-`m_linkHint`): serialized, localizable strings for every announcement
-template.
+`Milestro.Components.TextInputAccessibility` is a uGUI `Selectable` on the same
+GameObject as `TextInput`, compiled behind `#if UNITY_6000_3_OR_NEWER &&
+MILESTRO_UNITY_ACCESSIBILITY` with the same warning-without-module fallback as
+`TextBoxAccessibility`. Its label, announcement templates, and text echo limit
+are serialized so projects can localize them.
 
 ### Node publication
 
 One `AccessibilityNode` per `TextInput` (no container, unlike TextBox):
 
-- `role`: `TextField`, or `SearchField` when `contentType` maps to search.
-- `label`: explicit serialized field; falls back to placeholder text if the
-  placeholder `Graphic` exposes one, then to the GameObject name.
-- `value`: current text. When `maskInput` is set, publishes the masked
-  rendering (mask char repeated) — mirroring Android `isPassword` and
-  Chromium's sensitive state: length is exposed, contents are not.
-- `state`: `Disabled` when interaction is off; `Selected` while the input
-  holds edit focus.
-- `hint`: composed from properties the `state` enum cannot express —
-  readonly, multiline, password — e.g. `"Read-only text field"`,
-  `"Password field"`.
+- `role`: always `TextField`. A `SearchField` mapping is not implemented.
+- `label`: the serialized label; otherwise the text of a uGUI `Text`
+  placeholder; otherwise the GameObject name.
+- `value`: the committed text. When `maskInput` is set, publishes the mask
+  character repeated once per grapheme cluster, so length is exposed but
+  contents are not.
+- `state`: `Selected` while the input holds edit focus; otherwise no state
+  flag is published. Read-only is expressed through the hint rather than the
+  `Disabled` state.
+- `hint`: includes the read-only and password hints when applicable.
+  Multiline is not represented.
 - `frameGetter`: the input's screen-space rect (same helper style as
   `GetTextBoxScreenRect`).
 - `allowsDirectInteraction`: true while an editing session is active so touch
@@ -108,50 +106,48 @@ One `AccessibilityNode` per `TextInput` (no container, unlike TextBox):
 
 ### Reverse channel: screen-reader-initiated editing
 
-- `invoked` → begin editing (route focus through the same path
-  `OnSelect`/`AcquireDispatcherFocus` uses) and announce the "editing" hint.
-- `dismissed` → end editing (`ReleaseInputFocus` path), announce end-of-edit
-  with the final value (the spoken equivalent of `onEndEdit`).
-- `focusChanged` → track screen-reader focus for the frame highlight and to
-  gate announcements, mirroring `OnAccessibilityFocus` in
-  `TextBoxAccessibility`.
+- `invoked` requests the same editing path that pointer focus uses. The
+  transition is announced when edit focus is acquired.
+- `dismissed` ends editing and clears EventSystem selection.
+
+The component does not subscribe to `focusChanged`; announcements follow the
+`TextInput` editing snapshot rather than screen-reader focus.
 
 ### Snapshot diffing and announcements
 
-Follow the repository's existing snapshot pattern
-(`TextBoxContentSnapshot`, `TextInputFrameState`). Each frame the component
-captures a `TextInputAccessibilitySnapshot` from `InputBox`:
+Each frame the component captures a `TextInputAccessibilitySnapshot` from the
+`TextInput` and its `InputBox`:
 
 ```
-Text (version or hash)   | Cursor.Utf16Offset, Affinity
-Selection (Start/End/HasSelection, via Utf8ToUtf16)
-compositionActive        | editingActive (IsDispatcherFocused)
+Text                     | Cursor.Utf16Offset
+SelectionStart/EndUtf16  | compositionActive
+editingActive (IsDispatcherFocused)
 ```
 
 Diffs against the previous snapshot drive announcements:
 
 - **Editing begin / end** — "editing" / "editing ended" (UIA editing state,
   VoiceOver "is editing").
-- **Value changed** — classify the diff: insertion announces the inserted
-  text, deletion announces the removed text (ATK `text-changed::insert/delete`
-  semantics). Large pastes and IME commits announce a summary
-  ("pasted, 42 characters") instead of the full payload.
-- **Caret moved, no selection** — announce per movement granularity:
-  character move speaks the character now right of the caret, word move the
-  word, line move the line, document edge a boundary hint. This matches
-  Narrator / VoiceOver caret echo.
-- **Selection changed** — announce the selected text when small, otherwise
-  "N characters selected"; collapse announces the new caret context.
-- **Composition (IME)** — commit announces the committed string; pre-edit
-  updates are silent by default behind a serialized toggle.
-- **Password** — all announcements use the mask char or a localized
-  "bullet"; the plaintext value never reaches the announcement channel.
+- **Value changed** — a common-prefix/suffix diff announces the inserted or
+  removed text (ATK `text-changed::insert/delete` semantics). Text longer than
+  the echo limit is announced as a count. Counts are grapheme clusters, not
+  UTF-16 code units.
+- **Caret moved, no selection** — uses the change in UTF-16 offset to choose a
+  single-character, line, or word echo. It cannot distinguish keyboard from
+  pointer movement.
+- **Selection changed** — announces the selected text when small, otherwise
+  "N characters selected", counted in grapheme clusters. Removing a selection
+  without moving the caret produces no separate collapse announcement.
+- **Composition (IME)** — pre-edit updates are silent; the committed change is
+  announced through the value-diff path.
+- **Password** — a masked value change announces one localized password
+  character, never the plaintext. Masked selection still reports a grapheme
+  count.
 
-Announcements are coalesced per frame and rate-limited so sustained typing
-produces a steady cadence rather than a queue backlog; a cheap policy is to
-keep only the latest pending announcement per category.
+Announcements are generated once per frame and sent immediately. There is no
+rate limiter or per-category coalescing beyond the frame boundary.
 
-## Limits and future work
+## Limits and current gaps
 
 - Structured selection (a real TextPattern equivalent) requires native
   bridges beyond Unity's module: `AccessibilityNodeInfo` extras on Android,
@@ -163,13 +159,10 @@ keep only the latest pending announcement per category.
   expressible through `UnityEngine.Accessibility`; out of scope.
 - Caret/selection frame publishing for Braille displays is also bridge
   territory; not covered by the module.
-
-## Open questions
-
-- Should `value` update every frame or only on commit/focus loss? Every
-  change matches platform norms but risks redundant speech on screen readers
-  that re-read `value` on focus; needs device validation.
-- Granularity announcements need caret-movement cause (keyboard vs pointer);
-  pointer-driven caret placement probably should not echo.
-- Localization surface: one serialized template per announcement kind, or a
-  shared string table asset?
+- `SearchField` roles, multiline hints, and a disabled state are not mapped yet.
+- The label fallback reads only a uGUI `Text` placeholder, not a `TextBox` or
+  TMP placeholder.
+- Pointer-driven caret placement still produces caret-echo announcements;
+  movement-cause filtering needs device validation.
+- `value` is synchronized every frame while enabled. Some screen readers may
+  re-read it on focus more often than desired.
