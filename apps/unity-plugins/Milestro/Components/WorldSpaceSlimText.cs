@@ -343,15 +343,24 @@ namespace Milestro.Components
                 return;
             }
 
-            if (m_widthMode == TextWidthMode.Fixed && m_heightMode == TextHeightMode.Fixed &&
-                isActiveAndEnabled &&
-                producerCache != null && producerCache.enabled &&
+            var producer = producerCache;
+            var rectTransform = rectTransformCache;
+            var meshFilter = meshFilterCache;
+            if (isActiveAndEnabled &&
+                producer != null && producer.enabled &&
                 presenterCache != null &&
-                rectTransformCache != null &&
-                meshFilterCache != null &&
+                rectTransform != null &&
+                meshFilter != null &&
                 meshRendererCache != null)
             {
-                producerCache.SetManagedStringText(m_text);
+                producer.SetManagedStringText(m_text);
+                if (m_widthMode != TextWidthMode.Fixed || m_heightMode != TextHeightMode.Fixed)
+                {
+                    var textureSizePixels = CurrentTextureSizePixels(producer);
+                    ApplyRectTransformSettings(rectTransform, textureSizePixels);
+                    ApplyMesh(meshFilter, textureSizePixels);
+                }
+
                 return;
             }
 
