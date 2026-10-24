@@ -4,10 +4,14 @@ set(MILESTRO_TEST_SOURCE
         src/test_paragraph_style.cpp
         src/test_paragraph_hit_test.cpp
         src/test_paragraph_spacing.cpp
+        src/test_retcode.cpp
         src/test_unicode_fallback.cpp
 )
 
 add_executable(${MILESTRO_TEST_NAME} ${MILESTRO_TEST_SOURCE})
+target_include_directories(${MILESTRO_TEST_NAME} PRIVATE
+        ${PROJECT_SOURCE_DIR}/src
+)
 target_link_libraries(${MILESTRO_TEST_NAME} PRIVATE
         GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main
         Milestro

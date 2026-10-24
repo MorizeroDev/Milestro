@@ -26,6 +26,23 @@ namespace Milestro.Tests
             MilestroConfiguration.Configuration.RenderSurface = previousConfiguration;
         }
 
+        [Test]
+        public void CapturedCommandsClearAllResourcesWhenOneDisposeThrows()
+        {
+            var captured = new UnitySkiaRenderCommandList.CapturedCommands();
+            var completed = new DisposalProbe();
+            captured.Commands.Add(new UnitySkiaRenderCommandList.Command());
+            captured.OwnedResources.Add(new ThrowingDisposalProbe());
+            captured.OwnedResources.Add(completed);
+
+            Assert.Throws<System.InvalidOperationException>(() => captured.Dispose());
+            Assert.That(completed.Disposed, Is.True);
+            Assert.That(captured.Commands, Is.Empty);
+            Assert.That(captured.OwnedResources, Is.Empty);
+
+            Assert.DoesNotThrow(() => captured.Dispose());
+        }
+
         [UnityTest]
         public IEnumerator SharesTextureSubmitsOnceAndPreservesUnchangedRegion()
         {
@@ -221,6 +238,18 @@ namespace Milestro.Tests
             internal bool Disposed { get; private set; }
 
             public void Dispose() => Disposed = true;
+        }
+
+        private sealed class DisposalProbe : System.IDisposable
+        {
+            internal bool Disposed { get; private set; }
+
+            public void Dispose() => Disposed = true;
+        }
+
+        private sealed class ThrowingDisposalProbe : System.IDisposable
+        {
+            public void Dispose() => throw new System.InvalidOperationException("expected disposal failure");
         }
 
         [UnityTest]

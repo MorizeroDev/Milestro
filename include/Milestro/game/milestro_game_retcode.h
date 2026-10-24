@@ -7,6 +7,62 @@ constexpr int64_t MILESTRO_API_RET_OK = 0;
 constexpr int64_t MILESTRO_API_RET_UNEXPECTED_EXCEPTION = -11709394;
 constexpr int64_t MILESTRO_API_RET_FAILED = -1;
 
+// Structured statuses keep the historical sign convention: negative values
+// are failures, while non-negative values are successful results or warnings.
+// The high bits carry lifecycle information so cleanup callers can decide
+// whether an object is safe to recycle without parsing an opaque error code.
+constexpr uint64_t MILESTRO_API_STATUS_SEVERITY_SHIFT = 62;
+constexpr uint64_t MILESTRO_API_STATUS_FLAGS_SHIFT = 59;
+constexpr uint64_t MILESTRO_API_STATUS_MAGIC_SHIFT = 51;
+constexpr uint64_t MILESTRO_API_STATUS_DOMAIN_SHIFT = 43;
+constexpr uint64_t MILESTRO_API_STATUS_OPERATION_SHIFT = 32;
+
+constexpr uint64_t MILESTRO_API_STATUS_SEVERITY_MASK = 0x3ULL;
+constexpr uint64_t MILESTRO_API_STATUS_FLAGS_MASK = 0x7ULL;
+constexpr uint64_t MILESTRO_API_STATUS_MAGIC_MASK = 0xFFULL;
+constexpr uint64_t MILESTRO_API_STATUS_DOMAIN_MASK = 0xFFULL;
+constexpr uint64_t MILESTRO_API_STATUS_OPERATION_MASK = 0x7FFULL;
+constexpr uint64_t MILESTRO_API_STATUS_DETAIL_MASK = 0xFFFFFFFFULL;
+
+constexpr uint64_t MILESTRO_API_STATUS_MAGIC = 0x5AULL;
+
+enum : uint64_t {
+    MILESTRO_API_STATUS_SEVERITY_SUCCESS = 0,
+    MILESTRO_API_STATUS_SEVERITY_WARNING = 1,
+    MILESTRO_API_STATUS_SEVERITY_FAILURE = 2,
+    MILESTRO_API_STATUS_SEVERITY_FATAL = 3,
+};
+
+enum : uint64_t {
+    MILESTRO_API_STATUS_FLAG_DEFERRED = 1,
+    MILESTRO_API_STATUS_FLAG_RETRYABLE = 2,
+    MILESTRO_API_STATUS_FLAG_CONSUMED = 4,
+};
+
+constexpr uint64_t MILESTRO_API_STATUS_DOMAIN_NATIVE = 1;
+constexpr uint64_t MILESTRO_API_STATUS_DOMAIN_SKIA = MILESTRO_API_STATUS_DOMAIN_NATIVE;
+constexpr uint64_t MILESTRO_API_STATUS_OPERATION_DESTROY = 1;
+constexpr uint64_t MILESTRO_API_STATUS_DETAIL_UNEXPECTED_EXCEPTION = 1;
+
+constexpr int64_t MILESTRO_API_STATUS_MAKE(uint64_t severity,
+                                            uint64_t flags,
+                                            uint64_t domain,
+                                            uint64_t operation,
+                                            uint64_t detail) {
+    const uint64_t raw = ((severity & MILESTRO_API_STATUS_SEVERITY_MASK)
+                          << MILESTRO_API_STATUS_SEVERITY_SHIFT) |
+                         ((flags & MILESTRO_API_STATUS_FLAGS_MASK)
+                          << MILESTRO_API_STATUS_FLAGS_SHIFT) |
+                         ((MILESTRO_API_STATUS_MAGIC & MILESTRO_API_STATUS_MAGIC_MASK)
+                          << MILESTRO_API_STATUS_MAGIC_SHIFT) |
+                         ((domain & MILESTRO_API_STATUS_DOMAIN_MASK)
+                          << MILESTRO_API_STATUS_DOMAIN_SHIFT) |
+                         ((operation & MILESTRO_API_STATUS_OPERATION_MASK)
+                          << MILESTRO_API_STATUS_OPERATION_SHIFT) |
+                         (detail & MILESTRO_API_STATUS_DETAIL_MASK);
+    return static_cast<int64_t>(raw);
+}
+
 
 constexpr int64_t MILESTRO_API_RET_BEATMAP_FAILED = MILESTRO_API_RET_FAILED;
 constexpr int64_t MILESTRO_API_RET_BEATMAP_UNEXPECTED = MILESTRO_API_RET_UNEXPECTED_EXCEPTION;

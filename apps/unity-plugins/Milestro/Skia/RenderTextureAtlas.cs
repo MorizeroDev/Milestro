@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
 using Milestro.Configuration;
 using UnityEngine;
 #if UNITY_EDITOR
@@ -176,16 +177,15 @@ namespace Milestro.Skia
                 try
                 {
                     commands.CaptureInto(captured);
+                    page.Enqueue(this, captured);
+                    Pending = true;
+                    return true;
                 }
                 catch
                 {
-                    captured.Dispose();
-                    page.ReturnCaptured(captured);
+                    page.DisposeCapturedAfterFailedSubmission(captured);
                     throw;
                 }
-                Pending = true;
-                page.Enqueue(this, captured);
-                return true;
             }
 
             internal bool TrySubmitSlimText(ReusableTextDrawSnapshot snapshot, Vector2 baseline)
@@ -195,17 +195,25 @@ namespace Milestro.Skia
                     return false;
                 }
                 var captured = page.RentCaptured();
-                captured.Commands.Add(new UnitySkiaRenderCommandList.Command
+                try
                 {
-                    Kind = UnitySkiaRenderCommandList.CommandKind.SlimText,
-                    Resource = snapshot.NativePtr,
-                    X = baseline.x,
-                    Y = baseline.y,
-                    KeepAlive = snapshot
-                });
-                Pending = true;
-                page.Enqueue(this, captured);
-                return true;
+                    captured.Commands.Add(new UnitySkiaRenderCommandList.Command
+                    {
+                        Kind = UnitySkiaRenderCommandList.CommandKind.SlimText,
+                        Resource = snapshot.NativePtr,
+                        X = baseline.x,
+                        Y = baseline.y,
+                        KeepAlive = snapshot
+                    });
+                    page.Enqueue(this, captured);
+                    Pending = true;
+                    return true;
+                }
+                catch
+                {
+                    page.DisposeCapturedAfterFailedSubmission(captured);
+                    throw;
+                }
             }
 
             internal bool TrySubmitEmpty()
@@ -214,9 +222,18 @@ namespace Milestro.Skia
                 {
                     return false;
                 }
-                Pending = true;
-                page.Enqueue(this, page.RentCaptured());
-                return true;
+                var captured = page.RentCaptured();
+                try
+                {
+                    page.Enqueue(this, captured);
+                    Pending = true;
+                    return true;
+                }
+                catch
+                {
+                    page.DisposeCapturedAfterFailedSubmission(captured);
+                    throw;
+                }
             }
 
             internal bool TryBeginSubmit()
@@ -243,18 +260,37 @@ namespace Milestro.Skia
             internal void Notify(SubmissionStatus status)
             {
                 Pending = false;
+                Exception? firstException = null;
                 foreach (var resource in deferredResources)
                 {
-                    resource.Dispose();
+                    try
+                    {
+                        resource.Dispose();
+                    }
+                    catch (Exception exception)
+                    {
+                        firstException ??= exception;
+                    }
                 }
                 deferredResources.Clear();
-                if (disposed)
+                try
                 {
-                    page.Release(this);
+                    if (disposed)
+                    {
+                        page.Release(this);
+                    }
+                    else
+                    {
+                        Completed?.Invoke(status);
+                    }
                 }
-                else
+                catch (Exception exception)
                 {
-                    Completed?.Invoke(status);
+                    firstException ??= exception;
+                }
+                if (firstException != null)
+                {
+                    ExceptionDispatchInfo.Capture(firstException).Throw();
                 }
             }
 
@@ -318,7 +354,33 @@ namespace Milestro.Skia
 
             internal void Enqueue(Lease lease, UnitySkiaRenderCommandList.CapturedCommands captured)
             {
-                pending.Add(RentUpdate(lease, captured));
+                var update = RentUpdate(lease, captured);
+                try
+                {
+                    pending.Add(update);
+                }
+                catch
+                {
+                    ReturnUpdate(update);
+                    throw;
+                }
+            }
+
+            internal void DisposeCapturedAfterFailedSubmission(
+                UnitySkiaRenderCommandList.CapturedCommands captured)
+            {
+                try
+                {
+                    captured.Dispose();
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception);
+                }
+                finally
+                {
+                    ReturnCaptured(captured);
+                }
             }
 
             internal UnitySkiaRenderCommandList.CapturedCommands RentCaptured()
@@ -359,13 +421,13 @@ namespace Milestro.Skia
                 inFlight.AddRange(pending);
                 pending.Clear();
                 var commands = new UnitySkiaRenderCommandList();
-                foreach (var update in inFlight)
-                {
-                    commands.AppendRegion(update.Commands, update.Lease.Allocation,
-                        update.Lease.Content, update.Lease.Scale);
-                }
                 try
                 {
+                    foreach (var update in inFlight)
+                    {
+                        commands.AppendRegion(update.Commands, update.Lease.Allocation,
+                            update.Lease.Content, update.Lease.Scale);
+                    }
                     if (Epoch != UnityAutoRenderTextureSurface.ReadCurrentDeviceEpoch() ||
                         !Surface.TrySubmit(commands, !initialized))
                     {
@@ -377,7 +439,7 @@ namespace Milestro.Skia
                 catch (Exception exception)
                 {
                     Debug.LogException(exception);
-                    Surface.DisposeResourceAfterPendingDraws(new PendingFailure(this, inFlight));
+                    DeferInFlightCompletion();
                 }
             }
 
@@ -400,22 +462,30 @@ namespace Milestro.Skia
             {
                 foreach (var update in completed)
                 {
+                    var lease = update.Lease;
                     var commands = update.Commands;
-                    var clean = false;
+
+                    ReturnUpdate(update);
                     try
                     {
                         commands.Dispose();
-                        update.Lease.Notify(status);
-                        clean = true;
                     }
                     catch (Exception exception)
                     {
                         Debug.LogException(exception);
                     }
-                    if (clean)
+                    finally
                     {
-                        ReturnUpdate(update);
                         ReturnCaptured(commands);
+                    }
+
+                    try
+                    {
+                        lease.Notify(status);
+                    }
+                    catch (Exception exception)
+                    {
+                        Debug.LogException(exception);
                     }
                 }
             }
@@ -439,8 +509,21 @@ namespace Milestro.Skia
                 Surface.RenderEventCompleted -= Complete;
                 FinishUpdates(pending, SubmissionStatus.Failed);
                 pending.Clear();
-                Surface.DisposeResourceAfterPendingDraws(new PendingFailure(this, inFlight));
+                DeferInFlightCompletion();
                 Surface.Dispose();
+            }
+
+            private void DeferInFlightCompletion()
+            {
+                try
+                {
+                    Surface.DisposeResourceAfterPendingDraws(new PendingFailure(this, inFlight));
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception);
+                    Complete(SubmissionStatus.Failed);
+                }
             }
 
             private sealed class PendingFailure : IDisposable

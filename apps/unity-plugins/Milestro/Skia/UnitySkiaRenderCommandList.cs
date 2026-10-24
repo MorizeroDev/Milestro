@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
 using Milestro.Binding;
 using Milestro.Util;
 using UnityEngine;
@@ -209,8 +210,9 @@ namespace Milestro.Skia
                 var command = source;
                 if (command.Kind == CommandKind.Paragraph && command.Resource != IntPtr.Zero)
                 {
+                    var retained = new RetainedParagraph(command.Resource);
                     ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphRetain(command.Resource));
-                    captured.OwnedResources.Add(new RetainedParagraph(command.Resource));
+                    AddOwnedResource(captured, retained);
                     command.KeepAlive = null;
                 }
                 else if (command.SnapshotInputBox)
@@ -220,7 +222,7 @@ namespace Milestro.Skia
                         throw new InvalidOperationException("Milestro InputBox draw command is missing its editor model.");
                     }
                     var snapshot = inputBox.CreateDrawSnapshot();
-                    captured.OwnedResources.Add(snapshot);
+                    AddOwnedResource(captured, snapshot);
                     command.Resource = snapshot.NativePtr;
                     command.KeepAlive = snapshot;
                 }
@@ -231,7 +233,7 @@ namespace Milestro.Skia
                         throw new InvalidOperationException("Milestro slim text draw command is missing its font.");
                     }
                     var snapshot = new TextDrawSnapshot(font, command.Text, command.Color);
-                    captured.OwnedResources.Add(snapshot);
+                    AddOwnedResource(captured, snapshot);
                     command.Resource = snapshot.NativePtr;
                     command.KeepAlive = snapshot;
                 }
@@ -263,6 +265,19 @@ namespace Milestro.Skia
             }
         }
 
+        private static void AddOwnedResource(CapturedCommands captured, IDisposable resource)
+        {
+            try
+            {
+                captured.OwnedResources.Add(resource);
+            }
+            catch
+            {
+                resource.Dispose();
+                throw;
+            }
+        }
+
         internal void AppendRegion(CapturedCommands captured, RectInt allocation, RectInt content, float scale)
         {
             commands.Add(new Command
@@ -289,12 +304,25 @@ namespace Milestro.Skia
 
             public void Dispose()
             {
+                Exception? firstException = null;
                 foreach (var resource in OwnedResources)
                 {
-                    resource.Dispose();
+                    try
+                    {
+                        resource?.Dispose();
+                    }
+                    catch (Exception exception)
+                    {
+                        firstException ??= exception;
+                    }
                 }
+
                 OwnedResources.Clear();
                 Commands.Clear();
+                if (firstException != null)
+                {
+                    ExceptionDispatchInfo.Capture(firstException).Throw();
+                }
             }
         }
     }

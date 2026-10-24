@@ -34,12 +34,8 @@ int64_t MilestroSkiaTextDrawSnapshotCreate(milestro::skia::SlimTextDrawSnapshot 
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextDrawSnapshotDestroy(milestro::skia::SlimTextDrawSnapshot *&ret) try {
-    delete ret;
-    ret = nullptr;
-    return MILESTRO_API_RET_OK;
-} catch (...) {
-    return MILESTRO_API_RET_FAILED;
+int64_t MilestroSkiaTextDrawSnapshotDestroy(milestro::skia::SlimTextDrawSnapshot *&ret) {
+    return MilestroDestroyHandle(ret);
 }
 
 int64_t MilestroSkiaReusableTextDrawSnapshotCreate(milestro::skia::SlimTextDrawSnapshot *&ret,
@@ -107,12 +103,8 @@ int64_t MilestroSkiaReusableTextDrawSnapshotMeasureText(milestro::skia::SlimText
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaReusableTextDrawSnapshotDestroy(milestro::skia::SlimTextDrawSnapshot *&ret) try {
-    delete ret;
-    ret = nullptr;
-    return MILESTRO_API_RET_OK;
-} catch (...) {
-    return MILESTRO_API_RET_FAILED;
+int64_t MilestroSkiaReusableTextDrawSnapshotDestroy(milestro::skia::SlimTextDrawSnapshot *&ret) {
+    return MilestroDestroyHandle(ret);
 }
 
 }

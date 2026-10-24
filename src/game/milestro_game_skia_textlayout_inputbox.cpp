@@ -41,12 +41,8 @@ int64_t MilestroSkiaTextlayoutInputBoxCreate(milestro::skia::textlayout::InputBo
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxDestroy(milestro::skia::textlayout::InputBox*& ret) try {
-    delete ret;
-    ret = nullptr;
-    return MILESTRO_API_RET_OK;
-} catch (...) {
-    return MILESTRO_API_RET_FAILED;
+int64_t MilestroSkiaTextlayoutInputBoxDestroy(milestro::skia::textlayout::InputBox*& ret) {
+    return MilestroDestroyHandle(ret);
 }
 
 int64_t MilestroSkiaTextlayoutInputBoxCreateDrawSnapshot(milestro::skia::textlayout::InputBox* inputBox,
@@ -62,12 +58,9 @@ int64_t MilestroSkiaTextlayoutInputBoxCreateDrawSnapshot(milestro::skia::textlay
     return MILESTRO_API_RET_FAILED;
 }
 
-int64_t MilestroSkiaTextlayoutInputBoxDrawSnapshotDestroy(milestro::skia::textlayout::InputBoxDrawSnapshot*& ret) try {
-    delete ret;
-    ret = nullptr;
-    return MILESTRO_API_RET_OK;
-} catch (...) {
-    return MILESTRO_API_RET_FAILED;
+int64_t MilestroSkiaTextlayoutInputBoxDrawSnapshotDestroy(
+    milestro::skia::textlayout::InputBoxDrawSnapshot*& ret) {
+    return MilestroDestroyHandle(ret);
 }
 
 int64_t

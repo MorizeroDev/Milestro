@@ -7,14 +7,21 @@
 #include <limits>
 
 extern "C" {
-int64_t MilestroSkiaTextlayoutParagraphDestroy(milestro::skia::textlayout::Paragraph *&ret) try {
-    if (ret != nullptr) {
-        ret->release();
-    }
+int64_t MilestroSkiaTextlayoutParagraphDestroy(milestro::skia::textlayout::Paragraph *&ret) {
+    auto* owned = ret;
     ret = nullptr;
-    return MILESTRO_API_RET_OK;
-} catch (...) {
-    return MILESTRO_API_RET_FAILED;
+    try {
+        if (owned != nullptr) {
+            owned->release();
+        }
+        return MILESTRO_API_RET_OK;
+    } catch (...) {
+        return MILESTRO_API_STATUS_MAKE(MILESTRO_API_STATUS_SEVERITY_WARNING,
+                                        MILESTRO_API_STATUS_FLAG_CONSUMED,
+                                        MILESTRO_API_STATUS_DOMAIN_NATIVE,
+                                        MILESTRO_API_STATUS_OPERATION_DESTROY,
+                                        MILESTRO_API_STATUS_DETAIL_UNEXPECTED_EXCEPTION);
+    }
 }
 
 int64_t MilestroSkiaTextlayoutParagraphRetain(milestro::skia::textlayout::Paragraph *p) try {
