@@ -489,7 +489,11 @@ void TextLine::paintDecorations(ParagraphPainter* painter, SkScalar x, SkScalar 
     ParagraphPainterAutoRestore ppar(painter);
     painter->translate(x + this->offset().fX, y + this->offset().fY + style.getBaselineShift());
     Decorations decorations;
-    SkScalar correctedBaseline = SkScalarFloorToScalar(-this->sizes().rawAscent() + style.getBaselineShift() + 0.5);
+    // Gaps are cut where glyphs cross the decoration, so they must be measured against the
+    // baseline buildTextBlob() draws the text at, relative to the already shifted origin
+    SkScalar correctedBaseline =
+            SkScalarFloorToScalar(this->baseline() + style.getBaselineShift() + 0.5) -
+            style.getBaselineShift();
     decorations.paint(painter, style, context, correctedBaseline);
 }
 
@@ -762,6 +766,13 @@ void TextLine::createSoftHyphen() {
 }
 
 std::unique_ptr<Run> TextLine::shapeEllipsis(const SkString& ellipsis, const Cluster* cluster) {
+    return ShapeString(fOwner, fBlockRange, ellipsis, cluster);
+}
+
+std::unique_ptr<Run> TextLine::ShapeString(ParagraphImpl* owner,
+                                           BlockRange blockRange,
+                                           const SkString& ellipsis,
+                                           const Cluster* cluster) {
 
     class ShapeHandler final : public SkShaper::RunHandler {
     public:
@@ -806,9 +817,9 @@ std::unique_ptr<Run> TextLine::shapeEllipsis(const SkString& ellipsis, const Clu
     };
 
     const Run& run = cluster->run();
-    TextStyle textStyle = fOwner->paragraphStyle().getTextStyle();
-    for (auto i = fBlockRange.start; i < fBlockRange.end; ++i) {
-        auto& block = fOwner->block(i);
+    TextStyle textStyle = owner->paragraphStyle().getTextStyle();
+    for (auto i = blockRange.start; i < blockRange.end; ++i) {
+        auto& block = owner->block(i);
         if (run.leftToRight() && cluster->textRange().end <= block.fRange.end) {
             textStyle = block.fStyle;
             break;
@@ -824,7 +835,7 @@ std::unique_ptr<Run> TextLine::shapeEllipsis(const SkString& ellipsis, const Clu
     // single run, so if the affix would split in that direction (like
     // "Read more…" in RTL text), shape it in the opposite direction instead.
     SkBidiIterator::Level bidiLevel = run.bidiLevel();
-    if (sk_sp<SkUnicode> unicode = fOwner->getUnicode()) {
+    if (sk_sp<SkUnicode> unicode = owner->getUnicode()) {
         const bool ltr = run.leftToRight();
         const auto runDir = ltr ? SkUnicode::TextDirection::kLTR : SkUnicode::TextDirection::kRTL;
         const auto otherDir = ltr ? SkUnicode::TextDirection::kRTL : SkUnicode::TextDirection::kLTR;
@@ -843,13 +854,13 @@ std::unique_ptr<Run> TextLine::shapeEllipsis(const SkString& ellipsis, const Clu
         font.setSubpixel(textStyle.getSubpixel());
 
         std::unique_ptr<SkShaper> shaper = SkShapers::HB::ShapeDontWrapOrReorder(
-                fOwner->getUnicode(), fallback ? fallback : SkFontMgr::RefEmpty());
+                owner->getUnicode(), fallback ? fallback : SkFontMgr::RefEmpty());
 
         const char* utf8 = ellipsis.c_str();
         size_t utf8Bytes = ellipsis.size();
 
         std::unique_ptr<SkShaper::BiDiRunIterator> bidi = SkShapers::unicode::BidiRunIterator(
-                fOwner->getUnicode(), utf8, utf8Bytes, bidiLevel);
+                owner->getUnicode(), utf8, utf8Bytes, bidiLevel);
         SkASSERT(bidi);
 
         std::unique_ptr<SkShaper::LanguageRunIterator> language =
@@ -874,7 +885,7 @@ std::unique_ptr<Run> TextLine::shapeEllipsis(const SkString& ellipsis, const Clu
                       &handler);
         auto ellipsisRun = handler.run();
         ellipsisRun->fTextRange = TextRange(0, ellipsis.size());
-        ellipsisRun->fOwner = fOwner;
+        ellipsisRun->fOwner = owner;
         return ellipsisRun;
     };
 
@@ -885,7 +896,7 @@ std::unique_ptr<Run> TextLine::shapeEllipsis(const SkString& ellipsis, const Clu
     }
 
     // Check all allowed fonts
-    std::vector<sk_sp<SkTypeface>> typefaces = fOwner->fontCollection()->findTypefaces(
+    std::vector<sk_sp<SkTypeface>> typefaces = owner->fontCollection()->findTypefaces(
             textStyle.getFontFamilies(), textStyle.getFontStyle(), textStyle.getFontArguments());
     for (const auto& typeface : typefaces) {
         ellipsisRun = shaped(typeface, nullptr);
@@ -895,25 +906,24 @@ std::unique_ptr<Run> TextLine::shapeEllipsis(const SkString& ellipsis, const Clu
     }
 
     // Try the fallback
-    if (fOwner->fontCollection()->fontFallbackEnabled()) {
+    if (owner->fontCollection()->fontFallbackEnabled()) {
         const char* ch = ellipsis.c_str();
       SkUnichar unicode = SkUTF::NextUTF8WithReplacement(&ch,
                                                          ellipsis.c_str()
                                                              + ellipsis.size());
         // We do not expect emojis in ellipsis so if they appeat there
         // they will not be resolved with the pretiest color emoji font
-        auto typeface = fOwner->fontCollection()->defaultFallback(
-                                            unicode,
-                                            textStyle.getFontFamilies(),
-                                            textStyle.getFontStyle(),
-                                            textStyle.getLocale(),
-                                            textStyle.getFontArguments());
-        if (typeface) {
-            ellipsisRun = shaped(typeface, fOwner->fontCollection()->getFallbackManager());
-            if (ellipsisRun->isResolved()) {
-                return ellipsisRun;
-            }
-        }
+      auto typeface = owner->fontCollection()->defaultFallback(unicode,
+                                                               textStyle.getFontFamilies(),
+                                                               textStyle.getFontStyle(),
+                                                               textStyle.getLocale(),
+                                                               textStyle.getFontArguments());
+      if (typeface) {
+          ellipsisRun = shaped(typeface, owner->fontCollection()->getFallbackManager());
+          if (ellipsisRun->isResolved()) {
+              return ellipsisRun;
+          }
+      }
     }
     return ellipsisRun;
 }

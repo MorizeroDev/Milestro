@@ -224,10 +224,12 @@ private:
     }
 
     // softHyphen is the string drawn at soft hyphen line breaks, or nullptr if none is drawn.
+    // A line that may get an ellipsis draws no hyphen, so it needs no room for one
     void lookAhead(SkScalar maxWidth,
                    Cluster* endOfClusters,
                    bool applyRoundingHack,
-                   const SkString* softHyphen);
+                   const SkString* softHyphen,
+                   bool lineMayEllipsize);
     void breakRubyTextIntoLines(ParagraphImpl* parent, SkScalar maxWidth,
                                const AddLineToParagraph& addLine);
     void moveForward(bool hasEllipsis);

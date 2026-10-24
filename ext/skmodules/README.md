@@ -1,7 +1,11 @@
 # Skia module vendor
 
 `vendor-meta` records the upstream source and compatible Skia core revision. The current
-module source is from `b667731938d8a0921e543a04bfa01a5ecb7950f6`.
+module source is from `a625b5349f7048005a4ce9612b74ffcce458982e`.
+
+This update synchronizes FontCollection's font caches and caches system fallback
+results across paragraphs. It also corrects underline gaps with shifted baselines and
+soft-hyphen intrinsic widths, including fallback glyphs and truncated paragraphs.
 
 This revision includes upstream fixes for BiDi cluster coverage and ellipsis shaping,
 zero-width grapheme hit bounds, combining-mark and ligature styling, justified hit

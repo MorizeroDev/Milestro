@@ -669,6 +669,28 @@ TEST_F(RubyLayoutTest, SoftHyphenBreakReservesHyphenWidthWithTextIndent) {
     EXPECT_LE(paragraph->getLongestLine(), width + 24);
 }
 
+TEST_F(RubyLayoutTest, SoftHyphenIntrinsicWidthsPreserveFirstLineIndent) {
+    const auto wordWidth = build("longword")->getMaxIntrinsicWidth();
+    const auto hyphenWidth = build("-")->getMaxIntrinsicWidth();
+    style.setRenderSoftHyphens(true);
+    style.setSoftHyphenString(SkString("-"));
+    style.setTextIndent(24, false);
+
+    for (bool ellipsized : {false, true}) {
+        if (ellipsized) {
+            style.setMaxLines(2);
+            style.setEllipsis(SkString("..."));
+        }
+        for (float width : {1000.0f, 180.0f, 30.0f}) {
+            SCOPED_TRACE(::testing::Message() << "width=" << width << ", ellipsized=" << ellipsized);
+            auto firstWord = build("longword\xC2\xAD" "x y", {}, width);
+            auto laterWord = build("x y longword\xC2\xAD" "x", {}, width);
+            EXPECT_NEAR(firstWord->getMinIntrinsicWidth(), wordWidth + hyphenWidth + 24, 0.01f);
+            EXPECT_NEAR(laterWord->getMinIntrinsicWidth(), wordWidth + hyphenWidth, 0.01f);
+        }
+    }
+}
+
 TEST_F(RubyLayoutTest, SoftHyphenSelectionAndHitTestingUseOriginalSourceRange) {
     const auto width = build("inter-")->getMaxIntrinsicWidth() + 0.5f;
     style.setRenderSoftHyphens(true);
