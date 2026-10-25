@@ -117,7 +117,12 @@ The Unity rich-text parser supports the single-base HTML subset
 `<ruby>base<rt>annotation</rt></ruby>`, optional `<rp>` fallback text, standard
 CSS `ruby-position`, `ruby-align` and `ruby-overhang`, plus documented
 `--milestro-ruby-*` custom properties. InputBox editing intentionally remains
-plain-text-only. Vertical text/shaping is not implemented.
+plain-text-only. Vertical text/shaping is not implemented in the Ruby/layout
+pipeline. The native `ShapeTtbRun()` TTB shaping seam is implemented, but
+paragraph layout, Ruby integration, and Unity vertical text remain
+unimplemented. See [Vertical text research and implementation
+status](vertical-text-research.md) for the implemented shaping boundary,
+remaining layout and Ruby work, and current limitations.
 
 ## Validation
 

@@ -383,6 +383,7 @@ set(
         src/skia/textlayout/Paragraph.cpp
         src/skia/textlayout/NoWrapLayout.cpp
         src/skia/textlayout/InputBox.cpp
+        src/skia/textlayout/TtbShaper.cpp
 
         src/unicode/icu.cpp
         src/unicode/comparison.cpp
@@ -510,6 +511,7 @@ target_include_directories(Milestro
         ${MILESTRO_INCLUDES}
         PRIVATE
         src
+        ${PROJECT_SOURCE_DIR}/ext/skia/third_party/externals/harfbuzz/src
 )
 
 target_link_libraries(Milestro

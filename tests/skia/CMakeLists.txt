@@ -50,9 +50,30 @@ target_compile_definitions(${MILESTRO_PARAGRAPH_HIT_TEST_NAME} PRIVATE
         MILESTRO_TEST_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/SourceHanSans-VF.otf.woff2.bytes"
 )
 
+set(MILESTRO_VERTICAL_TEXT_TEST_NAME "MilestroTest_SkiaVerticalTextFeasibility")
+add_executable(${MILESTRO_VERTICAL_TEXT_TEST_NAME} src/test_vertical_text.cpp)
+target_include_directories(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PRIVATE
+        ${PROJECT_SOURCE_DIR}/ext/skia/third_party/externals/harfbuzz/src
+)
+target_link_libraries(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PRIVATE
+        GTest::gtest GTest::gtest_main
+        Milestro
+        Milestro::SkParagraph
+        skia_shaper
+        ${PROJECT_PLATFORM_LIBRARIES}
+)
+target_compile_definitions(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PRIVATE
+        MILESTRO_TEST_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/SourceHanSans-VF.otf.woff2.bytes"
+        MILESTRO_TEST_FALLBACK_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/LiberationSans-Bold.ttf.bytes"
+)
+if (MSVC)
+    target_compile_options(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PRIVATE /utf-8)
+endif ()
+
 if (NOT ANDROID)
     set(MILESTRO_TEST_NO_ICU_WORKDIR "${CMAKE_CURRENT_BINARY_DIR}/no-icu-workdir")
     file(MAKE_DIRECTORY "${MILESTRO_TEST_NO_ICU_WORKDIR}")
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vertical-text-results")
 
     add_test(
             NAME ${MILESTRO_TEST_NAME}
@@ -76,6 +97,16 @@ if (NOT ANDROID)
             ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
     )
     set_property(TEST ${MILESTRO_PARAGRAPH_HIT_TEST_NAME} APPEND PROPERTY
+            ENVIRONMENT "DYLD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
+    )
+
+    add_test(NAME ${MILESTRO_VERTICAL_TEXT_TEST_NAME}
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vertical-text-results"
+            COMMAND ${MILESTRO_VERTICAL_TEXT_TEST_NAME})
+    set_tests_properties(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PROPERTIES
+            ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    )
+    set_property(TEST ${MILESTRO_VERTICAL_TEXT_TEST_NAME} APPEND PROPERTY
             ENVIRONMENT "DYLD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
     )
 endif ()

@@ -76,6 +76,7 @@ Reference pages describe exact behavior and advanced configuration:
 - [Hybrid input provider contract](reference/hybrid-input.md)
 - [Known limitations](reference/limitations.md)
 - [Horizontal Ruby layout](reference/ruby-layout.md)
+- [Vertical text research and implementation status](reference/vertical-text-research.md)
 - [TextInput accessibility design](reference/accessibility-design.md)
 - [Build from source and CI reference](reference/build.md)
 
