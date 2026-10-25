@@ -1,5 +1,6 @@
 set(MILESTRO_TEST_NAME "MilestroTest_SkiaUnicodeFallback")
 set(MILESTRO_TEST_SOURCE
+        src/test_skshaper_direction.cpp
         src/test_font_collection.cpp
         src/test_paragraph_style.cpp
         src/test_paragraph_hit_test.cpp
@@ -15,6 +16,7 @@ target_include_directories(${MILESTRO_TEST_NAME} PRIVATE
 target_link_libraries(${MILESTRO_TEST_NAME} PRIVATE
         GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main
         Milestro
+        skia_shaper
         ${PROJECT_PLATFORM_LIBRARIES}
 )
 target_compile_definitions(${MILESTRO_TEST_NAME} PRIVATE
@@ -57,9 +59,8 @@ target_include_directories(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PRIVATE
 )
 target_link_libraries(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PRIVATE
         GTest::gtest GTest::gtest_main
-        Milestro
-        Milestro::SkParagraph
-        skia_shaper
+        Milestro::SkTtbShaper
+        Milestro::SkUnicode
         ${PROJECT_PLATFORM_LIBRARIES}
 )
 target_compile_definitions(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PRIVATE

@@ -1,4 +1,4 @@
-#include "Milestro/skia/textlayout/TtbShaper.h"
+#include "skttbshaper/TtbShaper.h"
 
 #include "include/core/SkData.h"
 #include "include/core/SkTypeface.h"
@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-namespace milestro::skia::textlayout {
+namespace skia::textlayout {
 namespace {
 
 constexpr float kHarfBuzzToSkia = 1.0f / 64.0f;
@@ -288,4 +288,4 @@ bool ShapeTtbRun(const TtbShapeRequest& request, TtbShapedRun* result) {
     return true;
 }
 
-} // namespace milestro::skia::textlayout
+} // namespace skia::textlayout

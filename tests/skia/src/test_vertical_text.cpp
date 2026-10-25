@@ -1,5 +1,3 @@
-#include "Milestro/skia/textlayout/TtbShaper.h"
-#include "Milestro/skia/unicode/Unicode.h"
 #include "include/core/SkBitmap.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColor.h"
@@ -16,9 +14,8 @@
 #include "include/core/SkTypeface.h"
 #include "include/encode/SkPngEncoder.h"
 #include "include/ports/SkFontMgr_empty.h"
-#include "modules/skshaper/include/SkShaper.h"
-#include "modules/skshaper/include/SkShaper_harfbuzz.h"
 #include "modules/skunicode/include/SkUnicode.h"
+#include "skttbshaper/TtbShaper.h"
 
 #include <hb-ot.h>
 #include <hb.h>
@@ -40,12 +37,12 @@
 
 namespace {
 
-using milestro::skia::textlayout::ShapeTtbRun;
-using milestro::skia::textlayout::TtbFeature;
-using milestro::skia::textlayout::TtbHorizontalDirection;
-using milestro::skia::textlayout::TtbOrientation;
-using milestro::skia::textlayout::TtbShapedRun;
-using milestro::skia::textlayout::TtbShapeRequest;
+using skia::textlayout::ShapeTtbRun;
+using skia::textlayout::TtbFeature;
+using skia::textlayout::TtbHorizontalDirection;
+using skia::textlayout::TtbOrientation;
+using skia::textlayout::TtbShapedRun;
+using skia::textlayout::TtbShapeRequest;
 
 constexpr float kFontSize = 48.0f;
 constexpr int kHarfBuzzScale = static_cast<int>(kFontSize * 64.0f);
@@ -415,37 +412,6 @@ protected:
     }
 
     std::unique_ptr<FontContext> font;
-};
-
-class RecordingRunHandler final : public SkShaper::RunHandler {
-public:
-    void beginLine() override {
-    }
-    void runInfo(const RunInfo&) override {
-    }
-    void commitRunInfo() override {
-    }
-
-    Buffer runBuffer(const RunInfo& info) override {
-        glyphs.resize(info.glyphCount);
-        positions.resize(info.glyphCount);
-        clusters.resize(info.glyphCount);
-        return {glyphs.data(), positions.data(), nullptr, clusters.data(), {0.0f, 0.0f}};
-    }
-
-    void commitRunBuffer(const RunInfo& info) override {
-        advances.push_back(info.fAdvance);
-        levels.push_back(info.fBidiLevel);
-    }
-
-    void commitLine() override {
-    }
-
-    std::vector<SkGlyphID> glyphs;
-    std::vector<SkPoint> positions;
-    std::vector<uint32_t> clusters;
-    std::vector<SkVector> advances;
-    std::vector<uint8_t> levels;
 };
 
 TEST_F(SkiaVerticalTextFeasibility, TtbShapingUsesVerticalAlternatesAndMetrics) {
@@ -915,33 +881,6 @@ TEST_F(SkiaVerticalTextFeasibility, TtbShaperApiRejectsOutOfRangeFontScales) {
     request.font = font->skFont;
     request.font.setScaleX(1000000.0f);
     EXPECT_FALSE(ShapeTtbRun(request, &run));
-}
-
-TEST_F(SkiaVerticalTextFeasibility, CurrentSkShaperApiCannotRequestTtb) {
-    constexpr std::string_view text = "「漢字」、。ー";
-    auto* unicodeProvider = milestro::skia::GetUnicodeProvider();
-    ASSERT_NE(unicodeProvider, nullptr);
-    auto unicode = unicodeProvider->unwrap();
-    ASSERT_NE(unicode, nullptr);
-    auto shaper = SkShapers::HB::ShapeThenWrap(unicode, nullptr);
-    ASSERT_NE(shaper, nullptr);
-
-    SkShaper::TrivialFontRunIterator fontRun(font->skFont, text.size());
-    SkShaper::TrivialBiDiRunIterator bidiRun(0, text.size());
-    SkShaper::TrivialScriptRunIterator scriptRun(SkSetFourByteTag('H', 'a', 'n', 'i'), text.size());
-    SkShaper::TrivialLanguageRunIterator languageRun("ja", text.size());
-    RecordingRunHandler handler;
-
-    shaper->shape(text.data(), text.size(), fontRun, bidiRun, scriptRun, languageRun, nullptr, 0, 4096.0f, &handler);
-
-    ASSERT_FALSE(handler.advances.empty());
-    for (const SkVector advance: handler.advances) {
-        EXPECT_GT(advance.x(), 0.0f);
-        EXPECT_EQ(advance.y(), 0.0f);
-    }
-    for (const uint8_t level: handler.levels) {
-        EXPECT_EQ(level, 0u);
-    }
 }
 
 TEST_F(SkiaVerticalTextFeasibility, SharedTransformsAgreeBetweenPaintingAndPaths) {

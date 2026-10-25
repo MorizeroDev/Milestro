@@ -1,11 +1,13 @@
 # Vertical text: research and implementation status
 
 Status: the Phase 1 native feasibility experiment and the Milestro-owned native
-TTB shaping API are implemented and tested. Vertical paragraph layout, C ABI
-exposure, generated Unity bindings for vertical text, and Unity vertical text
-are not implemented. Paragraph and managed-surface API names and phase
-boundaries below remain proposals, not available features or a committed
-release schedule.
+TTB shaping API are implemented. On Windows x64 Debug, the refactored
+seven-target build succeeded and focused CTest passed 7/7. The vertical group
+contains 15 cases, and the moved SkShaper direction probe remains in the
+Unicode fallback group. Vertical paragraph layout, C ABI exposure, generated
+Unity bindings for vertical text, and Unity vertical text are not implemented.
+Paragraph and managed-surface API names and phase boundaries below remain
+proposals, not available features or a committed release schedule.
 
 Research date: 2026-10-25. This document records source inspection and review of
 the official references listed at the end. A native CPU prototype has been
@@ -43,6 +45,9 @@ HarfBuzz library already vendored and built for Skia, then uses Skia for font
 loading, glyph outlines, text blobs, and CPU rasterization. It also exercises the
 Milestro-owned `ShapeTtbRun()` boundary. It does not change the paragraph
 pipeline or export the API through the C ABI or a generated Unity binding.
+The SkShaper direction probe now lives in
+[`tests/skia/src/test_skshaper_direction.cpp`](../../tests/skia/src/test_skshaper_direction.cpp)
+and runs under `MilestroTest_SkiaUnicodeFallback`.
 
 The controlled fixtures are
 [`SourceHanSans-VF.otf.woff2.bytes`](../../tests/data/font/SourceHanSans-VF.otf.woff2.bytes),
@@ -86,16 +91,15 @@ test's configured working directory.
 
 ### Integration decision
 
-Keep the pinned Skia and SkShaper sources unchanged. The repository now
-implements a Milestro-owned vertical shaping adapter in
-`include/Milestro/skia/textlayout/TtbShaper.h` and
-`src/skia/textlayout/TtbShaper.cpp`. It requests TTB shaping for upright runs
-and horizontal shaping for sideways runs. It returns run-local glyph records,
-not a paint transform; future Paragraph and painter integration must apply the
-sideways placement transform. The adapter retains the shaper's offsets,
-advances, clusters, and language/script/feature inputs rather than
-reconstructing glyph positions. If upstream SkShaper later exposes the needed
-direction and placement contract, the Milestro adapter can delegate to it
+Keep the pinned Skia and SkShaper sources unchanged. The project-maintained
+extension in [`ext/skttbshaper/`](../../ext/skttbshaper/) implements the vertical
+shaping adapter as the `Milestro::SkTtbShaper` static target. It requests TTB
+shaping for upright runs and horizontal shaping for sideways runs. It returns
+run-local glyph records, not a paint transform; future Paragraph and painter
+integration must apply the sideways placement transform. The adapter retains
+the shaper's offsets, advances, clusters, and language/script/feature inputs
+rather than reconstructing glyph positions. If upstream SkShaper later exposes
+the needed direction and placement contract, the adapter can delegate to it
 instead of carrying its own HarfBuzz call.
 
 This experiment establishes a viable shaping and transformed-painting boundary,
@@ -126,16 +130,18 @@ These commands require a Visual Studio x64 developer environment. A shell
 without that environment may not provide `clang-cl` or the Windows SDK `rc.exe`
 during CMake compiler detection.
 
-Recorded result: CMake completed and reported matching Skia base/source
-revisions. Reconfiguration regenerated the dependency graph, so the build
-rebuilt the ICU and Skia dependencies before compiling and linking the target.
-The latest focused CTest run passed 1/1. The GoogleTest binary covers the
-feasibility probes, SourceHan upright shaping through `ShapeTtbRun()` with
-global UTF-8 clusters, scoped and overridden `vrt2` feature ranges,
-fallback-font upright and sideways shaping, Hebrew RTL visual positioning,
-missing-glyph accounting, invalid scale cases, and invalid input or UTF-8
-boundary cases. The HarfBuzz item-length guard is verified by source inspection
-rather than by shaping a giant input run. The probe loads no system font:
+Validation result: on Windows x64 Debug, CMake configuration succeeded and
+reported matching Skia base/source revisions. A normal CMake build of the seven
+specified targets completed 573/573 steps. Focused CTest passed 7/7 in 36.80
+seconds, with the independent vertical group taking 3.60 seconds. The vertical
+GoogleTest binary contains 15 cases covering SourceHan upright shaping through
+`ShapeTtbRun()` with global UTF-8 clusters, scoped and overridden `vrt2`
+feature ranges, fallback-font upright and sideways shaping, Hebrew RTL visual
+positioning, missing-glyph accounting, invalid scale cases, and invalid input
+or UTF-8 boundary cases. The moved SkShaper direction probe remains in
+`MilestroTest_SkiaUnicodeFallback`; it was not deleted or weakened. The
+HarfBuzz item-length guard is verified by source inspection rather than by
+shaping a giant input run. The tests load no system font:
 `SourceHanSans-VF.otf.woff2.bytes` and
 `LiberationSans-Bold.ttf.bytes` are resolved from `tests/data/font/` through
 compile definitions.
@@ -148,11 +154,15 @@ success, so the callback must not release it separately. The test run exercises
 normal table loading and blob destruction, including the fallback font without
 vertical metric tables; it does not inject a HarfBuzz allocation failure.
 
-When `icudtl.dat` is not next to the test runtime, Milestro logs that it is
-using its Nop SkUnicode fallback. That does not affect the HarfBuzz shaping,
-cluster, or advance assertions in this probe. It also means the run makes no
-claim about ICU line breaking or full bidi resolution; the SkShaper capability
-test deliberately accepts the provider that Milestro exposes.
+The SkShaper direction probe moved to
+[`tests/skia/src/test_skshaper_direction.cpp`](../../tests/skia/src/test_skshaper_direction.cpp)
+and runs under `MilestroTest_SkiaUnicodeFallback`. That probe deliberately uses
+the provider Milestro exposes. When `icudtl.dat` is not next to its test
+runtime, Milestro logs that it is using its Nop SkUnicode fallback; this does
+not affect its horizontal-shaping assertions. The independent vertical shaping
+binary only uses the `Milestro::SkUnicode` static UTF-8/UTF-16 conversion
+helpers and does not initialize the Milestro Unicode provider, so that log
+message does not apply to it.
 
 Remaining limits of the recorded experiment:
 
@@ -424,13 +434,20 @@ unexported HarfBuzz internals.
 
 ### Milestro-owned TTB shaping API
 
-The Milestro-owned native boundary is implemented in
-`include/Milestro/skia/textlayout/TtbShaper.h` and
-`src/skia/textlayout/TtbShaper.cpp` rather than by changing the shaping
-interface of the pinned Skia checkout. The API shapes exactly one already
-segmented, font-resolved UTF-8 run. It does not perform orientation
-segmentation, bidi analysis, font fallback, line breaking, alignment, or
-painting, and its header does not depend on SkParagraph.
+The project-maintained native boundary is implemented in
+[`ext/skttbshaper/include/skttbshaper/TtbShaper.h`](../../ext/skttbshaper/include/skttbshaper/TtbShaper.h)
+and
+[`ext/skttbshaper/src/TtbShaper.cpp`](../../ext/skttbshaper/src/TtbShaper.cpp)
+rather than by changing the shaping interface of the pinned Skia checkout. The
+public include is `skttbshaper/TtbShaper.h`, the namespace is
+`skia::textlayout`, and the build target is `Milestro::SkTtbShaper`. The API
+shapes exactly one already segmented, font-resolved UTF-8 run. It does not
+perform orientation segmentation, bidi analysis, font fallback, line breaking,
+alignment, or painting, and its header does not depend on SkParagraph. It is a
+static project extension with no Milestro export macro.
+
+The target layout, dependency graph, and link-only behavior are documented in
+[`ttb-shaper-target.md`](ttb-shaper-target.md).
 
 #### Why not change SkShaper directly
 
@@ -498,7 +515,7 @@ struct TtbShapedRun {
     std::vector<TtbGlyph> glyphs;  // logical cluster order
 };
 
-MILESTRO_API bool ShapeTtbRun(const TtbShapeRequest& request, TtbShapedRun* result);
+bool ShapeTtbRun(const TtbShapeRequest& request, TtbShapedRun* result);
 ```
 
 The input fields are the minimum needed to reproduce shaping: source bytes and

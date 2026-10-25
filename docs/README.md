@@ -77,6 +77,7 @@ Reference pages describe exact behavior and advanced configuration:
 - [Known limitations](reference/limitations.md)
 - [Horizontal Ruby layout](reference/ruby-layout.md)
 - [Vertical text research and implementation status](reference/vertical-text-research.md)
+- [Independent TTB shaping target](reference/ttb-shaper-target.md)
 - [TextInput accessibility design](reference/accessibility-design.md)
 - [Build from source and CI reference](reference/build.md)
 

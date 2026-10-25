@@ -216,6 +216,7 @@ add_subdirectory("ext/cli11" EXCLUDE_FROM_ALL)
 add_subdirectory("ext/icu-cmake")
 
 add_subdirectory("ext/skia-cmake" "ext/skia" EXCLUDE_FROM_ALL)
+add_subdirectory("ext/skttbshaper" EXCLUDE_FROM_ALL)
 add_subdirectory("ext/skmodules" EXCLUDE_FROM_ALL)
 
 if (APPLE AND CMAKE_GENERATOR STREQUAL "Ninja")
@@ -383,7 +384,6 @@ set(
         src/skia/textlayout/Paragraph.cpp
         src/skia/textlayout/NoWrapLayout.cpp
         src/skia/textlayout/InputBox.cpp
-        src/skia/textlayout/TtbShaper.cpp
 
         src/unicode/icu.cpp
         src/unicode/comparison.cpp
@@ -511,7 +511,6 @@ target_include_directories(Milestro
         ${MILESTRO_INCLUDES}
         PRIVATE
         src
-        ${PROJECT_SOURCE_DIR}/ext/skia/third_party/externals/harfbuzz/src
 )
 
 target_link_libraries(Milestro

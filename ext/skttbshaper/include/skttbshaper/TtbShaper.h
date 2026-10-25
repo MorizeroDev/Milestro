@@ -1,7 +1,6 @@
-#ifndef MILESTRO_SKIA_TEXTLAYOUT_TTBSHAPER_H
-#define MILESTRO_SKIA_TEXTLAYOUT_TTBSHAPER_H
+#ifndef SKTTBSHAPER_TTB_SHAPER_H
+#define SKTTBSHAPER_TTB_SHAPER_H
 
-#include "Milestro/common/milestro_export_macros.h"
 #include "include/core/SkFont.h"
 #include "include/core/SkFourByteTag.h"
 #include "include/core/SkPoint.h"
@@ -13,7 +12,7 @@
 #include <string_view>
 #include <vector>
 
-namespace milestro::skia::textlayout {
+namespace skia::textlayout {
 
 enum class TtbOrientation {
     kUpright,
@@ -60,8 +59,8 @@ struct TtbShapedRun {
     std::vector<TtbGlyph> glyphs;
 };
 
-MILESTRO_API bool ShapeTtbRun(const TtbShapeRequest& request, TtbShapedRun* result);
+bool ShapeTtbRun(const TtbShapeRequest& request, TtbShapedRun* result);
 
-} // namespace milestro::skia::textlayout
+} // namespace skia::textlayout
 
-#endif // MILESTRO_SKIA_TEXTLAYOUT_TTBSHAPER_H
+#endif // SKTTBSHAPER_TTB_SHAPER_H
