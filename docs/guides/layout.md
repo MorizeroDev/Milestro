@@ -80,6 +80,53 @@ For a content-sized box, leave `ContentSizeFitter.verticalFit` and
 `horizontalFit` as `Unconstrained` for axes that should stay fixed. A parent
 `LayoutGroup` can consume the `ILayoutElement` values without a fitter.
 
+### Vertical writing (vertical-rl)
+
+Set `producer.paragraphStyle.writingMode` to `WritingMode.VerticalRl` on a
+fixed-size Canvas `TextBox`. Columns run top to bottom and advance from right
+to left: the box height constrains wrapping, and extra columns consume
+physical width. The feature set and current limits are in
+[Text, fonts, and rich text](text.md#vertical-writing).
+
+For content sizing, the roles of the axes swap: the height stays fixed and
+the content decides the width. Use `heightMode = Fixed`, leave
+`ContentSizeFitter.verticalFit` as `Unconstrained`, and choose
+`widthMode = MaxContent` or `FitContent` on the horizontal fitter. A long
+unbreakable word stays in one column and overflows along the column instead
+of being split at arbitrary character boundaries.
+
+#### First-line indent and alignment
+
+`text-indent` works in `px`, `em`, `%`, zero, and negative values. Only the
+paragraph's first column is offset along physical Y: positive values move it
+down, and negative values hang it above the start. Soft-wrapped columns and
+columns after a hard break start at zero indent.
+
+In finite `Wrap`, a percentage resolves against the content height after
+subtracting vertical margins. `NoWrap` and `singleLine` use an infinite
+inline extent, so their percentage resolves to zero.
+
+`Start`, `End`, and `Center` align the first column within the space
+remaining after the indent; later columns use the full height.
+`TextAlign.Justify` distributes free space inside soft-wrapped columns at
+whitespace and CJK/Latin break opportunities; hard-break columns, the final
+column, `NoWrap`, `singleLine`, and overflowing content keep normal
+alignment.
+
+#### Decorations, effects, and baseline shift
+
+Underline and line-through follow the vertical runs, and link hover feedback
+works as in horizontal text. The native `TextStyle` background and shadow
+properties paint with the final vertical glyph geometry; they affect ink only
+and do not change sizing, scrolling, or link hit areas. Unity `TextBox` does
+not expose background or shadow settings.
+
+`<sup>`, `<sub>`, `voffset`, and `voffset-em` keep their usual numeric and
+nesting rules. Superscript and positive offsets move toward physical right
+(line-over); subscript and negative offsets move toward physical left
+(line-under). A shift does not change inline advances but can grow the column
+box, the content width, and the scroll range.
+
 ## Wrapping, single-line, and overflow
 
 `TextBox` has two independent controls that are easy to confuse:
@@ -126,9 +173,12 @@ margin.Bottom.Unit = MarginUnit.Px;
 ```
 
 `em` resolves against the effective font size. Percentage and viewport units
-resolve against the current container/available size. `Auto` is accepted in the
-serialized model but currently resolves to zero; do not use it as a centering
-mechanism.
+resolve against the current container/available size. `Auto` contributes zero
+while the content viewport is resolved. A fixed-size horizontal or `vertical-rl`
+Canvas `TextBox` can then place the paragraph in the remaining space. Vertical
+X placement uses the complete column-box width, while Y placement uses the
+laid-out content bounds, so short text can be centered in a finite-height box.
+Auto placement does not change the clip or scroll range.
 
 Rich-text `<p>` blocks can also add `margin-top` and `margin-bottom`. Those are
 between blocks, not around the whole `TextBox`.

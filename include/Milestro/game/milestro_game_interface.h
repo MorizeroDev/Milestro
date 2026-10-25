@@ -293,6 +293,47 @@ MILESTRO_API int64_t MilestroSkiaImageDestroy(milestro::skia::Image*& ret);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphDestroy(milestro::skia::textlayout::Paragraph*& ret);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphRetain(milestro::skia::textlayout::Paragraph* p);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphLayout(milestro::skia::textlayout::Paragraph* p, float width);
+MILESTRO_API int64_t MilestroSkiaTextlayoutContainsStrongRtl(
+        [[milize::CSharpType("byte*")]] uint8_t* text,
+        uint64_t size,
+        int32_t& containsStrongRtl);
+MILESTRO_API int64_t
+MilestroSkiaTextlayoutParagraphLayoutWithInlineExtent(milestro::skia::textlayout::Paragraph* p,
+                                                      float inlineExtent);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetWritingMode(milestro::skia::textlayout::Paragraph* p,
+                                                                   int32_t& writingMode);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetLayoutMetrics(
+        milestro::skia::textlayout::Paragraph* p,
+        float& physicalWidth,
+        float& physicalHeight,
+        float& contentLeft,
+        float& contentTop,
+        float& contentRight,
+        float& contentBottom,
+        float& inkLeft,
+        float& inkTop,
+        float& inkRight,
+        float& inkBottom,
+        float& longestInlineExtent,
+        float& minIntrinsicInlineExtent,
+        float& maxIntrinsicInlineExtent,
+        uint64_t& columnCount);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetColumnMetrics(
+        milestro::skia::textlayout::Paragraph* p,
+        uint64_t columnIndex,
+        uint64_t& lineNumber,
+        int32_t& hardBreak,
+        float& left,
+        float& top,
+        float& right,
+        float& bottom,
+        float& inlineExtent,
+        float& blockThickness,
+        float& physicalBaseline,
+        uint64_t& utf16Start,
+        uint64_t& utf16End,
+        uint64_t& utf16EndExcludingWhitespace,
+        uint64_t& utf16EndIncludingNewline);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetHeight(milestro::skia::textlayout::Paragraph* p, float& height);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetLongestLine(milestro::skia::textlayout::Paragraph* p,
                                                                    float& longestLine);
@@ -315,6 +356,10 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphForEachRectInRange(
         milestro::skia::textlayout::Paragraph* p,
         uint64_t startUtf16,
         uint64_t endUtf16,
+        [[milize::CSharpType("IntPtr")]] void* context,
+        MilestroSkiaTextlayoutParagraphRectCallback callback);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetRectsForPlaceholders(
+        milestro::skia::textlayout::Paragraph* p,
         [[milize::CSharpType("IntPtr")]] void* context,
         MilestroSkiaTextlayoutParagraphRectCallback callback);
 MILESTRO_API int64_t MilestroSkiaTextlayoutResolveNoWrapProbeLayoutWidth(uint64_t textSize,
@@ -568,6 +613,9 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderBuild(milestro::skia:
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderAddText(milestro::skia::textlayout::ParagraphBuilder* b,
                                                                    [[milize::CSharpType("byte*")]] uint8_t* text,
                                                                    size_t len);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderAddPlaceholder(
+        milestro::skia::textlayout::ParagraphBuilder* b,
+        float width, float height, int32_t alignment, int32_t baseline, float baselineOffset);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderAddRuby(milestro::skia::textlayout::ParagraphBuilder* b,
                                                                 size_t startUtf8, size_t endUtf8,
                                                                 [[milize::CSharpType("byte*")]] const uint8_t* text, size_t len);
@@ -598,6 +646,10 @@ MilestroSkiaTextlayoutParagraphStyleGetTextStyle(milestro::skia::textlayout::Par
                                                  milestro::skia::textlayout::TextStyle*& textStyle);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetTextStyle(milestro::skia::textlayout::ParagraphStyle* s,
                                                                       milestro::skia::textlayout::TextStyle* textStyle);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetWritingMode(milestro::skia::textlayout::ParagraphStyle* s,
+                                                                        int32_t& writingMode);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetWritingMode(milestro::skia::textlayout::ParagraphStyle* s,
+                                                                        int32_t writingMode);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleGetTextDirection(milestro::skia::textlayout::ParagraphStyle* s,
                                                                           int32_t& direction);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphStyleSetTextDirection(milestro::skia::textlayout::ParagraphStyle* s,

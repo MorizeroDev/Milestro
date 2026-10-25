@@ -13,9 +13,9 @@ bool shapeWithSameFont(const TextStyle& a, const TextStyle& b) {
     return a.getFontStyle() == b.getFontStyle() &&
            a.getFontFamilies() == b.getFontFamilies() &&
            a.getFontArguments() == b.getFontArguments() &&
-           nearlyEqual(a.getFontSize(), b.getFontSize()) &&
+           a.getFontSize() == b.getFontSize() &&
            // The shaper sees only the effective height, which is zero without the override
-           nearlyEqual(a.getHeight(), b.getHeight()) &&
+           a.getHeight() == b.getHeight() &&
            a.getHalfLeading() == b.getHalfLeading() &&
            nearlyEqual(a.getBaselineShift(), b.getBaselineShift()) &&
            a.getFontEdging() == b.getFontEdging() &&

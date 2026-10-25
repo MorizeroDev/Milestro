@@ -12,7 +12,8 @@ namespace Milestro.RichTextParser.Css
     {
         internal static void Apply(TextStyleState textStyle,
                                    string declarations,
-                                   ParagraphStyleState? paragraphStyle = null)
+                                   ParagraphStyleState? paragraphStyle = null,
+                                   bool allowViewportBlockMargins = false)
         {
             FontFeatureOperation? kerningOperation = null;
             List<FontFeatureOperation>? featureOperations = null;
@@ -39,13 +40,13 @@ namespace Milestro.RichTextParser.Css
                 }
                 else if (paragraphStyle != null &&
                          declaration.Property.Equals("margin-top", StringComparison.OrdinalIgnoreCase) &&
-                         TryParseBlockMargin(declaration.Value, out var marginTop))
+                         TryParseBlockMargin(declaration.Value, allowViewportBlockMargins, out var marginTop))
                 {
                     paragraphStyle.MarginTop = marginTop;
                 }
                 else if (paragraphStyle != null &&
                          declaration.Property.Equals("margin-bottom", StringComparison.OrdinalIgnoreCase) &&
-                         TryParseBlockMargin(declaration.Value, out var marginBottom))
+                         TryParseBlockMargin(declaration.Value, allowViewportBlockMargins, out var marginBottom))
                 {
                     paragraphStyle.MarginBottom = marginBottom;
                 }
@@ -210,7 +211,8 @@ namespace Milestro.RichTextParser.Css
             return true;
         }
 
-        private static bool TryParseBlockMargin(CssSlice value, out MarginValue margin)
+        private static bool TryParseBlockMargin(CssSlice value, bool allowViewportBlockMargins,
+            out MarginValue margin)
         {
             margin = default;
             MarginUnit unit;
@@ -228,6 +230,16 @@ namespace Milestro.RichTextParser.Css
             else if (value.EndsWith("em", StringComparison.OrdinalIgnoreCase))
             {
                 unit = MarginUnit.Em;
+                suffixLength = 2;
+            }
+            else if (allowViewportBlockMargins && value.EndsWith("vw", StringComparison.OrdinalIgnoreCase))
+            {
+                unit = MarginUnit.Vw;
+                suffixLength = 2;
+            }
+            else if (allowViewportBlockMargins && value.EndsWith("vh", StringComparison.OrdinalIgnoreCase))
+            {
+                unit = MarginUnit.Vh;
                 suffixLength = 2;
             }
             else

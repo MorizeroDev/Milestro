@@ -7,6 +7,13 @@ if (NOT TARGET skia OR NOT TARGET skia_shaper OR NOT TARGET icu)
     )
 endif ()
 
+if (NOT TARGET Milestro::SkTtbShaper)
+    message(FATAL_ERROR
+            "skmodules requires Milestro::SkTtbShaper; "
+            "add ext/skttbshaper after ext/skia-cmake and before ext/skmodules."
+    )
+endif ()
+
 set(MILESTRO_SKMODULES_ROOT "${CMAKE_CURRENT_LIST_DIR}")
 set(MILESTRO_SKMODULES_METADATA "${MILESTRO_SKMODULES_ROOT}/vendor-meta")
 set(MILESTRO_SKMODULES_SKIA_SOURCE "${MILESTRO_SKMODULES_ROOT}/../skia")
@@ -90,6 +97,7 @@ set(MILESTRO_SKPARAGRAPH_SOURCES
         modules/skparagraph/src/TextStyle.cpp
         modules/skparagraph/src/TextWrapper.cpp
         modules/skparagraph/src/TypefaceFontProvider.cpp
+        modules/skparagraph/src/VerticalLayout.cpp
 )
 
 add_library(milestro_skparagraph STATIC ${MILESTRO_SKPARAGRAPH_SOURCES})
@@ -98,7 +106,7 @@ target_compile_features(milestro_skparagraph PUBLIC cxx_std_20)
 target_compile_definitions(milestro_skparagraph PUBLIC SK_ENABLE_PARAGRAPH)
 target_include_directories(milestro_skparagraph BEFORE PUBLIC "${MILESTRO_SKMODULES_ROOT}")
 target_link_libraries(milestro_skparagraph
-        PRIVATE skia_shaper
+        PRIVATE skia_shaper Milestro::SkTtbShaper
         PUBLIC Milestro::SkUnicode skia
 )
 

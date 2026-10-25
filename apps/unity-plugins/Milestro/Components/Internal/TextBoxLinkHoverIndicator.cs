@@ -11,14 +11,17 @@ namespace Milestro.Components.Internal
         private Color fillColor;
         private Color underlineColor;
         private float underlineThickness;
+        private bool vertical;
 
         internal void SetPresentation(IReadOnlyList<Rect> source,
             Color fill,
             Color underline,
-            float thickness)
+            float thickness,
+            bool isVerticalLayout)
         {
             var changed = fillColor != fill || underlineColor != underline ||
-                          underlineThickness != thickness || rects.Count != source.Count;
+                          underlineThickness != thickness || vertical != isVerticalLayout ||
+                          rects.Count != source.Count;
             for (var index = 0; !changed && index < source.Count; ++index)
             {
                 changed = rects[index] != source[index];
@@ -32,6 +35,7 @@ namespace Milestro.Components.Internal
             fillColor = fill;
             underlineColor = underline;
             underlineThickness = thickness;
+            vertical = isVerticalLayout;
             rects.Clear();
             for (var index = 0; index < source.Count; ++index)
             {
@@ -53,12 +57,16 @@ namespace Milestro.Components.Internal
 
                 if (underlineThickness > 0f)
                 {
-                    AddQuad(vh,
-                        Rect.MinMaxRect(rect.xMin,
+                    var underline = vertical
+                        ? Rect.MinMaxRect(rect.xMin,
+                            rect.yMin,
+                            Mathf.Min(rect.xMax, rect.xMin + underlineThickness),
+                            rect.yMax)
+                        : Rect.MinMaxRect(rect.xMin,
                             rect.yMin,
                             rect.xMax,
-                            Mathf.Min(rect.yMax, rect.yMin + underlineThickness)),
-                        underlineColor);
+                            Mathf.Min(rect.yMax, rect.yMin + underlineThickness));
+                    AddQuad(vh, underline, underlineColor);
                 }
             }
         }

@@ -15,6 +15,9 @@ namespace Milestro.Model
         private TextDirection m_textDirection = TextDirection.Ltr;
 
         [SerializeField]
+        private WritingMode m_writingMode = WritingMode.HorizontalTb;
+
+        [SerializeField]
         private bool m_singleLine;
 
         [SerializeField]
@@ -34,6 +37,16 @@ namespace Milestro.Model
         {
             get => m_textDirection;
             set => SetField(ref m_textDirection, value);
+        }
+
+        /// <summary>
+        /// Physical writing mode. Missing values in old serialized data resolve to the
+        /// enum's horizontal default and do not alter legacy horizontal layout.
+        /// </summary>
+        public WritingMode writingMode
+        {
+            get => m_writingMode;
+            set => SetField(ref m_writingMode, value);
         }
 
         public bool singleLine

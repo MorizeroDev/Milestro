@@ -52,6 +52,9 @@ public:
 
     virtual void clipRect(const SkRect& rect) = 0;
     virtual void translate(SkScalar dx, SkScalar dy) = 0;
+    // Applies a clockwise rotation in the painter coordinate space. Vertical
+    // sideways runs use this to rotate complete glyph outlines, not only origins.
+    virtual void rotate(SkScalar degrees) = 0;
 
     virtual void save() = 0;
     virtual void restore() = 0;

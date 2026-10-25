@@ -74,12 +74,24 @@ namespace Milestro.Components.Internal
                 return 1f;
             }
 
-            if (Fits(measure, maxScale, availableWidth, availableHeight))
+            return SearchFit(scale => Fits(measure, scale, availableWidth, availableHeight),
+                minScale, maxScale);
+        }
+
+        public static float SearchFit(Func<float, bool> fits, float minScale, float maxScale)
+        {
+            if (fits == null || !FloatUtil.IsFinite(minScale) ||
+                !FloatUtil.IsFinite(maxScale) || minScale <= 0f || minScale > maxScale)
+            {
+                return 1f;
+            }
+
+            if (fits(maxScale))
             {
                 return maxScale;
             }
 
-            if (!Fits(measure, minScale, availableWidth, availableHeight))
+            if (!fits(minScale))
             {
                 return minScale;
             }
@@ -91,7 +103,7 @@ namespace Milestro.Components.Internal
                  ++iteration)
             {
                 var mid = (low + high) * 0.5f;
-                if (Fits(measure, mid, availableWidth, availableHeight))
+                if (fits(mid))
                 {
                     low = mid;
                 }

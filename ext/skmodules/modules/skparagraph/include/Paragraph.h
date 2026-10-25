@@ -2,11 +2,13 @@
 #ifndef Paragraph_DEFINED
 #define Paragraph_DEFINED
 
+#include "include/core/SkMatrix.h"
 #include "include/core/SkPath.h"
 #include "modules/skparagraph/include/FontCollection.h"
 #include "modules/skparagraph/include/Metrics.h"
 #include "modules/skparagraph/include/ParagraphStyle.h"
 #include "modules/skparagraph/include/TextStyle.h"
+#include <stdexcept>
 #include <unordered_set>
 
 class SkCanvas;
@@ -23,23 +25,68 @@ public:
 
     virtual ~Paragraph() = default;
 
-    SkScalar getMaxWidth() { return fWidth; }
+    SkScalar getMaxWidth() {
+        return fWidth;
+    }
 
-    SkScalar getHeight() { return fHeight; }
+    SkScalar getHeight() {
+        return fHeight;
+    }
 
-    SkScalar getMinIntrinsicWidth() { return fMinIntrinsicWidth; }
+    SkScalar getMinIntrinsicWidth() {
+        if (isVertical()) {
+            throw std::logic_error("getMinIntrinsicWidth is not supported for vertical-rl; "
+                                   "use getLayoutMetrics().minIntrinsicInlineExtent");
+        }
+        return fMinIntrinsicWidth;
+    }
 
-    SkScalar getMaxIntrinsicWidth() { return fMaxIntrinsicWidth; }
+    SkScalar getMaxIntrinsicWidth() {
+        if (isVertical()) {
+            throw std::logic_error("getMaxIntrinsicWidth is not supported for vertical-rl; "
+                                   "use getLayoutMetrics().maxIntrinsicInlineExtent");
+        }
+        return fMaxIntrinsicWidth;
+    }
 
-    SkScalar getAlphabeticBaseline() { return fAlphabeticBaseline; }
+    SkScalar getAlphabeticBaseline() {
+        if (isVertical()) {
+            throw std::logic_error("getAlphabeticBaseline is not supported for vertical-rl");
+        }
+        return fAlphabeticBaseline;
+    }
 
-    SkScalar getIdeographicBaseline() { return fIdeographicBaseline; }
+    SkScalar getIdeographicBaseline() {
+        if (isVertical()) {
+            throw std::logic_error("getIdeographicBaseline is not supported for vertical-rl");
+        }
+        return fIdeographicBaseline;
+    }
 
-    SkScalar getLongestLine() { return fLongestLine; }
+    SkScalar getLongestLine() {
+        return fLongestLine;
+    }
 
-    bool didExceedMaxLines() { return fExceededMaxLines; }
+    bool didExceedMaxLines() {
+        return fExceededMaxLines;
+    }
+
+    WritingMode getWritingMode() const {
+        return fParagraphStyle.getWritingMode();
+    }
+    bool isVertical() const {
+        return getWritingMode() == WritingMode::kVerticalRl;
+    }
 
     virtual void layout(SkScalar width) = 0;
+
+    // Horizontal writing modes constrain the physical width; vertical-rl constrains
+    // the physical inline extent (height). The value is validated by the implementation.
+    virtual void layoutWithInlineExtent(SkScalar inlineExtent) {
+        layout(inlineExtent);
+    }
+
+    virtual const ParagraphLayoutMetrics& getLayoutMetrics() const = 0;
 
     virtual void paint(SkCanvas* canvas, SkScalar x, SkScalar y) = 0;
 
@@ -111,6 +158,12 @@ public:
         const SkRect*   bounds;     // count values
         const uint32_t* utf8Starts; // count+1 values
         unsigned        flags;
+        // Applied to glyph outline coordinates around the glyph's baseline
+        // origin. The baseline position (origin + positions[i]) is added
+        // afterward and is not affected by this transform. Horizontal layout
+        // uses the identity matrix; sideways vertical runs use a clockwise
+        // rotation. Positions are relative to origin; bounds are font-local.
+        SkMatrix glyphTransform = SkMatrix::I();
     };
     using ExtendedVisitor = std::function<void(int lineNumber, const ExtendedVisitorInfo*)>;
     virtual void extendedVisit(const ExtendedVisitor&) = 0;

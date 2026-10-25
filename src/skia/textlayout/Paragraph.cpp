@@ -8,11 +8,15 @@
 
 #include <cmath>
 #include <limits>
+#include <stdexcept>
 
 using namespace milestro::skia::textlayout;
 using namespace milestro::skia;
 
 SkScalar Paragraph::resolveNoWrapContentWidth(const char* text, size_t length) const {
+    if (paragraph != nullptr && paragraph->isVertical()) {
+        throw std::logic_error("vertical-rl does not support no-wrap width probing; use getLayoutMetrics()");
+    }
     return ResolveNoWrapContentWidth(paragraph.get(), text, length);
 }
 
@@ -59,10 +63,29 @@ uint64_t Paragraph::forEachRectInRange(size_t startUtf16,
     return 0;
 }
 
+uint64_t Paragraph::getRectsForPlaceholders(void* context,
+                                           MilestroSkiaTextlayoutParagraphRectCallback callback) const {
+    if (callback == nullptr || paragraph == nullptr) {
+        return -1;
+    }
+    for (const auto& box : paragraph->getRectsForPlaceholders()) {
+        if (box.rect.width() > 0 && box.rect.height() > 0) {
+            callback(context, box.rect.left(), box.rect.top(), box.rect.right(), box.rect.bottom());
+        }
+    }
+    return 0;
+}
+
 uint64_t
 Paragraph::splitGlyph(SkScalar x, SkScalar y,
                       void *context, MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback) {
     if (callback == nullptr) {
+        return -1;
+    }
+
+    if (paragraph != nullptr && paragraph->isVertical()) {
+        // The callback protocol can only describe upright horizontal glyphs. Reject
+        // before emitting any partial callback rather than fabricating horizontal data.
         return -1;
     }
 
@@ -137,7 +160,9 @@ SkPath Paragraph::generateToSkPath(SkScalar x, SkScalar y) {
 
             auto glyphPath = font.getPath(glyphId);
             if (glyphPath) {
-                fullPath.addPath(*glyphPath, glyphPosition.x(), glyphPosition.y());
+                SkMatrix transform = info->glyphTransform;
+                transform.postTranslate(glyphPosition.x(), glyphPosition.y());
+                fullPath.addPath(*glyphPath, transform);
             }
         }
     });

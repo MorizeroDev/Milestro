@@ -97,6 +97,46 @@ namespace Milestro.Tests
             Assert.That(second - first, Is.EqualTo(10f).Within(0.1f));
         }
 
+        [TestCase("vw", TextBoxWrapMode.Wrap)]
+        [TestCase("vh", TextBoxWrapMode.Wrap)]
+        [TestCase("vw", TextBoxWrapMode.NoWrap)]
+        [TestCase("vh", TextBoxWrapMode.NoWrap)]
+        public void HorizontalViewportBlockMarginsRemainIgnoredInMeasurementAndRendering(string unit,
+            TextBoxWrapMode wrapMode)
+        {
+            const string baseline = "<p style=\"margin-top: 7px; margin-bottom: 12px\">First block</p>" +
+                                    "<p style=\"margin-top: 1em; margin-bottom: 10%\">Second block</p>";
+            var content = $"<p style=\"margin-top: 7px; margin-top: 20{unit}; margin-bottom: 12px; margin-bottom: 30{unit}\">First block</p>" +
+                          $"<p style=\"margin-top: 1em; margin-top: 40{unit}; margin-bottom: 10%; margin-bottom: 50{unit}\">Second block</p>";
+            var style = new ParagraphStyleSettings { paragraphSpacing = 9f };
+            var textStyle = new TextStyleSettings { size = 20f };
+            var baselineSettings = new TextBoxRenderTargetSettings(baseline, new Margin(), style,
+                textStyle, wrapMode, TextOverflow.Clip);
+            var settings = new TextBoxRenderTargetSettings(content, new Margin(), style,
+                textStyle, wrapMode, TextOverflow.Clip);
+            using var expected = new TextBoxIntrinsicMeasurement(baselineSettings);
+            using var actual = new TextBoxIntrinsicMeasurement(settings);
+            using var baselineTarget = new TextBoxRenderTarget();
+            using var target = new TextBoxRenderTarget();
+            foreach (var height in new[] { 100, 200 })
+            {
+                var available = new UnityEngine.Vector2(160f, height);
+                expected.SetAvailableSize(available);
+                actual.SetAvailableSize(available);
+                var expectedMetrics = expected.Measure(20f, 160f);
+                var actualMetrics = actual.Measure(20f, 160f);
+                Assert.That(actualMetrics.ContentHeight, Is.EqualTo(expectedMetrics.ContentHeight));
+                Assert.That(actualMetrics.NaturalHeight, Is.EqualTo(expectedMetrics.NaturalHeight));
+                Assert.That(actualMetrics.ContentWidth, Is.EqualTo(expectedMetrics.ContentWidth));
+                var viewport = TextBoxRenderViewport.Invisible(new UnityEngine.Vector2Int(160, height), default);
+                Assert.That(baselineTarget.Rebuild(viewport, UnityEngine.ColorSpace.Gamma,
+                    baselineSettings, true, null), Is.True);
+                Assert.That(target.Rebuild(viewport, UnityEngine.ColorSpace.Gamma,
+                    settings, true, null), Is.True);
+                Assert.That(target.ContentSize, Is.EqualTo(baselineTarget.ContentSize));
+            }
+        }
+
         private static TextBoxIntrinsicMeasurement CreateMeasurement(string content,
             TextOverflow overflow,
             float paragraphSpacing)

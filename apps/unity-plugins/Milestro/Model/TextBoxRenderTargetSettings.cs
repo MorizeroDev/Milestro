@@ -13,7 +13,10 @@ namespace Milestro.Model
             bool autoFontSize = false,
             float minSize = 0f,
             float maxSize = 0f,
-            TextSizingResult? sizing = null, Vector2 marginReferenceSize = default)
+            TextSizingResult? sizing = null, Vector2 marginReferenceSize = default,
+            TextHeightMode? verticalHeightMode = null,
+            MarginResolveContext? verticalMarginContext = null,
+            bool sizingUsesVerticalLayout = false)
         {
             Content = content ?? "";
             Margin = margin ?? Margin.FixedZero();
@@ -27,15 +30,34 @@ namespace Milestro.Model
             MaxSize = maxSize;
             Sizing = sizing;
             MarginReferenceSize = marginReferenceSize;
+            VerticalHeightMode = verticalHeightMode;
+            VerticalMarginContext = verticalMarginContext;
+            SizingUsesVerticalLayout = sizingUsesVerticalLayout;
         }
 
         public TextSizingResult? Sizing { get; }
         public Vector2 MarginReferenceSize { get; }
+        public TextHeightMode? VerticalHeightMode { get; }
+        public MarginResolveContext? VerticalMarginContext { get; }
+        public bool SizingUsesVerticalLayout { get; }
 
-        public TextBoxRenderTargetSettings WithSizing(TextSizingResult sizing, Vector2 referenceSize)
+        public TextBoxRenderTargetSettings WithSizing(TextSizingResult sizing,
+            Vector2 referenceSize,
+            TextHeightMode? verticalHeightMode = null,
+            MarginResolveContext? verticalMarginContext = null,
+            bool sizingUsesVerticalLayout = false)
         {
             return new TextBoxRenderTargetSettings(Content, Margin, ParagraphStyle, TextStyle,
-                WrapMode, TextOverflow, AutoFontSize, MinSize, MaxSize, sizing, referenceSize);
+                WrapMode, TextOverflow, AutoFontSize, MinSize, MaxSize, sizing, referenceSize,
+                verticalHeightMode, verticalMarginContext, sizingUsesVerticalLayout);
+        }
+
+        public TextBoxRenderTargetSettings WithVerticalLayout(MarginResolveContext marginContext,
+            TextHeightMode heightMode)
+        {
+            return new TextBoxRenderTargetSettings(Content, Margin, ParagraphStyle, TextStyle,
+                WrapMode, TextOverflow, AutoFontSize, MinSize, MaxSize, Sizing,
+                MarginReferenceSize, heightMode, marginContext, SizingUsesVerticalLayout);
         }
 
         public string Content { get; }

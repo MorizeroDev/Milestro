@@ -19,12 +19,15 @@ namespace Milestro.Components.Internal
         Vector2 ViewportSize { get; }
         Vector2 MaxScrollOffset { get; }
         TextBoxHorizontalScrollState HorizontalScrollState { get; }
+        bool IsVertical { get; }
+        Exception? LastLayoutError { get; }
 
         event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus>? RenderEventCompleted;
 
         void MarkPropertiesChanged();
         void MarkContentChanged();
         void MarkPaintChanged();
+        void InvalidateFailedOutput();
         bool TryHitLink(Vector2 normalizedViewportPoint, out TextBoxLinkHit hit);
         bool TryGetContentSnapshot(out TextBoxContentSnapshot snapshot);
         bool TryGetLinkGeometrySnapshot(out TextBoxLinkGeometrySnapshot snapshot, out long generation);

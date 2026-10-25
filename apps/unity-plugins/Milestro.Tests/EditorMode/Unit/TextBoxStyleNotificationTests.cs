@@ -62,6 +62,16 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void LineHeightMutationMarksProducerPropertiesChanged()
+        {
+            var before = target.PropertiesChangedCount;
+
+            producer.textStyle.lineHeight = 1.5f;
+
+            Assert.AreEqual(before + 1, target.PropertiesChangedCount);
+        }
+
+        [Test]
         public void ReplacedStyleObjectIsSubscribedAndOldOneIsDropped()
         {
             var oldStyle = producer.textStyle;
@@ -100,6 +110,8 @@ namespace Milestro.Tests
             public Vector2 ViewportSize => Vector2.zero;
             public Vector2 MaxScrollOffset => Vector2.zero;
             public TextBoxHorizontalScrollState HorizontalScrollState => default;
+            public bool IsVertical => false;
+            public Exception? LastLayoutError => null;
             internal int PropertiesChangedCount { get; private set; }
 
             public event Action<Milestro.Skia.UnitySkiaRenderTextureSurface.RenderSubmissionStatus>?
@@ -116,6 +128,10 @@ namespace Milestro.Tests
             }
 
             public void MarkPaintChanged()
+            {
+            }
+
+            public void InvalidateFailedOutput()
             {
             }
 

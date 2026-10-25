@@ -123,6 +123,9 @@ public:
     ::skia::textlayout::TextDirection getTextDirection() const { return style.getTextDirection(); }
     void setTextDirection(::skia::textlayout::TextDirection direction) { style.setTextDirection(direction); }
 
+    ::skia::textlayout::WritingMode getWritingMode() const { return style.getWritingMode(); }
+    void setWritingMode(::skia::textlayout::WritingMode mode) { style.setWritingMode(mode); }
+
     ::skia::textlayout::TextAlign getTextAlign() const { return style.getTextAlign(); }
     void setTextAlign(::skia::textlayout::TextAlign align) { style.setTextAlign(align); }
 

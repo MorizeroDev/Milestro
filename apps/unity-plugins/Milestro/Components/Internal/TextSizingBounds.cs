@@ -73,6 +73,24 @@ namespace Milestro.Components.Internal
             return ExternalAvailableSize(rect).x;
         }
 
+        public static bool TryGetContainingBlockWidth(RectTransform rect, out float width)
+        {
+            width = 0f;
+            var parent = rect != null ? rect.parent as RectTransform : null;
+            if (parent == null || !IsFinite(parent.rect.width))
+            {
+                return false;
+            }
+
+            width = Mathf.Max(0f, parent.rect.width);
+            var group = parent.GetComponent<LayoutGroup>();
+            if (group != null && group.isActiveAndEnabled)
+            {
+                width = Mathf.Max(0f, width - group.padding.horizontal);
+            }
+            return true;
+        }
+
         private static float SubtractLayoutPadding(float size, RectTransform? source, bool horizontal)
         {
             var group = source != null ? source.GetComponent<LayoutGroup>() : null;
@@ -83,6 +101,11 @@ namespace Milestro.Components.Internal
 
             var padding = horizontal ? group.padding.horizontal : group.padding.vertical;
             return Mathf.Max(0f, size - padding);
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
     }
 }

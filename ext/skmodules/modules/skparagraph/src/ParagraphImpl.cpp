@@ -78,22 +78,10 @@ ParagraphImpl::ParagraphImpl(const SkString& text,
                              TArray<Placeholder> placeholders,
                              sk_sp<FontCollection> fonts,
                              sk_sp<SkUnicode> unicode)
-        : Paragraph(std::move(style), std::move(fonts))
-        , fTextStyles(std::move(blocks))
-        , fPlaceholders(std::move(placeholders))
-        , fText(text)
-        , fState(kUnknown)
-        , fUnresolvedGlyphs(0)
-        , fPicture(nullptr)
-        , fStrutMetrics(false)
-        , fOldWidth(0)
-        , fOldHeight(0)
-        , fTextIndent(0)
-        , fUnicode(std::move(unicode))
-        , fHasLineBreaks(false)
-        , fHasWhitespacesInside(false)
-        , fTrailingSpaces(0)
-{
+    : Paragraph(std::move(style), std::move(fonts)), fTextStyles(std::move(blocks)),
+      fPlaceholders(std::move(placeholders)), fText(text), fState(kUnknown), fUnresolvedGlyphs(0), fPicture(nullptr),
+      fStrutMetrics(false), fOldWidth(0), fOldHeight(0), fOldInlineExtent(0), fTextIndent(0),
+      fUnicode(std::move(unicode)), fHasLineBreaks(false), fHasWhitespacesInside(false), fTrailingSpaces(0) {
     SkASSERT(fUnicode);
 }
 
@@ -129,15 +117,18 @@ std::unordered_set<SkUnichar> ParagraphImpl::unresolvedCodepoints() {
 }
 
 void ParagraphImpl::addUnresolvedCodepoints(TextRange textRange) {
-    fUnicode->forEachCodepoint(
-        &fText[textRange.start], textRange.width(),
+    fUnicode->forEachCodepoint(&fText[textRange.start],
+                               textRange.width(),
         [&](SkUnichar unichar, int32_t start, int32_t end, int32_t count) {
             fUnresolvedCodepoints.emplace(unichar);
-        }
-    );
+                               });
 }
 
 void ParagraphImpl::layout(SkScalar rawWidth) {
+    if (this->isVertical()) {
+        this->layoutWithInlineExtent(rawWidth);
+        return;
+    }
     // TODO: This rounding is done to match Flutter tests. Must be removed...
     auto floorWidth = rawWidth;
     if (getApplyRoundingHack()) {
@@ -267,6 +258,10 @@ void ParagraphImpl::paint(SkCanvas* canvas, SkScalar x, SkScalar y) {
 }
 
 void ParagraphImpl::paint(ParagraphPainter* painter, SkScalar x, SkScalar y) {
+    if (this->isVertical()) {
+        this->paintVertical(painter, x, y);
+        return;
+    }
     for (auto& line : fLines) {
         line.paint(painter, x, y);
     }
@@ -408,8 +403,10 @@ SkScalar Run::calculateWidth(size_t start, size_t end, bool clip) const {
     auto correction = 0.0f;
     if (end > start && !fJustificationShifts.empty()) {
         // This is not a typo: we are using Point as a pair of SkScalars
-        correction = fJustificationShifts[end - 1].fX -
-                     fJustificationShifts[start].fY;
+        correction = fJustificationShifts[end - 1].fX - fJustificationShifts[start].fY;
+    }
+    if (fVertical) {
+        return inlinePosition(end) - inlinePosition(start) + correction;
     }
     return posX(end) - posX(start) + correction;
 }
@@ -561,7 +558,10 @@ void ParagraphImpl::buildClusterTable() {
               fClustersIndexFromCodeUnit[i] = fClusters.size();
             }
             // There are no glyphs but we want to have one cluster
-            fClusters.emplace_back(this, runIndex, 0ul, 1ul, this->text(run.textRange()), run.advance().fX, run.advance().fY);
+            fClusters.emplace_back(this, runIndex, 0ul, run.isVertical() ? 0ul : 1ul,
+                                   this->text(run.textRange()),
+                                   run.isVertical() ? run.inlineAdvance() : run.advance().fX,
+                                   run.advance().fY);
             fCodeUnitProperties[run.textRange().start] |= SkUnicode::CodeUnitFlags::kSoftLineBreakBefore;
             fCodeUnitProperties[run.textRange().end] |= SkUnicode::CodeUnitFlags::kSoftLineBreakBefore;
         } else {
@@ -786,6 +786,10 @@ bool ParagraphImpl::shapeTextIntoEndlessLine() {
     OneLineShaper oneLineShaper(this);
     auto result = oneLineShaper.shape();
     fUnresolvedGlyphs = oneLineShaper.unresolvedGlyphs();
+
+    if (result && this->isVertical()) {
+        this->shapeVerticalRuns();
+    }
 
     this->applySpacingAndBuildClusterTable();
     this->applyCjkPunctuationCompression();
@@ -1014,6 +1018,12 @@ std::vector<TextBox> ParagraphImpl::getRectsForRange(unsigned start,
                                                      unsigned end,
                                                      RectHeightStyle rectHeightStyle,
                                                      RectWidthStyle rectWidthStyle) {
+    if (this->isVertical()) {
+        if (rectHeightStyle != RectHeightStyle::kTight || rectWidthStyle != RectWidthStyle::kTight) {
+            throw std::logic_error("vertical-rl getRectsForRange supports only tight height and width styles");
+        }
+        return this->getVerticalRectsForRange(start, end);
+    }
     std::vector<TextBox> results;
     if (fText.isEmpty()) {
         if (start == 0 && end > 0) {
@@ -1079,6 +1089,18 @@ std::vector<TextBox> ParagraphImpl::getRectsForRange(unsigned start,
 
 std::vector<TextBox> ParagraphImpl::getRectsForPlaceholders() {
   std::vector<TextBox> boxes;
+  if (this->isVertical()) {
+      ensureVerticalLayoutReady();
+      for (size_t index = 0; index < fClusters.size(); ++index) {
+          const Run* run = fClusters[index].runOrNull();
+          SkRect cell;
+          if (run != nullptr && run->isPlaceholder() && run->textRange().width() > 0 &&
+              getVerticalClusterCell(index, &cell) && !cell.isEmpty()) {
+              boxes.emplace_back(cell, TextDirection::kLtr);
+          }
+      }
+      return boxes;
+  }
   if (fText.isEmpty()) {
        return boxes;
   }
@@ -1105,6 +1127,10 @@ std::vector<TextBox> ParagraphImpl::getRectsForPlaceholders() {
 
 // TODO: Optimize (save cluster <-> codepoint connection)
 PositionWithAffinity ParagraphImpl::getGlyphPositionAtCoordinate(SkScalar dx, SkScalar dy) {
+
+    if (this->isVertical()) {
+        return this->getVerticalGlyphPositionAtCoordinate(dx, dy);
+    }
 
     if (fText.isEmpty()) {
         return {0, Affinity::kDownstream};
@@ -1161,6 +1187,9 @@ SkRange<size_t> ParagraphImpl::getWordBoundary(unsigned offset) {
 }
 
 void ParagraphImpl::getLineMetrics(std::vector<LineMetrics>& metrics) {
+    if (this->isVertical()) {
+        throw std::logic_error("vertical-rl does not support LineMetrics; use getLayoutMetrics().columns");
+    }
     metrics.clear();
     for (auto& line : fLines) {
         metrics.emplace_back(line.getMetrics());
@@ -1310,7 +1339,14 @@ SkString ParagraphImpl::getEllipsis() const {
 
 void ParagraphImpl::updateFontSize(size_t from, size_t to, SkScalar fontSize) {
 
+    if (this->isVertical() && (!SkIsFinite(fontSize) || fontSize <= 0)) {
+        throw std::invalid_argument("vertical-rl requires a finite positive font size");
+    }
+
   SkASSERT(from == 0 && to == fText.size());
+    if (this->isVertical()) {
+        this->invalidateVerticalLayout();
+    }
   auto defaultStyle = fParagraphStyle.getTextStyle();
   defaultStyle.setFontSize(fontSize);
   fParagraphStyle.setTextStyle(defaultStyle);
@@ -1325,6 +1361,25 @@ void ParagraphImpl::updateFontSize(size_t from, size_t to, SkScalar fontSize) {
 }
 
 void ParagraphImpl::updateTextAlign(TextAlign textAlign) {
+    if (this->isVertical()) {
+        if (textAlign != TextAlign::kStart && textAlign != TextAlign::kEnd &&
+            textAlign != TextAlign::kCenter && textAlign != TextAlign::kJustify) {
+            throw std::invalid_argument(
+                    "vertical-rl supports only Start, End, Center, and Justify alignment");
+        }
+        fParagraphStyle.setTextAlign(textAlign);
+        fLines.clear();
+        fVerticalColumns.clear();
+        fVerticalDecorations.clear();
+        fVerticalBackgrounds.clear();
+        fLayoutMetrics = ParagraphLayoutMetrics{};
+        fExceededMaxLines = false;
+        fOldInlineExtent = 0;
+        if (fState >= kLineBroken) {
+            fState = kShaped;
+        }
+        return;
+    }
     fParagraphStyle.setTextAlign(textAlign);
 
     if (fState >= kLineBroken) {
@@ -1341,9 +1396,19 @@ void ParagraphImpl::updateForegroundPaint(size_t from, size_t to, SkPaint paint)
     for (auto& textStyle : fTextStyles) {
         textStyle.fStyle.setForegroundColor(paint);
     }
+    if (this->isVertical()) {
+        for (auto& span : fVerticalRuby) {
+            if (!span.input.style.textStyle.has_value()) {
+                span.annotation->updateForegroundPaint(0, span.input.text.size(), paint);
+            }
+        }
+    }
 }
 
 void ParagraphImpl::updateBackgroundPaint(size_t from, size_t to, SkPaint paint) {
+    if (this->isVertical()) {
+        this->invalidateVerticalLayout();
+    }
     SkASSERT(from == 0 && to == fText.size());
     auto defaultStyle = fParagraphStyle.getTextStyle();
     defaultStyle.setBackgroundColor(paint);
@@ -1411,6 +1476,9 @@ void ParagraphImpl::ensureUTF16Mapping() {
 }
 
 void ParagraphImpl::visit(const Visitor& visitor) {
+    if (this->isVertical()) {
+        throw std::logic_error("the legacy visit() API has horizontal-only semantics; use extendedVisit()");
+    }
     int lineNumber = 0;
     for (auto& line : fLines) {
         line.ensureTextBlobCachePopulated();
@@ -1503,6 +1571,9 @@ int ParagraphImpl::getLineNumberAtUTF16Offset(size_t codeUnitIndex) {
 }
 
 bool ParagraphImpl::getLineMetricsAt(int lineNumber, LineMetrics* lineMetrics) const {
+    if (this->isVertical()) {
+        throw std::logic_error("vertical-rl does not support LineMetrics; use getLayoutMetrics().columns");
+    }
     if (lineNumber < 0 || lineNumber >= fLines.size()) {
         return false;
     }
@@ -1522,6 +1593,9 @@ TextRange ParagraphImpl::getActualTextRange(int lineNumber, bool includeSpaces) 
 }
 
 bool ParagraphImpl::getGlyphClusterAt(TextIndex codeUnitIndex, GlyphClusterInfo* glyphInfo) {
+    if (this->isVertical()) {
+        return this->getVerticalGlyphClusterAt(codeUnitIndex, glyphInfo);
+    }
     const int lineNumber = getLineNumberAt(codeUnitIndex);
     if (lineNumber == -1) {
         return false;
@@ -1546,9 +1620,10 @@ bool ParagraphImpl::getGlyphClusterAt(TextIndex codeUnitIndex, GlyphClusterInfo*
     return false;
 }
 
-bool ParagraphImpl::getClosestGlyphClusterAt(SkScalar dx,
-                                             SkScalar dy,
-                                             GlyphClusterInfo* glyphInfo) {
+bool ParagraphImpl::getClosestGlyphClusterAt(SkScalar dx, SkScalar dy, GlyphClusterInfo* glyphInfo) {
+    if (this->isVertical()) {
+        return this->getVerticalClosestGlyphClusterAt(dx, dy, glyphInfo);
+    }
     const PositionWithAffinity res = this->getGlyphPositionAtCoordinate(dx, dy);
     SkASSERT(res.position != 0 || res.affinity != Affinity::kUpstream);
     const size_t utf16Offset = res.position + (res.affinity == Affinity::kDownstream ? 0 : -1);
@@ -1558,6 +1633,9 @@ bool ParagraphImpl::getClosestGlyphClusterAt(SkScalar dx,
 }
 
 bool ParagraphImpl::getGlyphInfoAtUTF16Offset(size_t codeUnitIndex, GlyphInfo* glyphInfo) {
+    if (this->isVertical()) {
+        return this->getVerticalGlyphInfoAtUTF16Offset(codeUnitIndex, glyphInfo);
+    }
     this->ensureUTF16Mapping();
     if (codeUnitIndex >= SkToSizeT(fUTF8IndexForUTF16Index.size())) {
         return false;
@@ -1594,6 +1672,9 @@ bool ParagraphImpl::getGlyphInfoAtUTF16Offset(size_t codeUnitIndex, GlyphInfo* g
 }
 
 bool ParagraphImpl::getClosestUTF16GlyphInfoAt(SkScalar dx, SkScalar dy, GlyphInfo* glyphInfo) {
+    if (this->isVertical()) {
+        return this->getVerticalClosestUTF16GlyphInfoAt(dx, dy, glyphInfo);
+    }
     const PositionWithAffinity res = this->getGlyphPositionAtCoordinate(dx, dy);
     SkASSERT(res.position != 0 || res.affinity != Affinity::kUpstream);
     const size_t utf16Offset = res.position + (res.affinity == Affinity::kDownstream ? 0 : -1);
@@ -1634,6 +1715,10 @@ std::vector<Paragraph::FontInfo> ParagraphImpl::getFonts() const {
 }
 
 void ParagraphImpl::extendedVisit(const ExtendedVisitor& visitor) {
+    if (this->isVertical()) {
+        this->extendedVisitVertical(visitor);
+        return;
+    }
     int lineNumber = 0;
     for (auto& line : fLines) {
         line.iterateThroughVisualRuns(
@@ -1724,6 +1809,9 @@ void ParagraphImpl::extendedVisit(const ExtendedVisitor& visitor) {
 }
 
 int ParagraphImpl::getPath(int lineNumber, SkPath* dest) {
+    if (this->isVertical()) {
+        return this->getVerticalPath(lineNumber, dest);
+    }
     if (hasRuby()) {
         SkPathBuilder rubyPath;
         int missing = 0;

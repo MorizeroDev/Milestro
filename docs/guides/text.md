@@ -24,7 +24,7 @@ Paragraph rendering reads three groups of settings from the producer:
 | Layer | Property | Controls |
 | --- | --- | --- |
 | Text run | `producer.textStyle` | Font families, size, weight, width, slant, color, spacing, locale |
-| Paragraph | `producer.paragraphStyle` | Alignment, text direction, single-line mode, ellipsis string, extra block spacing |
+| Paragraph | `producer.paragraphStyle` | Alignment, text direction, writing mode, single-line mode, ellipsis string, extra block spacing |
 | Component layout | `producer.wrapMode`, `producer.textOverflow`, `producer.margin`, `producer.enableAutoFontSize` | Line breaking, overflow, insets, automatic glyph fitting |
 
 This separation is intentional. For example, changing `wrapMode` changes line
@@ -135,6 +135,7 @@ markup. The supported subset is smaller than TextMesh Pro's tag set.
 | `<span>` | Lower-level inline overrides |
 | `<p>` | Paragraph block, alignment, direction, CSS block styles |
 | `<br>` | Explicit line break |
+| `<img width=".." height=".." key=".."/>` | Inline placeholder box |
 | `<a href="target" id="optional-id">` | Clickable range |
 | `<ruby>base<rt>annotation</rt></ruby>` | Ruby annotation |
 | `<rp>` | HTML fallback text inside Ruby; not rendered |
@@ -244,7 +245,67 @@ Supported standard Ruby properties are `ruby-position`, `ruby-align`, and
 The current parser supports one plain-text `<rt>` per `<ruby>`. Nested Ruby,
 multiple annotations, and styled markup inside `<rt>` are rejected. For the
 native layout rules and managed `ParagraphBuilder` API, see
-[Horizontal Ruby layout](../reference/ruby-layout.md).
+[Ruby layout](../reference/ruby-layout.md).
+
+### Inline placeholders
+
+`<img/>` reserves an inline box without painting anything, so the application
+can position its own visuals there:
+
+```xml
+Score: <img width="24" height="24" key="coin-icon"/> 1200
+```
+
+`width` and `height` are required positive numbers and `key` is an optional
+application string. The box is atomic for wrapping and occupies one character
+(U+FFFC) in the source text. It must be an empty element, and it is ignored
+inside `<ruby>`.
+
+Milestro only reports geometry; placing and animating the visual is up to the
+application. Query the laid-out boxes from the `TextBox`:
+
+```csharp
+if (textBox.TryGetPlaceholderGeometrySnapshot(out var snapshot))
+{
+    foreach (var item in snapshot.Geometry)
+    {
+        // item.Key, item.StartUtf16, item.Visible
+        // item.Rect is in paragraph layout units; convert to render-texture
+        // pixels with PaintPosition and the auto font size FitScale:
+        Vector2 centerPixels = snapshot.PaintPosition + item.Rect.center * snapshot.FitScale;
+    }
+}
+```
+
+Re-read the snapshot when `ContentVersion` or `Generation` changes.
+
+## Vertical writing
+
+`TextBox` supports vertical right-to-left writing (`vertical-rl`) for CJK
+titles, labels, and multi-paragraph bodies:
+
+```csharp
+producer.paragraphStyle.writingMode = WritingMode.VerticalRl;
+```
+
+Columns run top to bottom and advance from right to left. The same content,
+fonts, rich-text markup, margins, scrolling, links, and auto font size apply.
+Ruby annotations are placed on the physical right of the base column;
+`ruby-position: under` falls back to that side with an Editor diagnostic.
+Vertical-specific sizing, indent, alignment, and effect rules are in
+[Layout and sizing](layout.md#vertical-writing-vertical-rl).
+
+Current limits:
+
+- Use a fixed-size Canvas `TextBox`. `TextInput` editing, SlimText, and the
+  world-space components stay horizontal.
+- The base direction stays LTR; RTL content is not supported. `textAlign`
+  supports `Start`, `End`, `Center`, and `Justify`; `Left` and `Right` fall
+  back to `Start`.
+- `vertical-lr`, tate-chu-yoko (horizontal-in-vertical digits), and per-run
+  `text-orientation` overrides are not available yet.
+- Unsupported combinations degrade with an Editor diagnostic instead of
+  failing silently.
 
 ## Parser behavior to remember
 

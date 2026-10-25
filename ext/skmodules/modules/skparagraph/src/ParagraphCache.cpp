@@ -154,7 +154,9 @@ uint32_t ParagraphCacheKey::mixTextStyle(uint32_t hash, const TextStyle& style) 
     hash = mix(hash, SkGoodHash()(relax(style.getLetterSpacing())));
     hash = mix(hash, SkGoodHash()(relax(style.getWordSpacing())));
     hash = mix(hash, SkGoodHash()(style.getLocale()));
-    hash = mix(hash, SkGoodHash()(relax(style.getHeight())));
+    // Vertical layout stores this multiplier in each shaped run and derives
+    // column geometry directly from it, so approximate rounding is not safe.
+    hash = mix(hash, SkGoodHash()(SkFloat2Bits(style.getHeight())));
     hash = mix(hash, SkGoodHash()(style.getHalfLeading()));
     hash = mix(hash, SkGoodHash()(relax(style.getBaselineShift())));
     for (auto& ff : style.getFontFamilies()) {
@@ -166,7 +168,7 @@ uint32_t ParagraphCacheKey::mixTextStyle(uint32_t hash, const TextStyle& style) 
     }
     hash = mix(hash, std::hash<std::optional<FontArguments>>()(style.getFontArguments()));
     hash = mix(hash, SkGoodHash()(style.getFontStyle()));
-    hash = mix(hash, SkGoodHash()(relax(style.getFontSize())));
+    hash = mix(hash, SkGoodHash()(SkFloat2Bits(style.getFontSize())));
     hash = mix(hash, SkGoodHash()(static_cast<int>(style.getFontEdging())));
     hash = mix(hash, SkGoodHash()(static_cast<int>(style.getFontHinting())));
     hash = mix(hash, SkGoodHash()(style.getSubpixel()));
@@ -200,6 +202,7 @@ uint32_t ParagraphCacheKey::computeHash() const {
     }
 
     hash = mix(hash, SkGoodHash()(fParagraphStyle.getTextDirection()));
+    hash = mix(hash, SkGoodHash()(static_cast<int>(fParagraphStyle.getWritingMode())));
     hash = mix(hash, SkGoodHash()(fParagraphStyle.getReplaceTabCharacters() ? 1 : 0));
     hash = mix(hash, SkGoodHash()(fParagraphStyle.fakeMissingFontStyles() ? 1 : 0));
     hash = mix(hash, SkGoodHash()(fParagraphStyle.getLetterSpacingByCSSSpec() ? 1 : 0));
@@ -246,6 +249,10 @@ bool ParagraphCacheKey::operator==(const ParagraphCacheKey& other) const {
         return false;
     }
 
+    if (fParagraphStyle.getWritingMode() != other.fParagraphStyle.getWritingMode()) {
+        return false;
+    }
+
     if (!(fParagraphStyle.getStrutStyle() == other.fParagraphStyle.getStrutStyle())) {
         return false;
     }
@@ -260,8 +267,7 @@ bool ParagraphCacheKey::operator==(const ParagraphCacheKey& other) const {
     }
 
     // Letter spacing is applied to the cached runs
-    if (fParagraphStyle.getLetterSpacingByCSSSpec() !=
-        other.fParagraphStyle.getLetterSpacingByCSSSpec()) {
+    if (fParagraphStyle.getLetterSpacingByCSSSpec() != other.fParagraphStyle.getLetterSpacingByCSSSpec()) {
         return false;
     }
 

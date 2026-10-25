@@ -647,6 +647,63 @@ float width);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutContainsStrongRtl")]
+        internal static extern unsafe long SkiaTextlayoutContainsStrongRtl(byte* text,
+ulong size,
+out int containsStrongRtl);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphLayoutWithInlineExtent")]
+        internal static extern unsafe long SkiaTextlayoutParagraphLayoutWithInlineExtent(IntPtr p,
+float inlineExtent);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphGetWritingMode")]
+        internal static extern unsafe long SkiaTextlayoutParagraphGetWritingMode(IntPtr p,
+out int writingMode);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphGetLayoutMetrics")]
+        internal static extern unsafe long SkiaTextlayoutParagraphGetLayoutMetrics(IntPtr p,
+out float physicalWidth,
+out float physicalHeight,
+out float contentLeft,
+out float contentTop,
+out float contentRight,
+out float contentBottom,
+out float inkLeft,
+out float inkTop,
+out float inkRight,
+out float inkBottom,
+out float longestInlineExtent,
+out float minIntrinsicInlineExtent,
+out float maxIntrinsicInlineExtent,
+out ulong columnCount);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphGetColumnMetrics")]
+        internal static extern unsafe long SkiaTextlayoutParagraphGetColumnMetrics(IntPtr p,
+ulong columnIndex,
+out ulong lineNumber,
+out int hardBreak,
+out float left,
+out float top,
+out float right,
+out float bottom,
+out float inlineExtent,
+out float blockThickness,
+out float physicalBaseline,
+out ulong utf16Start,
+out ulong utf16End,
+out ulong utf16EndExcludingWhitespace,
+out ulong utf16EndIncludingNewline);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphGetHeight")]
         internal static extern unsafe long SkiaTextlayoutParagraphGetHeight(IntPtr p,
 out float height);
@@ -693,6 +750,13 @@ out int hit);
         internal static extern unsafe long SkiaTextlayoutParagraphForEachRectInRange(IntPtr p,
 ulong startUtf16,
 ulong endUtf16,
+IntPtr context,
+MilestroCTypes.SkiaTextlayoutParagraphRectCallback callback);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphGetRectsForPlaceholders")]
+        internal static extern unsafe long SkiaTextlayoutParagraphGetRectsForPlaceholders(IntPtr p,
 IntPtr context,
 MilestroCTypes.SkiaTextlayoutParagraphRectCallback callback);
 
@@ -1229,6 +1293,16 @@ ulong len);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphBuilderAddPlaceholder")]
+        internal static extern unsafe long SkiaTextlayoutParagraphBuilderAddPlaceholder(IntPtr b,
+float width,
+float height,
+int alignment,
+int baseline,
+float baselineOffset);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphBuilderAddRuby")]
         internal static extern unsafe long SkiaTextlayoutParagraphBuilderAddRuby(IntPtr b,
 ulong startUtf8,
@@ -1285,6 +1359,18 @@ out IntPtr textStyle);
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleSetTextStyle")]
         internal static extern unsafe long SkiaTextlayoutParagraphStyleSetTextStyle(IntPtr s,
 IntPtr textStyle);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleGetWritingMode")]
+        internal static extern unsafe long SkiaTextlayoutParagraphStyleGetWritingMode(IntPtr s,
+out int writingMode);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphStyleSetWritingMode")]
+        internal static extern unsafe long SkiaTextlayoutParagraphStyleSetWritingMode(IntPtr s,
+int writingMode);
 
 
 

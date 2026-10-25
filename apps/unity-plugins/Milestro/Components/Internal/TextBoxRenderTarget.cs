@@ -47,6 +47,8 @@ namespace Milestro.Components.Internal
         private Vector2Int outputVisibleSizePixels = Vector2Int.one;
         private IReadOnlyList<RichTextParser.LinkAnnotation> linkAnnotations =
             Array.Empty<RichTextParser.LinkAnnotation>();
+        private IReadOnlyList<RichTextParser.PlaceholderAnnotation> placeholderAnnotations =
+            Array.Empty<RichTextParser.PlaceholderAnnotation>();
         private TextBoxContentSnapshot contentSnapshot;
         private bool hasContentSnapshot;
         private string contentSource = "";
@@ -55,7 +57,30 @@ namespace Milestro.Components.Internal
         private TextBoxLinkGeometryPublication linkGeometryPublication;
         private ParagraphStyle? cachedParagraphStyle;
         private TextStyle? cachedTextStyle;
+        private TextBoxRenderPreparation? cachedPreparation;
+        private TextBoxRenderTargetSettings cachedRequestedSettings;
+        private bool hasCachedRequestedSettings;
+        private bool preparationDirty = true;
         private bool stylesChanged = true;
+        private bool verticalLayoutActive;
+        private bool hasVerticalLayoutMetrics;
+        private TextBoxVerticalBlockLayout verticalLayoutMetrics;
+        private Vector2[] verticalBlockMargins = Array.Empty<Vector2>();
+        private WritingMode requestedWritingMode;
+        private bool hasRequestedWritingMode;
+        private ResolvedMargin verticalMargin;
+        private bool verticalLeftAuto;
+        private bool verticalTopAuto;
+        private bool verticalRightAuto;
+        private bool verticalBottomAuto;
+        private float verticalContentViewportWidth;
+        private float verticalContentViewportHeight;
+        private Exception? lastLayoutError;
+        private string? lastConfigurationDiagnosticKey;
+        private bool configurationDegraded;
+        private bool failedRebuildSuspended;
+        private TextBoxRenderViewport failedViewport;
+        private ColorSpace failedColorSpace;
         private long pendingCompletionToken;
         private TextBoxRenderViewport pendingViewport;
         private ColorSpace pendingColorSpace;
@@ -82,11 +107,15 @@ namespace Milestro.Components.Internal
         public Vector2 ViewportSize => viewportSize;
         public Vector2 MaxScrollOffset => maxScrollOffset;
         public TextBoxHorizontalScrollState HorizontalScrollState => horizontalScrollState;
+        public bool IsVertical => verticalLayoutActive;
+        public Exception? LastLayoutError => lastLayoutError;
 
         public event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus>? RenderEventCompleted;
 
         public void MarkPropertiesChanged()
         {
+            failedRebuildSuspended = false;
+            preparationDirty = true;
             stylesChanged = true;
             layoutChanged = true;
             paintChanged = true;
@@ -96,6 +125,8 @@ namespace Milestro.Components.Internal
 
         public void MarkContentChanged()
         {
+            failedRebuildSuspended = false;
+            preparationDirty = true;
             layoutChanged = true;
             paintChanged = true;
             linkGeometryPublication.InvalidatePublished();
@@ -182,6 +213,312 @@ namespace Milestro.Components.Internal
             bool forceText,
             UnityEngine.Object? logContext)
         {
+            if (failedRebuildSuspended &&
+                failedViewport.Matches(viewport) &&
+                failedColorSpace == colorSpace)
+            {
+                return false;
+            }
+
+            failedRebuildSuspended = false;
+            try
+            {
+                var shouldPrepare = preparationDirty ||
+                                    forceText ||
+                                    cachedPreparation == null ||
+                                    !PreparationMatchesRequest(settings);
+                if (shouldPrepare)
+                {
+                    cachedPreparation = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(settings);
+                    cachedRequestedSettings = settings;
+                    hasCachedRequestedSettings = true;
+                    preparationDirty = false;
+                    if (cachedPreparation.Diagnostic != null || configurationDegraded)
+                    {
+                        InvalidateFailedOutput();
+                    }
+                }
+
+                var prepared = cachedPreparation!;
+                var effectiveSettings = prepared.Settings;
+                var writingMode = effectiveSettings.ParagraphStyle?.writingMode ?? WritingMode.HorizontalTb;
+                if (writingMode != WritingMode.HorizontalTb && writingMode != WritingMode.VerticalRl)
+                {
+                    throw new NotSupportedException(
+                        $"TextBox does not support writing mode value {(int)writingMode}.");
+                }
+
+                configurationDegraded = prepared.Diagnostic != null;
+
+                if (hasRequestedWritingMode && requestedWritingMode != writingMode)
+                {
+                    ResetForWritingModeChange();
+                }
+
+                requestedWritingMode = writingMode;
+                hasRequestedWritingMode = true;
+
+                Exception? configurationDiagnostic = prepared.Diagnostic;
+                var fallbackSettings = effectiveSettings;
+                var usedLineHeightFallback = false;
+                bool result;
+                if (TextBoxVerticalLayoutSupport.IsVertical(effectiveSettings))
+                {
+                    result = RebuildVerticalWithFallback(viewport,
+                        colorSpace,
+                        effectiveSettings,
+                        prepared.Payload,
+                        forceText,
+                        logContext,
+                        ref configurationDiagnostic,
+                        out fallbackSettings,
+                        out usedLineHeightFallback);
+                }
+                else
+                {
+                    verticalLayoutActive = false;
+                    hasVerticalLayoutMetrics = false;
+                    result = RebuildHorizontal(viewport,
+                        colorSpace,
+                        effectiveSettings,
+                        prepared.Payload,
+                        forceText,
+                        logContext);
+                }
+
+                if (usedLineHeightFallback)
+                {
+                    cachedPreparation = new TextBoxRenderPreparation(fallbackSettings,
+                        prepared.Payload,
+                        AsConfigurationDiagnostic(configurationDiagnostic),
+                        prepared.UsesHorizontalFallback);
+                    configurationDegraded = true;
+                }
+
+                lastLayoutError = null;
+                ReportConfigurationDiagnostic(configurationDiagnostic, logContext);
+                return result;
+            }
+            catch (Exception error)
+            {
+                InvalidateFailedOutput();
+                lastLayoutError = error;
+                failedRebuildSuspended = true;
+                failedViewport = viewport;
+                failedColorSpace = colorSpace;
+                ReportConfigurationDiagnostic(error, logContext);
+                return false;
+            }
+        }
+
+        private bool RebuildVerticalWithFallback(TextBoxRenderViewport viewport,
+            ColorSpace colorSpace,
+            TextBoxRenderTargetSettings settings,
+            RichTextParser.ParagraphPayload payload,
+            bool forceText,
+            UnityEngine.Object? logContext,
+            ref Exception? diagnostic,
+            out TextBoxRenderTargetSettings fallbackSettings,
+            out bool usedFallback)
+        {
+            var lineHeight = settings.TextStyle.lineHeight;
+            fallbackSettings = settings;
+            usedFallback = false;
+            var layoutSizePixels = NormalizeSize(viewport.LayoutSizePixels);
+            var inlineExtent = ResolveVerticalInlineExtent(settings, layoutSizePixels);
+            if (TextBoxVerticalLayoutSupport.HasUnrepresentableVerticalIndent(payload,
+                    inlineExtent,
+                    settings.TextStyle.size))
+            {
+                diagnostic = CombineDiagnostics(diagnostic,
+                    new NotSupportedException(
+                        "vertical text indent is not representable for the current content " +
+                        "height; defaulted to 0"));
+            }
+            try
+            {
+                return RebuildVertical(viewport, colorSpace, settings, payload, forceText, logContext);
+            }
+            catch (Exception error) when (FloatUtil.IsFinite(lineHeight) && lineHeight > 0f)
+            {
+                InvalidateFailedOutput();
+                var fallback = TextBoxVerticalLayoutSupport.WithNaturalLineHeight(settings);
+                fallbackSettings = fallback;
+                usedFallback = true;
+                diagnostic = CombineDiagnostics(diagnostic,
+                    new NotSupportedException(
+                        $"lineHeight={lineHeight} could not produce a valid vertical layout; " +
+                        $"defaulted to 0 (natural metrics). {error.Message}"));
+                try
+                {
+                    return RebuildVertical(viewport, colorSpace, fallback, payload, forceText, logContext);
+                }
+                catch (Exception retryError)
+                {
+                    throw CombineDiagnostics(diagnostic, retryError);
+                }
+            }
+        }
+
+        private static NotSupportedException AsConfigurationDiagnostic(Exception? diagnostic)
+        {
+            if (diagnostic == null)
+            {
+                return new NotSupportedException(
+                    "Canvas TextBox configuration was defaulted for rendering.");
+            }
+
+            return diagnostic as NotSupportedException ??
+                   new NotSupportedException(diagnostic.Message);
+        }
+
+        private bool PreparationMatchesRequest(TextBoxRenderTargetSettings settings)
+        {
+            return hasCachedRequestedSettings &&
+                   string.Equals(settings.Content,
+                       cachedRequestedSettings.Content,
+                       StringComparison.Ordinal) &&
+                   TextBoxVerticalLayoutSupport.MarginsEqual(settings.Margin,
+                       cachedRequestedSettings.Margin) &&
+                   ReferenceEquals(settings.ParagraphStyle, cachedRequestedSettings.ParagraphStyle) &&
+                   ReferenceEquals(settings.TextStyle, cachedRequestedSettings.TextStyle) &&
+                   settings.WrapMode == cachedRequestedSettings.WrapMode &&
+                   settings.TextOverflow == cachedRequestedSettings.TextOverflow &&
+                   settings.AutoFontSize == cachedRequestedSettings.AutoFontSize &&
+                   settings.MinSize.Equals(cachedRequestedSettings.MinSize) &&
+                   settings.MaxSize.Equals(cachedRequestedSettings.MaxSize) &&
+                   Nullable.Equals(settings.Sizing, cachedRequestedSettings.Sizing) &&
+                   settings.MarginReferenceSize == cachedRequestedSettings.MarginReferenceSize &&
+                   Nullable.Equals(settings.VerticalHeightMode,
+                       cachedRequestedSettings.VerticalHeightMode) &&
+                   Nullable.Equals(settings.VerticalMarginContext,
+                       cachedRequestedSettings.VerticalMarginContext) &&
+                   settings.SizingUsesVerticalLayout ==
+                   cachedRequestedSettings.SizingUsesVerticalLayout;
+        }
+
+        private static NotSupportedException CombineDiagnostics(Exception? first, Exception next)
+        {
+            if (first == null)
+            {
+                return AsConfigurationDiagnostic(next);
+            }
+
+            return new NotSupportedException($"{first.Message} {next.Message}");
+        }
+
+        private void ReportConfigurationDiagnostic(Exception? diagnostic,
+            UnityEngine.Object? logContext)
+        {
+#if UNITY_EDITOR
+            if (diagnostic == null)
+            {
+                lastConfigurationDiagnosticKey = null;
+                return;
+            }
+
+            var key = $"{diagnostic.GetType().FullName}:{diagnostic.Message}";
+            if (string.Equals(lastConfigurationDiagnosticKey, key, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            lastConfigurationDiagnosticKey = key;
+            if (diagnostic.StackTrace == null)
+            {
+                try
+                {
+                    throw diagnostic;
+                }
+                catch (Exception logged)
+                {
+                    Debug.LogException(logged, logContext);
+                }
+
+                return;
+            }
+
+            Debug.LogException(diagnostic, logContext);
+#endif
+        }
+
+        private void ResetForWritingModeChange()
+        {
+            fitScale = 1f;
+            DisposeSurface();
+            RetireParagraphs();
+            cachedParagraphStyle?.Dispose();
+            cachedTextStyle?.Dispose();
+            cachedParagraphStyle = null;
+            cachedTextStyle = null;
+            stylesChanged = true;
+            layoutChanged = true;
+            paintChanged = true;
+            verticalLayoutActive = false;
+            hasVerticalLayoutMetrics = false;
+            verticalLayoutMetrics = default;
+            hasRequestedWritingMode = false;
+            verticalMargin = default;
+            ResetVerticalAutoMargins();
+            verticalContentViewportWidth = 0;
+            verticalContentViewportHeight = 0;
+            paragraphHeight = 0f;
+            paragraphContentWidth = 0f;
+            paragraphVisualLeft = 0f;
+            paragraphVisualWidth = 0f;
+            horizontalScrollState = default;
+            scrollOffset = Vector2.zero;
+            contentSize = Vector2.zero;
+            viewportSize = Vector2.zero;
+            maxScrollOffset = Vector2.zero;
+            MarkOutputChanged();
+        }
+
+        public void InvalidateFailedOutput()
+        {
+            fitScale = 1f;
+            RetireParagraphs();
+            DisposeSurface();
+            cachedParagraphStyle?.Dispose();
+            cachedTextStyle?.Dispose();
+            cachedParagraphStyle = null;
+            cachedTextStyle = null;
+            stylesChanged = true;
+            layoutChanged = true;
+            paintChanged = true;
+            verticalLayoutActive = false;
+            hasVerticalLayoutMetrics = false;
+            verticalLayoutMetrics = default;
+            verticalMargin = default;
+            ResetVerticalAutoMargins();
+            verticalContentViewportWidth = 0;
+            verticalContentViewportHeight = 0;
+            paragraphHeight = 0f;
+            paragraphContentWidth = 0f;
+            paragraphVisualLeft = 0f;
+            paragraphVisualWidth = 0f;
+            horizontalScrollState = default;
+            scrollOffset = Vector2.zero;
+            contentSize = Vector2.zero;
+            viewportSize = Vector2.zero;
+            maxScrollOffset = Vector2.zero;
+            linkAnnotations = Array.Empty<RichTextParser.LinkAnnotation>();
+            hasContentSnapshot = false;
+            contentSnapshot = default;
+            linkGeometryPublication.Reset();
+            pendingCompletionToken = 0;
+            pendingViewport = default;
+            pendingColorSpace = default;
+            MarkOutputChanged();
+        }
+
+        private bool RebuildHorizontal(TextBoxRenderViewport viewport,
+            ColorSpace colorSpace,
+            TextBoxRenderTargetSettings settings,
+            RichTextParser.ParagraphPayload payload,
+            bool forceText,
+            UnityEngine.Object? logContext)
+        {
             ValidateMargin(settings.Margin);
             if (forceText)
             {
@@ -238,7 +575,7 @@ namespace Milestro.Components.Internal
                 List<Paragraph> nextParagraphs;
                 using (profiling ? TextBoxPipelineProfiler.BuildParagraphsMarker.Auto() : default)
                 {
-                    nextParagraphs = BuildParagraphs(settings, layoutSizePixels);
+                    nextParagraphs = BuildParagraphs(settings, layoutSizePixels, payload);
                 }
                 using (profiling ? TextBoxPipelineProfiler.RetireParagraphsMarker.Auto() : default)
                 {
@@ -247,7 +584,7 @@ namespace Milestro.Components.Internal
                 paragraphsRebuilt = true;
                 needsDraw = true;
             }
-            if (linkAnnotations.Count > 0)
+            if (linkAnnotations.Count > 0 || placeholderAnnotations.Count > 0)
             {
                 linkGeometryPublication.RequireControlledSubmission();
             }
@@ -304,7 +641,7 @@ namespace Milestro.Components.Internal
                     out clipRect);
             }
             var hasHitGeometry = paragraphs.Count > 0 &&
-                                 linkAnnotations.Count > 0 &&
+                                 (linkAnnotations.Count > 0 || placeholderAnnotations.Count > 0) &&
                                  clipRect.width > 0f &&
                                  clipRect.height > 0f;
             var hitGeometry = hasHitGeometry
@@ -315,7 +652,8 @@ namespace Milestro.Components.Internal
                     paintPosition,
                     clipRect,
                     visibleOutputSizePixels,
-                    fitScale)
+                    fitScale,
+                    BuildPlaceholderGeometry(paintPosition, clipRect, viewport.VisualScrollOffset.x))
                 : default;
             bool submitted;
             using (profiling ? TextBoxPipelineProfiler.SubmitMarker.Auto() : default)
@@ -344,8 +682,22 @@ namespace Milestro.Components.Internal
             cachedParagraphStyle = null;
             cachedTextStyle = null;
             stylesChanged = true;
+            cachedPreparation = null;
+            hasCachedRequestedSettings = false;
+            cachedRequestedSettings = default;
+            preparationDirty = true;
+            configurationDegraded = false;
             layoutChanged = true;
             paintChanged = true;
+            verticalLayoutActive = false;
+            hasVerticalLayoutMetrics = false;
+            verticalLayoutMetrics = default;
+            hasRequestedWritingMode = false;
+            verticalMargin = default;
+            ResetVerticalAutoMargins();
+            verticalContentViewportWidth = 0;
+            verticalContentViewportHeight = 0;
+            lastLayoutError = null;
             paragraphHeight = 0f;
             paragraphContentWidth = 0f;
             paragraphVisualLeft = 0f;
@@ -362,6 +714,430 @@ namespace Milestro.Components.Internal
             pendingViewport = default;
             pendingColorSpace = default;
             MarkOutputChanged();
+        }
+
+        private bool RebuildVertical(TextBoxRenderViewport viewport,
+            ColorSpace colorSpace,
+            TextBoxRenderTargetSettings settings,
+            RichTextParser.ParagraphPayload payload,
+            bool forceText,
+            UnityEngine.Object? logContext)
+        {
+            ValidateMargin(settings.Margin);
+            verticalLayoutActive = true;
+            if (forceText)
+            {
+                stylesChanged = true;
+                layoutChanged = true;
+                paintChanged = true;
+                linkGeometryPublication.InvalidatePublished();
+            }
+
+            if (linkGeometryPublication.HasPending)
+            {
+                if (forceText || layoutChanged || paintChanged ||
+                    !pendingViewport.Matches(viewport) || pendingColorSpace != colorSpace)
+                {
+                    linkGeometryPublication.RequestRebuild();
+                }
+                return false;
+            }
+
+            var profiling = TextBoxPipelineProfiler.Enabled;
+            var layoutSizePixels = NormalizeSize(viewport.LayoutSizePixels);
+            var outputSizePixels = NormalizeSize(viewport.OutputSizePixels);
+            var visibleOutputSizePixels = ClampVisibleOutputSize(
+                NormalizeSize(viewport.VisibleOutputSizePixels), outputSizePixels);
+            outputVisibleSizePixels = visibleOutputSizePixels;
+
+            var needsDraw = false;
+            var surfaceReady = true;
+            if (viewport.DrawOutput)
+            {
+                surfaceReady = EnsureSurface(outputSizePixels,
+                    colorSpace,
+                    viewport.UseScreenSpaceRasterization,
+                    viewport.DesiredRasterScale,
+                    logContext,
+                    out var surfaceChanged);
+                if (!surfaceReady)
+                {
+                    needsDraw = true;
+                }
+                else
+                {
+                    needsDraw = surfaceChanged;
+                }
+            }
+            else
+            {
+                ClearSurfaceOutput();
+            }
+
+            var paragraphsRebuilt = false;
+            if (forceText || paragraphs.Count == 0 || layoutChanged)
+            {
+                List<Paragraph> nextParagraphs;
+                using (profiling ? TextBoxPipelineProfiler.BuildParagraphsMarker.Auto() : default)
+                {
+                    nextParagraphs = BuildParagraphs(settings,
+                        layoutSizePixels,
+                        payload,
+                        ResolveVerticalInlineExtent(settings, layoutSizePixels));
+                }
+                using (profiling ? TextBoxPipelineProfiler.RetireParagraphsMarker.Auto() : default)
+                {
+                    ReplaceParagraphs(nextParagraphs);
+                }
+                paragraphsRebuilt = true;
+                needsDraw = true;
+            }
+
+            if (linkAnnotations.Count > 0 || placeholderAnnotations.Count > 0)
+            {
+                linkGeometryPublication.RequireControlledSubmission();
+            }
+
+            needsDraw |= ResolveVerticalParagraphs(paragraphs, settings, layoutSizePixels,
+                paragraphsRebuilt);
+            needsDraw |= UpdateScrollMetrics(settings,
+                layoutSizePixels,
+                visibleOutputSizePixels,
+                viewport);
+            needsDraw |= paintChanged;
+
+            if (!viewport.DrawOutput)
+            {
+                linkGeometryPublication.InvalidatePublished();
+                layoutChanged = false;
+                paintChanged = false;
+                return true;
+            }
+
+            if (!surfaceReady || surface == null || !surface.HasSurface)
+            {
+                layoutChanged = false;
+                paintChanged = true;
+                linkGeometryPublication.InvalidatePublished();
+                return false;
+            }
+
+            if (!needsDraw)
+            {
+                return true;
+            }
+
+            if (linkGeometryPublication.RequiresControlledSubmission &&
+                !linkGeometryPublication.CanBeginControlledSubmission)
+            {
+                layoutChanged = false;
+                paintChanged = true;
+                return false;
+            }
+
+            Vector2 paintPosition;
+            Rect clipRect;
+            UnitySkiaRenderCommandList commands;
+            using (profiling ? TextBoxPipelineProfiler.BuildCommandsMarker.Auto() : default)
+            {
+                commands = BuildVerticalRenderCommands(settings,
+                    viewport,
+                    outputSizePixels,
+                    logContext,
+                    out paintPosition,
+                    out clipRect);
+            }
+            var hasHitGeometry = paragraphs.Count > 0 &&
+                                 (linkAnnotations.Count > 0 || placeholderAnnotations.Count > 0) &&
+                                 clipRect.width > 0f &&
+                                 clipRect.height > 0f;
+            var hitGeometry = hasHitGeometry
+                ? new TextBoxLinkGeometrySnapshot(contentVersion,
+                    paragraphs.ToArray(),
+                    linkAnnotations,
+                    BuildVerticalLinkGeometry(paragraphs, linkAnnotations),
+                    paintPosition,
+                    clipRect,
+                    visibleOutputSizePixels,
+                    fitScale,
+                    BuildPlaceholderGeometry(paintPosition, clipRect, viewport.VisualScrollOffset.x))
+                : default;
+            bool submitted;
+            using (profiling ? TextBoxPipelineProfiler.SubmitMarker.Auto() : default)
+            {
+                submitted = TrySubmit(commands, hasHitGeometry, hitGeometry);
+            }
+            if (!submitted)
+            {
+                paintChanged = true;
+                return false;
+            }
+
+            pendingViewport = viewport;
+            pendingColorSpace = colorSpace;
+            layoutChanged = false;
+            paintChanged = false;
+            return true;
+        }
+
+        private bool ResolveVerticalParagraphs(IReadOnlyList<Paragraph> targetParagraphs,
+            TextBoxRenderTargetSettings settings,
+            Vector2Int layoutSizePixels,
+            bool force)
+        {
+            if (targetParagraphs.Count == 0)
+            {
+                hasVerticalLayoutMetrics = false;
+                verticalLayoutMetrics = default;
+                fitScale = 1f;
+                paragraphContentWidth = 0f;
+                paragraphHeight = 0f;
+                ResetVerticalAutoMargins();
+                return false;
+            }
+
+            var nextMargin = ResolveMargin(settings, layoutSizePixels);
+            var contentWidth = ResolveVerticalContentWidth(settings, layoutSizePixels, nextMargin);
+            var contentHeight = ResolveVerticalContentHeight(settings, layoutSizePixels, nextMargin);
+            var marginChanged = !MarginsEqual(verticalMargin, nextMargin);
+            var leftAuto = settings.Margin.Left.Auto;
+            var topAuto = settings.Margin.Top.Auto;
+            var rightAuto = settings.Margin.Right.Auto;
+            var bottomAuto = settings.Margin.Bottom.Auto;
+            var autoChanged = verticalLeftAuto != leftAuto ||
+                              verticalTopAuto != topAuto ||
+                              verticalRightAuto != rightAuto ||
+                              verticalBottomAuto != bottomAuto;
+            verticalMargin = nextMargin;
+            verticalLeftAuto = leftAuto;
+            verticalTopAuto = topAuto;
+            verticalRightAuto = rightAuto;
+            verticalBottomAuto = bottomAuto;
+            var margins = TextBoxVerticalBlockLayout.ResolveMargins(blockMarginTopValues,
+                blockMarginBottomValues, contentHeight, settings);
+            var blockMarginsChanged = margins.Length != verticalBlockMargins.Length;
+            for (var index = 0; !blockMarginsChanged && index < margins.Length; ++index)
+            {
+                blockMarginsChanged = !margins[index].Equals(verticalBlockMargins[index]);
+            }
+            if (!force &&
+                hasVerticalLayoutMetrics &&
+                !blockMarginsChanged &&
+                Mathf.Approximately(verticalContentViewportWidth, contentWidth) &&
+                Mathf.Approximately(verticalContentViewportHeight, contentHeight))
+            {
+                return marginChanged || autoChanged;
+            }
+
+            var scale = settings.Sizing.HasValue
+                ? settings.Sizing.Value.EffectiveFontSize / Mathf.Max(0.1f, settings.TextStyle.size)
+                : 1f;
+            if (!settings.Sizing.HasValue && ShouldApplyAutoFontSize(settings) &&
+                settings.VerticalHeightMode != TextHeightMode.Auto)
+            {
+                var bounds = TextAutoFontSizeSettings.Default;
+                bounds.fontSizeMin = settings.MinSize;
+                bounds.fontSizeMax = settings.MaxSize;
+                bounds.Normalize();
+                scale = TextAutoFontSizeScale.SearchFit(candidate =>
+                {
+                    var virtualWidth = contentWidth / candidate;
+                    var virtualHeight = contentHeight / candidate;
+                    var measured = TextBoxVerticalBlockLayout.Layout(targetParagraphs,
+                        UsesFiniteVerticalInlineExtent(settings)
+                            ? virtualHeight
+                            : float.PositiveInfinity,
+                        settings.ParagraphStyle.paragraphSpacing, margins).PhysicalSize;
+                    return measured.x <= virtualWidth && measured.y <= virtualHeight;
+                },
+                    bounds.fontSizeMin / settings.TextStyle.size,
+                    bounds.fontSizeMax / settings.TextStyle.size);
+            }
+            var inlineExtent = UsesFiniteVerticalInlineExtent(settings)
+                ? contentHeight / scale
+                : float.PositiveInfinity;
+            var metrics = TextBoxVerticalBlockLayout.Layout(targetParagraphs, inlineExtent,
+                settings.ParagraphStyle.paragraphSpacing, margins);
+
+            verticalBlockMargins = margins;
+            verticalContentViewportWidth = contentWidth;
+            verticalContentViewportHeight = contentHeight;
+            verticalLayoutMetrics = metrics;
+            hasVerticalLayoutMetrics = true;
+            verticalLayoutActive = true;
+            fitScale = scale;
+            paragraphContentWidth = metrics.PhysicalSize.x * scale;
+            paragraphHeight = metrics.PhysicalSize.y * scale;
+            layoutWidth = CeilToPositiveInt(contentWidth);
+            layoutHeight = CeilToPositiveInt(contentHeight);
+            return true;
+        }
+
+        private static bool MarginsEqual(ResolvedMargin left, ResolvedMargin right)
+        {
+            return Mathf.Approximately(left.Left, right.Left) &&
+                   Mathf.Approximately(left.Top, right.Top) &&
+                   Mathf.Approximately(left.Right, right.Right) &&
+                   Mathf.Approximately(left.Bottom, right.Bottom);
+        }
+
+        private UnitySkiaRenderCommandList BuildVerticalRenderCommands(
+            TextBoxRenderTargetSettings settings,
+            TextBoxRenderViewport viewport,
+            Vector2Int outputSizePixels,
+            UnityEngine.Object? logContext,
+            out Vector2 paintPosition,
+            out Rect clipRect)
+        {
+            var commands = new UnitySkiaRenderCommandList();
+            paintPosition = Vector2.zero;
+            clipRect = default;
+            if (!hasVerticalLayoutMetrics || paragraphs.Count == 0)
+            {
+#if MILESTRO_RENDER_DEBUG_LOG
+                Debug.LogWarning("No vertical paragraph built", logContext);
+#endif
+                return commands;
+            }
+
+            paintPosition = ResolveVerticalPaintOrigin(viewport);
+            clipRect = ResolveVerticalClipRect(settings, viewport, outputSizePixels);
+            for (var index = 0; index < paragraphs.Count; ++index)
+            {
+                commands.DrawParagraph(paragraphs[index],
+                    paintPosition + verticalLayoutMetrics.FrameOffsets[index] * fitScale, clipRect, fitScale);
+            }
+            return commands;
+        }
+
+        private Vector2 ResolveVerticalPaintOrigin(TextBoxRenderViewport viewport)
+        {
+            var paragraphWidth = verticalLayoutMetrics.PhysicalSize.x * fitScale;
+            return new Vector2(
+                verticalMargin.Left +
+                ResolveVerticalAutoOffsetX(verticalLeftAuto,
+                    verticalRightAuto,
+                    verticalContentViewportWidth,
+                    paragraphWidth) +
+                scrollOffset.x + viewport.VisualScrollOffset.x,
+                verticalMargin.Top +
+                ResolveVerticalAutoOffsetY(verticalTopAuto,
+                    verticalBottomAuto,
+                    verticalContentViewportHeight,
+                    new Rect(verticalLayoutMetrics.ContentBounds.position * fitScale,
+                        verticalLayoutMetrics.ContentBounds.size * fitScale)) -
+                scrollOffset.y - viewport.VisualScrollOffset.y);
+        }
+
+        private static float ResolveVerticalAutoOffsetX(bool leftAuto,
+            bool rightAuto,
+            float viewportWidth,
+            float paragraphWidth)
+        {
+            if (!FloatUtil.IsFinite(viewportWidth) || !FloatUtil.IsFinite(paragraphWidth))
+            {
+                return 0f;
+            }
+
+            var spare = viewportWidth - paragraphWidth;
+            if (spare <= 0f)
+            {
+                return spare;
+            }
+
+            if (leftAuto && rightAuto)
+            {
+                return spare * 0.5f;
+            }
+
+            return rightAuto ? 0f : spare;
+        }
+
+        private static float ResolveVerticalAutoOffsetY(bool topAuto,
+            bool bottomAuto,
+            float viewportHeight,
+            Rect contentBounds)
+        {
+            if ((!topAuto && !bottomAuto) ||
+                !FloatUtil.IsFinite(viewportHeight) ||
+                !FloatUtil.IsFinite(contentBounds.yMin) ||
+                !FloatUtil.IsFinite(contentBounds.height) ||
+                contentBounds.height <= 0f)
+            {
+                return 0f;
+            }
+
+            var spare = viewportHeight - contentBounds.height;
+            if (spare <= 0f)
+            {
+                return 0f;
+            }
+
+            if (topAuto && bottomAuto)
+            {
+                return spare * 0.5f - contentBounds.yMin;
+            }
+
+            return topAuto ? spare - contentBounds.yMin : -contentBounds.yMin;
+        }
+
+        private void ResetVerticalAutoMargins()
+        {
+            verticalLeftAuto = false;
+            verticalTopAuto = false;
+            verticalRightAuto = false;
+            verticalBottomAuto = false;
+        }
+
+        private Rect ResolveVerticalClipRect(TextBoxRenderTargetSettings settings,
+            TextBoxRenderViewport viewport,
+            Vector2Int outputSizePixels)
+        {
+            if (settings.TextOverflow == TextOverflow.Overflow || viewport.SliceOutput)
+            {
+                return new Rect(0f, 0f, outputSizePixels.x, outputSizePixels.y);
+            }
+
+            return new Rect(verticalMargin.Left,
+                verticalMargin.Top,
+                Mathf.Min(verticalContentViewportWidth, outputSizePixels.x - verticalMargin.Left),
+                Mathf.Min(verticalContentViewportHeight, outputSizePixels.y - verticalMargin.Top));
+        }
+
+        private IReadOnlyList<TextBoxLinkGeometry> BuildVerticalLinkGeometry(
+            IReadOnlyList<Paragraph> source,
+            IReadOnlyList<RichTextParser.LinkAnnotation> links)
+        {
+            var geometry = new List<TextBoxLinkGeometry>(links.Count);
+            foreach (var link in links)
+            {
+                var rects = new List<Rect>();
+                var blockRanges = new List<TextBoxLinkBlockRange>();
+                for (var index = 0; index < source.Count; ++index)
+                {
+                    var blockStart = blockStartsUtf16[index];
+                    var blockEnd = blockStart + blockPlainTexts[index].Length;
+                    var localStart = Math.Max(link.StartUtf16, blockStart);
+                    var localEnd = Math.Min(link.EndUtf16, blockEnd);
+                    if (localStart < localEnd)
+                    {
+                        var offset = verticalLayoutMetrics.FrameOffsets[index];
+                        foreach (var rect in source[index].GetRectsForRange(localStart - blockStart,
+                                     localEnd - blockStart))
+                        {
+                            rects.Add(new Rect(rect.position + offset, rect.size));
+                        }
+                        blockRanges.Add(new TextBoxLinkBlockRange(index,
+                            localStart - blockStart,
+                            localEnd - blockStart,
+                            offset));
+                    }
+                }
+
+                geometry.Add(new TextBoxLinkGeometry(link.Occurrence, rects, blockRanges));
+            }
+
+            return geometry;
         }
 
         private bool EnsureSurface(Vector2Int sizePixels,
@@ -513,10 +1289,13 @@ namespace Milestro.Components.Internal
             }
         }
 
-        private List<Paragraph> BuildParagraphs(TextBoxRenderTargetSettings settings, Vector2Int layoutSizePixels)
+        private List<Paragraph> BuildParagraphs(TextBoxRenderTargetSettings settings,
+            Vector2Int layoutSizePixels,
+            RichTextParser.ParagraphPayload payload,
+            float verticalInlineExtent = float.PositiveInfinity)
         {
             var profiling = TextBoxPipelineProfiler.Enabled;
-            var result = CreateParagraphs(settings, out var payload);
+            var result = CreateParagraphs(settings, payload, verticalInlineExtent);
             string plainText;
             using (profiling ? TextBoxPipelineProfiler.PlainTextMarker.Auto() : default)
             {
@@ -525,6 +1304,7 @@ namespace Milestro.Components.Internal
             linkAnnotations = payload.Links.Count == 0
                 ? Array.Empty<RichTextParser.LinkAnnotation>()
                 : new List<RichTextParser.LinkAnnotation>(payload.Links);
+            placeholderAnnotations = new List<RichTextParser.PlaceholderAnnotation>(payload.Placeholders);
             using (profiling ? TextBoxPipelineProfiler.BlockMetadataMarker.Auto() : default)
             {
                 CaptureBlockMetadata(payload, settings);
@@ -562,12 +1342,7 @@ namespace Milestro.Components.Internal
             foreach (var block in payload.Blocks)
             {
                 blockStartsUtf16.Add(block.StartUtf16);
-                var plainText = new StringBuilder();
-                foreach (var segment in block.Segments)
-                {
-                    plainText.Append(segment.Content ?? "");
-                }
-                blockPlainTexts.Add(plainText.ToString());
+                blockPlainTexts.Add(payload.GetPlainText(block));
                 blockMarginTopValues.Add(block.Style.MarginTop);
                 blockMarginBottomValues.Add(block.Style.MarginBottom);
                 hasHeightDependentBlockMargins |= IsHeightDependent(block.Style.MarginTop) ||
@@ -650,7 +1425,8 @@ namespace Milestro.Components.Internal
         }
 
         private List<Paragraph> CreateParagraphs(TextBoxRenderTargetSettings settings,
-            out RichTextParser.ParagraphPayload payload)
+            RichTextParser.ParagraphPayload payload,
+            float verticalInlineExtent)
         {
             var profiling = TextBoxPipelineProfiler.Enabled;
             if (stylesChanged || cachedParagraphStyle == null || cachedTextStyle == null)
@@ -668,18 +1444,26 @@ namespace Milestro.Components.Internal
             var paragraphStyle = cachedParagraphStyle!;
             var textStyle = cachedTextStyle!;
 
-            var parser = new RichTextParser.RichTextParser();
-            using (profiling ? TextBoxPipelineProfiler.ParseRichTextMarker.Auto() : default)
-            {
-                parser.ParseText(settings.Content);
-            }
-            using (profiling ? TextBoxPipelineProfiler.ConvertRichTextMarker.Auto() : default)
-            {
-                payload = parser.ConvertToSegments();
-            }
+            TextBoxVerticalLayoutSupport.ValidatePayload(payload, settings);
             using (profiling ? TextBoxPipelineProfiler.CreateNativeParagraphsMarker.Auto() : default)
             {
-                return payload.ToParagraphs(paragraphStyle, textStyle);
+                IDisposable? indentScope = null;
+                if (TextBoxVerticalLayoutSupport.IsVertical(settings))
+                {
+                    indentScope = TextBoxVerticalLayoutSupport.UseRepresentableVerticalIndent(
+                        payload,
+                        verticalInlineExtent,
+                        settings.TextStyle.size,
+                        out _);
+                }
+                try
+                {
+                    return payload.ToParagraphs(paragraphStyle, textStyle);
+                }
+                finally
+                {
+                    indentScope?.Dispose();
+                }
             }
         }
 
@@ -1075,6 +1859,53 @@ namespace Milestro.Components.Internal
             Vector2Int outputSizePixels,
             TextBoxRenderViewport viewport)
         {
+            if (verticalLayoutActive)
+            {
+                var verticalMargin = ResolveMargin(settings, layoutSizePixels);
+                var verticalViewportSize = new Vector2(
+                    ResolveVerticalContentWidth(settings, layoutSizePixels, verticalMargin),
+                    ResolveVerticalContentHeight(settings, outputSizePixels, verticalMargin));
+                var verticalContentSize = hasVerticalLayoutMetrics
+                    ? verticalLayoutMetrics.PhysicalSize
+                    : Vector2.zero;
+                if (placeholderAnnotations.Count > 0 && hasVerticalLayoutMetrics)
+                {
+                    for (var index = 0; index < paragraphs.Count; ++index)
+                    {
+                        foreach (var rect in paragraphs[index].GetRectsForPlaceholders())
+                        {
+                            verticalContentSize.y = Mathf.Max(verticalContentSize.y,
+                                rect.yMax + verticalLayoutMetrics.FrameOffsets[index].y);
+                        }
+                    }
+                }
+                verticalContentSize *= fitScale;
+                var verticalMaxScrollOffset = new Vector2(
+                    Mathf.Max(0f, verticalContentSize.x - verticalViewportSize.x),
+                    Mathf.Max(0f, verticalContentSize.y - verticalViewportSize.y));
+                var verticalHorizontalScrollState = viewport.HorizontalScrollState.ResolveVertical(
+                    verticalMaxScrollOffset.x,
+                    viewport.HorizontalScrollRequest);
+                var verticalScrollOffset = new Vector2(
+                    verticalHorizontalScrollState.ScrollX,
+                    Mathf.Clamp(FloatUtil.IsFinite(viewport.RequestedScrollY)
+                            ? viewport.RequestedScrollY
+                            : 0f,
+                        0f,
+                        verticalMaxScrollOffset.y));
+
+                var verticalChanged = viewportSize != verticalViewportSize ||
+                                      contentSize != verticalContentSize ||
+                                      maxScrollOffset != verticalMaxScrollOffset ||
+                                      scrollOffset != verticalScrollOffset;
+                viewportSize = verticalViewportSize;
+                contentSize = verticalContentSize;
+                maxScrollOffset = verticalMaxScrollOffset;
+                scrollOffset = verticalScrollOffset;
+                horizontalScrollState = verticalHorizontalScrollState;
+                return verticalChanged;
+            }
+
             var layoutViewportWidth = ContentViewportWidth(settings, layoutSizePixels);
             var nextViewportSize = new Vector2(layoutViewportWidth,
                 ContentViewportHeight(settings, outputSizePixels));
@@ -1126,6 +1957,20 @@ namespace Milestro.Components.Internal
 
         private ResolvedMargin ResolveMargin(TextBoxRenderTargetSettings settings, Vector2Int containerSizePixels)
         {
+            if (TextBoxVerticalLayoutSupport.IsVertical(settings))
+            {
+                if (settings.Sizing.HasValue)
+                {
+                    return settings.Sizing.Value.Margin;
+                }
+
+                var verticalContext = settings.VerticalMarginContext ??
+                                      new MarginResolveContext(containerSizePixels.x,
+                                          containerSizePixels.y,
+                                          settings.TextStyle.size);
+                return settings.Margin.ResolveVertical(verticalContext);
+            }
+
             if (settings.Sizing.HasValue)
             {
                 return settings.Sizing.Value.Margin;
@@ -1134,6 +1979,43 @@ namespace Milestro.Components.Internal
             return settings.Margin.Resolve(new MarginResolveContext(containerSizePixels.x,
                 containerSizePixels.y,
                 settings.TextStyle.size));
+        }
+
+        private float ResolveVerticalContentWidth(TextBoxRenderTargetSettings settings,
+            Vector2Int layoutSizePixels,
+            ResolvedMargin margin)
+        {
+            var allocatedWidth = settings.Sizing.HasValue
+                ? settings.Sizing.Value.UsedWidth
+                : layoutSizePixels.x;
+            return Mathf.Max(0f, allocatedWidth - margin.FixedHorizontalSize);
+        }
+
+        private float ResolveVerticalContentHeight(TextBoxRenderTargetSettings settings,
+            Vector2Int layoutSizePixels,
+            ResolvedMargin margin)
+        {
+            var allocatedHeight = settings.Sizing.HasValue
+                ? settings.Sizing.Value.UsedHeight
+                : layoutSizePixels.y;
+            return Mathf.Max(0f, allocatedHeight - margin.FixedVerticalSize);
+        }
+
+        internal float ResolveVerticalInlineExtent(TextBoxRenderTargetSettings settings,
+            Vector2Int layoutSizePixels)
+        {
+            if (!UsesFiniteVerticalInlineExtent(settings))
+            {
+                return float.PositiveInfinity;
+            }
+
+            var margin = ResolveMargin(settings, layoutSizePixels);
+            return ResolveVerticalContentHeight(settings, layoutSizePixels, margin);
+        }
+
+        private static bool UsesFiniteVerticalInlineExtent(TextBoxRenderTargetSettings settings)
+        {
+            return TextBoxVerticalBlockLayout.UsesFiniteInlineExtent(settings);
         }
 
         private static int CeilToPositiveInt(float value)
@@ -1182,12 +2064,44 @@ namespace Milestro.Components.Internal
         private static string PlainText(RichTextParser.ParagraphPayload payload)
         {
             var builder = new StringBuilder();
-            foreach (var segment in payload.Body)
+            foreach (var block in payload.Blocks)
             {
-                builder.Append(segment.Content ?? "");
+                builder.Append(payload.GetPlainText(block));
             }
 
             return builder.ToString();
+        }
+
+        private IReadOnlyList<TextBoxPlaceholderGeometry> BuildPlaceholderGeometry(
+            Vector2 paintPosition, Rect clipRect, float visualScrollOffsetX)
+        {
+            var result = new List<TextBoxPlaceholderGeometry>(placeholderAnnotations.Count);
+            foreach (var annotation in placeholderAnnotations)
+            {
+                var rect = default(Rect);
+                var visible = false;
+                for (var index = 0; index < paragraphs.Count; ++index)
+                {
+                    var start = blockStartsUtf16[index];
+                    if (annotation.StartUtf16 < start || annotation.EndUtf16 > start + blockPlainTexts[index].Length)
+                        continue;
+                    var boxes = paragraphs[index].GetRectsForRange(annotation.StartUtf16 - start,
+                        annotation.EndUtf16 - start);
+                    if (boxes.Count == 0) break;
+                    var offset = verticalLayoutActive
+                        ? verticalLayoutMetrics.FrameOffsets[index]
+                        : new Vector2(TextBoxNoWrapHorizontalLayout.ResolvePaintOffsetX(
+                            index < blockAlignmentOffsetsX.Count ? blockAlignmentOffsetsX[index] : 0f,
+                            scrollOffset.x, visualScrollOffsetX) / fitScale,
+                            index < blockTops.Count ? blockTops[index] : 0f);
+                    rect = new Rect(boxes[0].position + offset, boxes[0].size);
+                    var outputRect = new Rect(rect.position * fitScale + paintPosition, rect.size * fitScale);
+                    visible = outputRect.Overlaps(clipRect);
+                    break;
+                }
+                result.Add(new TextBoxPlaceholderGeometry(annotation.Key, annotation.StartUtf16, rect, visible));
+            }
+            return result.AsReadOnly();
         }
 
         private UnitySkiaRenderCommandList BuildRenderCommands(TextBoxRenderTargetSettings settings,

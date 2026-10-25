@@ -15,10 +15,11 @@ ParagraphPainter::DashPathEffect::DashPathEffect(SkScalar onLength, SkScalar off
     : fOnLength(onLength), fOffLength(offLength) {}
 
 ParagraphPainter::DecorationStyle::DecorationStyle()
-    : ParagraphPainter::DecorationStyle(SK_ColorTRANSPARENT, 0, std::nullopt) {}
+    : ParagraphPainter::DecorationStyle(SK_ColorTRANSPARENT, 0, std::nullopt) {
+}
 
-ParagraphPainter::DecorationStyle::DecorationStyle(
-    SkColor color, SkScalar strokeWidth,
+ParagraphPainter::DecorationStyle::DecorationStyle(SkColor color,
+                                                   SkScalar strokeWidth,
     std::optional<DashPathEffect> dashPathEffect)
     : fColor(color), fStrokeWidth(strokeWidth), fDashPathEffect(dashPathEffect) {
     fPaint.setStyle(SkPaint::kStroke_Style);
@@ -80,6 +81,10 @@ void CanvasParagraphPainter::clipRect(const SkRect& rect) {
 
 void CanvasParagraphPainter::translate(SkScalar dx, SkScalar dy) {
     fCanvas->translate(dx, dy);
+}
+
+void CanvasParagraphPainter::rotate(SkScalar degrees) {
+    fCanvas->rotate(degrees);
 }
 
 void CanvasParagraphPainter::save() {

@@ -48,6 +48,24 @@ namespace Milestro.Components.Internal
                 followsDefault);
         }
 
+        internal TextBoxHorizontalScrollState ResolveVertical(float maxScrollX,
+            TextBoxHorizontalScrollRequest request)
+        {
+            var requestedScrollX = request.HasValue ? SanitizeOffset(request.Value) : ScrollX;
+            var followsDefault = !HasLayout || FollowsDefaultAnchor;
+            if (request.HasValue && HasLayout && !OffsetsEqual(requestedScrollX, ScrollX))
+            {
+                followsDefault = OffsetsEqual(requestedScrollX, 0f);
+            }
+
+            var nextScrollX = followsDefault ? 0f : requestedScrollX;
+            nextScrollX = Math.Min(SanitizeOffset(maxScrollX), SanitizeOffset(nextScrollX));
+            return new TextBoxHorizontalScrollState(nextScrollX,
+                0f,
+                true,
+                followsDefault);
+        }
+
         private static float SanitizeOffset(float value)
         {
             return FloatUtil.IsFinite(value) ? Math.Max(0f, value) : 0f;

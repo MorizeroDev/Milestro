@@ -107,6 +107,21 @@ namespace Milestro.Skia.TextLayout
                 );
         }
 
+        public WritingMode WritingMode
+        {
+            get
+            {
+                ExitCodeUtil.ThrowIfFailed(
+                    BindingC.SkiaTextlayoutParagraphStyleGetWritingMode(NativePtr, out var ret)
+                );
+                return (WritingMode)ret;
+            }
+            set =>
+                ExitCodeUtil.ThrowIfFailed(
+                    BindingC.SkiaTextlayoutParagraphStyleSetWritingMode(NativePtr, (int)value)
+                );
+        }
+
         public TextAlign TextAlign
         {
             get

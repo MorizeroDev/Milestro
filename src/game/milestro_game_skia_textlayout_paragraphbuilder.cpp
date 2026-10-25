@@ -78,6 +78,21 @@ int64_t MilestroSkiaTextlayoutParagraphBuilderAddRuby(milestro::skia::textlayout
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutParagraphBuilderAddPlaceholder(
+        milestro::skia::textlayout::ParagraphBuilder* b,
+        float width, float height, int32_t alignment, int32_t baseline, float baselineOffset) try {
+    if (b == nullptr || alignment < 0 || alignment > 5 || baseline < 0 || baseline > 1 ||
+        !std::isfinite(baselineOffset)) {
+        return MILESTRO_API_RET_FAILED;
+    }
+    b->addPlaceholder(width, height,
+                      static_cast<::skia::textlayout::PlaceholderAlignment>(alignment),
+                      static_cast<::skia::textlayout::TextBaseline>(baseline), baselineOffset);
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutParagraphBuilderAddRubyWithStyle(milestro::skia::textlayout::ParagraphBuilder* b,
                                                                size_t startUtf8,
                                                                size_t endUtf8,

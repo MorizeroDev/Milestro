@@ -2,8 +2,10 @@
 #ifndef Metrics_DEFINED
 #define Metrics_DEFINED
 
-#include <map>
+#include "modules/skparagraph/include/ParagraphStyle.h"
 #include "modules/skparagraph/include/TextStyle.h"
+#include <map>
+#include <vector>
 
 namespace skia {
 namespace textlayout {
@@ -90,6 +92,34 @@ public:
     // them. The first run will be keyed under start_index. The metrics here
     // are before layout and are the base values we calculate from.
     std::map<size_t, StyleMetrics> fLineMetrics;
+};
+
+// Vertical layout results use physical paragraph coordinates (x right, y down)
+// and keep UTF-8 and UTF-16 source ranges explicitly separate. lineNumber is a
+// column number for vertical-rl and starts at 0 at the rightmost column.
+struct ParagraphColumnMetrics {
+    size_t lineNumber = 0;
+    bool hardBreak = false;
+    TextRange utf8Range;
+    size_t utf16Start = 0;
+    size_t utf16End = 0;
+    size_t utf16EndExcludingWhitespace = 0;
+    size_t utf16EndIncludingNewline = 0;
+    SkRect physicalBounds = SkRect::MakeEmpty();
+    SkScalar inlineExtent = 0;
+    SkScalar blockThickness = 0;
+    SkScalar physicalBaseline = 0;
+};
+
+struct ParagraphLayoutMetrics {
+    WritingMode writingMode = WritingMode::kHorizontalTb;
+    SkSize physicalSize = SkSize::Make(0, 0);
+    SkRect contentBounds = SkRect::MakeEmpty();
+    SkRect inkBounds = SkRect::MakeEmpty();
+    SkScalar longestInlineExtent = 0;
+    SkScalar minIntrinsicInlineExtent = 0;
+    SkScalar maxIntrinsicInlineExtent = 0;
+    std::vector<ParagraphColumnMetrics> columns;
 };
 
 }  // namespace textlayout

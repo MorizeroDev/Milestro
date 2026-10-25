@@ -218,7 +218,8 @@ namespace Milestro.Components
                 linkHoverIndicator!.SetPresentation(linkHoverRects,
                     m_linkHoverColor,
                     m_linkHoverUnderlineColor,
-                    m_linkHoverUnderlineThickness);
+                    m_linkHoverUnderlineThickness,
+                    ProducerComponent().isVerticalLayout);
                 linkHoverIndicator.enabled = true;
             }
             else if (linkHoverIndicator != null)
@@ -333,6 +334,15 @@ namespace Milestro.Components
         {
             linkHoverPointer = null;
             ClearHoveredLink(notify);
+        }
+
+        private void InvalidateLinkInteractionOnLayoutFailure()
+        {
+            // Keep linkHoverPointer so a later successful Update can restore the
+            // hover without requiring pointer movement. Published output is no
+            // longer valid, so drop presses and every visible hover artifact.
+            ClearLinkPresses();
+            ClearHoveredLink(notify: true);
         }
 
         private void DestroyLinkHoverFeedback()

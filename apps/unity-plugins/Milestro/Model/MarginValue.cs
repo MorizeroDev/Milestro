@@ -57,6 +57,30 @@ namespace Milestro.Model
             }
         }
 
+        public float ResolveVertical(MarginResolveContext context)
+        {
+            if (m_auto || !IsFinite(m_value))
+            {
+                return 0f;
+            }
+
+            switch (m_unit)
+            {
+                case MarginUnit.ContainerPercent:
+                    return context.HasContainerWidth
+                        ? m_value * 0.01f * context.ContainerWidth
+                        : 0f;
+                case MarginUnit.Vw:
+                    return context.HasViewport ? m_value * 0.01f * context.ViewportWidth : 0f;
+                case MarginUnit.Vh:
+                    return context.HasViewport ? m_value * 0.01f * context.ViewportHeight : 0f;
+                case MarginUnit.Em:
+                    return m_value * context.FontSize;
+                default:
+                    return m_value;
+            }
+        }
+
         public void Normalize()
         {
             if (!IsFinite(m_value))

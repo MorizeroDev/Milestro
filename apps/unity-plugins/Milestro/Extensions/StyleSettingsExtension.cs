@@ -11,6 +11,7 @@ namespace Milestro.Extensions
             var ret = new ParagraphStyle();
             ret.TextAlign = settings.textAlign;
             ret.TextDirection = settings.textDirection;
+            ret.WritingMode = settings.writingMode;
             if (settings.singleLine)
             {
                 ret.MaxLines = 1;

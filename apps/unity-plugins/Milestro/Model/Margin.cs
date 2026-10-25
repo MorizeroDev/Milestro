@@ -31,6 +31,14 @@ namespace Milestro.Model
                 m_bottom.Resolve(context, MarginAxis.Vertical));
         }
 
+        public ResolvedMargin ResolveVertical(MarginResolveContext context)
+        {
+            return new ResolvedMargin(m_left.ResolveVertical(context),
+                m_top.ResolveVertical(context),
+                m_right.ResolveVertical(context),
+                m_bottom.ResolveVertical(context));
+        }
+
         public void Normalize()
         {
             m_top.Normalize();

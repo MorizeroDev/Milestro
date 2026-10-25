@@ -186,6 +186,11 @@ namespace Milestro.RichTextParser
 
         public ParagraphPayload ConvertToSegments()
         {
+            return ConvertToSegments(allowViewportBlockMargins: false);
+        }
+
+        internal ParagraphPayload ConvertToSegments(bool allowViewportBlockMargins)
+        {
             var rootNode = RootNode;
             if (rootNode is XmlTextNode textNode)
             {
@@ -194,7 +199,7 @@ namespace Milestro.RichTextParser
 
             if (rootNode is XmlElementNode root)
             {
-                var ctx = new Context();
+                var ctx = new Context { AllowViewportBlockMargins = allowViewportBlockMargins };
                 ConvertToSegments(ctx, root);
                 return ctx.Result;
             }
@@ -209,6 +214,30 @@ namespace Milestro.RichTextParser
             var anchorHref = "";
             var anchorId = "";
             var anchorStartUtf16 = 0;
+            if (node.Tag == "img")
+            {
+                if (ctx.HasActiveRuby)
+                {
+                    Debug.LogError("<img> inside <ruby> is ignored");
+                    return;
+                }
+                if (!node.IsEmptyElement || node.Children.Count != 0)
+                    throw new InvalidCastException("<img> must be an empty element");
+                foreach (var attribute in node.Attributes)
+                {
+                    if (attribute.Key != "width" && attribute.Key != "height" && attribute.Key != "key")
+                        throw new InvalidCastException($"<img> does not accept the '{attribute.Key}' attribute");
+                }
+                var width = ReadPlaceholderDimension(node, "width");
+                var height = ReadPlaceholderDimension(node, "height");
+                var block = ctx.CurrentBlock ?? ctx.Result.AddBlock(false, ctx.TextLengthUtf16);
+                ctx.CurrentBlock = block;
+                ctx.Result.AddPlaceholder(new PlaceholderAnnotation(ctx.TextLengthUtf16, width, height,
+                    node.Attributes.TryGetValue("key", out var key) ? key : "", state));
+                ++block.LengthUtf16;
+                ++ctx.TextLengthUtf16;
+                return;
+            }
             if (node.Tag == "b" || node.Tag == "strong")
             {
                 state.FontWeight = FontWeight.Bold;
@@ -368,7 +397,8 @@ namespace Milestro.RichTextParser
 
                 if (node.Attributes.TryGetValue("style", out var paragraphDeclarations))
                 {
-                    CssParser.Apply(state, paragraphDeclarations, block.Style);
+                    CssParser.Apply(state, paragraphDeclarations, block.Style,
+                        ctx.AllowViewportBlockMargins);
                 }
 
                 foreach (var child in node.Children)
@@ -616,6 +646,15 @@ namespace Milestro.RichTextParser
         }
 
         private static readonly CultureInfo ParseCulture = CultureInfo.GetCultureInfo("en");
+
+        private static float ReadPlaceholderDimension(XmlElementNode node, string name)
+        {
+            if (!node.Attributes.TryGetValue(name, out var text) ||
+                !float.TryParse(text, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign,
+                    CultureInfo.InvariantCulture, out var value) || !float.IsFinite(value) || value <= 0)
+                throw new InvalidCastException($"<img> requires a positive finite decimal {name}");
+            return value;
+        }
 
         private static bool TryParseFloat(string value, out float result)
         {

@@ -76,6 +76,14 @@ public:
     SkScalar posX(size_t index) const { return fPositions[index].fX; }
     void addX(size_t index, SkScalar shift) { fPositions[index].fX += shift; }
     SkScalar posY(size_t index) const { return fPositions[index].fY; }
+    SkScalar inlinePosition(size_t index) const {
+        return fVertical ? fPositions[index].fY : fPositions[index].fX;
+    }
+    SkScalar inlineAdvance() const { return fVertical ? fAdvance.fY : fAdvance.fX; }
+    bool isVertical() const { return fVertical; }
+    bool isSideways() const { return fSideways; }
+    SkScalar blockAscent() const { return fBlockAscent; }
+    SkScalar blockDescent() const { return fBlockDescent; }
     size_t size() const { return fGlyphs.size(); }
     void setWidth(SkScalar width) { fAdvance.fX = width; }
     void setHeight(SkScalar height) { fAdvance.fY = height; }
@@ -221,6 +229,10 @@ private:
     uint8_t fBidiLevel;
     SkFourByteTag fScript;
     SkString fLanguage;
+    bool fVertical = false;
+    bool fSideways = false;
+    SkScalar fBlockAscent = 0;
+    SkScalar fBlockDescent = 0;
 };
 
 template<typename Visitor>

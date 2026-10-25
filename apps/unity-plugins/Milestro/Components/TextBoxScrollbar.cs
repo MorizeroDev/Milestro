@@ -113,9 +113,10 @@ namespace Milestro.Components
 
             var hasOverflow = HasOverflow(state.ViewportWidth, state.ContentWidth);
             m_horizontalScrollbar.size = hasOverflow ? ThumbSize(state.ViewportWidth, state.ContentWidth) : 1f;
-            m_horizontalScrollbar.SetValueWithoutNotify(hasOverflow
+            var percent = hasOverflow
                 ? ScrollOffsetToPercent(state.ScrollX, state.ViewportWidth, state.ContentWidth)
-                : 0f);
+                : 0f;
+            m_horizontalScrollbar.SetValueWithoutNotify(state.IsHorizontalReversed ? 1f - percent : percent);
             SetScrollbarVisible(m_horizontalScrollbar, hasOverflow);
         }
 
@@ -146,7 +147,10 @@ namespace Milestro.Components
                 return;
             }
 
-            Target.ScrollToPercentX(value);
+            if (TryGetScrollState(out var state))
+            {
+                Target.ScrollToPercentX(state.IsHorizontalReversed ? 1f - value : value);
+            }
         }
 
         private void OnVerticalScrollbarValueChanged(float value)

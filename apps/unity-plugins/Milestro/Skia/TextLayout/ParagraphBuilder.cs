@@ -58,6 +58,16 @@ namespace Milestro.Skia.TextLayout
             return new Paragraph(paragraphPtr);
         }
 
+        public void AddPlaceholder(float width, float height)
+        {
+            if (!float.IsFinite(width) || width <= 0) throw new ArgumentOutOfRangeException(nameof(width));
+            if (!float.IsFinite(height) || height <= 0) throw new ArgumentOutOfRangeException(nameof(height));
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphBuilderAddPlaceholder(
+                NativePtr, width, height, 5, 0, 0));
+            _text.Append('\uFFFC');
+            _utf8Length += 3;
+        }
+
         public unsafe void AddRuby(ulong startUtf8, ulong endUtf8, string annotation)
         {
             AddRubyUtf8(startUtf8, endUtf8, annotation);

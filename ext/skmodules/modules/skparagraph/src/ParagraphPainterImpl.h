@@ -21,6 +21,7 @@ public:
 
     void clipRect(const SkRect& rect) override;
     void translate(SkScalar dx, SkScalar dy) override;
+    void rotate(SkScalar degrees) override;
 
     void save() override;
     void restore() override;

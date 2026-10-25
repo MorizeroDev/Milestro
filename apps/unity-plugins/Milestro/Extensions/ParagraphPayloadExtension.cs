@@ -17,6 +17,7 @@ namespace Milestro.Extensions
             var ret = new ParagraphStyle();
             ret.TextDirection = t.TextDirection ?? baseParaStyle.TextDirection;
             ret.TextAlign = t.TextAlign ?? baseParaStyle.TextAlign;
+            ret.WritingMode = baseParaStyle.WritingMode;
             ret.TextIndent = ResolveTextIndent(t, baseParaStyle, fontSize);
 
             if (baseParaStyle.IsUnlimitedLines)
@@ -57,6 +58,7 @@ namespace Milestro.Extensions
             var ret = new ParagraphStyle();
             ret.TextDirection = blockStyle.TextDirection ?? payloadDefault.TextDirection ?? baseParaStyle.TextDirection;
             ret.TextAlign = blockStyle.TextAlign ?? payloadDefault.TextAlign ?? baseParaStyle.TextAlign;
+            ret.WritingMode = baseParaStyle.WritingMode;
             var indentStyle = blockStyle.TextIndent.HasValue || blockStyle.TextIndentEm.HasValue
                 ? blockStyle
                 : payloadDefault;
@@ -234,13 +236,7 @@ namespace Milestro.Extensions
                     builder.Pop();
                 }
 
-                foreach (var item in block.Segments)
-                {
-                    using var textStyle = item.TextStyle.ToTextStyle(baseTextStyle);
-                    builder.PushStyle(textStyle);
-                    builder.AddText(item.Content);
-                    builder.Pop();
-                }
+                AddBlockContents(payload, block, builder, baseTextStyle);
 
                 ++blockIndex;
             }
@@ -285,13 +281,7 @@ namespace Milestro.Extensions
                 paragraphStyle.SetTextStyle(baseTextStyle);
 
                 using var builder = new ParagraphBuilder(paragraphStyle);
-                foreach (var segment in block.Segments)
-                {
-                    using var textStyle = segment.TextStyle.ToTextStyle(baseTextStyle);
-                    builder.PushStyle(textStyle);
-                    builder.AddText(segment.Content);
-                    builder.Pop();
-                }
+                AddBlockContents(payload, block, builder, baseTextStyle);
 
                 foreach (var annotation in payload.RubyAnnotations)
                 {
@@ -310,6 +300,56 @@ namespace Milestro.Extensions
             }
 
             return ret;
+        }
+
+        private static void AddBlockContents(ParagraphPayload payload, ParagraphBlock block,
+            ParagraphBuilder builder, TextStyle baseTextStyle)
+        {
+            var placeholders = new List<PlaceholderAnnotation>();
+            foreach (var placeholder in payload.Placeholders)
+            {
+                if (block.ContainsRange(placeholder.StartUtf16, placeholder.EndUtf16))
+                    placeholders.Add(placeholder);
+            }
+            var next = 0;
+            var cursor = block.StartUtf16;
+            void AppendPlaceholder()
+            {
+                var placeholder = placeholders[next++];
+                using var style = placeholder.TextStyle.ToTextStyle(baseTextStyle);
+                builder.PushStyle(style);
+                builder.AddPlaceholder(placeholder.Width, placeholder.Height);
+                builder.Pop();
+                ++cursor;
+            }
+            foreach (var segment in block.Segments)
+            {
+                using var style = segment.TextStyle.ToTextStyle(baseTextStyle);
+                builder.PushStyle(style);
+                var offset = 0;
+                while (offset < segment.Content.Length)
+                {
+                    if (next < placeholders.Count && placeholders[next].StartUtf16 == cursor)
+                    {
+                        AppendPlaceholder();
+                        continue;
+                    }
+                    var count = segment.Content.Length - offset;
+                    if (next < placeholders.Count)
+                        count = Math.Min(count, placeholders[next].StartUtf16 - cursor);
+                    if (count <= 0) throw new InvalidOperationException("Invalid placeholder source position");
+                    builder.AddText(segment.Content.Substring(offset, count));
+                    cursor += count;
+                    offset += count;
+                }
+                builder.Pop();
+            }
+            while (next < placeholders.Count)
+            {
+                if (placeholders[next].StartUtf16 != cursor)
+                    throw new InvalidOperationException("Invalid placeholder source position");
+                AppendPlaceholder();
+            }
         }
     }
 }

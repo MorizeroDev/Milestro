@@ -31,7 +31,7 @@ run the first-text example.
 
 | Goal | Unity component | Guide |
 | --- | --- | --- |
-| A paragraph with wrapping, rich text, links, or Ruby | `TextBox` | [Text, fonts, and rich text](guides/text.md) |
+| A paragraph with wrapping, rich text, links, Ruby, or vertical writing | `TextBox` | [Text, fonts, and rich text](guides/text.md) |
 | A short single-line UI label | `CanvasSlimText` | [SlimText](guides/slim-text.md) |
 | A paragraph in world space | `WorldSpaceTextBox` | [World-space text](guides/world-space.md) |
 | A short single-line label in world space | `WorldSpaceSlimText` | [World-space text](guides/world-space.md) |
@@ -49,7 +49,8 @@ owned by `TextInput`; add `TextInput` when you need an editable field.
 Use these when you already have a scene working:
 
 - [Text, fonts, and rich text](guides/text.md): change content, font family,
-  size, weight, spacing, rich-text markup, and Ruby annotations.
+  size, weight, spacing, rich-text markup, Ruby annotations, and vertical
+  writing.
 - [SlimText](guides/slim-text.md): use the lightweight single-line path for UI
   and world-space labels.
 - [Layout and sizing](guides/layout.md): wrapping, overflow, margins, content
@@ -75,7 +76,7 @@ Reference pages describe exact behavior and advanced configuration:
 - [Rendering, batching, and backends](reference/rendering.md)
 - [Hybrid input provider contract](reference/hybrid-input.md)
 - [Known limitations](reference/limitations.md)
-- [Horizontal Ruby layout](reference/ruby-layout.md)
+- [Ruby layout](reference/ruby-layout.md)
 - [TextInput accessibility design](reference/accessibility-design.md)
 - [Build from source and CI reference](reference/build.md)
 

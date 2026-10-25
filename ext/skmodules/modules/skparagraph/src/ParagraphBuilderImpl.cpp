@@ -13,6 +13,8 @@
 #include "src/core/SkStringUtils.h"
 
 #include <memory>
+#include <cmath>
+#include <stdexcept>
 #include <utility>
 
 namespace skia {
@@ -106,6 +108,11 @@ void ParagraphBuilderImpl::addText(const char* text, size_t len) {
 }
 
 void ParagraphBuilderImpl::addPlaceholder(const PlaceholderStyle& placeholderStyle) {
+    if (!std::isfinite(placeholderStyle.fWidth) || placeholderStyle.fWidth <= 0 ||
+        !std::isfinite(placeholderStyle.fHeight) || placeholderStyle.fHeight <= 0 ||
+        !std::isfinite(placeholderStyle.fBaselineOffset)) {
+        throw std::invalid_argument("placeholders require positive finite dimensions and a finite baseline offset");
+    }
 #if defined(SK_UNICODE_CLIENT_IMPLEMENTATION)
     SkASSERT(!fTextIsFinalized);
 #endif

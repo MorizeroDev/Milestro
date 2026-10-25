@@ -761,6 +761,40 @@ TEST_F(RubyLayoutTest, SoftHyphenSelectionAndHitTestingUseOriginalSourceRange) {
     }
 }
 
+TEST_F(RubyLayoutTest, LineHeightDoesNotChangeRubyDistanceOrSize) {
+    for (auto position : {RubyPosition::Above, RubyPosition::Below}) {
+        for (bool halfLeading : {false, true}) {
+            RubyStyle rubyStyle;
+            rubyStyle.position = position;
+            rubyStyle.gap = 4;
+            auto textStyle = style.getTextStyle();
+            textStyle.setHeightOverride(false);
+            textStyle.setHalfLeading(halfLeading);
+            style.setTextStyle(textStyle);
+            auto control = build("漢字", {{{0, 6}, "かんじ", rubyStyle}});
+            const auto base = ink(*control, false);
+            const auto annotation = ink(*control, true);
+            const auto distance = annotation.top() - base.top();
+            for (float height : {1.f, 1.5f, 2.f, 3.f}) {
+                SCOPED_TRACE(::testing::Message() << "height=" << height
+                             << ", halfLeading=" << halfLeading
+                             << ", below=" << (position == RubyPosition::Below));
+                textStyle.setHeightOverride(true);
+                textStyle.setHeight(height);
+                style.setTextStyle(textStyle);
+                auto paragraph = build("漢字", {{{0, 6}, "かんじ", rubyStyle}});
+                const auto actualBase = ink(*paragraph, false);
+                const auto actualAnnotation = ink(*paragraph, true);
+                EXPECT_NEAR(actualAnnotation.top() - actualBase.top(), distance, 0.01f);
+                EXPECT_NEAR(actualAnnotation.height(), annotation.height(), 0.01f);
+                EXPECT_NEAR(actualAnnotation.width(), annotation.width(), 0.01f);
+                EXPECT_GE(actualAnnotation.top(), 0);
+                EXPECT_LE(actualAnnotation.bottom(), paragraph->getHeight());
+            }
+        }
+    }
+}
+
 TEST_F(RubyLayoutTest, HeightOverrideAppliesBaselineShiftOnce) {
     for (bool halfLeading : {false, true}) {
         auto textStyle = style.getTextStyle();
@@ -796,7 +830,8 @@ TEST_F(RubyLayoutTest, CachedHalfLeadingMatchesFreshLayoutForBaseAndRuby) {
         auto fresh = build("base", annotations);
         EXPECT_FLOAT_EQ(cached->getAlphabeticBaseline(), fresh->getAlphabeticBaseline());
         EXPECT_EQ(raster(*cached), raster(*fresh));
-        EXPECT_NE(scaled->getAlphabeticBaseline(), fresh->getAlphabeticBaseline());
+        if (annotations.empty())
+            EXPECT_NE(scaled->getAlphabeticBaseline(), fresh->getAlphabeticBaseline());
     }
 }
 

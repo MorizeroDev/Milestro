@@ -42,11 +42,76 @@ namespace textlayout {
 class LineMetrics;
 class TextLine;
 
-template <typename T> bool operator==(const SkSpan<T>& a, const SkSpan<T>& b) {
+struct VerticalAffixRun {
+    SkFont font;
+    bool sideways = false;
+    SkScalar inlineOffset = 0;
+    std::vector<SkGlyphID> glyphs;
+    std::vector<SkPoint> positions;
+    std::vector<SkPoint> offsets;
+};
+
+struct VerticalAffix {
+    TextStyle style;
+    TextIndex insertion = 0;
+    SkScalar inlineStart = 0;
+    SkScalar advance = 0;
+    std::vector<VerticalAffixRun> runs;
+};
+
+struct VerticalColumnGeometry {
+    SkScalar inlineSourceStart = 0;
+    SkScalar blockAscent = 0;
+    SkScalar blockDescent = 0;
+    bool hardBreak = false;
+    ClusterRange clusters = EMPTY_CLUSTERS;
+    TextRange text = EMPTY_TEXT;
+    SkScalar inlineContentExtent = 0;
+    SkScalar inlineExtent = 0;
+    bool justified = false;
+    size_t justificationOpportunityCount = 0;
+    SkScalar justificationStep = 0;
+    std::vector<SkScalar> justificationShifts;
+    bool ellipsized = false;
+    VerticalAffix affix;
+    SkScalar rubyGrowth = 0;
+    SkScalar rubyBaseAscent = 0;
+};
+
+struct VerticalRubySpan {
+    RubyAnnotation input;
+    ClusterRange clusters;
+    std::unique_ptr<Paragraph> annotation;
+    SkRect bounds;
+    SkScalar inlineStart;
+    SkScalar inlineExtent;
+    SkScalar annotationOffset;
+    SkScalar baseOffset;
+    SkScalar baseExtent;
+    SkScalar overflowShift = 0;
+};
+
+struct VerticalDecorationSegment {
+    size_t column = 0;
+    TextDecoration decoration = TextDecoration::kNoDecoration;
+    SkRect rect = SkRect::MakeEmpty();
+    SkColor color = SK_ColorTRANSPARENT;
+    SkScalar thickness = 0;
+};
+
+struct VerticalBackgroundSegment {
+    size_t column = 0;
+    SkRect rect = SkRect::MakeEmpty();
+    ParagraphPainter::SkPaintOrID paint;
+};
+
+template <typename T>
+bool operator==(const SkSpan<T>& a, const SkSpan<T>& b) {
     return a.size() == b.size() && a.begin() == b.begin();
 }
 
-template <typename T> bool operator<=(const SkSpan<T>& a, const SkSpan<T>& b) {
+template <typename T>
+bool operator<=(const SkSpan<T>& a, const SkSpan<T>& b) {
     return a.begin() >= b.begin() && a.end() <= b.end();
 }
 
@@ -108,6 +173,8 @@ public:
     ~ParagraphImpl() override;
 
     void layout(SkScalar width) override;
+    void layoutWithInlineExtent(SkScalar inlineExtent) override;
+    const ParagraphLayoutMetrics& getLayoutMetrics() const override;
     void paint(SkCanvas* canvas, SkScalar x, SkScalar y) override;
     void paint(ParagraphPainter* canvas, SkScalar x, SkScalar y) override;
     std::vector<TextBox> getRectsForRange(unsigned start,
@@ -137,12 +204,25 @@ public:
     SkSpan<Placeholder> placeholders() {
         return SkSpan<Placeholder>(fPlaceholders.data(), fPlaceholders.size());
     }
-    SkSpan<TextLine> lines() { return SkSpan<TextLine>(fLines.data(), fLines.size()); }
-    const ParagraphStyle& paragraphStyle() const { return fParagraphStyle; }
-    SkSpan<Cluster> clusters() { return SkSpan<Cluster>(fClusters.begin(), fClusters.size()); }
-    sk_sp<FontCollection> fontCollection() const { return fFontCollection; }
+    SkSpan<TextLine> lines() {
+        return SkSpan<TextLine>(fLines.data(), fLines.size());
+    }
+    SkSpan<const VerticalColumnGeometry> verticalColumns() const {
+        return SkSpan<const VerticalColumnGeometry>(fVerticalColumns.data(), fVerticalColumns.size());
+    }
+    const ParagraphStyle& paragraphStyle() const {
+        return fParagraphStyle;
+    }
+    SkSpan<Cluster> clusters() {
+        return SkSpan<Cluster>(fClusters.begin(), fClusters.size());
+    }
+    sk_sp<FontCollection> fontCollection() const {
+        return fFontCollection;
+    }
     void formatLines(SkScalar maxWidth);
-    SkScalar textIndent() const { return fTextIndent; }
+    SkScalar textIndent() const {
+        return fTextIndent;
+    }
     SkScalar firstLineWidth(SkScalar maxWidth) const {
         return SkIsFinite(maxWidth) ? std::max(SkScalar(0), maxWidth - fTextIndent) : maxWidth;
     }
@@ -195,9 +275,14 @@ public:
     Run& runByCluster(ClusterIndex clusterIndex);
     SkSpan<Block> blocks(BlockRange blockRange);
     Block& block(BlockIndex blockIndex);
-    skia_private::TArray<ResolvedFontDescriptor> resolvedFonts() const { return fFontSwitches; }
+    skia_private::TArray<ResolvedFontDescriptor> resolvedFonts() const {
+        return fFontSwitches;
+    }
 
     void markDirty() override {
+        if (this->isVertical()) {
+            this->invalidateVerticalLayout();
+        }
         if (fState > kIndexed) {
             fState = kIndexed;
         }
@@ -221,6 +306,31 @@ public:
     void buildClusterTable();
     bool shapeTextIntoEndlessLine();
     void breakShapedTextIntoLines(SkScalar maxWidth);
+    bool validateVerticalConfiguration(SkScalar inlineExtent);
+    void layoutVertical(SkScalar inlineExtent);
+    bool shapeVerticalRuns();
+    void prepareVerticalRuby();
+    SkScalar verticalRubyShift(ClusterIndex cluster) const;
+    std::vector<std::pair<const VerticalRubySpan*, SkPoint>> verticalRubyPlacements(size_t column) const;
+    void breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent);
+    void paintVertical(ParagraphPainter* painter, SkScalar x, SkScalar y);
+    std::vector<TextBox> getVerticalRectsForRange(unsigned start, unsigned end);
+    PositionWithAffinity getVerticalGlyphPositionAtCoordinate(SkScalar dx, SkScalar dy);
+    bool getVerticalGlyphClusterAt(TextIndex codeUnitIndex, GlyphClusterInfo* glyphInfo);
+    bool getVerticalClosestGlyphClusterAt(SkScalar dx, SkScalar dy, GlyphClusterInfo* glyphInfo);
+    bool getVerticalGlyphInfoAtUTF16Offset(size_t codeUnitIndex, GlyphInfo* glyphInfo);
+    bool getVerticalClosestUTF16GlyphInfoAt(SkScalar dx, SkScalar dy, GlyphInfo* glyphInfo);
+    void resolveVerticalMetrics();
+    void resolveVerticalDecorations();
+    void resolveVerticalBackgrounds();
+    void ensureVerticalLayoutReady() const;
+    void invalidateVerticalLayout();
+    int getVerticalColumnForCluster(ClusterIndex clusterIndex) const;
+    bool getVerticalClusterCell(ClusterIndex clusterIndex, SkRect* cell) const;
+    SkScalar getVerticalClusterShift(ClusterIndex clusterIndex) const;
+    SkScalar getVerticalClusterShiftAfter(ClusterIndex clusterIndex) const;
+    void extendedVisitVertical(const ExtendedVisitor& visitor);
+    int getVerticalPath(int lineNumber, SkPath* dest);
 
     void updateTextAlign(TextAlign textAlign) override;
     void updateFontSize(size_t from, size_t to, SkScalar fontSize) override;
@@ -310,6 +420,11 @@ private:
 
     skia_private::TArray<TextLine, false> fLines;   // kFormatted   (cached: width, max lines, ellipsis, text align)
     sk_sp<SkPicture> fPicture;          // kRecorded    (cached: text styles)
+    ParagraphLayoutMetrics fLayoutMetrics;
+    std::vector<VerticalColumnGeometry> fVerticalColumns;
+    std::vector<VerticalRubySpan> fVerticalRuby;
+    std::vector<VerticalDecorationSegment> fVerticalDecorations;
+    std::vector<VerticalBackgroundSegment> fVerticalBackgrounds;
 
     skia_private::TArray<ResolvedFontDescriptor> fFontSwitches;
 
@@ -318,6 +433,7 @@ private:
 
     SkScalar fOldWidth;
     SkScalar fOldHeight;
+    SkScalar fOldInlineExtent;
     SkScalar fMaxWidthWithTrailingSpaces;
     SkScalar fTextIndent;
 

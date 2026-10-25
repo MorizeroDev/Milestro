@@ -35,6 +35,22 @@ public :
         paragraph->layout(width);
     }
 
+    void layoutWithInlineExtent(SkScalar inlineExtent) {
+        paragraph->layoutWithInlineExtent(inlineExtent);
+    }
+
+    ::skia::textlayout::WritingMode getWritingMode() const {
+        return paragraph->getWritingMode();
+    }
+
+    bool isVertical() const {
+        return paragraph->isVertical();
+    }
+
+    const ::skia::textlayout::ParagraphLayoutMetrics& getLayoutMetrics() const {
+        return paragraph->getLayoutMetrics();
+    }
+
     SkScalar getHeight() const {
         return paragraph->getHeight();
     }
@@ -54,6 +70,9 @@ public :
     SkScalar resolveNoWrapContentWidth(const char* text, size_t length) const;
 
     bool hitTestRange(size_t startUtf16, size_t endUtf16, SkScalar x, SkScalar y) const;
+
+    uint64_t getRectsForPlaceholders(void* context,
+                                    MilestroSkiaTextlayoutParagraphRectCallback callback) const;
 
     uint64_t forEachRectInRange(size_t startUtf16,
                                 size_t endUtf16,
@@ -88,5 +107,5 @@ private:
 
     SkPath generateToSkPath(SkScalar x, SkScalar y);
 };
-}
+} // namespace milestro::skia::textlayout
 #endif //MILESTRO_SKIA_TEXTLAYOUT_PARAGRAPH_H

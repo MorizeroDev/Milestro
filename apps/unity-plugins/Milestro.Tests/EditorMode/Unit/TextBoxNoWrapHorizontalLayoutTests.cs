@@ -643,6 +643,8 @@ namespace Milestro.Tests
             public Vector2 ViewportSize => Vector2.zero;
             public Vector2 MaxScrollOffset => new Vector2(layout.MaxScrollX, 0f);
             public TextBoxHorizontalScrollState HorizontalScrollState { get; private set; }
+            public bool IsVertical => false;
+            public Exception? LastLayoutError => null;
             internal TextBoxRenderViewport LastViewport { get; private set; }
             internal int RebuildCalls { get; private set; }
             internal bool Disposed { get; private set; }
@@ -659,6 +661,10 @@ namespace Milestro.Tests
             }
 
             public void MarkPaintChanged()
+            {
+            }
+
+            public void InvalidateFailedOutput()
             {
             }
 

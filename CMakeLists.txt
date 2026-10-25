@@ -216,6 +216,7 @@ add_subdirectory("ext/cli11" EXCLUDE_FROM_ALL)
 add_subdirectory("ext/icu-cmake")
 
 add_subdirectory("ext/skia-cmake" "ext/skia" EXCLUDE_FROM_ALL)
+add_subdirectory("ext/skttbshaper" EXCLUDE_FROM_ALL)
 add_subdirectory("ext/skmodules" EXCLUDE_FROM_ALL)
 
 if (APPLE AND CMAKE_GENERATOR STREQUAL "Ninja")

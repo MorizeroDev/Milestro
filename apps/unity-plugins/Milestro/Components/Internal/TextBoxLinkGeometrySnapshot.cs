@@ -101,7 +101,8 @@ namespace Milestro.Components.Internal
             Vector2 paintPosition,
             Rect clipRect,
             Vector2Int visibleOutputSize,
-            float fitScale = 1f)
+            float fitScale = 1f,
+            IReadOnlyList<TextBoxPlaceholderGeometry>? placeholders = null)
         {
             ContentVersion = contentVersion;
             Paragraphs = paragraphs;
@@ -111,6 +112,7 @@ namespace Milestro.Components.Internal
             ClipRect = clipRect;
             VisibleOutputSize = visibleOutputSize;
             FitScale = fitScale > 0f && float.IsFinite(fitScale) ? fitScale : 1f;
+            Placeholders = placeholders ?? System.Array.Empty<TextBoxPlaceholderGeometry>();
         }
 
         internal long ContentVersion { get; }
@@ -121,6 +123,7 @@ namespace Milestro.Components.Internal
         internal Rect ClipRect { get; }
         internal Vector2Int VisibleOutputSize { get; }
         internal float FitScale { get; }
+        internal IReadOnlyList<TextBoxPlaceholderGeometry> Placeholders { get; }
 
         internal bool TryGetGeometry(int occurrence, out TextBoxLinkGeometry geometry)
         {

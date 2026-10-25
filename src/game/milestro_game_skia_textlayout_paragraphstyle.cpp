@@ -48,6 +48,34 @@ int64_t MilestroSkiaTextlayoutParagraphStyleSetTextStyle(milestro::skia::textlay
     return MILESTRO_API_RET_OK;
 }
 
+int64_t MilestroSkiaTextlayoutParagraphStyleGetWritingMode(milestro::skia::textlayout::ParagraphStyle *s,
+                                                           int32_t &writingMode
+) try {
+    if (s == nullptr) {
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    writingMode = (int32_t) s->getWritingMode();
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
+int64_t MilestroSkiaTextlayoutParagraphStyleSetWritingMode(milestro::skia::textlayout::ParagraphStyle *s,
+                                                           int32_t writingMode
+) try {
+    if (s == nullptr ||
+        (writingMode != (int32_t) ::skia::textlayout::WritingMode::kHorizontalTb &&
+         writingMode != (int32_t) ::skia::textlayout::WritingMode::kVerticalRl)) {
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    s->setWritingMode((::skia::textlayout::WritingMode) writingMode);
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutParagraphStyleGetTextDirection(milestro::skia::textlayout::ParagraphStyle *s,
                                                              int32_t &direction
 ) {

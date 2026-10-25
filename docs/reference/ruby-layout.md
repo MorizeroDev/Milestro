@@ -1,4 +1,4 @@
-# Horizontal Ruby layout
+# Ruby layout
 
 Ruby uses the normal `ParagraphBuilder::Build()`, `Paragraph::layout()` and
 `Paragraph::paint()` pipeline. It also participates in line metrics, visitors,
@@ -64,6 +64,11 @@ C ABI, and managed wrappers do not expose Skia's `Reset()`.
   base style unless `RubyStyle::textStyle` is supplied, then applies
   `fontSizeMultiplier`. The default multiplier is one half and the default gap is
   two units. Actual font metrics contribute to line height.
+- As in Chromium, base `line-height` changes the line box without changing the
+  annotation size or its distance from the base. Annotation layout ignores both
+  inherited and explicit height overrides. Placement uses natural base font/ink
+  metrics, including baseline shift, for both above and below annotations; existing
+  leading absorbs annotation space before the line expands further.
 - ICU soft and hard breaks remain authoritative. Emergency wrapping preserves raw
   graphemes and shaped clusters, opening/closing punctuation restrictions, NBSP,
   word joiners and combining sequences. An unbreakable group or sequence wider than
@@ -110,6 +115,13 @@ storage before adding padding, and restores placement offsets on width changes.
 Different annotations and independent measurement/render paragraphs cannot modify
 one another's cached base shaping.
 
+## Vertical writing mode
+
+In `vertical-rl` text, ruby annotations are placed on the line-over side
+(physical right) of the base column; `ruby-position: under` degrades to the
+line-over position with an Editor diagnostic. The atomic group, sizing, break,
+and query rules above are unchanged.
+
 ## Deferred work
 
 Multi-layer annotations and dedicated measurement APIs remain separate work.
@@ -117,7 +129,8 @@ The Unity rich-text parser supports the single-base HTML subset
 `<ruby>base<rt>annotation</rt></ruby>`, optional `<rp>` fallback text, standard
 CSS `ruby-position`, `ruby-align` and `ruby-overhang`, plus documented
 `--milestro-ruby-*` custom properties. InputBox editing intentionally remains
-plain-text-only. Vertical text/shaping is not implemented.
+plain-text-only. Tate-chu-yoko and `text-orientation` overrides are not yet
+supported.
 
 ## Validation
 

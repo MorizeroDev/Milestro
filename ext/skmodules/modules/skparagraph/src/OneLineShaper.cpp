@@ -390,6 +390,11 @@ void OneLineShaper::iterateThroughFontStyles(TextRange textRange,
 
     auto addFeatures = [&features](const Block& block) {
         for (auto& ff : block.fStyle.getFontFeatures()) {
+            // chws is implemented by ParagraphImpl after shaping so the
+            // paragraph-level fallback remains deterministic across fonts.
+            if (ff.fName.equals("chws")) {
+                continue;
+            }
             if (ff.fName.size() != 4) {
                 SkDEBUGF("Incorrect font feature: %s=%d\n", ff.fName.c_str(), ff.fValue);
                 continue;

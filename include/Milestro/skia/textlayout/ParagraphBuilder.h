@@ -33,6 +33,13 @@ public:
         builder->addText(text, len);
     }
 
+    void addPlaceholder(float width, float height,
+                        ::skia::textlayout::PlaceholderAlignment alignment = ::skia::textlayout::PlaceholderAlignment::kMiddle,
+                        ::skia::textlayout::TextBaseline baseline = ::skia::textlayout::TextBaseline::kAlphabetic,
+                        float baselineOffset = 0) {
+        builder->addPlaceholder({width, height, alignment, baseline, baselineOffset});
+    }
+
     void addRuby(size_t startUtf8, size_t endUtf8, const char* text, size_t length) {
         builder->addRuby({{startUtf8, endUtf8}, std::string(text, length)});
     }

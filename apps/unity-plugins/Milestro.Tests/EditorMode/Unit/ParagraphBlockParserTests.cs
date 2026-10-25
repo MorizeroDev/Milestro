@@ -87,6 +87,50 @@ namespace Milestro.Tests
             Assert.That(payload.Blocks[0].Style.MarginBottom.Value, Is.EqualTo(0f));
         }
 
+        [TestCase("vw", MarginUnit.Vw)]
+        [TestCase("vh", MarginUnit.Vh)]
+        public void BlockMarginsParseViewportLengths(string suffix, MarginUnit unit)
+        {
+            var payload = Parse($"<p style=\"margin-top: 2{suffix}; margin-bottom: 3{suffix}\">天</p>",
+                allowViewportBlockMargins: true);
+            Assert.That(payload.Blocks[0].Style.MarginTop.Unit, Is.EqualTo(unit));
+            Assert.That(payload.Blocks[0].Style.MarginTop.Value, Is.EqualTo(2f));
+            Assert.That(payload.Blocks[0].Style.MarginBottom.Unit, Is.EqualTo(unit));
+            Assert.That(payload.Blocks[0].Style.MarginBottom.Value, Is.EqualTo(3f));
+        }
+
+        [TestCase("vw")]
+        [TestCase("vh")]
+        public void DefaultParserIgnoresViewportBlockMarginsWithoutOverridingSupportedLengths(string suffix)
+        {
+            var payload = Parse($"<p style=\"margin-top: 2{suffix}; margin-bottom: 3{suffix}\">alpha</p>" +
+                                $"<p style=\"margin-top: 12px; margin-top: 2{suffix}; margin-bottom: 1em; margin-bottom: 3{suffix}\">beta</p>");
+            Assert.That(payload.Blocks[0].Style.MarginTop.Value, Is.Zero);
+            Assert.That(payload.Blocks[0].Style.MarginBottom.Value, Is.Zero);
+            Assert.That(payload.Blocks[1].Style.MarginTop.Unit, Is.EqualTo(MarginUnit.Px));
+            Assert.That(payload.Blocks[1].Style.MarginTop.Value, Is.EqualTo(12f));
+            Assert.That(payload.Blocks[1].Style.MarginBottom.Unit, Is.EqualTo(MarginUnit.Em));
+            Assert.That(payload.Blocks[1].Style.MarginBottom.Value, Is.EqualTo(1f));
+        }
+
+        [Test]
+        public void ViewportBlockMarginParsingIsScopedToEachConversion()
+        {
+            var parser = new RichTextParser.RichTextParser();
+            parser.ParseText("<p style=\"margin-top: 12px; margin-top: 2vw; margin-bottom: 1em; margin-bottom: 3vh\">天</p>");
+            var vertical = parser.ConvertToSegments(allowViewportBlockMargins: true);
+            Assert.That(vertical.Blocks[0].Style.MarginTop.Unit, Is.EqualTo(MarginUnit.Vw));
+            Assert.That(vertical.Blocks[0].Style.MarginTop.Value, Is.EqualTo(2f));
+            Assert.That(vertical.Blocks[0].Style.MarginBottom.Unit, Is.EqualTo(MarginUnit.Vh));
+            Assert.That(vertical.Blocks[0].Style.MarginBottom.Value, Is.EqualTo(3f));
+            var horizontal = parser.ConvertToSegments();
+            Assert.That(horizontal.Blocks[0].Style.MarginTop.Unit, Is.EqualTo(MarginUnit.Px));
+            Assert.That(horizontal.Blocks[0].Style.MarginTop.Value, Is.EqualTo(12f));
+            Assert.That(horizontal.Blocks[0].Style.MarginBottom.Unit, Is.EqualTo(MarginUnit.Em));
+            Assert.That(horizontal.Blocks[0].Style.MarginBottom.Value, Is.EqualTo(1f));
+            Assert.That(vertical.Blocks[0].Style.MarginTop.Unit, Is.EqualTo(MarginUnit.Vw));
+        }
+
         [Test]
         public void AnchorMaySpanParagraphBlocks()
         {
@@ -141,11 +185,13 @@ namespace Milestro.Tests
             return string.Concat(payload.Body.Select(segment => segment.Content));
         }
 
-        private static ParagraphPayload Parse(string markup)
+        private static ParagraphPayload Parse(string markup, bool allowViewportBlockMargins = false)
         {
             var parser = new RichTextParser.RichTextParser();
             parser.ParseText(markup);
-            return parser.ConvertToSegments();
+            return allowViewportBlockMargins
+                ? parser.ConvertToSegments(allowViewportBlockMargins: true)
+                : parser.ConvertToSegments();
         }
     }
 }

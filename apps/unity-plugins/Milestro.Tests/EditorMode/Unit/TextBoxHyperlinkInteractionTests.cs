@@ -326,6 +326,53 @@ namespace Milestro.Tests
             Assert.That(fixture.TextBox.GetComponentInChildren<TextBoxLinkHoverIndicator>(true), Is.Null);
         }
 
+        [TestCase(true)]
+        [TestCase(false)]
+        public void LinkHoverIndicatorPlacesUnderlineOnTheLayoutPhysicalSide(bool vertical)
+        {
+            var indicatorObject = new GameObject("hover indicator geometry",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(TextBoxLinkHoverIndicator));
+            try
+            {
+                var indicator = indicatorObject.GetComponent<TextBoxLinkHoverIndicator>();
+                var source = new Rect(10f, 20f, 40f, 60f);
+                indicator.SetPresentation(new[] { source }, Color.clear, Color.red, 4f, vertical);
+
+                var helper = new VertexHelper();
+                var populate = typeof(TextBoxLinkHoverIndicator).GetMethod("OnPopulateMesh",
+                    DeclaredInstance);
+                Assert.That(populate, Is.Not.Null);
+                populate!.Invoke(indicator, new object[] { helper });
+                var vertices = new List<UIVertex>();
+                helper.GetUIVertexStream(vertices);
+
+                Assert.That(vertices, Is.Not.Empty);
+                var minimum = vertices.Aggregate(vertices[0].position,
+                    (current, vertex) => Vector3.Min(current, vertex.position));
+                var maximum = vertices.Aggregate(vertices[0].position,
+                    (current, vertex) => Vector3.Max(current, vertex.position));
+                Assert.That(minimum.y, Is.EqualTo(source.yMin).Within(0.01f));
+                if (vertical)
+                {
+                    Assert.That(minimum.x, Is.EqualTo(source.xMin).Within(0.01f));
+                    Assert.That(maximum.x, Is.EqualTo(source.xMin + 4f).Within(0.01f));
+                    Assert.That(maximum.y, Is.EqualTo(source.yMax).Within(0.01f));
+                }
+                else
+                {
+                    Assert.That(minimum.x, Is.EqualTo(source.xMin).Within(0.01f));
+                    Assert.That(maximum.x, Is.EqualTo(source.xMax).Within(0.01f));
+                    Assert.That(maximum.y, Is.EqualTo(source.yMin + 4f).Within(0.01f));
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(indicatorObject);
+            }
+        }
+
         [Test]
         public void HoverRespectsFlowSliceAndIgnoresOtherPointerExits()
         {
@@ -956,6 +1003,8 @@ namespace Milestro.Tests
             public Vector2 ViewportSize => new Vector2(200f, 100f);
             public Vector2 MaxScrollOffset { get; private set; }
             public TextBoxHorizontalScrollState HorizontalScrollState => default;
+            public bool IsVertical => false;
+            public Exception? LastLayoutError => null;
             internal int HitTestCalls { get; private set; }
             internal Vector2 LastNormalizedPoint { get; private set; }
             internal bool UseGeometryHitTesting { get; set; }
@@ -975,6 +1024,11 @@ namespace Milestro.Tests
             }
 
             public void MarkPaintChanged()
+            {
+                ++generation;
+            }
+
+            public void InvalidateFailedOutput()
             {
                 ++generation;
             }

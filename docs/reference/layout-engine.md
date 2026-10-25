@@ -57,7 +57,7 @@ Read-only runtime measurements include `contentWidth`, `contentHeight`,
 | `textColor` | `Color` | white | Base text color |
 | `letterSpacing` | `float` | `0` | Extra points between glyphs |
 | `wordSpacing` | `float` | `0` | Extra points at word-boundary spaces |
-| `lineHeight` | `float` | `0` | Line-height multiplier; `<= 0` uses natural metrics |
+| `lineHeight` | `float` | `0` | Horizontal line-height or vertical column-thickness multiplier; `<= 0` uses natural metrics |
 | `locale` | `string` | `zh-Hans` | Locale for shaping, breaks, and fallback |
 
 The font-family list is resolved when the paragraph is built. `fontFamilies`
@@ -70,6 +70,7 @@ font collection, not by swapping a Unity font asset on the component.
 | --- | --- | --- | --- |
 | `textAlign` | `TextAlign` | `Start` | `Left`, `Right`, `Center`, `Justify`, `Start`, or `End` |
 | `textDirection` | `TextDirection` | `Ltr` | `Ltr` or `Rtl` |
+| `writingMode` | `WritingMode` | `HorizontalTb` | `HorizontalTb` or `VerticalRl` |
 | `singleLine` | `bool` | `false` | Forces a single-line paragraph |
 | `ellipsisString` | `string` | `…` | Text used by ellipsis overflow |
 | `paragraphSpacing` | `float` | `0` | Extra gap added between adjacent paragraph blocks |
@@ -83,15 +84,21 @@ follows normal alignment behavior.
 Layout units are local UI points/pixels in the producer's render space. Margin
 units are independent:
 
-| `MarginUnit` | Resolves against |
-| --- | --- |
-| `Px` | Raw value |
-| `ContainerPercent` | Container width for horizontal sides, height for vertical sides |
-| `Vw` | 1% of container width |
-| `Vh` | 1% of container height |
-| `Em` | Current effective font size |
+| `MarginUnit` | `horizontal-tb` | `vertical-rl` |
+| --- | --- | --- |
+| `Px` | Raw value | Raw value |
+| `ContainerPercent` | Width for left/right, height for top/bottom | All four sides use the containing block width |
+| `Vw` | 1% of container width | 1% of the root Canvas viewport width |
+| `Vh` | 1% of container height | 1% of the root Canvas viewport height |
+| `Em` | Current effective font size | Base font size for the paragraph |
 
-`MarginValue.Auto` is serialized but currently resolves to zero.
+`MarginValue.Auto` contributes zero when viewport size is resolved. In the
+horizontal Canvas path, Auto sides can absorb positive leftover space during
+component-level placement. In a fixed-size `vertical-rl` Canvas `TextBox`, Auto
+sides are placed after native layout: X uses the complete physical column-box
+width and Y uses the laid-out content bounds, then one common paragraph
+translation is applied. Auto does not enlarge the clip or scroll range, and
+overflow keeps the existing anchor.
 
 Screen-space rasterization can choose a different texture scale from the UI
 layout size. That scale affects raster quality and texture size, not the
@@ -121,7 +128,117 @@ than silently shrink the font.
 `Ellipsis` is not an auto-font-size trigger. If you need fitting, choose a fixed
 box and enable auto font size rather than relying on ellipsis to shrink glyphs.
 
+## Vertical writing and line height
+
+`VerticalRl` is supported by native Paragraph and by fixed-size static Canvas
+`TextBox`. Columns run top to bottom and advance from right to left. The content
+height constrains the inline axis; changing viewport width affects clipping,
+scroll range, and horizontal placement, not column wrapping.
+
+`lineHeight` changes axis meaning with writing mode:
+
+- Horizontal text uses it for line-box thickness along physical Y.
+- Vertical text uses it for each resolved run's target column-box thickness
+  along physical X. The target is `lineHeight * resolvedFontSize`; mixed font
+  sizes therefore get different target thicknesses, and the final column takes
+  the independent maximum of the two sides around the shared baseline.
+
+`lineHeight == 0` or a finite negative value keeps the natural font/run metrics.
+A positive multiplier of `1` means one em-sized target column box; it is not
+necessarily identical to the natural column width. Non-finite values are errors.
+The low-level `TextStyle.HalfLeading` flag selects equal-extra-space allocation;
+the normal `TextStyleSettings` API does not add a separate HalfLeading field.
+
+Changing only `lineHeight` does not resize glyphs or change inline advances,
+break opportunities, or column count at the same content height. It changes
+column boxes and physical placement. A small multiplier can therefore make
+glyph ink extend beyond the column box and into neighboring columns; layout and
+scroll geometry are not expanded to match that ink, and glyphs are not clipped
+per column. Caller clip/overflow behavior remains separate.
+
+For `VerticalRl`, `TextIndent` moves only the first source column along physical
+Y. A positive value shifts it down; a negative value hangs it above inline
+start. Soft-wrapped columns and columns after hard breaks are not indented. In
+finite wrapping, a percentage resolves against the finite inline extent;
+`NoWrap` and `singleLine` pass positive infinity, so the percentage resolves to
+0. Intrinsic min/max inline extents exclude percentage indentation while final
+layout resolves it, and absolute indentation contributes only to the first hard
+fragment. `Start`/`End`/`Center` align the first column within the remaining
+`max(0, inlineExtent - I)` area, while later columns use the full extent. When
+`I >= inlineExtent`, the first column remains and its first layout unit
+overflows atomically; negative indentation is not clamped. Painter, path,
+visitor, range, and hit geometry all use the resulting first-column origin.
+The native path rejects non-finite indent values and unrepresentable resolved
+values. The fixed Canvas boundary additionally treats a finite resolved
+indent as invalid when `em × font-size × scale`, `percentage × inlineExtent`,
+or `inlineExtent - I` overflows the representable range; it lays out that
+revision with indent `0`, keeps the configured value intact, and recovers when
+a later height or font size is representable.
+
+In `vertical-rl`, `Justify` consumes positive free space in finite soft-wrapped
+columns that still have source units after them. Hard-break columns, the source
+end column, `NoWrap`/`singleLine`, zero-height layouts, overflow, and columns
+without a frozen whitespace or CJK/Latin opportunity stay at Start. The first
+column uses `max(0, inlineExtent - I)`, later columns use the full extent, and
+the same per-cluster shift feeds painting, paths, visitors, range queries,
+link rectangles, and hit testing.
+
+In `vertical-rl`, `Ellipsis` truncates the last allowed column when `maxLines`
+and the inline extent are finite. The default `…` or `ellipsisString` is shaped
+and placed as one atomic synthetic affix; complete source grapheme/shaped
+clusters are removed from that column first. The affix owns no source range or
+link, and hidden source produces no range boxes, link rectangles, or
+content-size contribution. Paint, paths, visitors, range queries, hit testing,
+metrics, and scrolling consume the final cluster/affix geometry. A legal
+`singleLine + Ellipsis` uses the finite content height; `singleLine` without
+ellipsis keeps the positive-infinite inline extent.
+
+Tab follows HTML default whitespace handling and advances like one ASCII space
+in vertical text while retaining its original source range. Soft hyphen and
+explicit bidi controls are not painted; they add no glyph or advance and native
+layout logs the skip rather than rejecting the paragraph. Their source bidi
+levels are normalized to LTR so they cannot reorder vertical clusters, range
+queries, or column breaking. The current text
+model has no `white-space` or `tab-size` mode, so preserved-whitespace tab stops
+are not implemented. Other missing glyphs use the normal shaping and fallback
+path. Vertical punctuation glyph choice, including locale-specific `vert`
+forms, remains font-driven.
+
+Native `vertical-rl` backgrounds use each retained source run's final block
+metrics and cluster advances, including alignment, indent and Justify shifts.
+All backgrounds paint before glyphs, underline and line-through. They extend
+only `inkBounds`; layout, intrinsic sizing, scrolling, source ranges, paths and
+link rectangles retain their existing meaning. Hidden source and synthetic
+ellipsis affixes produce no background. `SkPaint` and custom painter `PaintID`
+are preserved; whole-paragraph background updates require a new vertical layout.
+This native extension adds no Unity TextBox background tag, Inspector field or
+C ABI.
+
+Native `vertical-rl` text shadows reuse the final source/affix glyph blobs and
+styles. Offsets remain physical X/Y and are applied before the sideways paint
+rotation, so they do not rotate with the glyphs. All backgrounds, shadows,
+glyphs, underline and line-through paint in that order. Shadows are paint-only:
+they do not change layout, intrinsic sizing, scrolling, source ranges, paths,
+link rectangles or `inkBounds`. Synthetic affixes use their own final style.
+This extension adds no Unity TextBox shadow input or C ABI.
+
+Native and Unity `vertical-rl` baseline shift supports the existing
+`sup`/`sub`/`voffset`/`voffset-em` subset. After ordinary baseline alignment, the
+final block offset is `-baselineShift` in physical X: superscript and positive
+rich-text offsets move right, while subscript and negative offsets move left.
+Upright and sideways runs use the same physical direction. Inline advances and
+wrapping do not change; final visible run metrics can only grow the two column
+sides. Paint, paths, visitors, ranges, links, sizing, and scrolling consume the
+resulting geometry. Synthetic affixes use their own shift but still have no
+background or decoration.
+
 ## Content sizing
+
+For `vertical-rl` with a fixed height, `TextBoxLayoutElement` can publish
+`Fixed`, `MaxContent`, or `FitContent` width from the complete physical column
+box while keeping a non-flow viewport. Unbreakable Latin segments overflow
+their single column instead of breaking at arbitrary clusters. The sizing
+rules below describe the existing horizontal path, which remains unchanged.
 
 `TextBoxLayoutElement` implements `ILayoutElement` and reports intrinsic values
 from the parsed paragraph and font metrics, before rasterization.
@@ -143,6 +260,10 @@ single-line result.
 - `Fixed`: report no preferred height.
 - `Auto`: report the full content height after wrapping at the width Unity
   assigns, including margins and rich-text block spacing.
+
+For `vertical-rl`, only `heightMode = Fixed` participates in content-width
+sizing. `heightMode = Auto` does not publish vertical content preferences and
+falls back to the existing assigned-rectangle path.
 
 Fixed axes report `-1` for the corresponding preferred value so a parent
 `LayoutGroup` keeps control. Content-sized axes report `minWidth` and

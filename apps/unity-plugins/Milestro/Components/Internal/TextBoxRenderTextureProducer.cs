@@ -52,7 +52,19 @@ namespace Milestro.Components.Internal
         [NonSerialized] private bool rasterContextValid;
         [NonSerialized] private ITextBoxRenderTarget? renderTarget;
         [NonSerialized] private TextBoxIntrinsicMeasurement? intrinsicMeasurement;
+        [NonSerialized] private TextBoxIntrinsicMeasurement? horizontalFallbackMeasurement;
+        [NonSerialized] private TextBoxVerticalIntrinsicMeasurement? verticalMeasurement;
         [NonSerialized] private TextSizingResult? lastSizing;
+        [NonSerialized] private Exception? m_lastLayoutError;
+        [NonSerialized] private bool m_hasObservedMargin;
+        [NonSerialized] private MarginValue m_observedMarginLeft;
+        [NonSerialized] private MarginValue m_observedMarginTop;
+        [NonSerialized] private MarginValue m_observedMarginRight;
+        [NonSerialized] private MarginValue m_observedMarginBottom;
+        [NonSerialized] private bool m_hasObservedVerticalMarginContext;
+        [NonSerialized] private MarginResolveContext m_observedVerticalMarginContext;
+        [NonSerialized] private bool m_hasObservedRectSize;
+        [NonSerialized] private Vector2 m_observedRectSize;
 
         public float effectiveFontSize => ResolveSizingAtLayoutWidth().EffectiveFontSize;
 
@@ -86,28 +98,169 @@ namespace Milestro.Components.Internal
 
         private TextSizingResult ResolveSizing(float? assignedWidth)
         {
+            return ResolveSizing(assignedWidth, out _);
+        }
+
+        private TextSizingResult ResolveSizing(float? assignedWidth, out bool usesVerticalSizing)
+        {
             var rect = RectTransformComponent();
             var layout = GetComponent<TextBoxLayoutElement>();
             var widthMode = layout != null && layout.isActiveAndEnabled ? layout.widthMode : TextWidthMode.Fixed;
             var heightMode = layout != null && layout.isActiveAndEnabled ? layout.heightMode : TextHeightMode.Fixed;
             var size = rect != null ? rect.rect.size : Vector2.zero;
             var available = rect != null ? TextSizingBounds.ExternalAvailableSize(rect) : Vector2.zero;
-            var request = new TextSizingRequest(widthMode, heightMode, size.x, size.y,
-                rect != null ? TextSizingBounds.AvailableWidth(rect) : float.PositiveInfinity,
-                m_wrapMode == TextBoxWrapMode.Wrap && !m_paragraphStyle.singleLine,
-                m_textStyle.size, m_autoFontSize.enabled && m_textOverflow != TextOverflow.Ellipsis,
-                m_autoFontSize.fontSizeMin, m_autoFontSize.fontSizeMax,
-                widthCap: widthMode == TextWidthMode.FitContent
-                    ? rect != null ? TextSizingBounds.AvailableWidth(rect) : float.PositiveInfinity
-                    : float.PositiveInfinity);
-            return TextSizingResolver.Resolve(this, request,
+            usesVerticalSizing = false;
+            if (IsVerticalRequested())
+            {
+                var marginContext = ResolveVerticalMarginContext(m_textStyle.size, rect);
+                var requestedSettings = RequestedSettings().WithVerticalLayout(marginContext, heightMode);
+                var preparation = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(
+                    requestedSettings);
+                var effective = preparation.Settings;
+                var request = BuildSizingRequest(widthMode, heightMode, size, rect, effective);
+                if (preparation.UsesHorizontalFallback)
+                {
+                    return ResolveHorizontalFallbackSizing(request, available, effective,
+                        assignedWidth);
+                }
+
+                usesVerticalSizing = true;
+                return ResolveVerticalSizing(request, size, heightMode, assignedWidth,
+                    effective);
+            }
+
+            var settings = RequestedSettings();
+            var horizontalRequest = BuildSizingRequest(widthMode, heightMode, size, rect, settings);
+            return TextSizingResolver.Resolve(this, horizontalRequest,
                 fontSize => m_margin.Resolve(new MarginResolveContext(available.x, available.y, fontSize)),
                 assignedWidth);
         }
 
+        private TextSizingRequest BuildSizingRequest(TextWidthMode widthMode,
+            TextHeightMode heightMode,
+            Vector2 allocatedSize,
+            RectTransform? rect,
+            TextBoxRenderTargetSettings settings)
+        {
+            var availableWidth = rect != null
+                ? TextSizingBounds.AvailableWidth(rect)
+                : float.PositiveInfinity;
+            return new TextSizingRequest(widthMode, heightMode,
+                allocatedSize.x, allocatedSize.y, availableWidth,
+                settings.WrapMode == TextBoxWrapMode.Wrap &&
+                !settings.ParagraphStyle.singleLine,
+                settings.TextStyle.size,
+                settings.AutoFontSize,
+                settings.MinSize,
+                settings.MaxSize,
+                widthCap: widthMode == TextWidthMode.FitContent
+                    ? availableWidth
+                    : float.PositiveInfinity);
+        }
+
+        private TextSizingResult ResolveVerticalSizing(TextSizingRequest requested,
+            Vector2 allocatedSize,
+            TextHeightMode heightMode,
+            float? assignedWidth,
+            TextBoxRenderTargetSettings settings)
+        {
+            var margin = settings.Margin.ResolveVertical(
+                settings.VerticalMarginContext ??
+                new MarginResolveContext(0f, 0f, settings.TextStyle.size,
+                    hasContainerWidth: false));
+            if (heightMode != TextHeightMode.Fixed)
+            {
+                var unsized = new TextSizingRequest(TextWidthMode.Fixed,
+                    TextHeightMode.Fixed,
+                    allocatedSize.x,
+                    allocatedSize.y,
+                    float.PositiveInfinity,
+                    requested.Wrap,
+                    requested.DesignFontSize);
+                return new TextSizingResult(unsized,
+                    Mathf.Max(0f, allocatedSize.x),
+                    Mathf.Max(0f, allocatedSize.y),
+                    Mathf.Max(0.1f, requested.DesignFontSize),
+                    margin,
+                    default,
+                    0f,
+                    0f);
+            }
+
+            HookStyleModels();
+            if (verticalMeasurement != null && !verticalMeasurement.MatchesMarginContext(settings))
+            {
+                verticalMeasurement.Dispose();
+                verticalMeasurement = null;
+            }
+            verticalMeasurement ??= new TextBoxVerticalIntrinsicMeasurement(settings);
+            return TextBoxVerticalSizingResolver.Resolve(verticalMeasurement,
+                requested,
+                margin,
+                allocatedSize.y,
+                assignedWidth);
+        }
+
+        private TextSizingResult ResolveHorizontalFallbackSizing(TextSizingRequest request,
+            Vector2 available,
+            TextBoxRenderTargetSettings settings,
+            float? assignedWidth)
+        {
+            HookStyleModels();
+            horizontalFallbackMeasurement ??= new TextBoxIntrinsicMeasurement(settings);
+            horizontalFallbackMeasurement.SetAvailableSize(available);
+            return TextSizingResolver.Resolve(horizontalFallbackMeasurement,
+                request,
+                fontSize => settings.Margin.Resolve(
+                    new MarginResolveContext(available.x, available.y, fontSize)),
+                assignedWidth);
+        }
+
+        private bool IsVerticalRequested()
+        {
+            return m_paragraphStyle != null &&
+                   m_paragraphStyle.writingMode == WritingMode.VerticalRl;
+        }
+
+        private TextBoxRenderTargetSettings RequestedSettings()
+        {
+            return TextBoxRenderTargetSettingsBuilder.BuildFrom(this);
+        }
+
+        private MarginResolveContext ResolveVerticalMarginContext(float fontSize,
+            RectTransform? rect)
+        {
+            var hasContainer = TextSizingBounds.TryGetContainingBlockWidth(rect!, out var cbWidth);
+            var viewportWidth = 0f;
+            var viewportHeight = 0f;
+            var hasViewport = false;
+            var canvas = CanvasComponent() ?? GetComponentInParent<Canvas>(true);
+            var root = canvas != null ? canvas.rootCanvas : null;
+            if (root != null)
+            {
+                var viewport = root.transform as RectTransform;
+                if (viewport != null &&
+                    FloatUtil.IsFinite(viewport.rect.width) &&
+                    FloatUtil.IsFinite(viewport.rect.height))
+                {
+                    viewportWidth = Mathf.Max(0f, viewport.rect.width);
+                    viewportHeight = Mathf.Max(0f, viewport.rect.height);
+                    hasViewport = true;
+                }
+            }
+
+            return new MarginResolveContext(cbWidth,
+                0f,
+                fontSize,
+                viewportWidth,
+                viewportHeight,
+                hasContainer,
+                hasViewport);
+        }
+
         internal void InvalidateSizing()
         {
-            RenderTarget.MarkPropertiesChanged();
+            MarkPropertiesChanged();
         }
         [NonSerialized] internal Func<ITextBoxRenderTarget>? renderTargetFactory;
         [NonSerialized] private ColorSpace? m_colorSpaceOverride;
@@ -115,6 +268,8 @@ namespace Milestro.Components.Internal
         [NonSerialized] private float m_scrollY;
         [NonSerialized] private TextBoxHorizontalScrollState m_horizontalScrollState;
         [NonSerialized] private Vector2 m_visualScrollOffset;
+        [NonSerialized] private WritingMode m_observedWritingMode = WritingMode.HorizontalTb;
+        [NonSerialized] private bool m_hasObservedWritingMode;
         [NonSerialized] private bool m_flowMode;
         [NonSerialized] private bool m_hasVisibleRange;
         [NonSerialized] private float m_visibleStartY;
@@ -141,6 +296,10 @@ namespace Milestro.Components.Internal
         public float viewportHeight => renderTarget?.ViewportSize.y ?? 0f;
         public float maxScrollX => renderTarget?.MaxScrollOffset.x ?? 0f;
         public float maxScrollY => renderTarget?.MaxScrollOffset.y ?? 0f;
+
+        internal bool isVerticalLayout => renderTarget?.IsVertical ?? false;
+
+        internal Exception? lastLayoutError => m_lastLayoutError;
 
         internal event Action? LayoutChanged;
 
@@ -431,6 +590,7 @@ namespace Milestro.Components.Internal
         protected virtual void OnEnable()
         {
             rectTransformCache = GetComponent<RectTransform>();
+            CaptureObservedRectSize();
             if (GetComponent<Milestro.Components.WorldSpaceTextBox>() != null)
             {
                 m_screenSpaceRasterization = false;
@@ -446,6 +606,12 @@ namespace Milestro.Components.Internal
             DisposeRenderTarget();
             intrinsicMeasurement?.Dispose();
             intrinsicMeasurement = null;
+            horizontalFallbackMeasurement?.Dispose();
+            horizontalFallbackMeasurement = null;
+            verticalMeasurement?.Dispose();
+            verticalMeasurement = null;
+            m_hasObservedVerticalMarginContext = false;
+            m_hasObservedRectSize = false;
             ResetRasterizationContext();
         }
 
@@ -496,7 +662,22 @@ namespace Milestro.Components.Internal
                 return;
             }
 
-            RenderTarget.MarkPropertiesChanged();
+            var rectTransform = transform as RectTransform;
+            var nextSize = rectTransform != null ? rectTransform.rect.size : Vector2.zero;
+            var hadSize = m_hasObservedRectSize;
+            var heightChanged = !hadSize || !Mathf.Approximately(nextSize.y, m_observedRectSize.y);
+            var widthChanged = !hadSize || !Mathf.Approximately(nextSize.x, m_observedRectSize.x);
+            m_observedRectSize = nextSize;
+            m_hasObservedRectSize = true;
+            if (!heightChanged && widthChanged &&
+                renderTarget != null && renderTarget.IsVertical)
+            {
+                RenderTarget.MarkPaintChanged();
+            }
+            else
+            {
+                MarkPropertiesChanged();
+            }
 #if UNITY_EDITOR
             QueueEditorRebuild();
 #endif
@@ -528,6 +709,8 @@ namespace Milestro.Components.Internal
 
         private void RebuildResources(bool forceText)
         {
+            ObserveMarginChanges();
+            ObserveVerticalLayoutChanges();
             if (!forceText &&
                 renderTarget != null &&
                 !renderTarget.HasPendingWork &&
@@ -540,58 +723,93 @@ namespace Milestro.Components.Internal
             using var rebuildScope = profiling
                 ? TextBoxPipelineProfiler.RebuildMarker.Auto()
                 : default;
-            TextBoxRenderTargetSettings settings;
-            using (profiling ? TextBoxPipelineProfiler.SettingsMarker.Auto() : default)
+            try
             {
-                settings = CurrentSettings();
-            }
+                TextBoxVerticalLayoutSupport.ValidateProducer(this);
 
-            Vector2Int currentSize;
-            using (profiling ? TextBoxPipelineProfiler.SizeMarker.Auto() : default)
-            {
-                currentSize = CurrentSize();
-            }
-
-            TextBoxRenderViewport viewport;
-            using (profiling ? TextBoxPipelineProfiler.ViewportMarker.Auto() : default)
-            {
-                viewport = CurrentViewportWithRasterization(currentSize);
-            }
-
-            bool rebuilt;
-            using (profiling ? TextBoxPipelineProfiler.TargetRebuildMarker.Auto() : default)
-            {
-                rebuilt = RenderTarget.Rebuild(viewport,
-                    SurfaceColorSpace(),
-                    settings,
-                    forceText,
-                    this);
-            }
-            DebugFlow("rebuild " +
-                      $"forceText={forceText} rebuilt={rebuilt} currentSize={currentSize.x}x{currentSize.y} " +
-                      $"hasRange={m_hasVisibleRange} range=[{m_visibleStartY:F3},{m_visibleEndY:F3}] " +
-                      $"capacity={m_visibleCapacityHeight} " +
-                      $"hasOutput={HasOutput} output={OutputWidth}x{OutputHeight} " +
-                      $"viewport={viewportWidth:F3}x{viewportHeight:F3} content={contentWidth:F3}x{contentHeight:F3}");
-            if (!rebuilt)
-            {
-#if UNITY_EDITOR
-                QueueEditorRebuild();
-#endif
-            }
-            else
-            {
-                ApplyHorizontalScrollState(RenderTarget.HorizontalScrollState);
-                if (!m_flowMode)
+                TextBoxRenderTargetSettings settings;
+                using (profiling ? TextBoxPipelineProfiler.SettingsMarker.Auto() : default)
                 {
-                    var nextScrollY = RenderTarget.ScrollOffset.y;
-                    if (!Mathf.Approximately(m_scrollY, nextScrollY))
+                    settings = CurrentSettings();
+                }
+
+                Vector2Int currentSize;
+                using (profiling ? TextBoxPipelineProfiler.SizeMarker.Auto() : default)
+                {
+                    currentSize = CurrentSize();
+                }
+
+                TextBoxRenderViewport viewport;
+                using (profiling ? TextBoxPipelineProfiler.ViewportMarker.Auto() : default)
+                {
+                    viewport = CurrentViewportWithRasterization(currentSize);
+                }
+
+                bool rebuilt;
+                var hadOutput = HasOutput;
+                using (profiling ? TextBoxPipelineProfiler.TargetRebuildMarker.Auto() : default)
+                {
+                    rebuilt = RenderTarget.Rebuild(viewport,
+                        SurfaceColorSpace(),
+                        settings,
+                        forceText,
+                        this);
+                }
+                if (RenderTarget.LastLayoutError != null)
+                {
+                    m_lastLayoutError = RenderTarget.LastLayoutError;
+                    if (hadOutput && !HasOutput)
                     {
-                        m_scrollY = nextScrollY;
+                        NotifyOutputChanged();
+                    }
+                    return;
+                }
+                m_lastLayoutError = null;
+                if (hadOutput && !HasOutput)
+                {
+                    NotifyOutputChanged();
+                }
+                DebugFlow("rebuild " +
+                          $"forceText={forceText} rebuilt={rebuilt} currentSize={currentSize.x}x{currentSize.y} " +
+                          $"hasRange={m_hasVisibleRange} range=[{m_visibleStartY:F3},{m_visibleEndY:F3}] " +
+                          $"capacity={m_visibleCapacityHeight} " +
+                          $"hasOutput={HasOutput} output={OutputWidth}x{OutputHeight} " +
+                          $"viewport={viewportWidth:F3}x{viewportHeight:F3} content={contentWidth:F3}x{contentHeight:F3}");
+                if (!rebuilt)
+                {
+#if UNITY_EDITOR
+                    QueueEditorRebuild();
+#endif
+                }
+                else
+                {
+                    ApplyHorizontalScrollState(RenderTarget.HorizontalScrollState);
+                    if (!m_flowMode)
+                    {
+                        var nextScrollY = RenderTarget.ScrollOffset.y;
+                        if (!Mathf.Approximately(m_scrollY, nextScrollY))
+                        {
+                            m_scrollY = nextScrollY;
+                        }
                     }
                 }
             }
-
+            catch (Exception error)
+            {
+                m_lastLayoutError = error;
+                if (renderTarget != null)
+                {
+                    renderTarget.InvalidateFailedOutput();
+                }
+                // Consumers must drop their previous Texture/UvRect even though
+                // the rebuild exception interrupts the caller's normal apply
+                // step. HasOutput is false at this point, so the observer clears
+                // the stale graphic immediately.
+                NotifyOutputChanged();
+#if UNITY_EDITOR
+                Debug.LogException(error, this);
+#endif
+            }
         }
 
         public void RebuildOutput(bool forceText)
@@ -656,14 +874,30 @@ namespace Milestro.Components.Internal
             HookStyleModels();
             var settings = TextBoxRenderTargetSettingsBuilder.BuildFrom(this);
             var layout = GetComponent<TextBoxLayoutElement>();
+            var requestedVertical = IsVerticalRequested();
+            var marginContext = requestedVertical
+                ? ResolveVerticalMarginContext(m_textStyle.size, RectTransformComponent())
+                : (MarginResolveContext?)null;
+            if (marginContext.HasValue)
+            {
+                settings = settings.WithVerticalLayout(marginContext.Value,
+                    layout != null && layout.isActiveAndEnabled
+                        ? layout.heightMode
+                        : TextHeightMode.Fixed);
+            }
             if (layout != null && layout.isActiveAndEnabled &&
                 ((enableAutoFontSize && textOverflow != TextOverflow.Ellipsis) ||
                  layout.widthMode != TextWidthMode.Fixed ||
                  layout.heightMode != TextHeightMode.Fixed))
             {
-                var sizing = ResolveSizingAtLayoutWidth();
+                var sizing = ResolveSizing(RectTransformComponent()?.rect.width,
+                    out var usesVerticalSizing);
                 var available = TextSizingBounds.ExternalAvailableSize(RectTransformComponent()!);
-                settings = settings.WithSizing(sizing, available);
+                settings = settings.WithSizing(sizing,
+                    available,
+                    layout.heightMode,
+                    marginContext,
+                    usesVerticalSizing);
                 if (!lastSizing.HasValue ||
                     !Mathf.Approximately(lastSizing.Value.PreferredWidth, sizing.PreferredWidth) ||
                     !Mathf.Approximately(lastSizing.Value.PreferredHeight, sizing.PreferredHeight))
@@ -767,11 +1001,124 @@ namespace Milestro.Components.Internal
 #if UNITY_EDITOR
             m_editorSkippedRenderRetries = 0;
 #endif
+            var writingMode = m_paragraphStyle?.writingMode ?? WritingMode.HorizontalTb;
+            if (m_hasObservedWritingMode && writingMode != m_observedWritingMode)
+            {
+                m_scrollX = 0f;
+                m_scrollY = 0f;
+                m_horizontalScrollState = default;
+                m_visualScrollOffset = Vector2.zero;
+            }
+            m_observedWritingMode = writingMode;
+            m_hasObservedWritingMode = true;
             intrinsicMeasurement?.Dispose();
             intrinsicMeasurement = null;
+            horizontalFallbackMeasurement?.Dispose();
+            horizontalFallbackMeasurement = null;
+            verticalMeasurement?.Dispose();
+            verticalMeasurement = null;
             lastSizing = null;
+            m_hasObservedVerticalMarginContext = false;
             RenderTarget.MarkPropertiesChanged();
             NotifyLayoutChanged();
+            GetComponent<TextBoxLayoutElement>()?.NotifyProducerConfigurationChanged();
+            CaptureObservedMargin();
+        }
+
+        private void ObserveMarginChanges()
+        {
+            if (m_margin == null)
+            {
+                m_hasObservedMargin = false;
+                return;
+            }
+
+            if (!m_hasObservedMargin)
+            {
+                CaptureObservedMargin();
+                return;
+            }
+
+            if (MarginValuesEqual(m_margin.Left, m_observedMarginLeft) &&
+                MarginValuesEqual(m_margin.Top, m_observedMarginTop) &&
+                MarginValuesEqual(m_margin.Right, m_observedMarginRight) &&
+                MarginValuesEqual(m_margin.Bottom, m_observedMarginBottom))
+            {
+                return;
+            }
+
+            MarkPropertiesChanged();
+        }
+
+        private void ObserveVerticalLayoutChanges()
+        {
+            if (!IsVerticalRequested())
+            {
+                m_hasObservedVerticalMarginContext = false;
+                return;
+            }
+
+            var next = ResolveVerticalMarginContext(m_textStyle.size, RectTransformComponent());
+            if (m_hasObservedVerticalMarginContext &&
+                VerticalMarginContextsEqual(next, m_observedVerticalMarginContext))
+            {
+                return;
+            }
+
+            var changed = m_hasObservedVerticalMarginContext;
+            m_observedVerticalMarginContext = next;
+            m_hasObservedVerticalMarginContext = true;
+            if (changed)
+            {
+                MarkPropertiesChanged();
+            }
+        }
+
+        private void CaptureObservedRectSize()
+        {
+            var rectTransform = RectTransformComponent();
+            if (rectTransform == null)
+            {
+                m_hasObservedRectSize = false;
+                return;
+            }
+
+            m_observedRectSize = rectTransform.rect.size;
+            m_hasObservedRectSize = true;
+        }
+
+        private static bool VerticalMarginContextsEqual(MarginResolveContext left,
+            MarginResolveContext right)
+        {
+            return Mathf.Approximately(left.ContainerWidth, right.ContainerWidth) &&
+                   Mathf.Approximately(left.ViewportWidth, right.ViewportWidth) &&
+                   Mathf.Approximately(left.ViewportHeight, right.ViewportHeight) &&
+                   Mathf.Approximately(left.FontSize, right.FontSize) &&
+                   left.HasContainerWidth == right.HasContainerWidth &&
+                   left.HasViewport == right.HasViewport;
+        }
+
+        private void CaptureObservedMargin()
+        {
+            if (m_margin == null)
+            {
+                m_hasObservedMargin = false;
+                return;
+            }
+
+            m_observedMarginLeft = m_margin.Left;
+            m_observedMarginTop = m_margin.Top;
+            m_observedMarginRight = m_margin.Right;
+            m_observedMarginBottom = m_margin.Bottom;
+            m_hasObservedMargin = true;
+        }
+
+        private static bool MarginValuesEqual(MarginValue left, MarginValue right)
+        {
+            return BitConverter.SingleToInt32Bits(left.Value) ==
+                   BitConverter.SingleToInt32Bits(right.Value) &&
+                   left.Unit == right.Unit &&
+                   left.Auto == right.Auto;
         }
 
         private void MarkContentChanged()
@@ -781,7 +1128,12 @@ namespace Milestro.Components.Internal
 #endif
             intrinsicMeasurement?.Dispose();
             intrinsicMeasurement = null;
+            horizontalFallbackMeasurement?.Dispose();
+            horizontalFallbackMeasurement = null;
+            verticalMeasurement?.Dispose();
+            verticalMeasurement = null;
             lastSizing = null;
+            m_hasObservedVerticalMarginContext = false;
             RenderTarget.MarkContentChanged();
             NotifyLayoutChanged();
         }

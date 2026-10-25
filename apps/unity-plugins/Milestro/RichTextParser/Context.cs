@@ -13,5 +13,7 @@ namespace Milestro.RichTextParser
         internal bool HasActiveLink { get; set; }
 
         internal bool HasActiveRuby { get; set; }
+
+        internal bool AllowViewportBlockMargins { get; set; }
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace Milestro.RichTextParser
 {
@@ -10,6 +11,27 @@ namespace Milestro.RichTextParser
         private List<LinkAnnotation>? links;
         private List<RubyAnnotation>? rubyAnnotations;
         private List<ParagraphBlock>? blocks;
+        private readonly List<PlaceholderAnnotation> placeholders = new List<PlaceholderAnnotation>();
+        public IReadOnlyList<PlaceholderAnnotation> Placeholders => placeholders.AsReadOnly();
+
+        internal void AddPlaceholder(PlaceholderAnnotation annotation) => placeholders.Add(annotation);
+
+        internal string GetPlainText(ParagraphBlock block)
+        {
+            var text = new StringBuilder();
+            foreach (var segment in block.Segments)
+            {
+                text.Append(segment.Content);
+            }
+            foreach (var placeholder in placeholders)
+            {
+                if (block.ContainsRange(placeholder.StartUtf16, placeholder.EndUtf16))
+                {
+                    text.Insert(placeholder.StartUtf16 - block.StartUtf16, '\uFFFC');
+                }
+            }
+            return text.ToString();
+        }
 
         public ParagraphStyleState ParagraphStyle { get; set; } = new ParagraphStyleState();
 
@@ -46,7 +68,7 @@ namespace Milestro.RichTextParser
         internal ParagraphBlock AddBlock(bool isExplicit, int startUtf16)
         {
             var list = blocks ??= new List<ParagraphBlock> { new ParagraphBlock() };
-            if (list.Count == 1 && !list[0].IsExplicit && list[0].Segments.Count == 0)
+            if (list.Count == 1 && !list[0].IsExplicit && list[0].LengthUtf16 == 0)
             {
                 if (isExplicit)
                 {

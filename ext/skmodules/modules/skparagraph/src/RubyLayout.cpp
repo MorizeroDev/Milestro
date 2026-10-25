@@ -154,6 +154,9 @@ void ParagraphImpl::prepareRuby() {
         }
         auto textStyle = input.style.textStyle.value_or(fTextStyles[findAllBlocks(range).start].fStyle);
         textStyle.setFontSize(textStyle.getFontSize() * input.style.fontSizeMultiplier);
+        // Keep annotation line metrics on the base line-height grid.
+        textStyle.setHeightOverride(false);
+        textStyle.setHeight(1);
         auto buildAnnotation = [&](const TextStyle& annotationTextStyle) {
             auto annotationStyle = fParagraphStyle;
             annotationStyle.setTextStyle(annotationTextStyle);
@@ -182,8 +185,8 @@ void ParagraphImpl::prepareRuby() {
             auto index = level % 2 == 0 ? first + visual : last - visual - 1;
             const auto& cluster = fClusters[index];
             const auto& run = cluster.run();
-            baseTop = std::min(baseTop, run.correctAscent());
-            baseBottom = std::max(baseBottom, run.correctDescent());
+            baseTop = std::min(baseTop, run.ascent());
+            baseBottom = std::max(baseBottom, run.descent());
             std::vector<SkRect> bounds(cluster.size());
             run.font().getBounds(run.glyphs().subspan(cluster.startPos(), cluster.size()), bounds, nullptr);
             for (size_t glyph = 0; glyph < cluster.size(); ++glyph) {

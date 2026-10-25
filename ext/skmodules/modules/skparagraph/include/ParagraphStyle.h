@@ -18,6 +18,11 @@
 namespace skia {
 namespace textlayout {
 
+enum class WritingMode {
+    kHorizontalTb,
+    kVerticalRl,
+};
+
 struct StrutStyle {
     StrutStyle();
 
@@ -82,6 +87,7 @@ struct ParagraphStyle {
         return this->fHeight == rhs.fHeight && this->fEllipsis == rhs.fEllipsis &&
                this->fEllipsisUtf16 == rhs.fEllipsisUtf16 &&
                this->fTextDirection == rhs.fTextDirection && this->fTextAlign == rhs.fTextAlign &&
+               this->fWritingMode == rhs.fWritingMode &&
                this->fTextIndent == rhs.fTextIndent &&
                this->fTextIndentIsPercentage == rhs.fTextIndentIsPercentage &&
                this->fDefaultTextStyle == rhs.fDefaultTextStyle &&
@@ -99,6 +105,9 @@ struct ParagraphStyle {
 
     TextDirection getTextDirection() const { return fTextDirection; }
     void setTextDirection(TextDirection direction) { fTextDirection = direction; }
+
+    WritingMode getWritingMode() const { return fWritingMode; }
+    void setWritingMode(WritingMode mode) { fWritingMode = mode; }
 
     TextAlign getTextAlign() const { return fTextAlign; }
     void setTextAlign(TextAlign align) { fTextAlign = align; }
@@ -162,6 +171,7 @@ private:
     TextStyle fDefaultTextStyle;
     TextAlign fTextAlign;
     TextDirection fTextDirection;
+    WritingMode fWritingMode = WritingMode::kHorizontalTb;
     SkScalar fTextIndent = 0;
     bool fTextIndentIsPercentage = false;
     size_t fLinesLimit;

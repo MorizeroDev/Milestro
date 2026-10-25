@@ -1,5 +1,6 @@
 set(MILESTRO_TEST_NAME "MilestroTest_SkiaUnicodeFallback")
 set(MILESTRO_TEST_SOURCE
+        src/test_skshaper_direction.cpp
         src/test_font_collection.cpp
         src/test_paragraph_style.cpp
         src/test_paragraph_hit_test.cpp
@@ -15,6 +16,7 @@ target_include_directories(${MILESTRO_TEST_NAME} PRIVATE
 target_link_libraries(${MILESTRO_TEST_NAME} PRIVATE
         GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main
         Milestro
+        skia_shaper
         ${PROJECT_PLATFORM_LIBRARIES}
 )
 target_compile_definitions(${MILESTRO_TEST_NAME} PRIVATE
@@ -51,9 +53,114 @@ target_compile_definitions(${MILESTRO_PARAGRAPH_HIT_TEST_NAME} PRIVATE
         MILESTRO_TEST_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/SourceHanSans-VF.otf.woff2.bytes"
 )
 
+set(MILESTRO_VERTICAL_TEXT_TEST_NAME "MilestroTest_SkiaVerticalTextFeasibility")
+add_executable(${MILESTRO_VERTICAL_TEXT_TEST_NAME} src/test_vertical_text.cpp)
+target_include_directories(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PRIVATE
+        ${PROJECT_SOURCE_DIR}/ext/skia/third_party/externals/harfbuzz/src
+)
+target_link_libraries(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PRIVATE
+        GTest::gtest GTest::gtest_main
+        Milestro::SkTtbShaper
+        Milestro::SkUnicode
+        ${PROJECT_PLATFORM_LIBRARIES}
+)
+target_compile_definitions(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PRIVATE
+        MILESTRO_TEST_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/SourceHanSans-VF.otf.woff2.bytes"
+        MILESTRO_TEST_FALLBACK_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/LiberationSans-Bold.ttf.bytes"
+)
+if (MSVC)
+    target_compile_options(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PRIVATE /utf-8)
+endif ()
+
+set(MILESTRO_VERTICAL_PARAGRAPH_TEST_NAME "MilestroTest_SkiaVerticalParagraph")
+add_executable(${MILESTRO_VERTICAL_PARAGRAPH_TEST_NAME} src/test_vertical_paragraph.cpp)
+target_link_libraries(${MILESTRO_VERTICAL_PARAGRAPH_TEST_NAME} PRIVATE
+        GTest::gtest GTest::gtest_main
+        Milestro::SkParagraph
+        Milestro::SkUnicode
+        ${PROJECT_PLATFORM_LIBRARIES}
+)
+target_compile_definitions(${MILESTRO_VERTICAL_PARAGRAPH_TEST_NAME} PRIVATE
+        MILESTRO_TEST_ICUDTL_PATH="${PROJECT_SOURCE_DIR}/ext/icu-cmake/common/icudtl.dat"
+        MILESTRO_TEST_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/SourceHanSans-VF.otf.woff2.bytes"
+        MILESTRO_TEST_FALLBACK_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/LiberationSans-Bold.ttf.bytes"
+        MILESTRO_TEST_EMOJI_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/NotoColorEmoji.ttf.bytes"
+)
+if (MSVC)
+    target_compile_options(${MILESTRO_VERTICAL_PARAGRAPH_TEST_NAME} PRIVATE /utf-8)
+endif ()
+
+set(MILESTRO_VERTICAL_PARAGRAPH_NO_ICU_TEST_NAME "MilestroTest_SkiaVerticalParagraphNoIcu")
+add_executable(${MILESTRO_VERTICAL_PARAGRAPH_NO_ICU_TEST_NAME}
+        src/test_vertical_paragraph_no_icu.cpp)
+target_link_libraries(${MILESTRO_VERTICAL_PARAGRAPH_NO_ICU_TEST_NAME} PRIVATE
+        GTest::gtest GTest::gtest_main
+        Milestro
+        ${PROJECT_PLATFORM_LIBRARIES}
+)
+target_compile_definitions(${MILESTRO_VERTICAL_PARAGRAPH_NO_ICU_TEST_NAME} PRIVATE
+        MILESTRO_TEST_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/SourceHanSans-VF.otf.woff2.bytes"
+        MILESTRO_TEST_FALLBACK_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/LiberationSans-Bold.ttf.bytes"
+)
+if (MSVC)
+    target_compile_options(${MILESTRO_VERTICAL_PARAGRAPH_NO_ICU_TEST_NAME} PRIVATE /utf-8)
+endif ()
+
+set(MILESTRO_VERTICAL_PARAGRAPH_WRAPPER_TEST_NAME "MilestroTest_SkiaVerticalParagraphWrapper")
+add_executable(${MILESTRO_VERTICAL_PARAGRAPH_WRAPPER_TEST_NAME}
+        src/test_vertical_paragraph_wrapper.cpp)
+target_link_libraries(${MILESTRO_VERTICAL_PARAGRAPH_WRAPPER_TEST_NAME} PRIVATE
+        GTest::gtest GTest::gtest_main
+        Milestro
+        ${PROJECT_PLATFORM_LIBRARIES}
+)
+target_compile_definitions(${MILESTRO_VERTICAL_PARAGRAPH_WRAPPER_TEST_NAME} PRIVATE
+        MILESTRO_TEST_ICUDTL_PATH="${PROJECT_SOURCE_DIR}/ext/icu-cmake/common/icudtl.dat"
+        MILESTRO_TEST_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/SourceHanSans-VF.otf.woff2.bytes"
+        MILESTRO_TEST_FALLBACK_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/LiberationSans-Bold.ttf.bytes"
+)
+if (MSVC)
+    target_compile_options(${MILESTRO_VERTICAL_PARAGRAPH_WRAPPER_TEST_NAME} PRIVATE /utf-8)
+endif ()
+
+if (NOT ANDROID)
+    set(MILESTRO_VERTICAL_PARAGRAPH_WORKDIR "${CMAKE_CURRENT_BINARY_DIR}/vertical-paragraph-results")
+    file(MAKE_DIRECTORY "${MILESTRO_VERTICAL_PARAGRAPH_WORKDIR}")
+    add_test(NAME ${MILESTRO_VERTICAL_PARAGRAPH_TEST_NAME}
+            WORKING_DIRECTORY "${MILESTRO_VERTICAL_PARAGRAPH_WORKDIR}"
+            COMMAND ${MILESTRO_VERTICAL_PARAGRAPH_TEST_NAME})
+    set_tests_properties(${MILESTRO_VERTICAL_PARAGRAPH_TEST_NAME} PROPERTIES
+            ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+    set_property(TEST ${MILESTRO_VERTICAL_PARAGRAPH_TEST_NAME} APPEND PROPERTY
+            ENVIRONMENT "DYLD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+
+    set(MILESTRO_VERTICAL_PARAGRAPH_NO_ICU_WORKDIR
+            "${CMAKE_CURRENT_BINARY_DIR}/vertical-paragraph-no-icu-workdir")
+    file(MAKE_DIRECTORY "${MILESTRO_VERTICAL_PARAGRAPH_NO_ICU_WORKDIR}")
+    add_test(NAME ${MILESTRO_VERTICAL_PARAGRAPH_NO_ICU_TEST_NAME}
+            WORKING_DIRECTORY "${MILESTRO_VERTICAL_PARAGRAPH_NO_ICU_WORKDIR}"
+            COMMAND ${MILESTRO_VERTICAL_PARAGRAPH_NO_ICU_TEST_NAME})
+    set_tests_properties(${MILESTRO_VERTICAL_PARAGRAPH_NO_ICU_TEST_NAME} PROPERTIES
+            ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+    set_property(TEST ${MILESTRO_VERTICAL_PARAGRAPH_NO_ICU_TEST_NAME} APPEND PROPERTY
+            ENVIRONMENT "DYLD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+
+    set(MILESTRO_VERTICAL_PARAGRAPH_WRAPPER_WORKDIR
+            "${CMAKE_CURRENT_BINARY_DIR}/vertical-paragraph-wrapper-results")
+    file(MAKE_DIRECTORY "${MILESTRO_VERTICAL_PARAGRAPH_WRAPPER_WORKDIR}")
+    add_test(NAME ${MILESTRO_VERTICAL_PARAGRAPH_WRAPPER_TEST_NAME}
+            WORKING_DIRECTORY "${MILESTRO_VERTICAL_PARAGRAPH_WRAPPER_WORKDIR}"
+            COMMAND ${MILESTRO_VERTICAL_PARAGRAPH_WRAPPER_TEST_NAME})
+    set_tests_properties(${MILESTRO_VERTICAL_PARAGRAPH_WRAPPER_TEST_NAME} PROPERTIES
+            ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+    set_property(TEST ${MILESTRO_VERTICAL_PARAGRAPH_WRAPPER_TEST_NAME} APPEND PROPERTY
+            ENVIRONMENT "DYLD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+endif ()
+
 if (NOT ANDROID)
     set(MILESTRO_TEST_NO_ICU_WORKDIR "${CMAKE_CURRENT_BINARY_DIR}/no-icu-workdir")
     file(MAKE_DIRECTORY "${MILESTRO_TEST_NO_ICU_WORKDIR}")
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vertical-text-results")
 
     add_test(
             NAME ${MILESTRO_TEST_NAME}
@@ -77,6 +184,16 @@ if (NOT ANDROID)
             ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
     )
     set_property(TEST ${MILESTRO_PARAGRAPH_HIT_TEST_NAME} APPEND PROPERTY
+            ENVIRONMENT "DYLD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
+    )
+
+    add_test(NAME ${MILESTRO_VERTICAL_TEXT_TEST_NAME}
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vertical-text-results"
+            COMMAND ${MILESTRO_VERTICAL_TEXT_TEST_NAME})
+    set_tests_properties(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PROPERTIES
+            ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    )
+    set_property(TEST ${MILESTRO_VERTICAL_TEXT_TEST_NAME} APPEND PROPERTY
             ENVIRONMENT "DYLD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
     )
 endif ()

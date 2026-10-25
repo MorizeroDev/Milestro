@@ -27,6 +27,7 @@ namespace Milestro.Components
 #endif
 
         [NonSerialized] private TextBox? textBoxCache;
+        [NonSerialized] private TextBoxRenderTextureProducer? observedProducer;
         [NonSerialized] private bool subscribed;
         [NonSerialized] private bool hasHorizontalMeasurement;
         [NonSerialized] private bool hasVerticalMeasurement;
@@ -49,6 +50,7 @@ namespace Milestro.Components
                 }
 
                 m_widthMode = nextValue;
+                InvalidateProducerSizing();
                 SetLayoutDirty();
             }
         }
@@ -67,6 +69,7 @@ namespace Milestro.Components
                 }
 
                 m_heightMode = nextValue;
+                InvalidateProducerSizing();
                 SetLayoutDirty();
             }
         }
@@ -109,7 +112,8 @@ namespace Milestro.Components
         }
 #endif
 
-        public float minWidth => TryGetHorizontalMeasurement(out var measurement)
+        public float minWidth => m_widthMode != TextWidthMode.Fixed &&
+                                 TryGetHorizontalMeasurement(out var measurement)
             ? measurement.MinWidth
             : -1f;
         public float maxWidth => -1f;
@@ -137,9 +141,8 @@ namespace Milestro.Components
 #if MILESTRO_FLOW_TEXTBOX_DEBUG
             textBox?.SetFlowDiagnosticsEnabled(m_debugFlowVisibleRange);
 #endif
-            textBox?.SetFlowModeActive(true);
+            UpdateFlowMode();
             SetLayoutDirty();
-            UpdateVisibleRange();
         }
 
         protected override void OnDisable()
@@ -178,6 +181,10 @@ namespace Milestro.Components
 
         private void LateUpdate()
         {
+            if (IsVerticalRequested())
+            {
+                return;
+            }
             UpdateVisibleRange();
         }
 
@@ -268,19 +275,33 @@ namespace Milestro.Components
 
         private void Subscribe()
         {
-            if (subscribed)
-            {
-                return;
-            }
-
             var textBox = TextBoxComponent();
-            if (textBox == null)
+            var producer = GetComponent<TextBoxRenderTextureProducer>();
+            if (!subscribed)
+            {
+                if (textBox != null)
+                {
+                    textBox.LayoutChanged += OnTextBoxLayoutChanged;
+                }
+
+                subscribed = true;
+            }
+
+            if (ReferenceEquals(observedProducer, producer))
             {
                 return;
             }
 
-            textBox.LayoutChanged += OnTextBoxLayoutChanged;
-            subscribed = true;
+            if (observedProducer != null)
+            {
+                observedProducer.LayoutChanged -= OnTextBoxLayoutChanged;
+            }
+
+            observedProducer = producer;
+            if (observedProducer != null)
+            {
+                observedProducer.LayoutChanged += OnTextBoxLayoutChanged;
+            }
         }
 
         private void Unsubscribe()
@@ -296,17 +317,53 @@ namespace Milestro.Components
                 textBox.LayoutChanged -= OnTextBoxLayoutChanged;
             }
 
+            if (observedProducer != null)
+            {
+                observedProducer.LayoutChanged -= OnTextBoxLayoutChanged;
+            }
+
+            observedProducer = null;
             subscribed = false;
         }
 
         private void OnTextBoxLayoutChanged()
         {
+            UpdateFlowMode();
             SetLayoutDirty();
+        }
+
+        internal void NotifyProducerConfigurationChanged()
+        {
+            if (!isActiveAndEnabled)
+            {
+                return;
+            }
+
+            UpdateFlowMode();
+            SetLayoutDirty();
+        }
+
+        private bool IsVerticalRequested()
+        {
+            var producer = GetComponent<TextBoxRenderTextureProducer>();
+            return producer != null && producer.paragraphStyle != null &&
+                   producer.paragraphStyle.writingMode == WritingMode.VerticalRl;
+        }
+
+        private void UpdateFlowMode()
+        {
+            var textBox = TextBoxComponent();
+            textBox?.SetFlowModeActive(!IsVerticalRequested());
         }
 
         private void UpdateVisibleRange()
         {
             if (!isActiveAndEnabled)
+            {
+                return;
+            }
+
+            if (IsVerticalRequested())
             {
                 return;
             }
@@ -440,6 +497,11 @@ namespace Milestro.Components
             }
 
             LayoutRebuilder.MarkLayoutForRebuild(targetRectTransform);
+        }
+
+        private void InvalidateProducerSizing()
+        {
+            GetComponent<TextBoxRenderTextureProducer>()?.InvalidateSizing();
         }
 
         private void NormalizeModes()

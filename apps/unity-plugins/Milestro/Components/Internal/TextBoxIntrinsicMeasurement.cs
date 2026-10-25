@@ -27,6 +27,12 @@ namespace Milestro.Components.Internal
 
         public TextBoxIntrinsicMeasurement(TextBoxRenderTargetSettings settings)
         {
+            if (TextBoxVerticalLayoutSupport.IsVertical(settings))
+            {
+                throw new NotSupportedException(
+                    "Vertical-rl Canvas TextBox does not expose intrinsic horizontal text measurement.");
+            }
+
             this.settings = settings;
             var parser = new RichTextParser.RichTextParser();
             parser.ParseText(settings.Content);

@@ -61,33 +61,19 @@ Run::Run(ParagraphImpl* owner,
 }
 
 Run::Run(const Run& other, bool detachGlyphs)
-    : fOwner(other.fOwner)
-    , fTextRange(other.fTextRange)
-    , fClusterRange(other.fClusterRange)
-    , fFont(other.fFont)
-    , fPlaceholderIndex(other.fPlaceholderIndex)
-    , fIndex(other.fIndex)
-    , fAdvance(other.fAdvance)
-    , fOffset(other.fOffset)
-    , fClusterStart(other.fClusterStart)
-    , fUtf8Range(other.fUtf8Range)
-    , fGlyphData(detachGlyphs ? std::make_shared<GlyphData>(*other.fGlyphData) : other.fGlyphData)
-    , fGlyphs(fGlyphData->glyphs)
-    , fPositions(fGlyphData->positions)
-    , fOffsets(fGlyphData->offsets)
-    , fClusterIndexes(fGlyphData->clusterIndexes)
-    , fJustificationShifts(other.fJustificationShifts)
-    , fFontMetrics(other.fFontMetrics)
-    , fHeightMultiplier(other.fHeightMultiplier)
-    , fUseHalfLeading(other.fUseHalfLeading)
-    , fBaselineShift(other.fBaselineShift)
-    , fCorrectAscent(other.fCorrectAscent)
-    , fCorrectDescent(other.fCorrectDescent)
-    , fCorrectLeading(other.fCorrectLeading)
-    , fEllipsis(other.fEllipsis)
-    , fBidiLevel(other.fBidiLevel)
-    , fScript(other.fScript)
-    , fLanguage(other.fLanguage) {}
+    : fOwner(other.fOwner), fTextRange(other.fTextRange), fClusterRange(other.fClusterRange), fFont(other.fFont),
+      fPlaceholderIndex(other.fPlaceholderIndex), fIndex(other.fIndex), fAdvance(other.fAdvance),
+      fOffset(other.fOffset), fClusterStart(other.fClusterStart), fUtf8Range(other.fUtf8Range),
+      fGlyphData(detachGlyphs ? std::make_shared<GlyphData>(*other.fGlyphData) : other.fGlyphData),
+      fGlyphs(fGlyphData->glyphs), fPositions(fGlyphData->positions), fOffsets(fGlyphData->offsets),
+      fClusterIndexes(fGlyphData->clusterIndexes), fJustificationShifts(other.fJustificationShifts),
+      fFontMetrics(other.fFontMetrics), fHeightMultiplier(other.fHeightMultiplier),
+      fUseHalfLeading(other.fUseHalfLeading), fBaselineShift(other.fBaselineShift),
+      fCorrectAscent(other.fCorrectAscent), fCorrectDescent(other.fCorrectDescent),
+      fCorrectLeading(other.fCorrectLeading), fEllipsis(other.fEllipsis), fBidiLevel(other.fBidiLevel),
+      fScript(other.fScript), fLanguage(other.fLanguage), fVertical(other.fVertical), fSideways(other.fSideways),
+      fBlockAscent(other.fBlockAscent), fBlockDescent(other.fBlockDescent) {
+}
 
 void Run::calculateMetrics() {
     fCorrectAscent = fFontMetrics.fAscent - fFontMetrics.fLeading * 0.5;
@@ -193,19 +179,33 @@ void Run::iterateThroughClusters(const ClusterVisitor& visitor) {
 
 void Run::addSpacesAtTheEnd(SkScalar space, Cluster* cluster) {
     // Increment the run width
-    fAdvance.fX += space;
+    if (fVertical) {
+        fAdvance.fY += space;
+    } else {
+        fAdvance.fX += space;
+    }
     // Increment the cluster width
     cluster->space(space);
 }
 
 SkScalar Run::addLetterSpacesEvenly(SkScalar space) {
     SkScalar shift = 0;
+    SkScalar advance = fVertical ? fAdvance.fY : fAdvance.fX;
     for (size_t i = 0; i < this->size(); ++i) {
-        fPositions[i].fX += shift;
+        if (fVertical) {
+            fPositions[i].fY += shift;
+        } else {
+            fPositions[i].fX += shift;
+        }
         shift += space;
     }
-    fPositions[this->size()].fX += shift;
-    fAdvance.fX += shift;
+    if (fVertical) {
+        fPositions[this->size()].fY += shift;
+        fAdvance.fY = advance + shift;
+    } else {
+        fPositions[this->size()].fX += shift;
+        fAdvance.fX = advance + shift;
+    }
     return shift;
 }
 
@@ -213,15 +213,27 @@ SkScalar Run::addLetterSpacesEvenly(SkScalar space, Cluster* cluster) {
     // Offset all the glyphs in the cluster
     SkScalar shift = 0;
     for (size_t i = cluster->startPos(); i < cluster->endPos(); ++i) {
-        fPositions[i].fX += shift;
+        if (fVertical) {
+            fPositions[i].fY += shift;
+        } else {
+            fPositions[i].fX += shift;
+        }
         shift += space;
     }
     if (this->size() == cluster->endPos()) {
         // To make calculations easier
-        fPositions[cluster->endPos()].fX += shift;
+        if (fVertical) {
+            fPositions[cluster->endPos()].fY += shift;
+        } else {
+            fPositions[cluster->endPos()].fX += shift;
+        }
     }
     // Increment the run width
-    fAdvance.fX += shift;
+    if (fVertical) {
+        fAdvance.fY += shift;
+    } else {
+        fAdvance.fX += shift;
+    }
     // Increment the cluster width
     cluster->space(shift);
     cluster->setHalfLetterSpacing(space / 2);
@@ -249,17 +261,29 @@ void Run::shift(const Cluster* cluster, SkScalar offset) {
         return;
     }
     for (size_t i = cluster->startPos(); i < cluster->endPos(); ++i) {
-        fPositions[i].fX += offset;
+        if (fVertical) {
+            fPositions[i].fY += offset;
+        } else {
+            fPositions[i].fX += offset;
+        }
     }
     if (this->size() == cluster->endPos()) {
         // To make calculations easier
-        fPositions[cluster->endPos()].fX += offset;
+        if (fVertical) {
+            fPositions[cluster->endPos()].fY += offset;
+        } else {
+            fPositions[cluster->endPos()].fX += offset;
+        }
     }
 }
 
 void Run::extend(const Cluster* cluster, SkScalar offset) {
     // Extend the cluster at the end
-    fPositions[cluster->endPos()].fX += offset;
+    if (fVertical) {
+        fPositions[cluster->endPos()].fY += offset;
+    } else {
+        fPositions[cluster->endPos()].fX += offset;
+    }
 }
 
 void Run::compressAfter(Cluster* cluster, SkScalar amount) {
@@ -333,6 +357,10 @@ SkScalar Cluster::sizeToChar(TextIndex ch) const {
     if (ch <= fTextRange.start || ch >= fTextRange.end) {
         return 0;
     }
+    if (fOwner != nullptr && fRunIndex != EMPTY_RUN && fOwner->run(fRunIndex).isVertical()) {
+        const auto ratio = (ch - fTextRange.start) * 1.0 / fTextRange.width();
+        return SkDoubleToScalar(fWidth * ratio);
+    }
     if (fOwner != nullptr && fRunIndex != EMPTY_RUN && fWidth > 0) {
         // Scale cluster width by standalone glyph advances so multi-character
         // ligatures (such as "ffi") split proportionally to their component characters.
@@ -391,6 +419,9 @@ SkScalar Cluster::trimmedWidth(size_t pos) const {
     // Find the width until the pos and return the min between trimmedWidth and the width(pos)
     // We don't have to take in account cluster shift since it's the same for 0 and for pos
     auto& run = fOwner->run(fRunIndex);
+    if (run.isVertical()) {
+        return std::min(run.inlinePosition(pos) - run.inlinePosition(fStart), fWidth);
+    }
     return std::min(run.positionX(pos) - run.positionX(fStart), fWidth);
 }
 

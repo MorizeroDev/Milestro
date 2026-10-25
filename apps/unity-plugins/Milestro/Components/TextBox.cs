@@ -122,13 +122,22 @@ namespace Milestro.Components
                 ? TextBoxPipelineProfiler.UpdateMarker.Auto()
                 : default;
             var producer = ProducerComponent();
-            producer.RebuildOutput(forceText: false);
-            if (!flowModeActive)
+            try
             {
-                TickScrollTweens(producer);
-                TickElastic(producer);
+                producer.RebuildOutput(forceText: false);
+                if (!flowModeActive)
+                {
+                    TickScrollTweens(producer);
+                    TickElastic(producer);
+                }
             }
-            ApplyProducerOutput(producer, force: false);
+            finally
+            {
+                // A failed rebuild already invalidates the producer output.
+                // Applying in finally guarantees the old Texture/UvRect is
+                // never left visible while the exception propagates.
+                ApplyProducerOutput(producer, force: false);
+            }
             RefreshLinkHover();
         }
 
@@ -271,10 +280,12 @@ namespace Milestro.Components
             SettleUnavailableElasticAxes(producer);
             var unusedScrollDelta = Vector2.zero;
             var consumed = false;
+            var horizontalContentDelta =
+                ResolveScrollXContentDelta(producer.isVerticalLayout, contentOffsetDelta.x);
             if (axis == ScrollAxis.Horizontal || axis == ScrollAxis.Free)
             {
                 if (TryScrollX(producer,
-                        contentOffsetDelta.x,
+                        horizontalContentDelta,
                         stepPixels,
                         shouldTweenPointerScroll,
                         allowElastic,
@@ -434,6 +445,21 @@ namespace Milestro.Components
             return true;
         }
 
+        public bool TryGetPlaceholderGeometrySnapshot(out TextBoxPlaceholderGeometrySnapshot snapshot)
+        {
+            snapshot = default;
+            if (!isActiveAndEnabled) return false;
+            var producer = ProducerComponent();
+            producer.RebuildOutput(forceText: false);
+            ApplyProducerOutput(producer, force: false);
+            if (!producer.TryGetContentSnapshot(out var content) ||
+                !producer.TryGetLinkGeometrySnapshot(out var geometry, out var generation) ||
+                content.ContentVersion != geometry.ContentVersion) return false;
+            snapshot = new TextBoxPlaceholderGeometrySnapshot(geometry.ContentVersion, generation,
+                geometry.Placeholders, geometry.PaintPosition, geometry.ClipRect, geometry.FitScale);
+            return true;
+        }
+
         internal bool TryGetContentSnapshot(out TextBoxContentSnapshot snapshot)
         {
             snapshot = default;
@@ -545,12 +571,18 @@ namespace Milestro.Components
                 targetRect.yMax,
                 snapshot.ClipRect.yMin,
                 snapshot.ClipRect.yMax);
+            var producer = ProducerComponent();
+            if (producer.isVerticalLayout)
+            {
+                // vertical-rl starts at the rightmost column and advances left. Increasing
+                // physical X scroll moves the paragraph right to reveal later left columns.
+                deltaX = -deltaX;
+            }
             if (Mathf.Approximately(deltaX, 0f) && Mathf.Approximately(deltaY, 0f))
             {
                 return true;
             }
 
-            var producer = ProducerComponent();
             CancelScrollTweens();
             SettleElastic(producer, rebuild: false);
             var nextScrollX = Mathf.Clamp(producer.scrollX + deltaX, 0f, producer.maxScrollX);
@@ -855,7 +887,8 @@ namespace Milestro.Components
                 producer.viewportWidth,
                 producer.viewportHeight,
                 producer.contentWidth,
-                producer.contentHeight);
+                producer.contentHeight,
+                producer.isVerticalLayout);
             return true;
         }
 
@@ -1132,6 +1165,11 @@ namespace Milestro.Components
         private static float ResolveScrollPercentX(TextBoxRenderTextureProducer producer)
         {
             return FloatUtil.ScrollOffsetToPercent(producer.scrollX, producer.maxScrollX);
+        }
+
+        internal static float ResolveScrollXContentDelta(bool vertical, float physicalDelta)
+        {
+            return vertical ? -physicalDelta : physicalDelta;
         }
 
         private static float ResolveScrollPercentY(TextBoxRenderTextureProducer producer)
@@ -1428,6 +1466,11 @@ namespace Milestro.Components
 
         private void OnProducerOutputChanged()
         {
+            if (observedProducer != null && !observedProducer.HasOutput)
+            {
+                ApplyProducerOutput(observedProducer, force: false);
+                InvalidateLinkInteractionOnLayoutFailure();
+            }
 #if UNITY_EDITOR
             if (!Application.isPlaying && this && isActiveAndEnabled)
             {
@@ -1438,6 +1481,8 @@ namespace Milestro.Components
 
         private void OnProducerLayoutChanged()
         {
+            ClearLinkPresses();
+            ClearHoveredLink(notify: true);
             LayoutChanged?.Invoke();
         }
 
