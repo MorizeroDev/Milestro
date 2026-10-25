@@ -42,7 +42,9 @@ enum : uint64_t {
 constexpr uint64_t MILESTRO_API_STATUS_DOMAIN_NATIVE = 1;
 constexpr uint64_t MILESTRO_API_STATUS_DOMAIN_SKIA = MILESTRO_API_STATUS_DOMAIN_NATIVE;
 constexpr uint64_t MILESTRO_API_STATUS_OPERATION_DESTROY = 1;
+constexpr uint64_t MILESTRO_API_STATUS_OPERATION_ENQUEUE = 2;
 constexpr uint64_t MILESTRO_API_STATUS_DETAIL_UNEXPECTED_EXCEPTION = 1;
+constexpr uint64_t MILESTRO_API_STATUS_DETAIL_QUEUE_FULL = 2;
 
 constexpr int64_t MILESTRO_API_STATUS_MAKE(uint64_t severity,
                                             uint64_t flags,

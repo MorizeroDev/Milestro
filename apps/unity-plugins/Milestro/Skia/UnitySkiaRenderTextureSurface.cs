@@ -486,6 +486,14 @@ namespace Milestro.Skia
                         firstRenderEventId,
                         secondRenderEventId);
                 }
+                catch (RetryableNativeException)
+                {
+                    if (!enqueued)
+                    {
+                        CancelPendingEvent(pendingEvent);
+                    }
+                    return false;
+                }
                 catch
                 {
                     if (!enqueued)
@@ -988,6 +996,22 @@ namespace Milestro.Skia
                 {
                     SlimTextPipelineProfiler.SubmitEnqueueMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
                 }
+            }
+            catch (RetryableNativeException)
+            {
+                if (pendingEvent != null && !enqueued)
+                {
+                    CancelPendingEvent(pendingEvent);
+                    DisposeNativeOwnedResources(nativeOwnedResources);
+                }
+                else if (pendingEvent == null)
+                {
+                    FreeSubmission(submissionPtr, commandsPtr);
+                    KeepAliveResources(resources);
+                    DisposeResources(ownedResources);
+                    DisposeNativeOwnedResources(nativeOwnedResources);
+                }
+                return false;
             }
             catch
             {

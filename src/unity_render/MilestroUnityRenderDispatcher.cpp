@@ -510,7 +510,7 @@ int64_t EnqueueSubmission(int32_t graphicsBackend, MilestroUnityRenderSubmission
         gDiagnostics.RecordRejectedSubmission();
         return MILESTRO_API_RET_FAILED;
     }
-    bool queueRejected = false;
+    int64_t rejectionStatus = MILESTRO_API_RET_OK;
     try {
         std::lock_guard lock(gSubmissionQueueMutex);
         const bool isMetal =
@@ -530,21 +530,28 @@ int64_t EnqueueSubmission(int32_t graphicsBackend, MilestroUnityRenderSubmission
         }
         if (gSubmissionQueues[queueIndex].size() >= kMaximumQueuedSubmissionsPerRoute) {
             gDiagnostics.RecordRejectedSubmission();
-            MILESTROLOG_ERROR("Milestro Unity render queue {} reached its fixed capacity.", queueIndex);
-            queueRejected = true;
+            MILESTRO_RENDER_LOG_WARN("Milestro Unity render queue {} reached its fixed capacity; "
+                                     "the submission will be retried.",
+                                     queueIndex);
+            rejectionStatus = MILESTRO_API_STATUS_MAKE(MILESTRO_API_STATUS_SEVERITY_FAILURE,
+                                                       MILESTRO_API_STATUS_FLAG_DEFERRED |
+                                                               MILESTRO_API_STATUS_FLAG_RETRYABLE,
+                                                       MILESTRO_API_STATUS_DOMAIN_NATIVE,
+                                                       MILESTRO_API_STATUS_OPERATION_ENQUEUE,
+                                                       MILESTRO_API_STATUS_DETAIL_QUEUE_FULL);
         } else {
             gSubmissionQueues[queueIndex].push_back(submission);
         }
     } catch (const std::bad_alloc&) {
         gDiagnostics.RecordRejectedSubmission();
-        queueRejected = true;
+        rejectionStatus = MILESTRO_API_RET_FAILED;
     }
     for (MilestroUnityRenderSubmission* superseded: supersededSubmissions) {
         MILESTRO_RENDER_LOG_WARN("Dropping superseded Milestro render submission before queue drain.");
         MarkSubmissionCompleted(superseded, MilestroUnityRenderSubmissionStatus::Failed);
     }
-    if (queueRejected) {
-        return MILESTRO_API_RET_FAILED;
+    if (rejectionStatus != MILESTRO_API_RET_OK) {
+        return rejectionStatus;
     }
     const MilestroUnityRenderTargetPayload& target = submission->target;
     gDiagnostics.RecordAcceptedSubmission(graphicsBackend,

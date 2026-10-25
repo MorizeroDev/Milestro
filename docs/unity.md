@@ -835,6 +835,16 @@ There are two separate reductions:
   render-target switches and submission overhead, not necessarily every Skia
   glyph draw. Rejected updates retain the producer's dirty state for retry.
 
+Native submission dispatch uses a bounded backlog per render route (currently
+256 submissions). This limit is backpressure against a stalled render drain,
+not a guarantee that every independent target can enter the queue in one frame.
+When a frame submits more targets than a route can accept, excess enqueues
+return a deferred, retryable status instead of growing the backlog or dropping
+the update. The managed layer leaves the producer dirty and retries after the
+route drains, so a large standalone burst can spread across frames. Atlas
+batching reduces the number of submissions by sharing one submission per dirty
+page; it does not change the per-route limit.
+
 Region updates clear one pixel of transparent padding, clip to the content, and
 apply that target's raster scale. Draw snapshots and retired regions remain alive
 until their pending submission completes. The atlas uses the existing surface
