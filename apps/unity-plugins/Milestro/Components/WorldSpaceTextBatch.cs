@@ -972,8 +972,10 @@ namespace Milestro.Components
             {
                 unchecked
                 {
-                    var hash = Material != null ? Material.GetInstanceID() : 0;
-                    hash = hash * 31 + (Texture != null ? Texture.GetInstanceID() : 0);
+                    // Object.GetHashCode is the entity/instance id hash on every supported Unity version
+                    // and is not deprecated, unlike GetInstanceID in Unity 6.6+.
+                    var hash = Material != null ? Material.GetHashCode() : 0;
+                    hash = hash * 31 + (Texture != null ? Texture.GetHashCode() : 0);
                     hash = hash * 31 + StringComparer.Ordinal.GetHashCode(TexturePropertyName ?? "");
                     hash = hash * 31 + Layer;
                     hash = hash * 31 + SortingLayerID;

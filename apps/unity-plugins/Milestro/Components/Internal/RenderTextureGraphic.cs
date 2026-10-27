@@ -22,10 +22,14 @@ namespace Milestro.Components.Internal
         [SerializeField]
         private TextGradientAsset? m_colorGradientPreset;
 
+#if !UNITY_6000_6_OR_NEWER
         protected RenderTextureGraphic()
         {
+            // Legacy mesh generation was removed in Unity 6.6, where the flag is obsolete and
+            // Graphic already defaults it to false.
             useLegacyMeshGeneration = false;
         }
+#endif
 
         public Texture? Texture
         {

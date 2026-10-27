@@ -115,9 +115,11 @@ namespace Milestro.Components.Internal
         }
 
         public float minWidth => m_widthMode == TextWidthMode.Fixed ? -1f : ResolveSizing().MinWidth;
+        public float maxWidth => -1f;
         public float preferredWidth => m_widthMode == TextWidthMode.Fixed ? -1f : ResolveSizing().PreferredWidth;
         public float flexibleWidth => -1f;
         public float minHeight => -1f;
+        public float maxHeight => -1f;
         public float preferredHeight => m_heightMode == TextHeightMode.Auto ? ResolveSizing().PreferredHeight : -1f;
         public float flexibleHeight => -1f;
 

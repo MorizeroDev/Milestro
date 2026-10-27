@@ -112,6 +112,7 @@ namespace Milestro.Components
         public float minWidth => TryGetHorizontalMeasurement(out var measurement)
             ? measurement.MinWidth
             : -1f;
+        public float maxWidth => -1f;
         public float preferredWidth => m_widthMode != TextWidthMode.Fixed &&
                                        TryGetHorizontalMeasurement(out var measurement) &&
                                        measurement.PreferredWidth >= 0f
@@ -119,6 +120,7 @@ namespace Milestro.Components
             : -1f;
         public float flexibleWidth => -1f;
         public float minHeight => -1f;
+        public float maxHeight => -1f;
         public float preferredHeight => m_heightMode == TextHeightMode.Auto &&
                                         TryGetVerticalMeasurement(out var measurement)
             ? measurement.PreferredHeight

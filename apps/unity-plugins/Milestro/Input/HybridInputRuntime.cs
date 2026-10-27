@@ -100,7 +100,10 @@ namespace Milestro.Input
 
         private static int CountActiveEventSystems()
         {
-#if UNITY_2023_1_OR_NEWER
+#if UNITY_6000_6_OR_NEWER
+            var eventSystems = UnityEngine.Object.FindObjectsByType<EventSystem>(
+                FindObjectsInactive.Exclude);
+#elif UNITY_2023_1_OR_NEWER
             var eventSystems = UnityEngine.Object.FindObjectsByType<EventSystem>(
                 FindObjectsInactive.Exclude,
                 FindObjectsSortMode.None);

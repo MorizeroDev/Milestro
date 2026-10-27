@@ -11,7 +11,9 @@ namespace Milestro.Input
             "UnityEngine.InputSystem.UI.InputSystemUIInputModule";
 
         private static HybridInputSystemPackageStatus packageStatus = DefaultPackageStatus;
+#if !UNITY_EDITOR && ENABLE_INPUT_SYSTEM && !MILESTRO_INPUT_SYSTEM_SUPPORTED
         private static bool runtimeIssueReported;
+#endif
 
         internal static HybridInputSystemPackageStatus PackageStatus => packageStatus;
 
@@ -42,7 +44,9 @@ namespace Milestro.Input
 
         internal static void ResetRuntimeReport()
         {
+#if !UNITY_EDITOR && ENABLE_INPUT_SYSTEM && !MILESTRO_INPUT_SYSTEM_SUPPORTED
             runtimeIssueReported = false;
+#endif
         }
 
         internal static void ReportRuntimeIssueIfNeeded(HybridInputEnvironment environment)
