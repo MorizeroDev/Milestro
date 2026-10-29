@@ -1,11 +1,13 @@
 # Skia module vendor
 
 `vendor-meta` records the upstream source and compatible Skia core revision. The current
-module source is from `a625b5349f7048005a4ce9612b74ffcce458982e`.
+module source is from `1349b73c9a20757b16c26f34b08d49b81aefa29a`.
 
-This update synchronizes FontCollection's font caches and caches system fallback
-results across paragraphs. It also corrects underline gaps with shifted baselines and
-soft-hyphen intrinsic widths, including fallback glyphs and truncated paragraphs.
+This update resets typeface, fallback, and paragraph resolution caches when font
+managers, default families, or fallback settings change. Long unbreakable words
+reuse width measurements across lines, and style block lookup uses a binary search.
+Shaping also clears resolved blocks between styles. SkUnicode computes character
+properties once per code point and caches ASCII flags in the ICU backend.
 
 This revision includes upstream fixes for BiDi cluster coverage and ellipsis shaping,
 zero-width grapheme hit bounds, combining-mark and ligature styling, justified hit
@@ -24,6 +26,8 @@ Milestro keeps horizontal Ruby integration in the paragraph/builder public heade
 `RubyLayout.cpp/.h`, `TextLine.cpp`, and `TextWrapper.cpp/.h`. Visitor safety changes
 also remain in `SkParagraphTest.cpp`.
 First-line indentation also modifies `ParagraphStyle.h` and the paragraph layout files.
+Cached long-word measurements update intrinsic width only on the first scan so
+reused measurements preserve negative first-line indentation.
 These overlays are preserved by `scripts/vendor-skia-modules.sh`; its `overlay_paths`
 array supplies both upstream conflict detection and synchronization exclusions.
 

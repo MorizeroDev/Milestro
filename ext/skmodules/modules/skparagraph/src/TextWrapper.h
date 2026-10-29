@@ -214,6 +214,13 @@ private:
     SkScalar fTextIndent;
     bool fTextIndentPending;
 
+    // The last walk to the end of a too long word: it started at fWordFrom (advanced as later
+    // lines reuse it, with fWordFromLength the walk's length there) and stopped at fWordEnd
+    Cluster* fWordFrom = nullptr;
+    Cluster* fWordEnd = nullptr;
+    SkScalar fWordFromLength = 0;
+    SkScalar fWordLength = 0;
+
     void reset() {
         fWords.clean();
         fClusters.clean();

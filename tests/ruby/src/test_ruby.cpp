@@ -580,6 +580,56 @@ TEST_F(RubyLayoutTest, TextIndentWrapsAndHitTestsOnlyTheFirstLine) {
     EXPECT_NEAR(secondBoxes.front().rect.fLeft, 0, 0.01);
 }
 
+TEST_F(RubyLayoutTest, LongUnbreakableWordsPreserveIndentAcrossRelayout) {
+    const std::string text(3000, 'a');
+    auto control = build(text, {}, 180);
+    const auto controlMin = control->getMinIntrinsicWidth();
+    const auto controlMax = control->getMaxIntrinsicWidth();
+    for (float indent : {-24.0f, 24.0f}) {
+        style.setTextIndent(indent, false);
+        auto paragraph = build(text, {}, 180);
+        for (float width : {80.0f, 301.0f, 180.0f}) {
+            SCOPED_TRACE(::testing::Message() << "indent=" << indent << ", width=" << width);
+            paragraph->layout(width);
+            const auto lines = static_cast<ParagraphImpl&>(*paragraph).lines();
+            ASSERT_GT(lines.size(), 1u);
+            size_t nextStart = 0;
+            for (size_t index = 0; index < lines.size(); ++index) {
+                const auto& line = lines[index];
+                const float lineIndent = index == 0 ? indent : 0;
+                EXPECT_EQ(line.text().start, nextStart);
+                EXPECT_FLOAT_EQ(line.offset().fX, lineIndent);
+                EXPECT_LE(line.width(), width - lineIndent + 0.25f);
+                nextStart = line.text().end;
+            }
+            EXPECT_EQ(nextStart, text.size());
+            EXPECT_NEAR(paragraph->getMinIntrinsicWidth(), controlMin + indent, 0.5f);
+            EXPECT_NEAR(paragraph->getMaxIntrinsicWidth(), controlMax + indent, 0.5f);
+        }
+    }
+}
+
+TEST_F(RubyLayoutTest, FontManagerReplacementUpdatesCachedParagraphTypeface) {
+    auto original = build("cache");
+    const auto originalRuns = static_cast<ParagraphImpl&>(*original).runs();
+    ASSERT_FALSE(originalRuns.empty());
+    const auto originalTypeface = originalRuns[0].font().getTypeface()->uniqueID();
+
+    auto loader = SkFontMgr_New_Custom_Empty();
+    auto replacement = loader->makeFromFile(
+            RUBY_TEST_ROOT "/tests/data/font/SourceHanSans-VF.otf.woff2.bytes");
+    ASSERT_NE(replacement, nullptr);
+    auto provider = sk_make_sp<TypefaceFontProvider>();
+    provider->registerTypeface(replacement, SkString("Latin"));
+    fonts->setDefaultFontManager(provider);
+
+    auto paragraph = build("cache");
+    const auto runs = static_cast<ParagraphImpl&>(*paragraph).runs();
+    ASSERT_FALSE(runs.empty());
+    EXPECT_NE(runs[0].font().getTypeface()->uniqueID(), originalTypeface);
+    EXPECT_EQ(runs[0].font().getTypeface()->uniqueID(), replacement->uniqueID());
+}
+
 TEST_F(RubyLayoutTest, TextIndentResolvesPercentagesAgainstLayoutWidth) {
     style.setTextIndent(10, true);
     auto paragraph = build("one two", {}, 200);
