@@ -697,6 +697,83 @@ void ParagraphImpl::buildClusterTable() {
     }
 }
 
+namespace {
+
+bool IsCjkPunctuation(SkUnichar ch) {
+    switch (ch) {
+        case 0x3001: // 、
+        case 0x3002: // 。
+        case 0x3008: case 0x3009: // 〈〉
+        case 0x300A: case 0x300B: // 《》
+        case 0x300C: case 0x300D: // 「」
+        case 0x300E: case 0x300F: // 『』
+        case 0x3010: case 0x3011: // 【】
+        case 0x3014: case 0x3015: // 〔〕
+        case 0x3016: case 0x3017: // 〖〗
+        case 0x301A: case 0x301B: // 〚〛
+        case 0xFF08: case 0xFF09: // （）
+        case 0xFF1A: case 0xFF1B: // ：；
+        case 0xFF0C: case 0xFF0E: // ，．
+        case 0xFF01: case 0xFF1F: // ！？
+        case 0x201C: case 0x201D: // “ ”
+        case 0x2018: case 0x2019: // ‘ ’
+        case 0x2026: // …
+            return true;
+        default:
+            return false;
+    }
+}
+
+SkUnichar FirstCodePoint(const Cluster& cluster) {
+    const auto text = cluster.owner()->text(cluster.textRange());
+    const char* ptr = text.begin();
+    const char* end = text.end();
+    return ptr < end ? SkUTF::NextUTF8(&ptr, end) : -1;
+}
+
+bool IsChwsEnabled(const TextStyle& style) {
+    for (const auto& feature : style.getFontFeatures()) {
+        if (feature.fName.equals("chws")) {
+            return feature.fValue != 0;
+        }
+    }
+    return false;
+}
+
+}  // namespace
+
+void ParagraphImpl::applyCjkPunctuationCompression() {
+    // This is the Chromium text-spacing-trim fallback for fonts without chws.
+    // Compress only the first member of an adjacent punctuation pair. Thus a
+    // trailing punctuation mark remains full width, while `、，。` compresses
+    // the first two marks.
+    for (size_t index = 0; index + 1 < fClusters.size(); ++index) {
+        auto& current = fClusters[index];
+        auto& next = fClusters[index + 1];
+        if (current.textRange().empty() || next.textRange().empty() ||
+            !IsCjkPunctuation(FirstCodePoint(current)) ||
+            !IsCjkPunctuation(FirstCodePoint(next)) ||
+            current.runIndex() == EMPTY_RUN || next.runIndex() == EMPTY_RUN) {
+            continue;
+        }
+
+        const auto styleIndex = std::partition_point(
+                fTextStyles.begin(), fTextStyles.end(), [&](const Block& block) {
+                    return block.fRange.end <= current.textRange().start;
+                });
+        if (styleIndex == fTextStyles.end() || !IsChwsEnabled(styleIndex->fStyle)) {
+            continue;
+        }
+
+        const SkScalar amount = std::min(current.width(), next.width()) * 0.5f;
+        if (amount <= 0) {
+            continue;
+        }
+        current.run().compressAfter(&current, amount);
+        fMaxIntrinsicWidth -= amount;
+    }
+}
+
 bool ParagraphImpl::shapeTextIntoEndlessLine() {
 
     if (fText.size() == 0) {
@@ -711,6 +788,7 @@ bool ParagraphImpl::shapeTextIntoEndlessLine() {
     fUnresolvedGlyphs = oneLineShaper.unresolvedGlyphs();
 
     this->applySpacingAndBuildClusterTable();
+    this->applyCjkPunctuationCompression();
 
     return result;
 }

@@ -262,6 +262,17 @@ void Run::extend(const Cluster* cluster, SkScalar offset) {
     fPositions[cluster->endPos()].fX += offset;
 }
 
+void Run::compressAfter(Cluster* cluster, SkScalar amount) {
+    if (amount <= 0) {
+        return;
+    }
+    for (size_t i = cluster->endPos(); i <= this->size(); ++i) {
+        fPositions[i].fX -= amount;
+    }
+    fAdvance.fX -= amount;
+    cluster->space(-amount);
+}
+
 void Run::updateMetrics(InternalLineMetrics* endlineMetrics) {
 
     SkASSERT(isPlaceholder());

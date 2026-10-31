@@ -129,6 +129,9 @@ public:
     SkScalar addLetterSpacesEvenly(SkScalar space);
     void shift(const Cluster* cluster, SkScalar offset);
     void extend(const Cluster* cluster, SkScalar offset);
+    // Reduce the advance after a cluster and move following glyphs with it.
+    // This is used by the paragraph-level CJK punctuation-spacing fallback.
+    void compressAfter(Cluster* cluster, SkScalar amount);
 
     SkScalar calculateHeight(LineMetricStyle ascentStyle, LineMetricStyle descentStyle) const {
         auto ascent = ascentStyle == LineMetricStyle::Typographic ? this->ascent()

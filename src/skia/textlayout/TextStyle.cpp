@@ -2,7 +2,11 @@
 
 namespace milestro::skia::textlayout {
 
-TextStyle::TextStyle() = default;
+TextStyle::TextStyle() {
+    // Match Chromium's normal CJK punctuation spacing behavior. Fonts that
+    // do not provide `chws` simply ignore the feature.
+    textStyle.addFontFeature(SkString("chws"), 1);
+}
 
 TextStyle::TextStyle(::skia::textlayout::TextStyle textStyle)
     : textStyle(std::move(textStyle)) {

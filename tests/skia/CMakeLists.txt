@@ -20,6 +20,7 @@ target_link_libraries(${MILESTRO_TEST_NAME} PRIVATE
 target_compile_definitions(${MILESTRO_TEST_NAME} PRIVATE
         MILESTRO_TEST_ICUDTL_PATH="${PROJECT_SOURCE_DIR}/ext/icu-cmake/common/icudtl.dat"
         MILESTRO_TEST_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/SourceHanSans-VF.otf.woff2.bytes"
+        MILESTRO_TEST_CHWS_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/LXGWWenKai-Regular.ttf"
         MILESTRO_TEST_EMOJI_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/NotoColorEmoji.ttf.bytes"
 )
 

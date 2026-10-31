@@ -217,6 +217,7 @@ public:
 
     bool computeCodeUnitProperties();
     void applySpacingAndBuildClusterTable();
+    void applyCjkPunctuationCompression();
     void buildClusterTable();
     bool shapeTextIntoEndlessLine();
     void breakShapedTextIntoLines(SkScalar maxWidth);

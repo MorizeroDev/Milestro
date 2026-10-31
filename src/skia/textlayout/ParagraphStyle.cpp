@@ -2,7 +2,15 @@
 
 namespace milestro::skia::textlayout {
 
-ParagraphStyle::ParagraphStyle() = default;
+ParagraphStyle::ParagraphStyle() {
+    // Chromium's default `text-spacing-trim: normal` uses the OpenType
+    // `chws` feature to collapse adjacent full-width CJK punctuation. Keep
+    // this on the paragraph's inherited style so every run participates in
+    // the same shaping pass (including runs that do not set a local style).
+    auto textStyle = style.getTextStyle();
+    textStyle.addFontFeature(SkString("chws"), 1);
+    style.setTextStyle(std::move(textStyle));
+}
 
 ParagraphStyle::ParagraphStyle(const ParagraphStyle &other) = default;
 

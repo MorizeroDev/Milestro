@@ -8,6 +8,7 @@
 #include "include/core/SkString.h"
 
 #include <gtest/gtest.h>
+#include <cstring>
 #include <memory>
 
 namespace milestro_text = milestro::skia::textlayout;
@@ -55,6 +56,9 @@ protected:
     void SetUp() override {
         const auto result = milestro::skia::GetFontRegistry()->RegisterFontFromFile(MILESTRO_TEST_FONT_PATH);
         ASSERT_NE(result, milestro::skia::MilestroRegisteredFontMgr::RegisterResult::Failed);
+        const auto chwsResult = milestro::skia::GetFontRegistry()->RegisterFontFromFile(
+                MILESTRO_TEST_CHWS_FONT_PATH);
+        ASSERT_NE(chwsResult, milestro::skia::MilestroRegisteredFontMgr::RegisterResult::Failed);
         milestro_text::GetFontCollection()->clearCaches();
     }
 };
@@ -85,6 +89,44 @@ TEST_F(SkiaParagraphSpacingTest, WordSpacingOnlyWidensAtWordBoundaries) {
 
     EXPECT_NEAR(spacedTwoWords - baseTwoWords, 30.0f, 3.0f);
     EXPECT_NEAR(spacedOneWord - baseOneWord, 0.0f, 1.0f);
+}
+
+TEST_F(SkiaParagraphSpacingTest, CjkPunctuationCompressionKeepsTrailingMarkFullWidth) {
+    auto compressedStyle = MakeBaseStyle();
+
+    const float separate = MeasureLongestLine(compressedStyle, "、", strlen("、")) +
+                           MeasureLongestLine(compressedStyle, "，", strlen("，"));
+    const float compressed = MeasureLongestLine(compressedStyle, "、，", strlen("、，"));
+
+    // Adjacent marks share one half-width gap instead of two full-width gaps.
+    EXPECT_GT(separate - compressed, 10.0f)
+            << "separate=" << separate << " compressed=" << compressed;
+}
+
+TEST_F(SkiaParagraphSpacingTest, ChwsFeatureControlsCjkPunctuationCompression) {
+    auto enabledStyle = MakeBaseStyle();
+    auto disabledStyle = MakeBaseStyle();
+    disabledStyle.setFontFeature(SkString("chws"), 0);
+
+    const float enabledWidth = MeasureLongestLine(enabledStyle, "、，", strlen("、，"));
+    const float disabledWidth = MeasureLongestLine(disabledStyle, "、，", strlen("、，"));
+
+    EXPECT_GT(disabledWidth - enabledWidth, 10.0f)
+            << "disabled=" << disabledWidth << " enabled=" << enabledWidth;
+}
+
+TEST_F(SkiaParagraphSpacingTest, ChwsFeaturePositiveBranchWithLxgwWenKai) {
+    auto enabledStyle = MakeBaseStyle();
+    enabledStyle.setFontFamilies({SkString("LXGW WenKai")});
+    auto disabledStyle = enabledStyle;
+    disabledStyle.setFontFeature(SkString("chws"), 0);
+
+    const char text[] = "压括号：《书名》：压括号";
+    const float enabledWidth = MeasureLongestLine(enabledStyle, text, strlen(text));
+    const float disabledWidth = MeasureLongestLine(disabledStyle, text, strlen(text));
+
+    EXPECT_GT(disabledWidth - enabledWidth, 10.0f)
+            << "disabled=" << disabledWidth << " enabled=" << enabledWidth;
 }
 
 TEST_F(SkiaParagraphSpacingTest, LineHeightMultiplierRequiresHeightOverride) {

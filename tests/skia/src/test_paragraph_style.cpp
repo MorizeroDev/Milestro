@@ -59,9 +59,26 @@ TEST(SkiaParagraphStyleTest, DefaultStylesCanBeCopiedAndReadAcrossLibraryBoundar
     EXPECT_FALSE(paragraphStyle.getTextIndentIsPercentage());
 }
 
+TEST(SkiaParagraphStyleTest, EnablesCjkPunctuationCompressionByDefault) {
+    milestro_textlayout::ParagraphStyle paragraphStyle;
+    auto* inheritedTextStyle = paragraphStyle.getTextStyle();
+    auto paragraphFeatures = inheritedTextStyle->spawn().getFontFeatures();
+    delete inheritedTextStyle;
+    ASSERT_EQ(paragraphFeatures.size(), 1u);
+    EXPECT_STREQ(paragraphFeatures[0].fName.c_str(), "chws");
+    EXPECT_EQ(paragraphFeatures[0].fValue, 1);
+
+    milestro_textlayout::TextStyle textStyle;
+    auto textFeatures = textStyle.spawn().getFontFeatures();
+    ASSERT_EQ(textFeatures.size(), 1u);
+    EXPECT_STREQ(textFeatures[0].fName.c_str(), "chws");
+    EXPECT_EQ(textFeatures[0].fValue, 1);
+}
+
 TEST(SkiaTextStyleTest, FontFeaturesCanBeSetRemovedAndCopied) {
     milestro_textlayout::TextStyle source;
     source.setLocale(SkString("en"));
+    source.resetFontFeatures();
     source.addFontFeature(SkString("liga"), 0);
     source.addFontFeature(SkString("kern"), 0);
     source.addFontFeature(SkString("liga"), 0);

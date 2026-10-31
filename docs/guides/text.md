@@ -196,6 +196,13 @@ supported.
 
 ### Text spacing
 
+Paragraphs enable the OpenType `chws` feature by default. Fonts that support
+`chws` therefore apply Chromium-style CJK punctuation compression between
+adjacent full-width punctuation marks (for example `、，。`); a punctuation
+mark without an adjacent punctuation mark keeps its normal advance. Calling
+`TextStyle.ResetFontFeature()` disables all font features, including this
+default.
+
 Component-level spacing is available on `producer.textStyle`:
 
 ```csharp
