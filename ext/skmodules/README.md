@@ -1,7 +1,17 @@
 # Skia module vendor
 
 `vendor-meta` records the upstream source and compatible Skia core revision. The current
-module source is from `1349b73c9a20757b16c26f34b08d49b81aefa29a`.
+module source is from `e43478a2f9f8c7f68d6c7e2ca79441dac7df9b75`.
+
+This revision reserves the rendered soft hyphen width during justification and
+keeps invisible soft hyphens out of justification patch counting. Hits on a
+rendered soft hyphen or ellipsis use upstream affinity so glyph lookup stays
+on the current line. Cluster iteration also handles trailing whitespace runs
+and runs removed by ellipsis without forming invalid ranges.
+
+Skia no longer provides the libavif decoder or its GN flag. AVIF decoding is
+unsupported in this standalone build; CrabbyAvif currently requires Android
+framework integration. PNG and JPEG decoding remain enabled.
 
 This update resets typeface, fallback, and paragraph resolution caches when font
 managers, default families, or fallback settings change. Long unbreakable words
@@ -29,7 +39,8 @@ First-line indentation also modifies `ParagraphStyle.h` and the paragraph layout
 Cached long-word measurements update intrinsic width only on the first scan so
 reused measurements preserve negative first-line indentation.
 These overlays are preserved by `scripts/vendor-skia-modules.sh`; its `overlay_paths`
-array supplies both upstream conflict detection and synchronization exclusions.
+array supplies both upstream conflict detection and synchronization exclusions,
+including the vertical layout, metrics, painter, shaping, style, and cache overlays.
 
 See [horizontal Ruby](../../docs/reference/ruby-layout.md) for the API and layout policy.
 

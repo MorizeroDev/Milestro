@@ -119,6 +119,14 @@ if [[ -n "$(git -C "${skia_source}" status --porcelain --untracked-files=all -- 
 fi
 
 overlay_paths=(
+    modules/skparagraph/include/Metrics.h
+    modules/skparagraph/include/ParagraphPainter.h
+    modules/skparagraph/src/OneLineShaper.cpp
+    modules/skparagraph/src/ParagraphCache.cpp
+    modules/skparagraph/src/ParagraphPainterImpl.cpp
+    modules/skparagraph/src/ParagraphPainterImpl.h
+    modules/skparagraph/src/TextStyle.cpp
+    modules/skparagraph/src/VerticalLayout.cpp
     modules/skparagraph/include/Paragraph.h
     modules/skparagraph/include/ParagraphBuilder.h
     modules/skparagraph/include/ParagraphStyle.h

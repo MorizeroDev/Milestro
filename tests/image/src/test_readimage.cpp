@@ -125,37 +125,41 @@ protected:
 TEST_F(ReadFontTest, DrawSimpleImage) {
     TestDrawSimpleImage("a_reincarnation_of_a_scattering_spring.jpg");
     TestDrawSimpleImage("bg_day_character.png");
-    TestDrawSimpleImage("test-large.avif");
-    TestDrawSimpleImage("test-small.avif");
 }
 
 TEST_F(ReadFontTest, DrawImage) {
     TestDrawImage("a_reincarnation_of_a_scattering_spring.jpg");
     TestDrawImage("bg_day_character.png");
-    TestDrawImage("test-large.avif");
-    TestDrawImage("test-small.avif");
 }
 
 TEST_F(ReadFontTest, DrawSimpleImageYFlipped) {
     TestDrawSimpleImageYFlipped("a_reincarnation_of_a_scattering_spring.jpg");
     TestDrawSimpleImageYFlipped("bg_day_character.png");
-    TestDrawSimpleImageYFlipped("test-large.avif");
-    TestDrawSimpleImageYFlipped("test-small.avif");
 }
 
 TEST_F(ReadFontTest, SpeedCompareTest) {
     milestro::util::time::StopWatch([&]() {
         TestDrawSimpleImage("a_reincarnation_of_a_scattering_spring.jpg");
         TestDrawSimpleImage("bg_day_character.png");
-        TestDrawSimpleImage("test-large.avif");
-        TestDrawSimpleImage("test-small.avif");
     }, "normal");
     milestro::util::time::StopWatch([&]() {
         TestDrawSimpleImageYFlipped("a_reincarnation_of_a_scattering_spring.jpg");
         TestDrawSimpleImageYFlipped("bg_day_character.png");
-        TestDrawSimpleImageYFlipped("test-large.avif");
-        TestDrawSimpleImageYFlipped("test-small.avif");
     }, "yflipped");
+}
+
+TEST_F(ReadFontTest, AvifDecodeIsUnsupported) {
+    for (const char* name : {"test-large.avif", "test-small.avif"}) {
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+        auto data = milestro::io::readFile(milestro::util::encoding::WStringToString((imageDir / name).wstring()));
+#else
+        auto data = milestro::io::readFile(imageDir / name);
+#endif
+        ASSERT_FALSE(data.empty());
+        milestro::skia::Image* image = nullptr;
+        EXPECT_LT(MilestroSkiaImageCreate(image, data.data(), data.size()), 0);
+        EXPECT_GE(MilestroSkiaImageDestroy(image), 0);
+    }
 }
 
 TEST_F(ReadFontTest, RenderSvg) {

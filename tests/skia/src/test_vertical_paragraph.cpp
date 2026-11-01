@@ -7538,7 +7538,8 @@ TEST_F(SkiaVerticalParagraph, OR03_OR04_SpanBoundariesAndMixedRestoreIcuClassifi
     auto sidewaysHan = BuildVerticalOrientation(
             "漢", {{{0, 3}, skia_text::VerticalTextOrientation::kSideways}});
     sidewaysHan->layoutWithInlineExtent(400);
-    const auto* forced = FindVisitorRun(SnapshotRuns(sidewaysHan.get()), 0, 0);
+    const auto sidewaysHanRuns = SnapshotRuns(sidewaysHan.get());
+    const auto* forced = FindVisitorRun(sidewaysHanRuns, 0, 0);
     ASSERT_NE(forced, nullptr);
     EXPECT_TRUE(forced->sideways);
 
@@ -7791,5 +7792,72 @@ TEST_F(SkiaVerticalParagraph, OR13_OrientationCacheIsolationAndFailureRecovery) 
     cache->turnOn(false);
 }
 
+
+TEST_F(SkiaVerticalParagraph, HorizontalJustifiedSoftHyphenFitsLine) {
+    auto make = [&](const std::string& text, skia_text::TextDirection direction) {
+        return BuildConfiguredParagraph(text, PrimaryStyle(20), [&](auto& style) {
+            style.setWritingMode(skia_text::WritingMode::kHorizontalTb);
+            style.setRenderSoftHyphens(true);
+            style.setApplyRoundingHack(false);
+            style.setTextAlign(skia_text::TextAlign::kJustify);
+            style.setTextDirection(direction);
+        });
+    };
+    auto measure = make("xy abcd-", skia_text::TextDirection::kLtr);
+    measure->layout(10000);
+    const auto width = measure->getMaxIntrinsicWidth() + 5;
+    for (auto direction : {skia_text::TextDirection::kLtr, skia_text::TextDirection::kRtl}) {
+        auto paragraph = make("xy abcd\u00ADefgh", direction);
+        paragraph->layout(width);
+        auto lines = static_cast<skia_text::ParagraphImpl*>(paragraph.get())->lines();
+        ASSERT_EQ(lines.size(), 2u);
+        ASSERT_NE(lines[0].hyphen(), nullptr);
+        auto boxes = paragraph->getRectsForRange(0, 8, skia_text::RectHeightStyle::kTight,
+                                                 skia_text::RectWidthStyle::kTight);
+        ASSERT_FALSE(boxes.empty());
+        SkRect extent = SkRect::MakeEmpty();
+        for (const auto& box : boxes) extent.join(box.rect);
+        EXPECT_NEAR(extent.left(), 0, 0.01f);
+        EXPECT_NEAR(extent.right(), width, 0.01f);
+    }
+}
+
+TEST_F(SkiaVerticalParagraph, HorizontalSoftHyphenAndEllipsisHitsStayUpstream) {
+    for (bool ellipsis : {false, true}) {
+        auto make = [&](const std::string& text) {
+            return BuildConfiguredParagraph(text, PrimaryStyle(20), [&](auto& style) {
+                style.setWritingMode(skia_text::WritingMode::kHorizontalTb);
+                style.setRenderSoftHyphens(true);
+                style.setApplyRoundingHack(false);
+                if (ellipsis) {
+                    style.setMaxLines(1);
+                    style.setEllipsis(SkString("..."));
+                }
+            });
+        };
+        auto measure = make(ellipsis ? "abc..." : "inter-");
+        measure->layout(10000);
+        const auto width = measure->getMaxIntrinsicWidth() + 1;
+        auto paragraph = make(ellipsis ? "abcdef" : "inter\u00ADnational");
+        paragraph->layout(width);
+        auto lines = static_cast<skia_text::ParagraphImpl*>(paragraph.get())->lines();
+        if (ellipsis) {
+            ASSERT_EQ(lines.size(), 1u);
+        } else {
+            ASSERT_GE(lines.size(), 2u);
+        }
+        auto& line = lines[0];
+        ASSERT_NE(ellipsis ? line.ellipsis() : line.hyphen(), nullptr);
+        const auto x = line.offset().fX + (line.widthWithoutEllipsis() + line.width()) / 2;
+        const auto y = line.offset().fY + line.height() / 2;
+        auto hit = paragraph->getGlyphPositionAtCoordinate(x, y);
+        EXPECT_EQ(hit.position, ellipsis ? 3 : 6);
+        EXPECT_EQ(hit.affinity, skia_text::Affinity::kUpstream);
+        skia_text::Paragraph::GlyphInfo glyph;
+        ASSERT_TRUE(paragraph->getClosestUTF16GlyphInfoAt(x, y, &glyph));
+        EXPECT_EQ(glyph.fGraphemeClusterTextRange,
+                  skia_text::TextRange(ellipsis ? 2 : 5, ellipsis ? 3 : 6));
+    }
+}
 
 } // namespace

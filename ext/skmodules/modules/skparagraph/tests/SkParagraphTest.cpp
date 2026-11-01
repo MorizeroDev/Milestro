@@ -11085,6 +11085,155 @@ UNIX_ONLY_TEST(SkParagraph_SoftHyphenBreakNotTakenNeedsNoRoom, reporter) {
     checkLines(reporter, paragraph.get(), "xy abcdi|jklm");
 }
 
+// A justified line that breaks at a soft hyphen spreads its text so that the text and the drawn
+// hyphen together fill the line, in either paragraph direction.
+UNIX_ONLY_TEST(SkParagraph_SoftHyphenJustifiedLineFitsHyphen, reporter) {
+    sk_sp<ResourceFontCollection> fontCollection = sk_make_sp<ResourceFontCollection>(true);
+    SKIP_IF_FONTS_NOT_FOUND(reporter, fontCollection)
+
+    SkScalar width = singleLineWidth(fontCollection, "xy abcd-") + 15;
+    for (TextDirection direction : {TextDirection::kLtr, TextDirection::kRtl}) {
+        auto paragraph = layoutWithSoftHyphens(
+                fontCollection, "xy abcd~efgh", width, [direction](ParagraphStyle& style) {
+                    style.setTextAlign(TextAlign::kJustify);
+                    style.setTextDirection(direction);
+                });
+        checkLines(reporter, paragraph.get(), "xy abcd-|efgh");
+        auto& line = static_cast<ParagraphImpl*>(paragraph.get())->lines()[0];
+        auto extent = lineRectExtent(paragraph.get(), line, 0, 12);
+        REPORTER_ASSERT(
+                reporter, SkScalarNearlyEqual(extent.first, 0, EPSILON100), "%g", extent.first);
+        REPORTER_ASSERT(reporter,
+                        SkScalarNearlyEqual(extent.second, width, EPSILON100),
+                        "%g vs %g",
+                        extent.second,
+                        width);
+    }
+}
+
+// A justified RTL line with no spaces to spread is right aligned, and its hyphen stays in the line.
+UNIX_ONLY_TEST(SkParagraph_SoftHyphenJustifiedRtlLineWithoutSpacesFitsHyphen, reporter) {
+    sk_sp<ResourceFontCollection> fontCollection = sk_make_sp<ResourceFontCollection>(true);
+    SKIP_IF_FONTS_NOT_FOUND(reporter, fontCollection)
+
+    SkScalar width = singleLineWidth(fontCollection, "abcd-") + 15;
+    auto paragraph =
+            layoutWithSoftHyphens(fontCollection, "abcd~efgh", width, [](ParagraphStyle& style) {
+                style.setTextAlign(TextAlign::kJustify);
+                style.setTextDirection(TextDirection::kRtl);
+            });
+    checkLines(reporter, paragraph.get(), "abcd-|efgh");
+    auto& line = static_cast<ParagraphImpl*>(paragraph.get())->lines()[0];
+    auto extent = lineRectExtent(paragraph.get(), line, 0, 9);
+    REPORTER_ASSERT(reporter,
+                    SkScalarNearlyEqual(extent.first, width - line.width(), EPSILON100),
+                    "%g vs %g",
+                    extent.first,
+                    width - line.width());
+    REPORTER_ASSERT(reporter,
+                    SkScalarNearlyEqual(extent.second, width, EPSILON100),
+                    "%g vs %g",
+                    extent.second,
+                    width);
+}
+
+// An ideographic line breaking at a soft hyphen counts justification patches only between
+// visible characters, not between an ideograph and an adjacent soft hyphen
+UNIX_ONLY_TEST(SkParagraph_SoftHyphenJustifiedIdeographicFitsHyphen, reporter) {
+    sk_sp<ResourceFontCollection> fontCollection = sk_make_sp<ResourceFontCollection>(true);
+    SKIP_IF_FONTS_NOT_FOUND(reporter, fontCollection)
+
+    auto layoutCJK = [&](const char* text, SkScalar width, TextDirection direction) {
+        ParagraphStyle paragraph_style;
+        paragraph_style.turnHintingOff();
+        paragraph_style.setApplyRoundingHack(false);
+        paragraph_style.setRenderSoftHyphens(true);
+        paragraph_style.setTextAlign(TextAlign::kJustify);
+        paragraph_style.setTextDirection(direction);
+        ParagraphBuilderImpl builder(paragraph_style, fontCollection, get_unicode());
+        TextStyle text_style;
+        text_style.setFontFamilies({SkString("Source Han Serif CN"), SkString("Roboto")});
+        text_style.setFontSize(20);
+        text_style.setColor(SK_ColorBLACK);
+        builder.pushStyle(text_style);
+        std::string utf8 = withSoftHyphens(text);
+        builder.addText(utf8.c_str(), utf8.size());
+        builder.pop();
+        auto paragraph = builder.Build();
+        paragraph->layout(width);
+        return paragraph;
+    };
+
+    // "漢字~語文" breaks after "漢字~": only 1 justification patch exists (between 漢 and 字), so
+    // the second ideograph 字 must reach the start of the rendered hyphen at (cjkWidth - hyphen)
+    SkScalar hyphenWidth = layoutCJK("-", 10000, TextDirection::kLtr)->getMaxIntrinsicWidth();
+    SkScalar cjkWidth = layoutCJK("漢字-", 10000, TextDirection::kLtr)->getMaxIntrinsicWidth() + 6;
+    auto paragraph = layoutCJK("漢字~語文", cjkWidth, TextDirection::kLtr);
+    auto* impl = static_cast<ParagraphImpl*>(paragraph.get());
+    REPORTER_ASSERT(reporter, impl->lines().size() == 2);
+    REPORTER_ASSERT(reporter, impl->lines()[0].hyphen() != nullptr);
+    auto secondChar = lineRectExtent(paragraph.get(), impl->lines()[0], 1, 2);
+    REPORTER_ASSERT(reporter,
+                    SkScalarNearlyEqual(secondChar.second, cjkWidth - hyphenWidth, EPSILON100),
+                    "%g vs %g",
+                    secondChar.second,
+                    cjkWidth - hyphenWidth);
+    auto extent = lineRectExtent(paragraph.get(), impl->lines()[0], 0, 3);
+    REPORTER_ASSERT(
+            reporter, SkScalarNearlyEqual(extent.first, 0, EPSILON100), "%g", extent.first);
+    REPORTER_ASSERT(reporter,
+                    SkScalarNearlyEqual(extent.second, cjkWidth, EPSILON100),
+                    "%g vs %g",
+                    extent.second,
+                    cjkWidth);
+
+    // A single ideograph before a soft hyphen break ("漢~字") has 0 inter-character patches to
+    // stretch, so its width must remain its unstretched advance plus the hyphen
+    SkScalar oneCharPlusHyphen =
+            layoutCJK("漢-", 10000, TextDirection::kLtr)->getMaxIntrinsicWidth();
+    SkScalar oneWidth = oneCharPlusHyphen + 6;
+    auto single = layoutCJK("漢~字", oneWidth, TextDirection::kLtr);
+    auto* singleImpl = static_cast<ParagraphImpl*>(single.get());
+    REPORTER_ASSERT(reporter, singleImpl->lines().size() == 2);
+    REPORTER_ASSERT(reporter, singleImpl->lines()[0].hyphen() != nullptr);
+    REPORTER_ASSERT(reporter,
+                    SkScalarNearlyEqual(
+                            singleImpl->lines()[0].width(), oneCharPlusHyphen, EPSILON100),
+                    "%g vs %g",
+                    singleImpl->lines()[0].width(),
+                    oneCharPlusHyphen);
+
+    // An unbroken soft hyphen between two ideographs ("漢~字語~文言") must not insert a second
+    // justification patch between 漢 and 字: each character's justified box must match the same
+    // line without the unbroken soft hyphen ("漢字語~文言")
+    SkScalar threeWidth =
+            layoutCJK("漢字語-", 10000, TextDirection::kLtr)->getMaxIntrinsicWidth() + 6;
+    auto unbroken = layoutCJK("漢~字語~文言", threeWidth, TextDirection::kLtr);
+    auto* unbrokenImpl = static_cast<ParagraphImpl*>(unbroken.get());
+    auto reference = layoutCJK("漢字語~文言", threeWidth, TextDirection::kLtr);
+    auto* referenceImpl = static_cast<ParagraphImpl*>(reference.get());
+    REPORTER_ASSERT(reporter, unbrokenImpl->lines().size() == 2);
+    REPORTER_ASSERT(reporter, unbrokenImpl->lines()[0].hyphen() != nullptr);
+    auto char1 = lineRectExtent(unbroken.get(), unbrokenImpl->lines()[0], 2, 3);
+    auto refChar1 = lineRectExtent(reference.get(), referenceImpl->lines()[0], 1, 2);
+    auto char2 = lineRectExtent(unbroken.get(), unbrokenImpl->lines()[0], 3, 4);
+    REPORTER_ASSERT(reporter,
+                    SkScalarNearlyEqual(char1.first, refChar1.first, EPSILON100),
+                    "%g vs %g",
+                    char1.first,
+                    refChar1.first);
+    REPORTER_ASSERT(reporter,
+                    SkScalarNearlyEqual(char1.second, refChar1.second, EPSILON100),
+                    "%g vs %g",
+                    char1.second,
+                    refChar1.second);
+    REPORTER_ASSERT(reporter,
+                    SkScalarNearlyEqual(char2.second, threeWidth - hyphenWidth, EPSILON100),
+                    "%g vs %g",
+                    char2.second,
+                    threeWidth - hyphenWidth);
+}
+
 // Laid out at its min intrinsic width, text with soft hyphens doesn't overflow: as in CSS
 // min-content, the min intrinsic width includes the hyphen drawn at a soft hyphen break.
 UNIX_ONLY_TEST(SkParagraph_SoftHyphenMinIntrinsicWidthIncludesHyphen, reporter) {
@@ -11316,6 +11465,64 @@ UNIX_ONLY_TEST(SkParagraph_SoftHyphenFallbackFontWidth, reporter) {
                     "%g > %g",
                     atMin->getLongestLine(),
                     minWidth);
+}
+
+// A hit on the rendered hyphen is at the end of its line, upstream, as at the end of any other
+// line. Downstream would put it at the start of the next line, and getClosestUTF16GlyphInfoAt
+// would return the next line's first glyph instead of the soft hyphen.
+UNIX_ONLY_TEST(SkParagraph_SoftHyphenHitIsUpstream, reporter) {
+    sk_sp<ResourceFontCollection> fontCollection = sk_make_sp<ResourceFontCollection>(true);
+    SKIP_IF_FONTS_NOT_FOUND(reporter, fontCollection)
+
+    const size_t softHyphen = 5;
+    auto paragraph = layoutWithSoftHyphens(fontCollection, "inter~national", 80);
+    checkLines(reporter, paragraph.get(), "inter-|national");
+    auto& line = static_cast<ParagraphImpl*>(paragraph.get())->lines()[0];
+    SkScalar x = line.offset().fX + (line.widthWithoutEllipsis() + line.width()) / 2;
+    SkScalar y = line.offset().fY + line.height() / 2;
+
+    auto position = paragraph->getGlyphPositionAtCoordinate(x, y);
+    REPORTER_ASSERT(reporter, position.position == softHyphen + 1, "%d", position.position);
+    REPORTER_ASSERT(reporter, position.affinity == Affinity::kUpstream);
+
+    Paragraph::GlyphInfo glyphInfo;
+    REPORTER_ASSERT(reporter, paragraph->getClosestUTF16GlyphInfoAt(x, y, &glyphInfo));
+    REPORTER_ASSERT(reporter,
+                    glyphInfo.fGraphemeClusterTextRange == TextRange(softHyphen, softHyphen + 1),
+                    "[%zu, %zu)",
+                    glyphInfo.fGraphemeClusterTextRange.start,
+                    glyphInfo.fGraphemeClusterTextRange.end);
+}
+
+// Likewise for a hit on the ellipsis, which is at the end of the truncated text. Downstream there
+// is past the line's text, so getClosestUTF16GlyphInfoAt found no glyph at all.
+UNIX_ONLY_TEST(SkParagraph_EllipsisHitIsUpstream, reporter) {
+    sk_sp<ResourceFontCollection> fontCollection = sk_make_sp<ResourceFontCollection>(true);
+    SKIP_IF_FONTS_NOT_FOUND(reporter, fontCollection)
+
+    SkScalar width = singleLineWidth(fontCollection, "abc...") + 1;
+    auto paragraph =
+            layoutWithSoftHyphens(fontCollection, "abcdef", width, [](ParagraphStyle& style) {
+                style.setMaxLines(1);
+                style.setEllipsis(SkString("..."));
+            });
+    auto& line = static_cast<ParagraphImpl*>(paragraph.get())->lines()[0];
+    REPORTER_ASSERT(reporter, line.ellipsis() != nullptr);
+    REPORTER_ASSERT(reporter, line.trimmedText() == TextRange(0, 3));
+    SkScalar x = line.offset().fX + (line.widthWithoutEllipsis() + line.width()) / 2;
+    SkScalar y = line.offset().fY + line.height() / 2;
+
+    auto position = paragraph->getGlyphPositionAtCoordinate(x, y);
+    REPORTER_ASSERT(reporter, position.position == 3, "%d", position.position);
+    REPORTER_ASSERT(reporter, position.affinity == Affinity::kUpstream);
+
+    Paragraph::GlyphInfo glyphInfo;
+    REPORTER_ASSERT(reporter, paragraph->getClosestUTF16GlyphInfoAt(x, y, &glyphInfo));
+    REPORTER_ASSERT(reporter,
+                    glyphInfo.fGraphemeClusterTextRange == TextRange(2, 3),
+                    "[%zu, %zu)",
+                    glyphInfo.fGraphemeClusterTextRange.start,
+                    glyphInfo.fGraphemeClusterTextRange.end);
 }
 
 // Only a soft hyphen's own width changes how a too-long word is measured. Other soft breaks, such
@@ -12191,4 +12398,80 @@ DEF_TEST(SkParagraph_ManyStyleBlocksWithSeveralFonts, reporter) {
             REPORTER_ASSERT(reporter, run.typeface == piece.typeface);
         }
     }
+}
+
+// Trailing spaces in two runs at a line end must not make an invalid cluster range in justify
+DEF_TEST(SkParagraph_JustifyTrailingSpacesInTwoRuns, reporter) {
+    auto fontCollection = sk_make_sp<FontCollection>();
+    fontCollection->setDefaultFontManager(ToolUtils::TestFontMgr());
+    ParagraphStyle paragraphStyle;
+    paragraphStyle.setTextAlign(TextAlign::kJustify);
+    ParagraphBuilderImpl builder(paragraphStyle, fontCollection, get_unicode());
+    TextStyle textStyle;
+    textStyle.setFontSize(20);
+    builder.pushStyle(textStyle);
+    builder.addText("aaa bbb ");
+    // A different font size puts the second space in its own run
+    textStyle.setFontSize(10);
+    builder.pushStyle(textStyle);
+    builder.addText(" ");
+    builder.pop();
+    builder.addText("ccc");
+    auto paragraph = builder.Build();
+    paragraph->layout(SK_ScalarInfinity);
+    auto boxes = paragraph->getRectsForRange(0, 7, RectHeightStyle::kTight, RectWidthStyle::kTight);
+    REPORTER_ASSERT(reporter, boxes.size() == 1);
+    if (boxes.empty()) {
+        return;
+    }
+    SkScalar width = SkScalarCeilToScalar(boxes.back().rect.fRight) + 1;
+
+    // The first line is "aaa bbb" and the two spaces are its trailing whitespaces
+    paragraph->layout(width);
+    auto impl = static_cast<ParagraphImpl*>(paragraph.get());
+    REPORTER_ASSERT(reporter, impl->lines().size() == 2);
+    if (impl->lines().size() != 2) {
+        return;
+    }
+    auto& line = impl->lines()[0];
+    REPORTER_ASSERT(reporter, line.clusters().end + 2 == line.clustersWithSpaces().end);
+    REPORTER_ASSERT(reporter, SkScalarNearlyEqual(line.width(), width));
+}
+
+// Justify must skip runs that the ellipsis removed from a line
+DEF_TEST(SkParagraph_JustifyEllipsisRemovesRuns, reporter) {
+    auto fontCollection = sk_make_sp<FontCollection>();
+    fontCollection->setDefaultFontManager(ToolUtils::TestFontMgr());
+    auto build = [&](bool ellipsis) {
+        ParagraphStyle paragraphStyle;
+        paragraphStyle.setTextAlign(TextAlign::kJustify);
+        if (ellipsis) {
+            paragraphStyle.setMaxLines(1);
+            paragraphStyle.setEllipsis(u"\u2026");
+        }
+        ParagraphBuilderImpl builder(paragraphStyle, fontCollection, get_unicode());
+        TextStyle textStyle;
+        // The ellipsis in this large font is wider than the line
+        textStyle.setFontSize(100);
+        builder.pushStyle(textStyle);
+        builder.addText("i");
+        textStyle.setFontSize(10);
+        builder.pushStyle(textStyle);
+        builder.addText("j kkkk");
+        return builder.Build();
+    };
+    auto paragraph = build(false);
+    paragraph->layout(SK_ScalarInfinity);
+    auto boxes = paragraph->getRectsForRange(0, 2, RectHeightStyle::kTight, RectWidthStyle::kTight);
+    REPORTER_ASSERT(reporter, !boxes.empty());
+    if (boxes.empty()) {
+        return;
+    }
+
+    // "ij" fits on the line, but no ellipsis fits after any part of it
+    paragraph = build(true);
+    paragraph->layout(SkScalarCeilToScalar(boxes.back().rect.fRight) + 1);
+    auto impl = static_cast<ParagraphImpl*>(paragraph.get());
+    REPORTER_ASSERT(reporter, impl->lines().size() == 1);
+    REPORTER_ASSERT(reporter, paragraph->didExceedMaxLines());
 }

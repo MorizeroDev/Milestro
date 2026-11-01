@@ -10,7 +10,7 @@ set(MILESTRO_SKIA_REPOSITORY_URL
         "Skia git repository URL used when the source checkout is missing."
 )
 set(MILESTRO_SKIA_COMMIT
-        "1349b73c9a20757b16c26f34b08d49b81aefa29a"
+        "e43478a2f9f8c7f68d6c7e2ca79441dac7df9b75"
         CACHE STRING
         "Skia git commit checked out after cloning. Leave empty to use the repository default branch."
 )
@@ -387,8 +387,6 @@ if (ANDROID)
     milestro_skia_append_gn_bool(skia_enable_fontmgr_android ON)
     milestro_skia_append_gn_bool(skia_enable_fontmgr_android_ndk OFF)
 endif ()
-
-milestro_skia_append_gn_bool(skia_use_libavif ON)
 
 milestro_skia_append_gn_bool(skia_use_metal MILESTRO_SKIA_USE_METAL)
 milestro_skia_append_gn_bool(skia_use_gl MILESTRO_SKIA_USE_GL)
