@@ -2008,6 +2008,118 @@ namespace Milestro.Tests
             Assert.That(horizontal.Payload.TateChuYokoAnnotations, Is.Empty);
         }
 
+        [Test]
+        public void OR12_BlockAndInlineOrientationInheritanceEmitsContiguousRanges()
+        {
+            var parser = new RichTextParser.RichTextParser();
+            parser.ParseText(
+                "<p style=\"text-orientation: upright\">A<b>B</b>" +
+                "<span style=\"text-orientation: mixed\">C</span>D</p>" +
+                "<p style=\"text-orientation: sideways\">EF</p>");
+            var ranges = parser.ConvertToSegments().OrientationAnnotations;
+            Assert.That(ranges, Has.Count.EqualTo(3));
+            AssertOrientationRange(ranges[0], 0, 2, VerticalTextOrientation.Upright);
+            AssertOrientationRange(ranges[1], 3, 4, VerticalTextOrientation.Upright);
+            AssertOrientationRange(ranges[2], 4, 6, VerticalTextOrientation.Sideways);
+
+            parser = new RichTextParser.RichTextParser();
+            parser.ParseText(
+                "<p style=\"text-orientation: sideways\"><a href=\"anchor\">AB</a>" +
+                "<em style=\"text-orientation: upright\">C</em></p>");
+            var arbitraryInline = parser.ConvertToSegments().OrientationAnnotations;
+            Assert.That(arbitraryInline, Has.Count.EqualTo(2));
+            AssertOrientationRange(arbitraryInline[0], 0, 2, VerticalTextOrientation.Sideways);
+            AssertOrientationRange(arbitraryInline[1], 2, 3, VerticalTextOrientation.Upright);
+        }
+
+        [Test]
+        public void OR12_InvalidOrientationDefaultsToMixedAndReportsIssue()
+        {
+            const string markup =
+                "<p style=\"text-orientation: upright\">A" +
+                "<span style=\"text-orientation: sideways-right\">B</span>C</p>";
+            var vertical = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(
+                VerticalSettings(markup));
+            Assert.That(vertical.Diagnostic, Is.Not.Null);
+            Assert.That(vertical.Diagnostic!.Message,
+                Does.Contain("text-orientation=sideways-right defaulted to mixed"));
+            var ranges = vertical.Payload.OrientationAnnotations;
+            Assert.That(ranges, Has.Count.EqualTo(2));
+            AssertOrientationRange(ranges[0], 0, 1, VerticalTextOrientation.Upright);
+            AssertOrientationRange(ranges[1], 2, 3, VerticalTextOrientation.Upright);
+
+            var horizontal = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(
+                new TextBoxRenderTargetSettings(
+                    markup,
+                    Margin.FixedZero(),
+                    new ParagraphStyleSettings { writingMode = WritingMode.HorizontalTb },
+                    TextStyle(30f, 0f),
+                    TextBoxWrapMode.Wrap,
+                    TextOverflow.Clip));
+            Assert.That(horizontal.Diagnostic, Is.Not.Null);
+            Assert.That(horizontal.Diagnostic!.Message,
+                Does.Contain("text-orientation=sideways-right defaulted to mixed"));
+        }
+
+        [Test]
+        public void OR09_ManagedSidewaysRangeKeepsTateChuYokoAnnotationButDisablesItsCell()
+        {
+            const string mixedMarkup =
+                "<span style=\"text-combine-upright: all\">ABC</span>";
+            const string sidewaysMarkup =
+                "<p style=\"text-orientation: sideways\">" + mixedMarkup + "</p>";
+            var parsed = new RichTextParser.RichTextParser();
+            parsed.ParseText(mixedMarkup);
+            var mixedPayload = parsed.ConvertToSegments();
+            Assert.That(mixedPayload.TateChuYokoAnnotations, Has.Count.EqualTo(1));
+            Assert.That(mixedPayload.OrientationAnnotations, Is.Empty);
+
+            parsed = new RichTextParser.RichTextParser();
+            parsed.ParseText(sidewaysMarkup);
+            var sidewaysPayload = parsed.ConvertToSegments();
+            Assert.That(sidewaysPayload.TateChuYokoAnnotations, Has.Count.EqualTo(1));
+            Assert.That(sidewaysPayload.OrientationAnnotations, Has.Count.EqualTo(1));
+            AssertOrientationRange(sidewaysPayload.OrientationAnnotations[0], 0, 3,
+                VerticalTextOrientation.Sideways);
+
+            using var mixed = BuildParagraph(mixedMarkup, VerticalStyle(), TextStyle(40f, 0f));
+            using var sideways = BuildParagraph(sidewaysMarkup, VerticalStyle(), TextStyle(40f, 0f));
+            mixed.LayoutWithInlineExtent(400);
+            sideways.LayoutWithInlineExtent(400);
+            Assert.That(sideways.LayoutMetrics.Columns.Count, Is.EqualTo(1));
+            Assert.That(sideways.LayoutMetrics.LongestInlineExtent,
+                Is.GreaterThan(mixed.LayoutMetrics.LongestInlineExtent + 10f));
+        }
+
+        [Test]
+        public void OR13_ManagedOrientationVariantsKeepIndependentCachedLayouts()
+        {
+            const string uprightMarkup =
+                "<p style=\"text-orientation: upright\">ABC</p>";
+            const string sidewaysMarkup =
+                "<p style=\"text-orientation: sideways\">ABC</p>";
+            using var upright = BuildParagraph(uprightMarkup, VerticalStyle(), TextStyle(40f, 0f));
+            using var sideways = BuildParagraph(sidewaysMarkup, VerticalStyle(), TextStyle(40f, 0f));
+            using var uprightAgain = BuildParagraph(uprightMarkup, VerticalStyle(), TextStyle(40f, 0f));
+            upright.LayoutWithInlineExtent(400);
+            sideways.LayoutWithInlineExtent(400);
+            uprightAgain.LayoutWithInlineExtent(400);
+
+            Assert.That(upright.LayoutMetrics.LongestInlineExtent,
+                Is.GreaterThan(sideways.LayoutMetrics.LongestInlineExtent + 10f));
+            Assert.That(uprightAgain.LayoutMetrics.LongestInlineExtent,
+                Is.EqualTo(upright.LayoutMetrics.LongestInlineExtent).Within(0.01f));
+            Assert.That(uprightAgain.LayoutMetrics.PhysicalSize,
+                Is.EqualTo(upright.LayoutMetrics.PhysicalSize));
+        }
+
+        private static void AssertOrientationRange(OrientationAnnotation annotation,
+            int startUtf16, int endUtf16, VerticalTextOrientation orientation)
+        {
+            Assert.That((annotation.StartUtf16, annotation.EndUtf16, annotation.Orientation),
+                Is.EqualTo((startUtf16, endUtf16, orientation)));
+        }
+
         private static Paragraph BuildParagraph(string content,
             ParagraphStyleSettings paragraphSettings,
             TextStyleSettings textSettings)

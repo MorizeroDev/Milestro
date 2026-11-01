@@ -191,6 +191,7 @@ std::unique_ptr<Paragraph> ParagraphBuilderImpl::Build() {
             fUtf8, fParagraphStyle, fStyledBlocks, fPlaceholders, fFontCollection, fUnicode);
     paragraph->setRubyAnnotations(fRubyAnnotations);
     paragraph->setTateChuYokoAnnotations(fTateChuYokoAnnotations);
+    paragraph->setOrientationOverrides(fOrientationOverrides);
     return paragraph;
 }
 
@@ -200,6 +201,10 @@ void ParagraphBuilderImpl::addRuby(const RubyAnnotation& annotation) {
 
 void ParagraphBuilderImpl::addTateChuYoko(TextRange range, TateChuYokoSizing sizing) {
     fTateChuYokoAnnotations.push_back({range, sizing});
+}
+
+void ParagraphBuilderImpl::addOrientationOverride(TextRange range, VerticalTextOrientation orientation) {
+    fOrientationOverrides.push_back({range, orientation});
 }
 
 SkSpan<char> ParagraphBuilderImpl::getText() {
@@ -270,6 +275,7 @@ void ParagraphBuilderImpl::Reset() {
 
     fRubyAnnotations.clear();
     fTateChuYokoAnnotations.clear();
+    fOrientationOverrides.clear();
     fTextStyles.clear();
     fUtf8.reset();
     fStyledBlocks.clear();

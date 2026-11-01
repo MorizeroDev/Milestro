@@ -152,7 +152,34 @@ const Block* FindBlock(const skia_private::TArray<Block>& blocks, TextIndex inde
     return blocks.empty() ? nullptr : &blocks.back();
 }
 
-bool IsSidewaysGrapheme(const char* text, TextIndex start, TextIndex end) {
+VerticalTextOrientation OrientationOverrideAt(const std::vector<OrientationOverride>& overrides,
+                                              TextIndex index) {
+    const auto next = std::upper_bound(
+            overrides.begin(), overrides.end(), index,
+            [](TextIndex value, const OrientationOverride& override) {
+                return value < override.range.start;
+            });
+    if (next == overrides.begin()) {
+        return VerticalTextOrientation::kMixed;
+    }
+    const auto& candidate = *(next - 1);
+    return index < candidate.range.end ? candidate.orientation : VerticalTextOrientation::kMixed;
+}
+
+bool IsSidewaysGrapheme(const char* text,
+                        TextIndex start,
+                        TextIndex end,
+                        const std::vector<OrientationOverride>* overrides = nullptr) {
+    if (overrides != nullptr) {
+        const VerticalTextOrientation orientation = OrientationOverrideAt(*overrides, start);
+        if (orientation == VerticalTextOrientation::kUpright) {
+            return false;
+        }
+        if (orientation == VerticalTextOrientation::kSideways) {
+            return true;
+        }
+    }
+
     bool first = true;
     SkUnichar base = 0;
     const char* current = text + start;
@@ -703,6 +730,44 @@ bool ParagraphImpl::validateVerticalConfiguration(SkScalar inlineExtent) {
     return true;
 }
 
+void ParagraphImpl::validateVerticalOrientationOverrides() {
+    if (fOrientationOverrides.empty()) {
+        return;
+    }
+    for (size_t index = 0; index < fOrientationOverrides.size(); ++index) {
+        const auto& override = fOrientationOverrides[index];
+        if (override.orientation != VerticalTextOrientation::kMixed &&
+            override.orientation != VerticalTextOrientation::kUpright &&
+            override.orientation != VerticalTextOrientation::kSideways) {
+            throw std::invalid_argument("text-orientation override value is invalid");
+        }
+        if (override.range.start >= override.range.end || override.range.end > fText.size()) {
+            throw std::invalid_argument("text-orientation override range is empty or out of bounds");
+        }
+        if (index > 0 && override.range.start < fOrientationOverrides[index - 1].range.end) {
+            throw std::invalid_argument("text-orientation override ranges overlap");
+        }
+    }
+
+    std::string original(fText.c_str(), fText.size());
+    skia_private::TArray<SkUnicode::CodeUnitFlags, true> rawFlags;
+    if (!fUnicode->computeCodeUnitFlags(original.data(), original.size(), false, &rawFlags)) {
+        throw std::runtime_error("text-orientation override Unicode analysis failed");
+    }
+    auto isGraphemeStart = [&](TextIndex index) {
+        if (index >= rawFlags.size()) {
+            return index == fText.size();
+        }
+        return SkUnicode::hasGraphemeStartFlag(rawFlags[index]);
+    };
+    for (const auto& override : fOrientationOverrides) {
+        if (!isGraphemeStart(override.range.start) || !isGraphemeStart(override.range.end)) {
+            throw std::invalid_argument(
+                    "text-orientation override is not aligned to grapheme boundaries");
+        }
+    }
+}
+
 bool ParagraphImpl::shapeVerticalRuns() {
     if (!this->isVertical()) {
         return true;
@@ -803,13 +868,15 @@ bool ParagraphImpl::shapeVerticalRuns() {
                 continue;
             }
 
-            const bool sideways = IsSidewaysGrapheme(shapingText, segmentStart, segmentEnd);
+            const bool sideways = IsSidewaysGrapheme(shapingText, segmentStart, segmentEnd,
+                                                     &fOrientationOverrides);
             while (segmentEnd < sourceText.end) {
                 const TextIndex next = findNextGraphemeBoundary(segmentEnd + 1);
                 if (codeUnitHasProperty(next, SkUnicode::CodeUnitFlags::kHardLineBreakBefore)) {
                     break;
                 }
-                if (IsSidewaysGrapheme(shapingText, segmentEnd, next) != sideways) {
+                if (IsSidewaysGrapheme(shapingText, segmentEnd, next,
+                                       &fOrientationOverrides) != sideways) {
                     break;
                 }
                 segmentEnd = next;
@@ -1198,6 +1265,26 @@ void ParagraphImpl::prepareVerticalTateChuYoko() {
             }
         }
 
+        bool sidewaysOverride = false;
+        for (TextIndex start = range.start; start < range.end;) {
+            TextIndex end = start + 1;
+            while (end < range.end && !isGraphemeStart(end)) {
+                ++end;
+            }
+            if (OrientationOverrideAt(fOrientationOverrides, start) ==
+                VerticalTextOrientation::kSideways) {
+                sidewaysOverride = true;
+                break;
+            }
+            start = end;
+        }
+        if (sidewaysOverride) {
+            // text-combine-upright is ignored when text-orientation resolves to
+            // the explicit sideways value; mixed keeps its ICU run classification
+            // and remains combinable.
+            continue;
+        }
+
         auto contentStyle = *firstStyle;
         contentStyle.setBaselineShift(0);
         auto contentParagraphStyle = fParagraphStyle;
@@ -1454,6 +1541,7 @@ void ParagraphImpl::layoutVertical(SkScalar inlineExtent) {
     if (!this->validateVerticalConfiguration(inlineExtent)) {
         throw std::invalid_argument("vertical-rl configuration is not supported");
     }
+    this->validateVerticalOrientationOverrides();
 
     const bool sameExtent = fOldInlineExtent == inlineExtent;
     if (fState == kFormatted && sameExtent) {

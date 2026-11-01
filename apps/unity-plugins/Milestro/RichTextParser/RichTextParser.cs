@@ -207,6 +207,7 @@ namespace Milestro.RichTextParser
                 };
                 ConvertToSegments(ctx, root);
                 CollectTateChuYokoRanges(ctx.Result);
+                CollectOrientationRanges(ctx.Result);
                 return ctx.Result;
             }
 
@@ -566,6 +567,88 @@ namespace Milestro.RichTextParser
                         payload.AddTateChuYoko(new TateChuYokoAnnotation(
                             block.StartUtf16 + groupStart, block.StartUtf16 + index, groupSizing));
                         groupStart = -1;
+                    }
+                }
+            }
+        }
+
+        private static void CollectOrientationRanges(ParagraphPayload payload)
+        {
+            foreach (var block in payload.Blocks)
+            {
+                if (block.LengthUtf16 <= 0) continue;
+
+                var orientation = new VerticalTextOrientation[block.LengthUtf16];
+                var active = new bool[block.LengthUtf16];
+                var placeholders = new List<int>();
+                foreach (var placeholder in payload.Placeholders)
+                {
+                    if (block.ContainsRange(placeholder.StartUtf16, placeholder.EndUtf16))
+                    {
+                        placeholders.Add(placeholder.StartUtf16);
+                    }
+                }
+
+                placeholders.Sort();
+                var nextPlaceholder = 0;
+                var cursor = block.StartUtf16;
+
+                void ConsumePlaceholders()
+                {
+                    while (nextPlaceholder < placeholders.Count &&
+                           placeholders[nextPlaceholder] == cursor)
+                    {
+                        ++cursor;
+                        ++nextPlaceholder;
+                    }
+                }
+
+                foreach (var segment in block.Segments)
+                {
+                    var content = segment.Content ?? string.Empty;
+                    var segmentOrientation = segment.TextStyle?.TextOrientation ??
+                                             VerticalTextOrientation.Mixed;
+                    var offset = 0;
+                    while (offset < content.Length)
+                    {
+                        ConsumePlaceholders();
+                        var position = cursor - block.StartUtf16;
+                        if (position < 0 || position >= block.LengthUtf16)
+                        {
+                            throw new InvalidOperationException("Invalid text-orientation source position");
+                        }
+
+                        active[position] = true;
+                        orientation[position] = segmentOrientation;
+                        ++cursor;
+                        ++offset;
+                    }
+                }
+
+                ConsumePlaceholders();
+
+                var groupStart = -1;
+                var groupOrientation = VerticalTextOrientation.Mixed;
+                for (var index = 0; index <= active.Length; ++index)
+                {
+                    var participates = index < active.Length && active[index] &&
+                                       orientation[index] != VerticalTextOrientation.Mixed;
+                    if (participates && groupStart >= 0 && orientation[index] == groupOrientation)
+                    {
+                        continue;
+                    }
+
+                    if (groupStart >= 0)
+                    {
+                        payload.AddOrientation(new OrientationAnnotation(
+                            block.StartUtf16 + groupStart, block.StartUtf16 + index, groupOrientation));
+                        groupStart = -1;
+                    }
+
+                    if (participates)
+                    {
+                        groupStart = index;
+                        groupOrientation = orientation[index];
                     }
                 }
             }

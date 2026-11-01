@@ -20,15 +20,33 @@ namespace Milestro.RichTextParser
         internal TateChuYokoSizing Sizing { get; }
     }
 
+    internal readonly struct OrientationAnnotation
+    {
+        internal OrientationAnnotation(int startUtf16, int endUtf16,
+            VerticalTextOrientation orientation)
+        {
+            StartUtf16 = startUtf16;
+            EndUtf16 = endUtf16;
+            Orientation = orientation;
+        }
+
+        internal int StartUtf16 { get; }
+        internal int EndUtf16 { get; }
+        internal VerticalTextOrientation Orientation { get; }
+    }
+
     public class ParagraphPayload
     {
         private static readonly IReadOnlyList<LinkAnnotation> EmptyLinks = Array.Empty<LinkAnnotation>();
         private static readonly IReadOnlyList<RubyAnnotation> EmptyRubyAnnotations = Array.Empty<RubyAnnotation>();
         private static readonly IReadOnlyList<TateChuYokoAnnotation> EmptyTateChuYokoAnnotations =
             Array.Empty<TateChuYokoAnnotation>();
+        private static readonly IReadOnlyList<OrientationAnnotation> EmptyOrientationAnnotations =
+            Array.Empty<OrientationAnnotation>();
         private List<LinkAnnotation>? links;
         private List<RubyAnnotation>? rubyAnnotations;
         private List<TateChuYokoAnnotation>? tateChuYokoAnnotations;
+        private List<OrientationAnnotation>? orientationAnnotations;
         private List<ParagraphBlock>? blocks;
         private readonly List<PlaceholderAnnotation> placeholders = new List<PlaceholderAnnotation>();
         public IReadOnlyList<PlaceholderAnnotation> Placeholders => placeholders.AsReadOnly();
@@ -87,6 +105,9 @@ namespace Milestro.RichTextParser
         internal IReadOnlyList<TateChuYokoAnnotation> TateChuYokoAnnotations =>
             tateChuYokoAnnotations ?? EmptyTateChuYokoAnnotations;
 
+        internal IReadOnlyList<OrientationAnnotation> OrientationAnnotations =>
+            orientationAnnotations ?? EmptyOrientationAnnotations;
+
         internal ParagraphBlock AddBlock(bool isExplicit, int startUtf16)
         {
             var list = blocks ??= new List<ParagraphBlock> { new ParagraphBlock() };
@@ -124,6 +145,12 @@ namespace Milestro.RichTextParser
         {
             tateChuYokoAnnotations ??= new List<TateChuYokoAnnotation>();
             tateChuYokoAnnotations.Add(annotation);
+        }
+
+        internal void AddOrientation(OrientationAnnotation annotation)
+        {
+            orientationAnnotations ??= new List<OrientationAnnotation>();
+            orientationAnnotations.Add(annotation);
         }
 
         public static ParagraphPayload MakeText(string text)

@@ -7466,5 +7466,330 @@ TEST_F(SkiaVerticalParagraph, TC21_GrowEllipsisAdjacentGroupsAndFontSizeUpdate) 
     EXPECT_NEAR(resizedRuns[0].transform.getScaleX(), 1, 0.001);
 }
 
+std::unique_ptr<skia_text::Paragraph>
+BuildVerticalOrientation(
+        const std::string& text,
+        std::vector<skia_text::OrientationOverride> overrides,
+        const skia_text::TextStyle& textStyle = PrimaryStyle(40),
+        const BuildOptions& options = {},
+        const std::function<void(skia_text::ParagraphBuilder*)>& extra = {}) {
+    return BuildCoreParagraph(text, textStyle, options, [&](auto* builder) {
+        for (const auto& override : overrides) {
+            builder->addOrientationOverride(override.range, override.orientation);
+        }
+        if (extra) {
+            extra(builder);
+        }
+    });
+}
+
+TEST_F(SkiaVerticalParagraph, OR01_OR02_ParagraphUprightAndSidewaysOverrideEveryGrapheme) {
+    const std::string text = "ABC漢12";
+    const skia_text::TextRange all{0, text.size()};
+    auto upright = BuildVerticalOrientation(
+            text, {{all, skia_text::VerticalTextOrientation::kUpright}});
+    auto sideways = BuildVerticalOrientation(
+            text, {{all, skia_text::VerticalTextOrientation::kSideways}});
+    auto mixed = BuildCoreParagraph(text, PrimaryStyle(40));
+    upright->layoutWithInlineExtent(1000);
+    sideways->layoutWithInlineExtent(1000);
+    mixed->layoutWithInlineExtent(1000);
+
+    const auto uprightRuns = SnapshotRuns(upright.get());
+    const auto sidewaysRuns = SnapshotRuns(sideways.get());
+    ASSERT_EQ(SourceGlyphCount(uprightRuns), Utf16Length(text));
+    ASSERT_EQ(SourceGlyphCount(sidewaysRuns), Utf16Length(text));
+    for (const auto& run : uprightRuns) {
+        EXPECT_FALSE(run.sideways);
+        EXPECT_TRUE(IsIdentity(run.transform));
+    }
+    for (const auto& run : sidewaysRuns) {
+        EXPECT_TRUE(run.sideways);
+        EXPECT_TRUE(IsClockwise(run.transform));
+    }
+
+    bool mixedHasUpright = false;
+    bool mixedHasSideways = false;
+    for (const auto& run : SnapshotRuns(mixed.get())) {
+        mixedHasUpright |= !run.sideways;
+        mixedHasSideways |= run.sideways;
+    }
+    EXPECT_TRUE(mixedHasUpright);
+    EXPECT_TRUE(mixedHasSideways);
+}
+
+TEST_F(SkiaVerticalParagraph, OR03_OR04_SpanBoundariesAndMixedRestoreIcuClassification) {
+    auto span = BuildVerticalOrientation("A漢B",
+            {{{0, 1}, skia_text::VerticalTextOrientation::kUpright},
+             {{1, 4}, skia_text::VerticalTextOrientation::kMixed},
+             {{4, 5}, skia_text::VerticalTextOrientation::kSideways}});
+    span->layoutWithInlineExtent(1000);
+    const auto runs = SnapshotRuns(span.get());
+    const auto* latinA = FindVisitorRun(runs, 0, 0);
+    const auto* han = FindVisitorRun(runs, 0, 1);
+    const auto* latinB = FindVisitorRun(runs, 0, 4);
+    ASSERT_NE(latinA, nullptr);
+    ASSERT_NE(han, nullptr);
+    ASSERT_NE(latinB, nullptr);
+    EXPECT_FALSE(latinA->sideways);
+    EXPECT_FALSE(han->sideways);
+    EXPECT_TRUE(latinB->sideways);
+
+    auto sidewaysHan = BuildVerticalOrientation(
+            "漢", {{{0, 3}, skia_text::VerticalTextOrientation::kSideways}});
+    sidewaysHan->layoutWithInlineExtent(400);
+    const auto* forced = FindVisitorRun(SnapshotRuns(sidewaysHan.get()), 0, 0);
+    ASSERT_NE(forced, nullptr);
+    EXPECT_TRUE(forced->sideways);
+
+    auto restored = BuildVerticalOrientation("A漢",
+            {{{0, 1}, skia_text::VerticalTextOrientation::kSideways},
+             {{1, 4}, skia_text::VerticalTextOrientation::kMixed}});
+    restored->layoutWithInlineExtent(400);
+    const auto restoredRuns = SnapshotRuns(restored.get());
+    const auto* restoredA = FindVisitorRun(restoredRuns, 0, 0);
+    const auto* restoredHan = FindVisitorRun(restoredRuns, 0, 1);
+    ASSERT_NE(restoredA, nullptr);
+    ASSERT_NE(restoredHan, nullptr);
+    EXPECT_TRUE(restoredA->sideways);
+    EXPECT_FALSE(restoredHan->sideways);
+}
+
+TEST_F(SkiaVerticalParagraph, OR05_OR06_GeometryJustifyAndEllipsisKeepMixedRules) {
+    auto style = PrimaryStyle(40);
+    style.setHeightOverride(true);
+    style.setHeight(1.5f);
+    const std::string text = "天地";
+    const skia_text::TextRange all{0, text.size()};
+    for (auto orientation : {skia_text::VerticalTextOrientation::kMixed,
+                             skia_text::VerticalTextOrientation::kUpright,
+                             skia_text::VerticalTextOrientation::kSideways}) {
+        auto paragraph = BuildVerticalOrientation(
+                text,
+                orientation == skia_text::VerticalTextOrientation::kMixed
+                        ? std::vector<skia_text::OrientationOverride>{}
+                        : std::vector<skia_text::OrientationOverride>{{all, orientation}},
+                style, {.align = skia_text::TextAlign::kCenter, .indent = 10});
+        paragraph->layoutWithInlineExtent(50);
+        const auto& metrics = paragraph->getLayoutMetrics();
+        ASSERT_EQ(metrics.columns.size(), 2u);
+        for (const auto& column : metrics.columns) {
+            EXPECT_NEAR(column.blockThickness, 60, kTolerance);
+        }
+        EXPECT_NEAR(metrics.physicalSize.height(), 50, kTolerance);
+    }
+
+    const std::string justifiedText = "天地玄黃宇宙";
+    for (auto orientation : {skia_text::VerticalTextOrientation::kUpright,
+                             skia_text::VerticalTextOrientation::kSideways}) {
+        auto paragraph = BuildVerticalOrientation(justifiedText,
+                {{{0, justifiedText.size()}, orientation}},
+                PrimaryStyle(40), {.align = skia_text::TextAlign::kJustify});
+        paragraph->layoutWithInlineExtent(172);
+        const auto columns = ImplOf(paragraph.get())->verticalColumns();
+        ASSERT_EQ(columns.size(), 2u);
+        EXPECT_TRUE(columns[0].justified);
+        EXPECT_EQ(columns[0].justificationOpportunityCount, 3u);
+    }
+
+    auto measure = BuildParagraph("天", PrimaryStyle(40), {});
+    measure->layoutWithInlineExtent(std::numeric_limits<SkScalar>::infinity());
+    const SkScalar advance = measure->getLayoutMetrics().longestInlineExtent;
+    auto ellipsized = BuildEllipsisParagraph("天地玄黃", PrimaryStyle(40), 1, "\xE2\x80\xA6",
+            skia_text::TextAlign::kStart,
+            [](auto* builder) {
+                builder->addOrientationOverride(
+                        {0, 12}, skia_text::VerticalTextOrientation::kSideways);
+            });
+    ellipsized->layoutWithInlineExtent(advance * 2 + 4);
+    EXPECT_TRUE(ellipsized->didExceedMaxLines());
+    const auto affix = SyntheticRuns(SnapshotRuns(ellipsized.get()));
+    ASSERT_EQ(affix.size(), 1u);
+    EXPECT_FALSE(affix[0].sideways);
+    EXPECT_TRUE(IsIdentity(affix[0].transform));
+}
+
+TEST_F(SkiaVerticalParagraph, OR07_EffectsAndBaselineShiftComposeWithBothOrientations) {
+    auto style = PrimaryStyle(40);
+    SkPaint background;
+    background.setColor(SK_ColorGREEN);
+    style.setBackgroundPaint(background);
+    style.setDecoration(skia_text::TextDecoration::kUnderline);
+    style.addShadow(skia_text::TextShadow(SK_ColorBLUE, {4, 6}, 2));
+    style.setBaselineShift(12);
+    for (auto orientation : {skia_text::VerticalTextOrientation::kUpright,
+                             skia_text::VerticalTextOrientation::kSideways}) {
+        auto paragraph = BuildVerticalOrientation("天A",
+                {{{0, 4}, orientation}}, style);
+        paragraph->layoutWithInlineExtent(400);
+        RecordingPainter painter;
+        paragraph->paint(&painter, 0, 0);
+        EXPECT_GT(painter.backgrounds.size(), 0u);
+        EXPECT_GT(painter.decorations.size(), 0u);
+        EXPECT_GT(painter.shadows.size(), 0u);
+        EXPECT_GT(painter.textBlobCount, 0);
+        EXPECT_FALSE(TightBoxes(paragraph.get(), 0, 3).empty());
+        SkPath path;
+        EXPECT_EQ(paragraph->getPath(0, &path), 0);
+        EXPECT_FALSE(path.isEmpty());
+    }
+}
+
+TEST_F(SkiaVerticalParagraph, OR08_RubyAnnotationStaysMixedWhileBaseFollowsOverride) {
+    const std::string text = "漢ABC";
+    auto ruby = BuildVerticalOrientation(text,
+            {{{0, 3}, skia_text::VerticalTextOrientation::kMixed},
+             {{3, 6}, skia_text::VerticalTextOrientation::kSideways}},
+            PrimaryStyle(40),
+            {},
+            [&](auto* builder) {
+                builder->addRuby(skia_text::RubyAnnotation({0, text.size()}, "か"));
+            });
+    ruby->layoutWithInlineExtent(1000);
+    const auto runs = SnapshotRuns(ruby.get());
+    const auto* baseHan = FindVisitorRun(runs, 0, 0);
+    const auto* baseLatin = FindVisitorRun(runs, 0, 3);
+    ASSERT_NE(baseHan, nullptr);
+    ASSERT_NE(baseLatin, nullptr);
+    EXPECT_FALSE(baseHan->sideways);
+    EXPECT_TRUE(baseLatin->sideways);
+
+    bool hasRuby = false;
+    for (const auto& run : runs) {
+        if ((run.flags & skia_text::Paragraph::kRubyAnnotation_VisitorFlag) == 0) {
+            continue;
+        }
+        hasRuby = true;
+        EXPECT_FALSE(run.sideways);
+        EXPECT_TRUE(IsIdentity(run.transform));
+    }
+    EXPECT_TRUE(hasRuby);
+}
+
+TEST_F(SkiaVerticalParagraph, OR09_SidewaysDisablesTateChuYokoWhileMixedAndUprightKeepIt) {
+    auto sideways = BuildVerticalOrientation("ABC",
+            {{{0, 3}, skia_text::VerticalTextOrientation::kSideways}},
+            PrimaryStyle(40), {},
+            [](auto* builder) { builder->addTateChuYoko({0, 3}); });
+    sideways->layoutWithInlineExtent(400);
+    EXPECT_TRUE(TateChuYokoRuns(SnapshotRuns(sideways.get())).empty());
+    for (const auto& run : SnapshotRuns(sideways.get())) {
+        EXPECT_TRUE(run.sideways);
+    }
+
+    for (auto orientation : {skia_text::VerticalTextOrientation::kMixed,
+                             skia_text::VerticalTextOrientation::kUpright}) {
+        auto paragraph = BuildVerticalOrientation("ABC",
+                orientation == skia_text::VerticalTextOrientation::kMixed
+                        ? std::vector<skia_text::OrientationOverride>{}
+                        : std::vector<skia_text::OrientationOverride>{{{0, 3}, orientation}},
+                PrimaryStyle(40), {},
+                [](auto* builder) { builder->addTateChuYoko({0, 3}); });
+        paragraph->layoutWithInlineExtent(400);
+        const auto tcy = TateChuYokoRuns(SnapshotRuns(paragraph.get()));
+        ASSERT_EQ(tcy.size(), 1u);
+        EXPECT_FALSE(tcy[0].sideways);
+        EXPECT_GT(tcy[0].transform.getScaleX(), 0);
+    }
+}
+
+TEST_F(SkiaVerticalParagraph, OR10_OR11_QueriesValidationPlaceholderControlsAndHorizontalNoOp) {
+    for (auto orientation : {skia_text::VerticalTextOrientation::kUpright,
+                             skia_text::VerticalTextOrientation::kSideways}) {
+        auto paragraph = BuildVerticalOrientation("A漢",
+                {{{0, 4}, orientation}});
+        paragraph->layoutWithInlineExtent(400);
+        const auto boxes = TightBoxes(paragraph.get(), 0, 4);
+        ASSERT_FALSE(boxes.empty());
+        SkPath path;
+        EXPECT_EQ(paragraph->getPath(0, &path), 0);
+        EXPECT_FALSE(path.isEmpty());
+        const auto position = paragraph->getGlyphPositionAtCoordinate(
+                boxes.front().rect.centerX(), boxes.front().rect.centerY());
+        EXPECT_GE(position.position, 0u);
+        EXPECT_LE(position.position, Utf16Length("A漢"));
+        for (const auto& run : SnapshotRuns(paragraph.get())) {
+            EXPECT_EQ(run.flags & (skia_text::Paragraph::kRubyAnnotation_VisitorFlag |
+                                   skia_text::Paragraph::kTateChuYoko_VisitorFlag),
+                      0u);
+        }
+    }
+
+    auto expectInvalid = [](const std::string& text,
+                            std::vector<skia_text::OrientationOverride> overrides) {
+        auto paragraph = BuildVerticalOrientation(text, std::move(overrides));
+        EXPECT_THROW(paragraph->layoutWithInlineExtent(400), std::invalid_argument);
+        EXPECT_THROW(paragraph->getLayoutMetrics(), std::logic_error);
+    };
+    expectInvalid("", {{{0, 0}, skia_text::VerticalTextOrientation::kUpright}});
+    expectInvalid("A", {{{0, 2}, skia_text::VerticalTextOrientation::kUpright}});
+    expectInvalid("e\xCC\x81", {{{0, 1}, skia_text::VerticalTextOrientation::kUpright}});
+    expectInvalid("ABC",
+            {{{0, 2}, skia_text::VerticalTextOrientation::kUpright},
+             {{1, 3}, skia_text::VerticalTextOrientation::kSideways}});
+    expectInvalid("A", {{{0, 1}, static_cast<skia_text::VerticalTextOrientation>(3)}});
+
+    auto placeholder = BuildCustomParagraph({}, [](auto* builder) {
+        builder->pushStyle(PrimaryStyle(40));
+        builder->addText("1", 1);
+        builder->addPlaceholder(MiddlePlaceholder(20, 20));
+        builder->addText("2", 1);
+        builder->pop();
+        builder->addOrientationOverride({0, 5}, skia_text::VerticalTextOrientation::kSideways);
+    });
+    EXPECT_NO_THROW(placeholder->layoutWithInlineExtent(400));
+    EXPECT_NEAR(placeholder->getLayoutMetrics().physicalSize.width(), 40, kTolerance);
+
+    auto controls = BuildVerticalOrientation("\xE2\x80\x8E" "A",
+            {{{0, 4}, skia_text::VerticalTextOrientation::kSideways}});
+    EXPECT_NO_THROW(controls->layoutWithInlineExtent(400));
+
+    auto plain = BuildCoreParagraph("12", PrimaryStyle(40),
+            {.writingMode = skia_text::WritingMode::kHorizontalTb});
+    auto ignored = BuildCoreParagraph("12", PrimaryStyle(40),
+            {.writingMode = skia_text::WritingMode::kHorizontalTb},
+            [](auto* builder) {
+                builder->addOrientationOverride(
+                        {0, 99}, skia_text::VerticalTextOrientation::kSideways);
+            });
+    plain->layout(400);
+    ignored->layout(400);
+    ExpectSnapshotsNear(Capture(plain.get()), Capture(ignored.get()));
+}
+
+TEST_F(SkiaVerticalParagraph, OR13_OrientationCacheIsolationAndFailureRecovery) {
+    auto* cache = TestFontCollection()->getParagraphCache();
+    ASSERT_NE(cache, nullptr);
+    cache->reset();
+    cache->turnOn(true);
+
+    auto upright = BuildVerticalOrientation("ABC",
+            {{{0, 3}, skia_text::VerticalTextOrientation::kUpright}});
+    auto sideways = BuildVerticalOrientation("ABC",
+            {{{0, 3}, skia_text::VerticalTextOrientation::kSideways}});
+    auto mixed = BuildCoreParagraph("ABC", PrimaryStyle(40));
+    upright->layoutWithInlineExtent(400);
+    sideways->layoutWithInlineExtent(400);
+    mixed->layoutWithInlineExtent(400);
+    for (const auto& run : SnapshotRuns(upright.get())) EXPECT_FALSE(run.sideways);
+    for (const auto& run : SnapshotRuns(sideways.get())) EXPECT_TRUE(run.sideways);
+    bool mixedHasSideways = false;
+    for (const auto& run : SnapshotRuns(mixed.get())) mixedHasSideways |= run.sideways;
+    EXPECT_TRUE(mixedHasSideways);
+
+    EXPECT_THROW(upright->layoutWithInlineExtent(-1), std::invalid_argument);
+    upright->layoutWithInlineExtent(400);
+    for (const auto& run : SnapshotRuns(upright.get())) EXPECT_FALSE(run.sideways);
+    upright->updateFontSize(0, 3, 60);
+    upright->layoutWithInlineExtent(600);
+    for (const auto& run : SnapshotRuns(upright.get())) {
+        EXPECT_FALSE(run.sideways);
+        EXPECT_FLOAT_EQ(run.font.getSize(), 60);
+    }
+
+    cache->reset();
+    cache->turnOn(false);
+}
+
 
 } // namespace

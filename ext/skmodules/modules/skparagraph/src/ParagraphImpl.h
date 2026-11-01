@@ -252,7 +252,15 @@ public:
         fTateChuYokoAnnotations = std::move(annotations);
         fTateChuYokoPrepared = false;
     }
+    void setOrientationOverrides(std::vector<OrientationOverride> overrides) {
+        fOrientationOverrides = std::move(overrides);
+        std::sort(fOrientationOverrides.begin(), fOrientationOverrides.end(),
+                  [](const OrientationOverride& a, const OrientationOverride& b) {
+                      return a.range.start < b.range.start;
+                  });
+    }
     bool hasTateChuYoko() const { return !fTateChuYokoAnnotations.empty(); }
+    bool hasOrientationOverrides() const { return !fOrientationOverrides.empty(); }
     void prepareVerticalTateChuYoko();
     const VerticalTateChuYokoSpan* verticalTateChuYokoAtCluster(ClusterIndex cluster) const;
     const VerticalTateChuYokoSpan* verticalTateChuYokoStartingAt(ClusterIndex cluster) const;
@@ -337,6 +345,7 @@ public:
     void layoutVertical(SkScalar inlineExtent);
     bool shapeVerticalRuns();
     void prepareVerticalRuby();
+    void validateVerticalOrientationOverrides();
     SkScalar verticalRubyShift(ClusterIndex cluster) const;
     std::vector<std::pair<const VerticalRubySpan*, SkPoint>> verticalRubyPlacements(size_t column) const;
     void breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent);
@@ -416,6 +425,7 @@ private:
     // Input
     std::vector<RubyAnnotation> fRubyAnnotations;
     std::vector<TateChuYokoAnnotation> fTateChuYokoAnnotations;
+    std::vector<OrientationOverride> fOrientationOverrides;
     std::vector<RubySpan> fRubySpans;
     std::vector<RubyLayoutUnit> fRubyUnits;
     std::vector<std::vector<SkPoint>> fRubyOffsets;

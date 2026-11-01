@@ -20,6 +20,7 @@ namespace Milestro.RichTextParser.Css
             List<FontFeatureOperation>? featureOperations = null;
             bool? textCombineUpright = null;
             TateChuYokoSizing? tateChuYokoSizing = null;
+            VerticalTextOrientation? textOrientation = null;
             TextIndent? textIndent = null;
             float? textIndentEm = null;
             var parser = new CssDeclarationParser(declarations);
@@ -65,6 +66,18 @@ namespace Milestro.RichTextParser.Css
                         tateChuYokoSizing = TateChuYokoSizing.Squeeze;
                     }
                 }
+                else if (declaration.Property.Equals("text-orientation", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (TryParseTextOrientation(declaration.Value, out var orientation))
+                    {
+                        textOrientation = orientation;
+                    }
+                    else
+                    {
+                        issues?.Add($"text-orientation={declaration.Value} defaulted to mixed");
+                        textOrientation = VerticalTextOrientation.Mixed;
+                    }
+                }
                 else if (paragraphStyle != null &&
                          declaration.Property.Equals("text-indent", StringComparison.OrdinalIgnoreCase) &&
                          TryParseTextIndent(declaration.Value, out var indent, out var isEm))
@@ -91,6 +104,8 @@ namespace Milestro.RichTextParser.Css
             if (textCombineUpright.HasValue) textStyle.TextCombineUprightAll = textCombineUpright.Value;
             if (tateChuYokoSizing.HasValue)
                 textStyle.TextCombineUprightSizing = tateChuYokoSizing.Value;
+            if (textOrientation.HasValue)
+                textStyle.TextOrientation = textOrientation.Value;
             if (paragraphStyle != null && (textIndent.HasValue || textIndentEm.HasValue))
             {
                 paragraphStyle.TextIndent = textIndent;
@@ -134,6 +149,31 @@ namespace Milestro.RichTextParser.Css
 
             all = false;
             return value.Equals("none", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryParseTextOrientation(CssSlice value,
+            out VerticalTextOrientation orientation)
+        {
+            if (value.Equals("mixed", StringComparison.OrdinalIgnoreCase))
+            {
+                orientation = VerticalTextOrientation.Mixed;
+                return true;
+            }
+
+            if (value.Equals("upright", StringComparison.OrdinalIgnoreCase))
+            {
+                orientation = VerticalTextOrientation.Upright;
+                return true;
+            }
+
+            if (value.Equals("sideways", StringComparison.OrdinalIgnoreCase))
+            {
+                orientation = VerticalTextOrientation.Sideways;
+                return true;
+            }
+
+            orientation = VerticalTextOrientation.Mixed;
+            return false;
         }
 
         private static bool TryParseFeatureSettings(CssSlice value, out List<FontFeatureOperation> operations)

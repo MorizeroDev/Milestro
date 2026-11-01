@@ -274,6 +274,21 @@ namespace Milestro.Extensions
                     annotation.EndUtf16 + separatorShift, annotation.Sizing);
             }
 
+            foreach (var annotation in payload.OrientationAnnotations)
+            {
+                var separatorShift = 0;
+                for (var index = 1; index < blocks.Count; ++index)
+                {
+                    if (blocks[index].StartUtf16 <= annotation.StartUtf16)
+                    {
+                        separatorShift = index;
+                    }
+                }
+
+                builder.AddOrientationOverrideUtf16(annotation.StartUtf16 + separatorShift,
+                    annotation.EndUtf16 + separatorShift, annotation.Orientation);
+            }
+
             return builder.Build();
         }
 
@@ -320,6 +335,17 @@ namespace Milestro.Extensions
 
                     builder.AddTateChuYokoUtf16(annotation.StartUtf16 - block.StartUtf16,
                         annotation.EndUtf16 - block.StartUtf16, annotation.Sizing);
+                }
+
+                foreach (var annotation in payload.OrientationAnnotations)
+                {
+                    if (!block.ContainsRange(annotation.StartUtf16, annotation.EndUtf16))
+                    {
+                        continue;
+                    }
+
+                    builder.AddOrientationOverrideUtf16(annotation.StartUtf16 - block.StartUtf16,
+                        annotation.EndUtf16 - block.StartUtf16, annotation.Orientation);
                 }
 
                 ret.Add(builder.Build());

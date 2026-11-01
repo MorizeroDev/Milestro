@@ -145,6 +145,27 @@ namespace Milestro.Skia.TextLayout
             AddTateChuYokoUtf8(startUtf8, endUtf8, sizing);
         }
 
+        public void AddOrientationOverrideUtf8(ulong startUtf8, ulong endUtf8,
+            VerticalTextOrientation orientation)
+        {
+            if (startUtf8 >= endUtf8 || endUtf8 > _utf8Length)
+                throw new ArgumentOutOfRangeException(nameof(endUtf8));
+            if (orientation != VerticalTextOrientation.Mixed &&
+                orientation != VerticalTextOrientation.Upright &&
+                orientation != VerticalTextOrientation.Sideways)
+                throw new ArgumentOutOfRangeException(nameof(orientation));
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutParagraphBuilderAddOrientationOverride(
+                    NativePtr, startUtf8, endUtf8, (int)orientation));
+        }
+
+        public void AddOrientationOverrideUtf16(int startUtf16, int endUtf16,
+            VerticalTextOrientation orientation)
+        {
+            Utf16RangeToUtf8(_text.ToString(), startUtf16, endUtf16, out var startUtf8, out var endUtf8);
+            AddOrientationOverrideUtf8(startUtf8, endUtf8, orientation);
+        }
+
         internal static void Utf16RangeToUtf8(string text, int startUtf16, int endUtf16,
             out ulong startUtf8, out ulong endUtf8)
         {

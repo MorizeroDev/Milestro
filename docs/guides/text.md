@@ -172,6 +172,10 @@ with a small CSS subset:
 - `font-feature-settings: normal` or comma-separated settings such as
   `'liga' 0`, `'tnum' on`, and `'kern' 1`
 
+The vertical-only properties (`text-combine-upright`, `text-orientation`, and
+`--milestro-text-combine-upright-sizing`) are documented in
+[Vertical writing](#vertical-writing).
+
 Use `&quot;` if a double-quoted feature tag appears inside a double-quoted XML
 attribute.
 
@@ -320,6 +324,27 @@ natural width and widens the column instead.
   mixed-orientation rules.
 - Horizontal paragraphs ignore combine marks entirely.
 
+### Text orientation
+
+The default `mixed` orientation stands CJK glyphs upright and rotates Latin
+runs sideways, following the Unicode `Vertical_Orientation` property. Override
+it per block or per span:
+
+```xml
+<span style="text-orientation: upright">ABC123</span>
+<span style="text-orientation: sideways">漢字ABC</span>
+```
+
+- `text-orientation: mixed | upright | sideways` works on block and inline
+  elements and inherits like other text styles.
+- `upright` sets every glyph upright without rotation; Latin letters and
+  digits stack one by one (it does not merge them — use tate-chu-yoko for
+  that).
+- `sideways` rotates every glyph 90 degrees clockwise, including CJK.
+- Inside a `sideways` range, tate-chu-yoko marks have no effect; the text
+  follows the normal sideways rules.
+- Horizontal paragraphs ignore orientation marks entirely.
+
 Current limits:
 
 - Use a fixed-size Canvas `TextBox`. `TextInput` editing, SlimText, and the
@@ -327,8 +352,7 @@ Current limits:
 - The base direction stays LTR; RTL content is not supported. `textAlign`
   supports `Start`, `End`, `Center`, and `Justify`; `Left` and `Right` fall
   back to `Start`.
-- `vertical-lr` and per-run `text-orientation` overrides are not available
-  yet.
+- `vertical-lr` is not available yet.
 - Unsupported combinations degrade with an Editor diagnostic instead of
   failing silently.
 

@@ -11,6 +11,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <memory>
 #include <string>
 
@@ -41,6 +42,22 @@ BuildParagraph(const std::string& text,
     return std::unique_ptr<milestro_text::Paragraph>(builder.build());
 }
 
+std::unique_ptr<milestro_text::Paragraph>
+BuildOrientedParagraph(const std::string& text,
+                       milestro_text::TextStyle& textStyle,
+                       skia_text::VerticalTextOrientation orientation) {
+    milestro_text::ParagraphStyle paragraphStyle;
+    paragraphStyle.setTextStyle(&textStyle);
+    paragraphStyle.setWritingMode(skia_text::WritingMode::kVerticalRl);
+    milestro_text::ParagraphBuilder builder(&paragraphStyle);
+    builder.pushStyle(&textStyle);
+    builder.addText(text.c_str(), text.size());
+    builder.pop();
+    builder.addOrientationOverride(
+            skia_text::TextRange{0, text.size()}, orientation);
+    return std::unique_ptr<milestro_text::Paragraph>(builder.build());
+}
+
 } // namespace
 
 TEST(SkiaVerticalParagraphNoIcu, HorizontalNopLayoutRemainsAvailableWithoutIcuData) {
@@ -66,5 +83,68 @@ TEST(SkiaVerticalParagraphNoIcu, HorizontalNopLayoutRemainsAvailableWithoutIcuDa
     EXPECT_GT(horizontal->getHeight(), 0);
     EXPECT_FALSE(horizontal->unwrap()
                          ->getRectsForRange(0, 7, skia_text::RectHeightStyle::kTight, skia_text::RectWidthStyle::kTight)
+                         .empty());
+}
+
+TEST(SkiaVerticalParagraphNoIcu, OrientationOverridesWorkWithoutIcuVerticalClassification) {
+    auto textStyle = Style("Liberation Sans", 40);
+    auto upright = BuildOrientedParagraph(
+            "ABC", textStyle, skia_text::VerticalTextOrientation::kUpright);
+    auto sideways = BuildOrientedParagraph(
+            "ABC", textStyle, skia_text::VerticalTextOrientation::kSideways);
+    upright->layoutWithInlineExtent(400);
+    sideways->layoutWithInlineExtent(400);
+
+    const auto& uprightMetrics = upright->getLayoutMetrics();
+    const auto& sidewaysMetrics = sideways->getLayoutMetrics();
+    ASSERT_EQ(uprightMetrics.columns.size(), 1u);
+    ASSERT_EQ(sidewaysMetrics.columns.size(), 1u);
+    EXPECT_GT(uprightMetrics.longestInlineExtent, 0);
+    EXPECT_GT(sidewaysMetrics.longestInlineExtent, 0);
+    EXPECT_GT(std::abs(uprightMetrics.longestInlineExtent -
+                       sidewaysMetrics.longestInlineExtent),
+              1);
+    EXPECT_FALSE(upright->unwrap()
+                         ->getRectsForRange(0, 3,
+                                            skia_text::RectHeightStyle::kTight,
+                                            skia_text::RectWidthStyle::kTight)
+                         .empty());
+    EXPECT_FALSE(sideways->unwrap()
+                         ->getRectsForRange(0, 3,
+                                            skia_text::RectHeightStyle::kTight,
+                                            skia_text::RectWidthStyle::kTight)
+                         .empty());
+
+    bool sawUpright = false;
+    upright->unwrap()->extendedVisit(
+            [&](int, const skia_text::Paragraph::ExtendedVisitorInfo* info) {
+                if (info == nullptr || info->count == 0) return;
+                sawUpright = true;
+                EXPECT_TRUE(SkScalarNearlyZero(info->glyphTransform.getSkewX()));
+            });
+    EXPECT_TRUE(sawUpright);
+
+    bool sawSideways = false;
+    sideways->unwrap()->extendedVisit(
+            [&](int, const skia_text::Paragraph::ExtendedVisitorInfo* info) {
+                if (info == nullptr || info->count == 0) return;
+                sawSideways = true;
+                EXPECT_NEAR(info->glyphTransform.getSkewX(), -1, 0.01);
+                EXPECT_NEAR(info->glyphTransform.getSkewY(), 1, 0.01);
+            });
+    EXPECT_TRUE(sawSideways);
+}
+
+TEST(SkiaVerticalParagraphNoIcu, MixedVerticalLayoutStillConsumesAdapterResults) {
+    auto textStyle = Style("Liberation Sans", 40);
+    auto mixed = BuildParagraph("ABC漢", textStyle, skia_text::WritingMode::kVerticalRl);
+    EXPECT_NO_THROW(mixed->layoutWithInlineExtent(400));
+    const auto& metrics = mixed->getLayoutMetrics();
+    ASSERT_EQ(metrics.columns.size(), 1u);
+    EXPECT_GT(metrics.longestInlineExtent, 0);
+    EXPECT_FALSE(mixed->unwrap()
+                         ->getRectsForRange(0, 4,
+                                            skia_text::RectHeightStyle::kTight,
+                                            skia_text::RectWidthStyle::kTight)
                          .empty());
 }

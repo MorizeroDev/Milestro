@@ -71,6 +71,13 @@ namespace Milestro.RichTextParser
             TateChuYokoSizing.Squeeze;
 
         /// <summary>
+        /// Computed CSS <c>text-orientation</c> value. <see cref="VerticalTextOrientation.Mixed"/>
+        /// keeps the native ICU classification; other values override it for this range.
+        /// </summary>
+        public VerticalTextOrientation TextOrientation { get; set; } =
+            VerticalTextOrientation.Mixed;
+
+        /// <summary>
         /// Optional numeric font weight override.
         /// </summary>
         public int? FontWeight { get; set; } = null;
@@ -173,6 +180,7 @@ namespace Milestro.RichTextParser
             ret.Strikethrough = Strikethrough;
             ret.TextCombineUprightAll = TextCombineUprightAll;
             ret.TextCombineUprightSizing = TextCombineUprightSizing;
+            ret.TextOrientation = TextOrientation;
 
             ret.FontWeight = FontWeight;
             ret.FontWidth = FontWidth;
@@ -244,7 +252,7 @@ namespace Milestro.RichTextParser
             if (LetterSpacing.HasValue || BaselineShift.HasValue || BaselineShiftEm.HasValue ||
                 FontSizeScale.HasValue || Locale != null || FontWidth.HasValue ||
                 (FontSlant.HasValue && FontSlant.Value != Milestro.Model.FontSlant.Italic) ||
-                TextCombineUprightAll)
+                TextCombineUprightAll || TextOrientation != VerticalTextOrientation.Mixed)
             {
                 sb.Append("<span");
                 if (FontSizeScale.HasValue)
@@ -282,12 +290,24 @@ namespace Milestro.RichTextParser
                     AppendAttribute(sb, "slant", FontSlant.Value.ToString());
                 }
 
-                if (TextCombineUprightAll)
+                if (TextCombineUprightAll || TextOrientation != VerticalTextOrientation.Mixed)
                 {
-                    var style = TextCombineUprightSizing == TateChuYokoSizing.Grow
-                        ? "text-combine-upright: all; --milestro-text-combine-upright-sizing: grow"
-                        : "text-combine-upright: all";
-                    AppendAttribute(sb, "style", style);
+                    var styles = new List<string>();
+                    if (TextCombineUprightAll)
+                    {
+                        styles.Add("text-combine-upright: all");
+                        if (TextCombineUprightSizing == TateChuYokoSizing.Grow)
+                        {
+                            styles.Add("--milestro-text-combine-upright-sizing: grow");
+                        }
+                    }
+
+                    if (TextOrientation != VerticalTextOrientation.Mixed)
+                    {
+                        styles.Add($"text-orientation: {TextOrientation.ToString().ToLowerInvariant()}");
+                    }
+
+                    AppendAttribute(sb, "style", string.Join("; ", styles));
                 }
 
                 sb.Append('>');

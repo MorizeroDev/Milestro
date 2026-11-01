@@ -245,6 +245,21 @@ horizontal paragraphs ignore the annotation. Group glyphs keep their real
 source indices in visitors, range queries, paths, hit testing, and links, and
 carry `Paragraph::kTateChuYoko_VisitorFlag`.
 
+Orientation overrides (`ParagraphBuilder::addOrientationOverride`, or rich-text
+`text-orientation: mixed | upright | sideways`) replace the ICU
+`Vertical_Orientation` classification for a source range: each grapheme uses
+the override value when present and falls back to the ICU class otherwise, and
+runs split where the effective orientation changes. `upright` shapes every
+grapheme upright like an ideograph; `sideways` shapes horizontally and rotates
+the run 90 degrees clockwise, including CJK. Overrides must align to grapheme
+boundaries and cannot overlap each other; they have no effect on placeholders
+or zero-width controls, and horizontal paragraphs ignore them. Inside a
+`sideways` range, tate-chu-yoko marks are ignored. Ruby annotations always use
+`mixed` classification regardless of overrides on the base range. Column
+thickness, wrapping, alignment, indent, justification, ellipsis, effects,
+links, and scrolling follow the same rules as the equivalent mixed runs, and
+overrides add no visitor flag.
+
 ## Content sizing
 
 For `vertical-rl` with a fixed height, `TextBoxLayoutElement` can publish

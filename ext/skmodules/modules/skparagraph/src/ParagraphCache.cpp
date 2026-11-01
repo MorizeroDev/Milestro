@@ -71,6 +71,7 @@ public:
     ParagraphCacheKey(const ParagraphImpl* paragraph)
         : fText(paragraph->fText.c_str(), paragraph->fText.size())
         , fTateChuYokoAnnotations(paragraph->fTateChuYokoAnnotations)
+        , fOrientationOverrides(paragraph->fOrientationOverrides)
         , fPlaceholders(paragraph->fPlaceholders)
         , fTextStyles(paragraph->fTextStyles)
         , fParagraphStyle(paragraph->paragraphStyle()) {
@@ -82,6 +83,7 @@ public:
     ParagraphCacheKey(ParagraphCacheKey&& other)
         : fText(std::move(other.fText))
         , fTateChuYokoAnnotations(std::move(other.fTateChuYokoAnnotations))
+        , fOrientationOverrides(std::move(other.fOrientationOverrides))
         , fPlaceholders(std::move(other.fPlaceholders))
         , fTextStyles(std::move(other.fTextStyles))
         , fParagraphStyle(std::move(other.fParagraphStyle))
@@ -102,6 +104,7 @@ private:
 
     SkString fText;
     std::vector<TateChuYokoAnnotation> fTateChuYokoAnnotations;
+    std::vector<OrientationOverride> fOrientationOverrides;
     TArray<Placeholder> fPlaceholders;
     TArray<Block> fTextStyles;
     ParagraphStyle fParagraphStyle;
@@ -184,6 +187,10 @@ uint32_t ParagraphCacheKey::computeHash() const {
         hash = mix(hash, SkGoodHash()(annotation.range));
         hash = mix(hash, SkGoodHash()(static_cast<int>(annotation.sizing)));
     }
+    for (const auto& override : fOrientationOverrides) {
+        hash = mix(hash, SkGoodHash()(override.range));
+        hash = mix(hash, SkGoodHash()(static_cast<int>(override.orientation)));
+    }
     for (auto& ph : fPlaceholders) {
         if (ph.fRange.width() == 0) {
             continue;
@@ -257,6 +264,19 @@ bool ParagraphCacheKey::operator==(const ParagraphCacheKey& other) const {
                     other.fTateChuYokoAnnotations[index].range.end ||
             fTateChuYokoAnnotations[index].sizing !=
                     other.fTateChuYokoAnnotations[index].sizing) {
+            return false;
+        }
+    }
+    if (fOrientationOverrides.size() != other.fOrientationOverrides.size()) {
+        return false;
+    }
+    for (size_t index = 0; index < fOrientationOverrides.size(); ++index) {
+        if (fOrientationOverrides[index].range.start !=
+                    other.fOrientationOverrides[index].range.start ||
+            fOrientationOverrides[index].range.end !=
+                    other.fOrientationOverrides[index].range.end ||
+            fOrientationOverrides[index].orientation !=
+                    other.fOrientationOverrides[index].orientation) {
             return false;
         }
     }

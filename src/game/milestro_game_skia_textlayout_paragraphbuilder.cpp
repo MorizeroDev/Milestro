@@ -90,6 +90,18 @@ int64_t MilestroSkiaTextlayoutParagraphBuilderAddTateChuYoko(
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutParagraphBuilderAddOrientationOverride(
+        milestro::skia::textlayout::ParagraphBuilder* b, size_t startUtf8, size_t endUtf8,
+        int32_t orientation) try {
+    if (b == nullptr || startUtf8 >= endUtf8 || orientation < 0 || orientation > 2)
+        return MILESTRO_API_RET_FAILED;
+    b->addOrientationOverride(startUtf8, endUtf8,
+                              static_cast<::skia::textlayout::VerticalTextOrientation>(orientation));
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutParagraphBuilderAddPlaceholder(
         milestro::skia::textlayout::ParagraphBuilder* b,
         float width, float height, int32_t alignment, int32_t baseline, float baselineOffset) try {

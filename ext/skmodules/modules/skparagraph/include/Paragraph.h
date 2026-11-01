@@ -23,9 +23,16 @@ class ParagraphPainter;
 // the column thickness grow.
 enum class TateChuYokoSizing { kSqueeze = 0, kGrow = 1 };
 
+enum class VerticalTextOrientation { kMixed = 0, kUpright = 1, kSideways = 2 };
+
 struct TateChuYokoAnnotation {
     TextRange range;
     TateChuYokoSizing sizing = TateChuYokoSizing::kSqueeze;
+};
+
+struct OrientationOverride {
+    TextRange range;
+    VerticalTextOrientation orientation = VerticalTextOrientation::kMixed;
 };
 
 class Paragraph {

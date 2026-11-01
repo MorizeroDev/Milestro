@@ -65,6 +65,10 @@ public:
             TextRange range,
             TateChuYokoSizing sizing = TateChuYokoSizing::kSqueeze) = 0;
 
+    // Overrides the vertical text orientation classification for a UTF-8 source
+    // range. Horizontal paragraphs ignore the override without changing layout.
+    virtual void addOrientationOverride(TextRange range, VerticalTextOrientation orientation) = 0;
+
     // Constructs a SkParagraph object that can be used to layout and paint the text to a SkCanvas.
     virtual std::unique_ptr<Paragraph> Build() = 0;
 

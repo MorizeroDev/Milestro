@@ -54,6 +54,19 @@ public:
         builder->addTateChuYoko({startUtf8, endUtf8}, sizing);
     }
 
+    void addOrientationOverride(
+            ::skia::textlayout::TextRange range,
+            ::skia::textlayout::VerticalTextOrientation orientation) {
+        builder->addOrientationOverride(range, orientation);
+    }
+
+    void addOrientationOverride(
+            size_t startUtf8,
+            size_t endUtf8,
+            ::skia::textlayout::VerticalTextOrientation orientation) {
+        builder->addOrientationOverride({startUtf8, endUtf8}, orientation);
+    }
+
     Paragraph *build() {
         auto paragraph = builder->Build();
         auto ret = new Paragraph(std::move(paragraph));
