@@ -619,6 +619,9 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderAddPlaceholder(
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderAddRuby(milestro::skia::textlayout::ParagraphBuilder* b,
                                                                 size_t startUtf8, size_t endUtf8,
                                                                 [[milize::CSharpType("byte*")]] const uint8_t* text, size_t len);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderAddTateChuYoko(
+        milestro::skia::textlayout::ParagraphBuilder* b, size_t startUtf8, size_t endUtf8,
+        int32_t sizing);
 MILESTRO_API int64_t
 MilestroSkiaTextlayoutParagraphBuilderAddRubyWithStyle(milestro::skia::textlayout::ParagraphBuilder* b,
                                                        size_t startUtf8,

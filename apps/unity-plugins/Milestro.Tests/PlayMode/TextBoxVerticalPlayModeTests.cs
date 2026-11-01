@@ -2632,9 +2632,13 @@ namespace Milestro.Tests
             var version = producer.OutputVersion;
             producer.content = "<img width=\"50\" height=\"20\" key=\"centered\"/>";
             producer.paragraphStyle.singleLine = false;
-            producer.margin = new Margin { Left = new MarginValue { Auto = true },
-                Right = new MarginValue { Auto = true }, Top = new MarginValue { Auto = true },
-                Bottom = new MarginValue { Auto = true } };
+            producer.margin = new Margin
+            {
+                Left = new MarginValue { Auto = true },
+                Right = new MarginValue { Auto = true },
+                Top = new MarginValue { Auto = true },
+                Bottom = new MarginValue { Auto = true }
+            };
             yield return WaitForProducerAfter(producer, version, true);
             Assert.That(textBox.TryGetPlaceholderGeometrySnapshot(out var centered), Is.True);
             Assert.That(centered.Geometry[0].Visible, Is.True);
@@ -3124,6 +3128,69 @@ namespace Milestro.Tests
                 settings.MaxSize,
                 settings.Sizing,
                 settings.MarginReferenceSize);
+        }
+
+        [UnityTest]
+        public IEnumerator TC08_TateChuYokoLinkHitHoverAndRuntimeUpdate()
+        {
+            const string markup =
+                "<a href=\"tcy-link\"><span style=\"text-combine-upright: all\">ABC</span></a>天地";
+            var textBox = CreateTextBox(markup, out var producer, MarginAll(0));
+            textBox.GetComponent<RectTransform>().sizeDelta = new Vector2(200, 200);
+            producer.textStyle.size = 30;
+            yield return WaitForProducer(producer, true);
+            Assert.That(producer.isVerticalLayout, Is.True);
+            Assert.That(producer.lastLayoutError, Is.Null);
+            Assert.That(producer.TryGetContentSnapshot(out var content), Is.True);
+            Assert.That(content.PlainText, Is.EqualTo("ABC天地"));
+            Assert.That(producer.TryGetLinkGeometrySnapshot(out var geometry, out _), Is.True);
+            var rects = geometry.Paragraphs[0].GetRectsForRange(0, 3);
+            Assert.That(rects, Has.Count.EqualTo(1));
+            Assert.That(rects[0].height, Is.EqualTo(30f).Within(1f));
+            Assert.That(rects[0].width, Is.EqualTo(30f).Within(1f));
+            Assert.That(TryGetVisibleLinkPoint(geometry, out var point), Is.True);
+            Assert.That(producer.TryHitLink(point, out var hit), Is.True);
+            Assert.That(hit.Href, Is.EqualTo("tcy-link"));
+            var indicator = HoverFirstLink(textBox);
+            Assert.That(indicator.enabled, Is.True);
+            Assert.That(LinkHoverIndicatorVertical(indicator), Is.True);
+
+            var version = producer.OutputVersion;
+            producer.content =
+                "<a href=\"tcy-updated\"><span style=\"text-combine-upright: all\">ABC</span></a>天地";
+            yield return WaitForProducerAfter(producer, version, true);
+            Assert.That(producer.lastLayoutError, Is.Null);
+            Assert.That(producer.TryGetLinkGeometrySnapshot(out var updated, out _), Is.True);
+            Assert.That(TryGetVisibleLinkPoint(updated, out var updatedPoint), Is.True);
+            Assert.That(producer.TryHitLink(updatedPoint, out var updatedHit), Is.True);
+            Assert.That(updatedHit.Href, Is.EqualTo("tcy-updated"));
+        }
+
+        [UnityTest]
+        public IEnumerator TC21_GrowTateChuYokoLinkHitAndNaturalWidth()
+        {
+            const string markup =
+                "<a href=\"tcy-grow\"><span style=\"text-combine-upright: all; " +
+                "--milestro-text-combine-upright-sizing: grow\">ABC</span></a>天地";
+            var textBox = CreateTextBox(markup, out var producer, MarginAll(0));
+            textBox.GetComponent<RectTransform>().sizeDelta = new Vector2(240, 200);
+            producer.textStyle.size = 30;
+            yield return WaitForProducer(producer, true);
+            Assert.That(producer.isVerticalLayout, Is.True);
+            Assert.That(producer.lastLayoutError, Is.Null);
+            Assert.That(producer.TryGetContentSnapshot(out var content), Is.True);
+            Assert.That(content.PlainText, Is.EqualTo("ABC天地"));
+            Assert.That(producer.TryGetLinkGeometrySnapshot(out var geometry, out _), Is.True);
+            var rects = geometry.Paragraphs[0].GetRectsForRange(0, 3);
+            Assert.That(rects, Has.Count.EqualTo(1));
+            Assert.That(rects[0].height, Is.EqualTo(30f).Within(1f));
+            Assert.That(rects[0].width, Is.GreaterThan(35f));
+            Assert.That(TryGetVisibleLinkPoint(geometry, out var point), Is.True);
+            Assert.That(producer.TryHitLink(point, out var hit), Is.True);
+            Assert.That(hit.Href, Is.EqualTo("tcy-grow"));
+            var indicator = HoverFirstLink(textBox);
+            Assert.That(indicator.enabled, Is.True);
+            Assert.That(LinkHoverIndicatorVertical(indicator), Is.True);
         }
 
         private static MarginValue FixedMarginValue(MarginValue value)

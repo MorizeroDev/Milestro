@@ -48,6 +48,12 @@ public:
         builder->addRuby({{startUtf8, endUtf8}, std::string(text, length), style.spawn()});
     }
 
+    void addTateChuYoko(size_t startUtf8, size_t endUtf8,
+                        ::skia::textlayout::TateChuYokoSizing sizing =
+                                ::skia::textlayout::TateChuYokoSizing::kSqueeze) {
+        builder->addTateChuYoko({startUtf8, endUtf8}, sizing);
+    }
+
     Paragraph *build() {
         auto paragraph = builder->Build();
         auto ret = new Paragraph(std::move(paragraph));

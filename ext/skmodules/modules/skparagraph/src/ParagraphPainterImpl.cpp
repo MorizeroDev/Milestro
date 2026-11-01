@@ -83,6 +83,10 @@ void CanvasParagraphPainter::translate(SkScalar dx, SkScalar dy) {
     fCanvas->translate(dx, dy);
 }
 
+void CanvasParagraphPainter::scale(SkScalar sx, SkScalar sy) {
+    fCanvas->scale(sx, sy);
+}
+
 void CanvasParagraphPainter::rotate(SkScalar degrees) {
     fCanvas->rotate(degrees);
 }

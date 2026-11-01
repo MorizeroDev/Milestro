@@ -190,11 +190,16 @@ std::unique_ptr<Paragraph> ParagraphBuilderImpl::Build() {
     auto paragraph = std::make_unique<ParagraphImpl>(
             fUtf8, fParagraphStyle, fStyledBlocks, fPlaceholders, fFontCollection, fUnicode);
     paragraph->setRubyAnnotations(fRubyAnnotations);
+    paragraph->setTateChuYokoAnnotations(fTateChuYokoAnnotations);
     return paragraph;
 }
 
 void ParagraphBuilderImpl::addRuby(const RubyAnnotation& annotation) {
     fRubyAnnotations.push_back(annotation);
+}
+
+void ParagraphBuilderImpl::addTateChuYoko(TextRange range, TateChuYokoSizing sizing) {
+    fTateChuYokoAnnotations.push_back({range, sizing});
 }
 
 SkSpan<char> ParagraphBuilderImpl::getText() {
@@ -264,6 +269,7 @@ void ParagraphBuilderImpl::setLineBreaksUtf16(std::vector<SkUnicode::LineBreakBe
 void ParagraphBuilderImpl::Reset() {
 
     fRubyAnnotations.clear();
+    fTateChuYokoAnnotations.clear();
     fTextStyles.clear();
     fUtf8.reset();
     fStyledBlocks.clear();

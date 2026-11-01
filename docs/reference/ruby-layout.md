@@ -129,8 +129,9 @@ The Unity rich-text parser supports the single-base HTML subset
 `<ruby>base<rt>annotation</rt></ruby>`, optional `<rp>` fallback text, standard
 CSS `ruby-position`, `ruby-align` and `ruby-overhang`, plus documented
 `--milestro-ruby-*` custom properties. InputBox editing intentionally remains
-plain-text-only. Tate-chu-yoko and `text-orientation` overrides are not yet
-supported.
+plain-text-only. A Ruby base range cannot intersect a tate-chu-yoko group;
+the tate-chu-yoko validation rejects the overlap. Per-run `text-orientation`
+overrides are not yet supported.
 
 ## Validation
 

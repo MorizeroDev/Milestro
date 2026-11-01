@@ -1397,6 +1397,11 @@ void ParagraphImpl::updateForegroundPaint(size_t from, size_t to, SkPaint paint)
         textStyle.fStyle.setForegroundColor(paint);
     }
     if (this->isVertical()) {
+        for (auto& span : fVerticalTateChuYoko) {
+            if (span.styleIsDefault) {
+                span.content->updateForegroundPaint(0, span.range.width(), paint);
+            }
+        }
         for (auto& span : fVerticalRuby) {
             if (!span.input.style.textStyle.has_value()) {
                 span.annotation->updateForegroundPaint(0, span.input.text.size(), paint);

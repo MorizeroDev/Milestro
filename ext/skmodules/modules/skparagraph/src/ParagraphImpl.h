@@ -91,6 +91,23 @@ struct VerticalRubySpan {
     SkScalar overflowShift = 0;
 };
 
+struct VerticalTateChuYokoSpan {
+    TextRange range = EMPTY_TEXT;
+    ClusterRange clusters = EMPTY_CLUSTERS;
+    std::unique_ptr<Paragraph> content;
+    TextStyle style;
+    SkScalar naturalWidth = 0;
+    SkScalar lineAscent = 0;
+    SkScalar lineDescent = 0;
+    SkScalar inlineStart = 0;
+    SkScalar inlineExtent = 0;
+    SkScalar cellWidth = 0;
+    SkScalar squeeze = 1;
+    SkScalar blockOffset = 0;
+    TateChuYokoSizing sizing = TateChuYokoSizing::kSqueeze;
+    bool styleIsDefault = false;
+};
+
 struct VerticalDecorationSegment {
     size_t column = 0;
     TextDecoration decoration = TextDecoration::kNoDecoration;
@@ -231,6 +248,16 @@ public:
     }
     void setRubyAnnotations(std::vector<RubyAnnotation> annotations);
     bool hasRuby() const { return !fRubyAnnotations.empty(); }
+    void setTateChuYokoAnnotations(std::vector<TateChuYokoAnnotation> annotations) {
+        fTateChuYokoAnnotations = std::move(annotations);
+        fTateChuYokoPrepared = false;
+    }
+    bool hasTateChuYoko() const { return !fTateChuYokoAnnotations.empty(); }
+    void prepareVerticalTateChuYoko();
+    const VerticalTateChuYokoSpan* verticalTateChuYokoAtCluster(ClusterIndex cluster) const;
+    const VerticalTateChuYokoSpan* verticalTateChuYokoStartingAt(ClusterIndex cluster) const;
+    std::vector<std::pair<const VerticalTateChuYokoSpan*, SkPoint>>
+    verticalTateChuYokoPlacements(size_t column) const;
     void prepareRuby();
     void positionRuby();
     void addRubyMetrics(ClusterRange clusters, InternalLineMetrics& metrics) const;
@@ -388,10 +415,12 @@ private:
 
     // Input
     std::vector<RubyAnnotation> fRubyAnnotations;
+    std::vector<TateChuYokoAnnotation> fTateChuYokoAnnotations;
     std::vector<RubySpan> fRubySpans;
     std::vector<RubyLayoutUnit> fRubyUnits;
     std::vector<std::vector<SkPoint>> fRubyOffsets;
     bool fRubyPrepared = false;
+    bool fTateChuYokoPrepared = false;
     skia_private::TArray<StyleBlock<SkScalar>> fLetterSpaceStyles;
     skia_private::TArray<StyleBlock<SkScalar>> fWordSpaceStyles;
     skia_private::TArray<StyleBlock<SkPaint>> fBackgroundStyles;
@@ -423,6 +452,7 @@ private:
     ParagraphLayoutMetrics fLayoutMetrics;
     std::vector<VerticalColumnGeometry> fVerticalColumns;
     std::vector<VerticalRubySpan> fVerticalRuby;
+    std::vector<VerticalTateChuYokoSpan> fVerticalTateChuYoko;
     std::vector<VerticalDecorationSegment> fVerticalDecorations;
     std::vector<VerticalBackgroundSegment> fVerticalBackgrounds;
 

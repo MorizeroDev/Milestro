@@ -165,8 +165,8 @@ in a player build the fallback is `Render Error`.
 | `face` | Font-family list |
 | `weight`, `width`, `slant` | Font style axes |
 
-`<font>`, `<span>`, and `<p>` also accept a `style` attribute with a small CSS
-subset:
+`<font>`, `<span>`, and other inline elements also accept a `style` attribute
+with a small CSS subset:
 
 - `font-kerning: auto | normal | none`
 - `font-feature-settings: normal` or comma-separated settings such as
@@ -295,6 +295,31 @@ Ruby annotations are placed on the physical right of the base column;
 Vertical-specific sizing, indent, alignment, and effect rules are in
 [Layout and sizing](layout.md#vertical-writing-vertical-rl).
 
+### Tate-chu-yoko
+
+Mark short runs to typeset them horizontally inside a vertical column (dates,
+numbers, short Latin words):
+
+```xml
+<span style="text-combine-upright: all">2025</span>年
+<span style="text-combine-upright: all; --milestro-text-combine-upright-sizing: grow">netnewswire</span>
+```
+
+A combine group is shaped horizontally (not rotated) and occupies a one-em
+slot down the column. It is atomic for wrapping, justification, and ellipsis
+truncation, and its glyphs keep their real source text for hit testing and
+links. With the default `squeeze` sizing, a group wider than one em is
+compressed to fit; `--milestro-text-combine-upright-sizing: grow` keeps the
+natural width and widens the column instead.
+
+- `text-combine-upright: none | all` works on any inline element; consecutive
+  `all` text forms one group.
+- A group needs one uniform text style and cannot contain a hard break, an
+  `<img/>` placeholder, or a Ruby base range.
+- There is no `digits` auto-detection: unmarked digits follow the normal
+  mixed-orientation rules.
+- Horizontal paragraphs ignore combine marks entirely.
+
 Current limits:
 
 - Use a fixed-size Canvas `TextBox`. `TextInput` editing, SlimText, and the
@@ -302,8 +327,8 @@ Current limits:
 - The base direction stays LTR; RTL content is not supported. `textAlign`
   supports `Start`, `End`, `Center`, and `Justify`; `Left` and `Right` fall
   back to `Start`.
-- `vertical-lr`, tate-chu-yoko (horizontal-in-vertical digits), and per-run
-  `text-orientation` overrides are not available yet.
+- `vertical-lr` and per-run `text-orientation` overrides are not available
+  yet.
 - Unsupported combinations degrade with an Editor diagnostic instead of
   failing silently.
 

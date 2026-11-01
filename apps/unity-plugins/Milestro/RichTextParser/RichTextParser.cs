@@ -189,7 +189,8 @@ namespace Milestro.RichTextParser
             return ConvertToSegments(allowViewportBlockMargins: false);
         }
 
-        internal ParagraphPayload ConvertToSegments(bool allowViewportBlockMargins)
+        internal ParagraphPayload ConvertToSegments(bool allowViewportBlockMargins,
+            ICollection<string>? issues = null)
         {
             var rootNode = RootNode;
             if (rootNode is XmlTextNode textNode)
@@ -199,8 +200,13 @@ namespace Milestro.RichTextParser
 
             if (rootNode is XmlElementNode root)
             {
-                var ctx = new Context { AllowViewportBlockMargins = allowViewportBlockMargins };
+                var ctx = new Context
+                {
+                    AllowViewportBlockMargins = allowViewportBlockMargins,
+                    Issues = issues,
+                };
                 ConvertToSegments(ctx, root);
+                CollectTateChuYokoRanges(ctx.Result);
                 return ctx.Result;
             }
 
@@ -297,10 +303,6 @@ namespace Milestro.RichTextParser
                     state.FontFamilies = FontFamilyParser.ToSourceFamilyList(fontFamilies);
                 }
 
-                if (node.Attributes.TryGetValue("style", out var fontDeclarations))
-                {
-                    CssParser.Apply(state, fontDeclarations);
-                }
             }
             else if (node.Tag == "span")
             {
@@ -359,10 +361,6 @@ namespace Milestro.RichTextParser
                     state.FontSlant = fontSlant;
                 }
 
-                if (node.Attributes.TryGetValue("style", out var spanDeclarations))
-                {
-                    CssParser.Apply(state, spanDeclarations);
-                }
             }
             else if (node.Tag == "p")
             {
@@ -398,7 +396,7 @@ namespace Milestro.RichTextParser
                 if (node.Attributes.TryGetValue("style", out var paragraphDeclarations))
                 {
                     CssParser.Apply(state, paragraphDeclarations, block.Style,
-                        ctx.AllowViewportBlockMargins);
+                        ctx.AllowViewportBlockMargins, ctx.Issues);
                 }
 
                 foreach (var child in node.Children)
@@ -448,6 +446,13 @@ namespace Milestro.RichTextParser
                 throw new InvalidCastException($"unknown tag accepted: {node.Tag}{Environment.NewLine}{node}");
             }
 
+            // The <p> branch already applied its style attribute (with the
+            // paragraph-level argument); applying it again here would duplicate
+            // feature operations and diagnostic entries.
+            if (node.Tag != "p" && node.Attributes.TryGetValue("style", out var inlineDeclarations))
+            {
+                CssParser.Apply(state, inlineDeclarations, issues: ctx.Issues);
+            }
 
             foreach (var child in node.Children)
             {
@@ -462,6 +467,107 @@ namespace Milestro.RichTextParser
                     anchorStartUtf16,
                     ctx.TextLengthUtf16,
                     ctx.Result.Links.Count));
+            }
+        }
+
+        private static void CollectTateChuYokoRanges(ParagraphPayload payload)
+        {
+            foreach (var block in payload.Blocks)
+            {
+                if (block.LengthUtf16 <= 0) continue;
+
+                var groupable = new bool[block.LengthUtf16];
+                var combine = new bool[block.LengthUtf16];
+                var sizing = new TateChuYokoSizing[block.LengthUtf16];
+                var placeholders = new List<int>();
+                foreach (var placeholder in payload.Placeholders)
+                {
+                    if (block.ContainsRange(placeholder.StartUtf16, placeholder.EndUtf16))
+                    {
+                        placeholders.Add(placeholder.StartUtf16);
+                    }
+                }
+
+                placeholders.Sort();
+                var nextPlaceholder = 0;
+                var cursor = block.StartUtf16;
+
+                void ConsumePlaceholders()
+                {
+                    while (nextPlaceholder < placeholders.Count && placeholders[nextPlaceholder] == cursor)
+                    {
+                        ++cursor;
+                        ++nextPlaceholder;
+                    }
+                }
+
+                foreach (var segment in block.Segments)
+                {
+                    var content = segment.Content ?? string.Empty;
+                    var isAll = segment.TextStyle?.TextCombineUprightAll == true;
+                    var segmentSizing = segment.TextStyle?.TextCombineUprightSizing ??
+                                        TateChuYokoSizing.Squeeze;
+                    var offset = 0;
+                    while (offset < content.Length)
+                    {
+                        ConsumePlaceholders();
+                        var position = cursor - block.StartUtf16;
+                        if (position < 0 || position >= block.LengthUtf16)
+                        {
+                            throw new InvalidOperationException("Invalid tate-chu-yoko source position");
+                        }
+
+                        var character = content[offset];
+                        groupable[position] = character != '\n' && character != '\r';
+                        combine[position] = isAll;
+                        sizing[position] = segmentSizing;
+                        ++cursor;
+                        ++offset;
+                    }
+                }
+
+                ConsumePlaceholders();
+
+                foreach (var ruby in payload.RubyAnnotations)
+                {
+                    if (!block.ContainsRange(ruby.StartUtf16, ruby.EndUtf16)) continue;
+                    var start = ruby.StartUtf16 - block.StartUtf16;
+                    var end = ruby.EndUtf16 - block.StartUtf16;
+                    for (var index = start; index < end; ++index)
+                    {
+                        groupable[index] = false;
+                    }
+                }
+
+                var groupStart = -1;
+                var groupSizing = TateChuYokoSizing.Squeeze;
+                for (var index = 0; index <= groupable.Length; ++index)
+                {
+                    var active = index < groupable.Length && groupable[index] && combine[index];
+                    if (active && groupStart >= 0 && sizing[index] != groupSizing)
+                    {
+                        payload.AddTateChuYoko(new TateChuYokoAnnotation(
+                            block.StartUtf16 + groupStart, block.StartUtf16 + index, groupSizing));
+                        groupStart = -1;
+                    }
+
+                    if (active)
+                    {
+                        if (groupStart < 0)
+                        {
+                            groupStart = index;
+                            groupSizing = sizing[index];
+                        }
+                        continue;
+                    }
+
+                    if (groupStart >= 0)
+                    {
+                        payload.AddTateChuYoko(new TateChuYokoAnnotation(
+                            block.StartUtf16 + groupStart, block.StartUtf16 + index, groupSizing));
+                        groupStart = -1;
+                    }
+                }
             }
         }
 
@@ -629,10 +735,12 @@ namespace Milestro.RichTextParser
             }
 
             id = hasId ? id : "";
-            var expectedAttributeCount = hasId ? 2 : 1;
+            var hasStyle = node.Attributes.ContainsKey("style");
+            var expectedAttributeCount = 1 + (hasId ? 1 : 0) + (hasStyle ? 1 : 0);
             if (node.Attributes.Count != expectedAttributeCount)
             {
-                throw new InvalidCastException("<a> only accepts href and optional id attributes");
+                throw new InvalidCastException(
+                    "<a> only accepts href and optional id and style attributes");
             }
         }
 

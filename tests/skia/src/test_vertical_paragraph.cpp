@@ -188,6 +188,7 @@ struct BuildOptions {
     const char* ellipsis = nullptr;
     bool fallback = true;
     bool replaceTabCharacters = false;
+    SkScalar indent = 0;
 };
 
 std::unique_ptr<skia_text::Paragraph>
@@ -208,6 +209,9 @@ BuildCoreParagraph(const std::string& text,
         style.setEllipsis(SkString(options.ellipsis));
     }
     style.setReplaceTabCharacters(options.replaceTabCharacters);
+    if (options.indent != 0) {
+        style.setTextIndent(options.indent, false);
+    }
     auto builder = skia_text::ParagraphBuilder::make(style, collection, TestUnicodeProvider());
     builder->pushStyle(textStyle);
     builder->addText(text.c_str(), text.size());
@@ -360,6 +364,9 @@ public:
     void translate(SkScalar dx, SkScalar dy) override {
         canvas_->translate(dx, dy);
     }
+    void scale(SkScalar sx, SkScalar sy) override {
+        canvas_->scale(sx, sy);
+    }
     void rotate(SkScalar degrees) override {
         canvas_->rotate(degrees);
     }
@@ -435,6 +442,10 @@ public:
 
     void translate(SkScalar offsetX, SkScalar offsetY) override {
         transform.preTranslate(offsetX, offsetY);
+    }
+
+    void scale(SkScalar scaleX, SkScalar scaleY) override {
+        transform.preScale(scaleX, scaleY);
     }
 
     void rotate(SkScalar degrees) override {
@@ -1236,6 +1247,334 @@ TEST_F(SkiaVerticalParagraph, RB07_TrailingWhitespaceInsideRubyCannotLeavePartia
     EXPECT_FLOAT_EQ(full->getLayoutMetrics().columns[0].blockThickness,
                     removed->getLayoutMetrics().columns[0].blockThickness);
     EXPECT_TRUE(TightBoxes(removed.get(), 0, 2).empty());
+}
+
+std::unique_ptr<skia_text::Paragraph> BuildVerticalTateChuYoko(
+        const std::string& text, std::vector<skia_text::TextRange> ranges,
+        const skia_text::TextStyle& textStyle = PrimaryStyle(40),
+        const BuildOptions& options = {},
+        const std::function<void(skia_text::ParagraphBuilder*)>& extra = {}) {
+    return BuildCoreParagraph(text, textStyle, options, [&](auto* builder) {
+        for (auto range : ranges) {
+            builder->addTateChuYoko(range);
+        }
+        if (extra) {
+            extra(builder);
+        }
+    });
+}
+
+std::unique_ptr<skia_text::Paragraph> BuildVerticalTateChuYokoModes(
+        const std::string& text,
+        std::vector<skia_text::TateChuYokoAnnotation> annotations,
+        const skia_text::TextStyle& textStyle = PrimaryStyle(40),
+        const BuildOptions& options = {},
+        const std::function<void(skia_text::ParagraphBuilder*)>& extra = {}) {
+    return BuildCoreParagraph(text, textStyle, options, [&](auto* builder) {
+        for (const auto& annotation : annotations) {
+            builder->addTateChuYoko(annotation.range, annotation.sizing);
+        }
+        if (extra) {
+            extra(builder);
+        }
+    });
+}
+
+std::vector<VisitorRun> TateChuYokoRuns(const std::vector<VisitorRun>& runs) {
+    std::vector<VisitorRun> result;
+    for (const auto& run : runs) {
+        if (run.flags & skia_text::Paragraph::kTateChuYoko_VisitorFlag) {
+            result.push_back(run);
+        }
+    }
+    return result;
+}
+
+TEST_F(SkiaVerticalParagraph, TC01_BasicCellGeometryIsHorizontalAndOneEm) {
+    auto plain = BuildCoreParagraph("天地", PrimaryStyle(40));
+    auto tcy = BuildVerticalTateChuYoko("天12", {{3, 5}});
+    plain->layoutWithInlineExtent(400);
+    tcy->layoutWithInlineExtent(400);
+
+    EXPECT_NEAR(tcy->getLayoutMetrics().longestInlineExtent,
+                plain->getLayoutMetrics().longestInlineExtent, kTolerance);
+    const auto runs = TateChuYokoRuns(SnapshotRuns(tcy.get()));
+    ASSERT_EQ(runs.size(), 1u);
+    EXPECT_FALSE(runs[0].sideways);
+    EXPECT_FALSE(IsClockwise(runs[0].transform));
+    EXPECT_FLOAT_EQ(runs[0].advance.height(), 40);
+    EXPECT_EQ(runs[0].starts, (std::vector<uint32_t>{3, 4, 5}));
+
+    const auto boxes = TightBoxes(tcy.get(), 1, 3);
+    ASSERT_EQ(boxes.size(), 1u);
+    const auto& column = tcy->getLayoutMetrics().columns[0];
+    EXPECT_NEAR(boxes[0].rect.height(), 40, kTolerance);
+    EXPECT_NEAR(boxes[0].rect.centerX(), column.physicalBaseline, kTolerance);
+    EXPECT_NEAR(runs[0].origin.x(), boxes[0].rect.left(), kTolerance);
+    const auto absoluteOrigins = AbsoluteGlyphOrigins(runs[0]);
+    ASSERT_FALSE(absoluteOrigins.empty());
+    EXPECT_GE(absoluteOrigins[0].y(), boxes[0].rect.top());
+    EXPECT_LE(absoluteOrigins[0].y(), boxes[0].rect.bottom());
+}
+
+TEST_F(SkiaVerticalParagraph, TC02_TC03_OverwideSqueezesAndNarrowKeepsNaturalWidth) {
+    auto wideContent = BuildCoreParagraph("ABC", PrimaryStyle(40),
+            {.writingMode = skia_text::WritingMode::kHorizontalTb});
+    wideContent->layout(10000);
+    const SkScalar wideNatural = wideContent->getMaxIntrinsicWidth();
+    EXPECT_GT(wideNatural, 40);
+
+    auto squeezed = BuildVerticalTateChuYoko("天ABC", {{3, 6}});
+    squeezed->layoutWithInlineExtent(400);
+    const auto squeezedRuns = TateChuYokoRuns(SnapshotRuns(squeezed.get()));
+    ASSERT_EQ(squeezedRuns.size(), 1u);
+    EXPECT_NEAR(squeezedRuns[0].transform.getScaleX(), 40 / wideNatural, 0.001);
+    auto squeezedBoxes = TightBoxes(squeezed.get(), 1, 4);
+    ASSERT_EQ(squeezedBoxes.size(), 1u);
+    EXPECT_NEAR(squeezedBoxes[0].rect.width(), 40, kTolerance);
+    EXPECT_NEAR(squeezed->getLayoutMetrics().longestInlineExtent, 80, kTolerance);
+
+    auto narrowContent = BuildCoreParagraph("A", PrimaryStyle(40),
+            {.writingMode = skia_text::WritingMode::kHorizontalTb});
+    narrowContent->layout(10000);
+    const SkScalar narrowNatural = narrowContent->getMaxIntrinsicWidth();
+    EXPECT_LT(narrowNatural, 40);
+
+    auto natural = BuildVerticalTateChuYoko("天A", {{3, 4}});
+    natural->layoutWithInlineExtent(400);
+    const auto naturalRuns = TateChuYokoRuns(SnapshotRuns(natural.get()));
+    ASSERT_EQ(naturalRuns.size(), 1u);
+    EXPECT_NEAR(naturalRuns[0].transform.getScaleX(), 1, 0.001);
+    auto naturalBoxes = TightBoxes(natural.get(), 1, 2);
+    ASSERT_EQ(naturalBoxes.size(), 1u);
+    EXPECT_NEAR(naturalBoxes[0].rect.width(), narrowNatural, kTolerance);
+}
+
+TEST_F(SkiaVerticalParagraph, TC04_CellWidthGrowsColumnSymmetric) {
+    auto style = PrimaryStyle(40);
+    style.setHeightOverride(true);
+    style.setHeight(0.4f);
+    auto plain = BuildCoreParagraph("天", style);
+    auto tcy = BuildVerticalTateChuYoko("天1", {{3, 4}}, style);
+    plain->layoutWithInlineExtent(400);
+    tcy->layoutWithInlineExtent(400);
+    const auto plainColumn = plain->getLayoutMetrics().columns[0];
+    const auto tcyColumn = tcy->getLayoutMetrics().columns[0];
+    const auto boxes = TightBoxes(tcy.get(), 1, 2);
+    ASSERT_EQ(boxes.size(), 1u);
+    EXPECT_GT(boxes[0].rect.width(), plainColumn.blockThickness);
+    EXPECT_NEAR(tcyColumn.blockThickness, boxes[0].rect.width(), kTolerance);
+    EXPECT_NEAR(boxes[0].rect.centerX(), tcyColumn.physicalBounds.centerX(), kTolerance);
+    EXPECT_LT(plainColumn.blockThickness, tcyColumn.blockThickness);
+}
+
+TEST_F(SkiaVerticalParagraph, TC05_AtomicWrapAndJustifyOpportunity) {
+    auto wrapped = BuildVerticalTateChuYoko("天12地", {{3, 5}});
+    wrapped->layoutWithInlineExtent(50);
+    const auto& metrics = wrapped->getLayoutMetrics();
+    ASSERT_EQ(metrics.columns.size(), 3u);
+    EXPECT_EQ(metrics.columns[0].utf16Start, 0u);
+    EXPECT_EQ(metrics.columns[0].utf16End, 1u);
+    EXPECT_EQ(metrics.columns[1].utf16Start, 1u);
+    EXPECT_EQ(metrics.columns[1].utf16End, 3u);
+    EXPECT_EQ(metrics.columns[2].utf16Start, 3u);
+    EXPECT_EQ(metrics.columns[2].utf16End, 4u);
+    const auto boxes = TightBoxes(wrapped.get(), 1, 3);
+    ASSERT_EQ(boxes.size(), 1u);
+    EXPECT_NEAR(boxes[0].rect.height(), 40, kTolerance);
+
+    auto start = BuildVerticalTateChuYoko("天12地", {{3, 5}});
+    auto justify = BuildVerticalTateChuYoko("天12地", {{3, 5}},
+            PrimaryStyle(40), {.align = skia_text::TextAlign::kJustify});
+    start->layoutWithInlineExtent(100);
+    justify->layoutWithInlineExtent(100);
+    const auto startBox = TightBoxes(start.get(), 1, 3);
+    const auto justifyBox = TightBoxes(justify.get(), 1, 3);
+    ASSERT_EQ(startBox.size(), 1u);
+    ASSERT_EQ(justifyBox.size(), 1u);
+    EXPECT_NEAR(justifyBox[0].rect.top() - startBox[0].rect.top(), 20, 0.1);
+}
+
+TEST_F(SkiaVerticalParagraph, TC06_EllipsisRemovesWholeGroupAndSnapsInsertion) {
+    auto removed = BuildEllipsisParagraph("天地12", PrimaryStyle(40), 1, "\xE2\x80\xA6",
+            skia_text::TextAlign::kStart,
+            [](auto* builder) { builder->addTateChuYoko({6, 8}); });
+    removed->layoutWithInlineExtent(90);
+    EXPECT_TRUE(removed->didExceedMaxLines());
+    EXPECT_TRUE(TightBoxes(removed.get(), 2, 4).empty());
+    EXPECT_TRUE(TateChuYokoRuns(SnapshotRuns(removed.get())).empty());
+    ASSERT_FALSE(removed->getLayoutMetrics().columns.empty());
+    EXPECT_LE(removed->getLayoutMetrics().columns[0].utf16End, 2u);
+    for (const auto& run : SnapshotRuns(removed.get())) {
+        if (IsSyntheticAffixRun(run)) continue;
+        for (size_t index = 0; index + 1 < run.starts.size(); ++index) {
+            EXPECT_LT(run.starts[index], 6u);
+        }
+    }
+}
+
+TEST_F(SkiaVerticalParagraph, TC07_AdjacentGroupsAndEffectsStayInsideCells) {
+    auto style = PrimaryStyle(40);
+    SkPaint background;
+    background.setColor(SK_ColorGREEN);
+    style.setBackgroundPaint(background);
+    style.setDecoration(skia_text::TextDecoration::kUnderline);
+    style.addShadow(skia_text::TextShadow(SK_ColorBLUE, {4, 6}, 2));
+    auto paragraph = BuildVerticalTateChuYoko("12天34", {{0, 2}, {5, 7}}, style);
+    paragraph->layoutWithInlineExtent(400);
+    const auto runs = TateChuYokoRuns(SnapshotRuns(paragraph.get()));
+    ASSERT_EQ(runs.size(), 2u);
+    EXPECT_EQ(runs[0].starts, (std::vector<uint32_t>{0, 1, 2}));
+    EXPECT_EQ(runs[1].starts, (std::vector<uint32_t>{5, 6, 7}));
+    EXPECT_EQ(TightBoxes(paragraph.get(), 0, 2).size(), 1u);
+    EXPECT_EQ(TightBoxes(paragraph.get(), 3, 5).size(), 1u);
+
+    const auto bitmap = RasterizeText(paragraph.get(), 0, 0, 120, 220);
+    const auto green = PixelsMatching(bitmap, [](SkColor color) {
+        return SkColorGetG(color) > 120 && SkColorGetR(color) < 100 && SkColorGetB(color) < 100;
+    });
+    EXPECT_GT(green, 40u);
+    EXPECT_GT(NonWhitePixels(bitmap), 80u);
+}
+
+TEST_F(SkiaVerticalParagraph, TC08_RangeVisitorPathAndHitTestShareCellGeometry) {
+    auto paragraph = BuildVerticalTateChuYoko("天12地", {{3, 5}});
+    paragraph->layoutWithInlineExtent(400);
+    const auto boxes = TightBoxes(paragraph.get(), 1, 3);
+    ASSERT_EQ(boxes.size(), 1u);
+    ASSERT_TRUE(paragraph->getRectsForPlaceholders().empty());
+
+    const auto runs = TateChuYokoRuns(SnapshotRuns(paragraph.get()));
+    ASSERT_EQ(runs.size(), 1u);
+    EXPECT_EQ(runs[0].starts, (std::vector<uint32_t>{3, 4, 5}));
+    EXPECT_EQ(runs[0].glyphs.size(), 2u);
+
+    const auto cell = boxes[0].rect;
+    auto firstHalf = paragraph->getGlyphPositionAtCoordinate(cell.centerX(), cell.top() + 5);
+    auto secondHalf = paragraph->getGlyphPositionAtCoordinate(cell.centerX(), cell.bottom() - 5);
+    EXPECT_EQ(firstHalf.position, 1u);
+    EXPECT_EQ(secondHalf.position, 3u);
+
+    auto onlyGroup = BuildVerticalTateChuYoko("12", {{0, 2}});
+    onlyGroup->layoutWithInlineExtent(200);
+    const auto groupCell = TightBoxes(onlyGroup.get(), 0, 2);
+    ASSERT_EQ(groupCell.size(), 1u);
+    SkPath path;
+    EXPECT_EQ(onlyGroup->getPath(0, &path), 0);
+    EXPECT_FALSE(path.isEmpty());
+    const auto bounds = path.getBounds();
+    EXPECT_GE(bounds.left(), groupCell[0].rect.left() - 1);
+    EXPECT_LE(bounds.right(), groupCell[0].rect.right() + 1);
+    EXPECT_GE(bounds.top(), groupCell[0].rect.top() - 1);
+    EXPECT_LE(bounds.bottom(), groupCell[0].rect.bottom() + 1);
+}
+
+TEST_F(SkiaVerticalParagraph, TC11_StrictValidationAndHorizontalNoOp) {
+    auto expectRejected = [](const std::string& text,
+                             std::vector<skia_text::TextRange> ranges,
+                             const std::function<void(skia_text::ParagraphBuilder*)>& extra = {}) {
+        EXPECT_THROW({
+            auto paragraph = BuildVerticalTateChuYoko(text, std::move(ranges), PrimaryStyle(40), {}, extra);
+            paragraph->layoutWithInlineExtent(400);
+        }, std::invalid_argument);
+    };
+
+    expectRejected("12", {{1, 1}});
+    expectRejected("12", {{0, 3}});
+    expectRejected("😀", {{0, 2}});
+    expectRejected("12", {{0, 2}, {1, 2}});
+    expectRejected("12\n3", {{0, 3}});
+    expectRejected("\xE2\x80\x8E", {{0, 3}});
+    expectRejected("12", {{0, 2}}, [](auto* builder) {
+        builder->addRuby({{0, 1}, "a"});
+    });
+    expectRejected("12", {{0, 2}}, [](auto* builder) {
+        builder->addPlaceholder({20, 20, skia_text::PlaceholderAlignment::kMiddle,
+                                 skia_text::TextBaseline::kAlphabetic, 0});
+        builder->addTateChuYoko({0, 5});
+    });
+
+    auto crossStyle = BuildCustomParagraph({}, [](auto* builder) {
+        builder->pushStyle(PrimaryStyle(40));
+        builder->addText("1", 1);
+        builder->pushStyle(PrimaryStyle(20));
+        builder->addText("2", 1);
+        builder->addTateChuYoko({0, 2});
+    });
+    EXPECT_THROW(crossStyle->layoutWithInlineExtent(400), std::invalid_argument);
+
+    auto plain = BuildCoreParagraph("12天地", PrimaryStyle(40),
+            {.writingMode = skia_text::WritingMode::kHorizontalTb});
+    auto annotated = BuildVerticalTateChuYoko("12天地", {{0, 2}}, PrimaryStyle(40),
+            {.writingMode = skia_text::WritingMode::kHorizontalTb});
+    plain->layout(400);
+    annotated->layout(400);
+    ExpectSnapshotsNear(Capture(plain.get()), Capture(annotated.get()));
+}
+
+TEST_F(SkiaVerticalParagraph, TC13_LayoutFailuresResizeAndCacheIsolation) {
+    auto paragraph = BuildVerticalTateChuYoko("天ABC地", {{3, 6}});
+    paragraph->layoutWithInlineExtent(400);
+    const auto first = TateChuYokoRuns(SnapshotRuns(paragraph.get()));
+    ASSERT_EQ(first.size(), 1u);
+    const SkScalar firstSqueeze = first[0].transform.getScaleX();
+    EXPECT_THROW(paragraph->layoutWithInlineExtent(-1), std::invalid_argument);
+    paragraph->layoutWithInlineExtent(400);
+    const auto restored = TateChuYokoRuns(SnapshotRuns(paragraph.get()));
+    ASSERT_EQ(restored.size(), 1u);
+    EXPECT_NEAR(restored[0].transform.getScaleX(), firstSqueeze, 0.001);
+
+    paragraph->layoutWithInlineExtent(50);
+    EXPECT_FALSE(TateChuYokoRuns(SnapshotRuns(paragraph.get())).empty());
+    paragraph->markDirty();
+    paragraph->layoutWithInlineExtent(400);
+    EXPECT_FALSE(TateChuYokoRuns(SnapshotRuns(paragraph.get())).empty());
+
+    auto* cache = TestFontCollection()->getParagraphCache();
+    ASSERT_NE(cache, nullptr);
+    cache->reset();
+    cache->turnOn(true);
+    auto cachedAnnotated = BuildVerticalTateChuYoko("天12", {{3, 5}});
+    auto cachedPlain = BuildCoreParagraph("天12", PrimaryStyle(40));
+    auto cachedGrow = BuildVerticalTateChuYokoModes("天12",
+            {{{3, 5}, skia_text::TateChuYokoSizing::kGrow}});
+    cachedAnnotated->layoutWithInlineExtent(400);
+    cachedPlain->layoutWithInlineExtent(400);
+    cachedGrow->layoutWithInlineExtent(400);
+    EXPECT_EQ(TateChuYokoRuns(SnapshotRuns(cachedAnnotated.get())).size(), 1u);
+    EXPECT_TRUE(TateChuYokoRuns(SnapshotRuns(cachedPlain.get())).empty());
+    const auto cachedSqueezeBoxes = TightBoxes(cachedAnnotated.get(), 1, 3);
+    const auto cachedGrowBoxes = TightBoxes(cachedGrow.get(), 1, 3);
+    ASSERT_EQ(cachedSqueezeBoxes.size(), 1u);
+    ASSERT_EQ(cachedGrowBoxes.size(), 1u);
+    EXPECT_NEAR(cachedSqueezeBoxes[0].rect.width(), 40, kTolerance);
+    EXPECT_GT(cachedGrowBoxes[0].rect.width(), cachedSqueezeBoxes[0].rect.width() + 1);
+    cache->reset();
+    cache->turnOn(false);
+}
+
+TEST_F(SkiaVerticalParagraph, TC14_ForegroundAndFontSizeUpdatesReachGroupGlyphs) {
+    auto paragraph = BuildVerticalTateChuYoko("天12", {{3, 5}});
+    paragraph->layoutWithInlineExtent(200);
+    SkPaint red;
+    red.setColor(SK_ColorRED);
+    paragraph->updateForegroundPaint(0, 5, red);
+    const auto bitmap = RasterizeText(paragraph.get(), 0, 0, 100, 160);
+    const auto cell = TightBoxes(paragraph.get(), 1, 3)[0].rect;
+    const auto redPixels = PixelsMatching(bitmap, [&](SkColor color) {
+        return IsRedLike(color);
+    });
+    EXPECT_GT(redPixels, 10u);
+    EXPECT_GT(NonWhitePixels(bitmap, &cell), 20u);
+
+    const auto before = TightBoxes(paragraph.get(), 1, 3)[0].rect.width();
+    paragraph->updateFontSize(0, 5, 80);
+    paragraph->layoutWithInlineExtent(400);
+    const auto runs = TateChuYokoRuns(SnapshotRuns(paragraph.get()));
+    ASSERT_EQ(runs.size(), 1u);
+    EXPECT_FLOAT_EQ(runs[0].font.getSize(), 80);
+    EXPECT_NEAR(runs[0].advance.height(), 80, kTolerance);
+    EXPECT_GT(TightBoxes(paragraph.get(), 1, 3)[0].rect.width(), before);
 }
 
 TEST_F(SkiaVerticalParagraph, P01_P05_PhysicalSizeAdvanceAndSymmetricColumnGrowth) {
@@ -6845,5 +7184,287 @@ TEST_F(SkiaVerticalParagraph, V84_UpdatesFailuresAndCacheIsolationNeverReuseStal
     cache->reset();
     cache->turnOn(false);
 }
+
+
+TEST_F(SkiaVerticalParagraph, TC08b_SqueezedVisitorPathAndHitTestShareCell) {
+    auto paragraph = BuildVerticalTateChuYoko("ABC", {{0, 3}});
+    paragraph->layoutWithInlineExtent(400);
+    const auto boxes = TightBoxes(paragraph.get(), 0, 3);
+    ASSERT_EQ(boxes.size(), 1u);
+    const SkRect cell = boxes[0].rect;
+    const auto runs = TateChuYokoRuns(SnapshotRuns(paragraph.get()));
+    ASSERT_EQ(runs.size(), 1u);
+    EXPECT_LT(runs[0].transform.getScaleX(), 1);
+    for (const auto& position: AbsoluteGlyphOrigins(runs[0])) {
+        EXPECT_GE(position.x(), cell.left() - 1);
+        EXPECT_LE(position.x(), cell.right() + 1);
+        EXPECT_GE(position.y(), cell.top() - 1);
+        EXPECT_LE(position.y(), cell.bottom() + 1);
+    }
+
+    SkPath path;
+    EXPECT_EQ(paragraph->getPath(0, &path), 0);
+    ASSERT_FALSE(path.isEmpty());
+    const SkRect pathBounds = path.getBounds();
+    EXPECT_GE(pathBounds.left(), cell.left() - 1);
+    EXPECT_LE(pathBounds.right(), cell.right() + 1);
+    EXPECT_GE(pathBounds.top(), cell.top() - 1);
+    EXPECT_LE(pathBounds.bottom(), cell.bottom() + 1);
+
+    const auto start = paragraph->getGlyphPositionAtCoordinate(cell.centerX(), cell.top() + 2);
+    const auto end = paragraph->getGlyphPositionAtCoordinate(cell.centerX(), cell.bottom() - 2);
+    EXPECT_EQ(start.position, 0u);
+    EXPECT_EQ(end.position, 3u);
+}
+
+TEST_F(SkiaVerticalParagraph, TC07b_IndentSpacingBaselineShiftAndFallbackRuns) {
+    auto spacing = PrimaryStyle(40);
+    spacing.setLetterSpacing(5);
+    spacing.setWordSpacing(7);
+    auto plain = BuildCoreParagraph("天 12", spacing, {.indent = 30});
+    auto tcy = BuildVerticalTateChuYoko("天 12", {{4, 6}}, spacing, {.indent = 30});
+    plain->layoutWithInlineExtent(400);
+    tcy->layoutWithInlineExtent(400);
+    const auto reference = SourceClusterCell(plain.get(), 4);
+    const auto cell = TightBoxes(tcy.get(), 2, 4);
+    ASSERT_EQ(cell.size(), 1u);
+    EXPECT_NEAR(cell[0].rect.top(), reference.top(), kTolerance);
+    EXPECT_NEAR(cell[0].rect.height(), 40, kTolerance);
+
+    auto shiftedStyle = PrimaryStyle(40);
+    shiftedStyle.setBaselineShift(12);
+    auto plainShifted = BuildCoreParagraph("天12", shiftedStyle);
+    auto shifted = BuildVerticalTateChuYoko("天12", {{3, 5}}, shiftedStyle);
+    plainShifted->layoutWithInlineExtent(400);
+    shifted->layoutWithInlineExtent(400);
+    const auto referenceRuns = SnapshotRuns(plainShifted.get());
+    ASSERT_FALSE(referenceRuns.empty());
+    const auto shiftedCell = TightBoxes(shifted.get(), 1, 3);
+    ASSERT_EQ(shiftedCell.size(), 1u);
+    EXPECT_NEAR(shiftedCell[0].rect.centerX(), referenceRuns[0].origin.x(), kTolerance);
+
+    auto fallback = BuildVerticalTateChuYoko("天AB", {{3, 5}});
+    fallback->layoutWithInlineExtent(400);
+    const auto fallbackRuns = TateChuYokoRuns(SnapshotRuns(fallback.get()));
+    ASSERT_EQ(fallbackRuns.size(), 1u);
+    EXPECT_EQ(fallbackRuns[0].starts, (std::vector<uint32_t>{3, 4, 5}));
+    EXPECT_EQ(TightBoxes(fallback.get(), 1, 3).size(), 1u);
+}
+
+TEST_F(SkiaVerticalParagraph, TC11b_HorizontalInvalidRangeIsNoOpAndWhitespaceControlsAreAccepted) {
+    auto plain = BuildCoreParagraph("12", PrimaryStyle(40),
+            {.writingMode = skia_text::WritingMode::kHorizontalTb});
+    auto annotated = BuildCoreParagraph("12", PrimaryStyle(40),
+            {.writingMode = skia_text::WritingMode::kHorizontalTb},
+            [](auto* builder) { builder->addTateChuYoko({0, 99}); });
+    plain->layout(400);
+    annotated->layout(400);
+    ExpectSnapshotsNear(Capture(plain.get()), Capture(annotated.get()));
+
+    auto trailing = BuildVerticalTateChuYoko("12 ", {{0, 3}});
+    trailing->layoutWithInlineExtent(400);
+    EXPECT_EQ(TightBoxes(trailing.get(), 0, 3).size(), 1u);
+    EXPECT_EQ(TateChuYokoRuns(SnapshotRuns(trailing.get())).size(), 1u);
+
+    auto controls = BuildVerticalTateChuYoko("\xE2\x80\x8E" "12", {{0, 5}});
+    controls->layoutWithInlineExtent(400);
+    EXPECT_EQ(TightBoxes(controls.get(), 0, 3).size(), 1u);
+    EXPECT_EQ(TateChuYokoRuns(SnapshotRuns(controls.get())).size(), 1u);
+}
+
+TEST_F(SkiaVerticalParagraph, TC17_GrowUsesNaturalCellWidthWithoutCompression) {
+    auto style = PrimaryStyle(40);
+    auto reference = BuildCoreParagraph("ABC", style,
+            {.writingMode = skia_text::WritingMode::kHorizontalTb});
+    reference->layout(10000);
+    const SkScalar natural = reference->getMaxIntrinsicWidth();
+    EXPECT_GT(natural, 40);
+
+    auto grow = BuildVerticalTateChuYokoModes("天ABC",
+            {{{3, 6}, skia_text::TateChuYokoSizing::kGrow}}, style);
+    auto squeeze = BuildVerticalTateChuYoko("天ABC", {{3, 6}}, style);
+    grow->layoutWithInlineExtent(400);
+    squeeze->layoutWithInlineExtent(400);
+
+    const auto growBoxes = TightBoxes(grow.get(), 1, 4);
+    const auto squeezeBoxes = TightBoxes(squeeze.get(), 1, 4);
+    ASSERT_EQ(growBoxes.size(), 1u);
+    ASSERT_EQ(squeezeBoxes.size(), 1u);
+    EXPECT_NEAR(growBoxes[0].rect.width(), natural, kTolerance);
+    EXPECT_NEAR(squeezeBoxes[0].rect.width(), 40, kTolerance);
+    EXPECT_NEAR(growBoxes[0].rect.height(), 40, kTolerance);
+    EXPECT_NEAR(growBoxes[0].rect.top(), squeezeBoxes[0].rect.top(), kTolerance);
+    EXPECT_NEAR(growBoxes[0].rect.height(), squeezeBoxes[0].rect.height(), kTolerance);
+
+    const auto growRuns = TateChuYokoRuns(SnapshotRuns(grow.get()));
+    ASSERT_EQ(growRuns.size(), 1u);
+    EXPECT_NEAR(growRuns[0].transform.getScaleX(), 1, 0.001);
+    EXPECT_NEAR(growRuns[0].advance.height(), 40, kTolerance);
+
+    const auto& growColumn = grow->getLayoutMetrics().columns[0];
+    const auto& squeezeColumn = squeeze->getLayoutMetrics().columns[0];
+    EXPECT_NEAR(growColumn.blockThickness, natural, kTolerance);
+    EXPECT_NEAR(growBoxes[0].rect.centerX(), growColumn.physicalBounds.centerX(), kTolerance);
+    const SkScalar growAscent = growColumn.physicalBaseline - growColumn.physicalBounds.left();
+    const SkScalar growDescent = growColumn.physicalBounds.right() - growColumn.physicalBaseline;
+    const SkScalar squeezeAscent =
+            squeezeColumn.physicalBaseline - squeezeColumn.physicalBounds.left();
+    const SkScalar squeezeDescent =
+            squeezeColumn.physicalBounds.right() - squeezeColumn.physicalBaseline;
+    EXPECT_NEAR(growAscent - squeezeAscent, growDescent - squeezeDescent, kTolerance);
+    EXPECT_NEAR(grow->getLayoutMetrics().longestInlineExtent,
+                squeeze->getLayoutMetrics().longestInlineExtent, kTolerance);
+}
+
+TEST_F(SkiaVerticalParagraph, TC18_MixedSizingModesResolvePerGroup) {
+    auto style = PrimaryStyle(40);
+    auto reference = BuildCoreParagraph("ABC", style,
+            {.writingMode = skia_text::WritingMode::kHorizontalTb});
+    reference->layout(10000);
+    const SkScalar natural = reference->getMaxIntrinsicWidth();
+
+    auto mixed = BuildVerticalTateChuYokoModes("天ABC12地",
+            {{{3, 6}, skia_text::TateChuYokoSizing::kGrow},
+             {{6, 8}, skia_text::TateChuYokoSizing::kSqueeze}}, style);
+    mixed->layoutWithInlineExtent(400);
+    const auto growBoxes = TightBoxes(mixed.get(), 1, 4);
+    const auto squeezeBoxes = TightBoxes(mixed.get(), 4, 6);
+    ASSERT_EQ(growBoxes.size(), 1u);
+    ASSERT_EQ(squeezeBoxes.size(), 1u);
+    EXPECT_NEAR(growBoxes[0].rect.width(), natural, kTolerance);
+    EXPECT_NEAR(squeezeBoxes[0].rect.width(), 40, kTolerance);
+    EXPECT_NEAR(squeezeBoxes[0].rect.top() - growBoxes[0].rect.top(), 40, kTolerance);
+
+    const auto runs = TateChuYokoRuns(SnapshotRuns(mixed.get()));
+    ASSERT_EQ(runs.size(), 2u);
+    EXPECT_NEAR(runs[0].transform.getScaleX(), 1, 0.001);
+    EXPECT_LT(runs[1].transform.getScaleX(), 1);
+    EXPECT_FLOAT_EQ(runs[0].advance.height(), 40);
+    EXPECT_FLOAT_EQ(runs[1].advance.height(), 40);
+}
+
+TEST_F(SkiaVerticalParagraph, TC19_GrowColumnSizeAndAtomicWrap) {
+    auto style = PrimaryStyle(40);
+    auto plain = BuildCoreParagraph("天", style);
+    auto grow = BuildVerticalTateChuYokoModes("天ABC",
+            {{{3, 6}, skia_text::TateChuYokoSizing::kGrow}}, style);
+    plain->layoutWithInlineExtent(400);
+    grow->layoutWithInlineExtent(400);
+
+    const auto& plainMetrics = plain->getLayoutMetrics();
+    const auto& growMetrics = grow->getLayoutMetrics();
+    ASSERT_EQ(growMetrics.columns.size(), 1u);
+    EXPECT_GT(growMetrics.physicalSize.width(), plainMetrics.physicalSize.width());
+    EXPECT_NEAR(growMetrics.physicalSize.width(), growMetrics.columns[0].blockThickness, kTolerance);
+    EXPECT_NEAR(growMetrics.physicalSize.width(),
+                TightBoxes(grow.get(), 1, 4)[0].rect.width(), kTolerance);
+
+    auto wrapped = BuildVerticalTateChuYokoModes("天ABC地",
+            {{{3, 6}, skia_text::TateChuYokoSizing::kGrow}}, style);
+    wrapped->layoutWithInlineExtent(50);
+    const auto& wrappedMetrics = wrapped->getLayoutMetrics();
+    ASSERT_EQ(wrappedMetrics.columns.size(), 3u);
+    EXPECT_EQ(wrappedMetrics.columns[0].utf16Start, 0u);
+    EXPECT_EQ(wrappedMetrics.columns[0].utf16End, 1u);
+    EXPECT_EQ(wrappedMetrics.columns[1].utf16Start, 1u);
+    EXPECT_EQ(wrappedMetrics.columns[1].utf16End, 4u);
+    EXPECT_EQ(wrappedMetrics.columns[2].utf16Start, 4u);
+    EXPECT_EQ(wrappedMetrics.columns[2].utf16End, 5u);
+    EXPECT_GT(wrappedMetrics.physicalSize.width(), growMetrics.physicalSize.width());
+}
+
+TEST_F(SkiaVerticalParagraph, TC20_GrowQueryPathAndVisitorUseNaturalGeometry) {
+    auto style = PrimaryStyle(40);
+    auto reference = BuildCoreParagraph("ABC", style,
+            {.writingMode = skia_text::WritingMode::kHorizontalTb});
+    reference->layout(10000);
+    const SkScalar natural = reference->getMaxIntrinsicWidth();
+
+    auto grow = BuildVerticalTateChuYokoModes("天ABC地",
+            {{{3, 6}, skia_text::TateChuYokoSizing::kGrow}}, style);
+    grow->layoutWithInlineExtent(400);
+    const auto boxes = TightBoxes(grow.get(), 1, 4);
+    ASSERT_EQ(boxes.size(), 1u);
+    const SkRect cell = boxes[0].rect;
+    EXPECT_NEAR(cell.width(), natural, kTolerance);
+    EXPECT_NEAR(cell.height(), 40, kTolerance);
+
+    const auto runs = TateChuYokoRuns(SnapshotRuns(grow.get()));
+    ASSERT_EQ(runs.size(), 1u);
+    EXPECT_EQ(runs[0].starts, (std::vector<uint32_t>{3, 4, 5, 6}));
+    EXPECT_NEAR(runs[0].transform.getScaleX(), 1, 0.001);
+    EXPECT_NEAR(runs[0].advance.height(), 40, kTolerance);
+    EXPECT_NEAR(runs[0].origin.x(), cell.left(), kTolerance);
+
+    const auto start = grow->getGlyphPositionAtCoordinate(cell.centerX(), cell.top() + 2);
+    const auto end = grow->getGlyphPositionAtCoordinate(cell.centerX(), cell.bottom() - 2);
+    EXPECT_EQ(start.position, 1u);
+    EXPECT_EQ(end.position, 4u);
+
+    auto onlyGroup = BuildVerticalTateChuYokoModes("ABC",
+            {{{0, 3}, skia_text::TateChuYokoSizing::kGrow}}, style);
+    onlyGroup->layoutWithInlineExtent(400);
+    const auto onlyBoxes = TightBoxes(onlyGroup.get(), 0, 3);
+    ASSERT_EQ(onlyBoxes.size(), 1u);
+    const SkRect onlyCell = onlyBoxes[0].rect;
+    EXPECT_NEAR(onlyCell.width(), natural, kTolerance);
+    SkPath path;
+    EXPECT_EQ(onlyGroup->getPath(0, &path), 0);
+    ASSERT_FALSE(path.isEmpty());
+    const auto pathBounds = path.getBounds();
+    EXPECT_GE(pathBounds.left(), onlyCell.left() - 1);
+    EXPECT_LE(pathBounds.right(), onlyCell.right() + 1);
+    EXPECT_GE(pathBounds.top(), onlyCell.top() - 1);
+    EXPECT_LE(pathBounds.bottom(), onlyCell.bottom() + 1);
+}
+
+TEST_F(SkiaVerticalParagraph, TC21_GrowEllipsisAdjacentGroupsAndFontSizeUpdate) {
+    auto style = PrimaryStyle(40);
+    auto reference = BuildCoreParagraph("ABC", style,
+            {.writingMode = skia_text::WritingMode::kHorizontalTb});
+    reference->layout(10000);
+    const SkScalar natural = reference->getMaxIntrinsicWidth();
+
+    auto adjacent = BuildVerticalTateChuYokoModes("ABC12",
+            {{{0, 3}, skia_text::TateChuYokoSizing::kGrow},
+             {{3, 5}, skia_text::TateChuYokoSizing::kSqueeze}}, style);
+    adjacent->layoutWithInlineExtent(400);
+    const auto adjacentRuns = TateChuYokoRuns(SnapshotRuns(adjacent.get()));
+    ASSERT_EQ(adjacentRuns.size(), 2u);
+    EXPECT_NEAR(adjacentRuns[0].transform.getScaleX(), 1, 0.001);
+    EXPECT_LT(adjacentRuns[1].transform.getScaleX(), 1);
+    const auto growBoxes = TightBoxes(adjacent.get(), 0, 3);
+    const auto squeezeBoxes = TightBoxes(adjacent.get(), 3, 5);
+    ASSERT_EQ(growBoxes.size(), 1u);
+    ASSERT_EQ(squeezeBoxes.size(), 1u);
+    EXPECT_NEAR(growBoxes[0].rect.width(), natural, kTolerance);
+    EXPECT_NEAR(squeezeBoxes[0].rect.width(), 40, kTolerance);
+
+    auto removed = BuildEllipsisParagraph("天地ABC", style, 1, "\xE2\x80\xA6",
+            skia_text::TextAlign::kStart,
+            [](auto* builder) {
+                builder->addTateChuYoko({6, 9}, skia_text::TateChuYokoSizing::kGrow);
+            });
+    removed->layoutWithInlineExtent(90);
+    EXPECT_TRUE(removed->didExceedMaxLines());
+    EXPECT_TRUE(TightBoxes(removed.get(), 2, 5).empty());
+    EXPECT_TRUE(TateChuYokoRuns(SnapshotRuns(removed.get())).empty());
+
+    auto resized = BuildVerticalTateChuYokoModes("天ABC",
+            {{{3, 6}, skia_text::TateChuYokoSizing::kGrow}}, style);
+    resized->layoutWithInlineExtent(400);
+    const auto before = TightBoxes(resized.get(), 1, 4);
+    ASSERT_EQ(before.size(), 1u);
+    resized->updateFontSize(0, 6, 80);
+    resized->layoutWithInlineExtent(800);
+    const auto after = TightBoxes(resized.get(), 1, 4);
+    ASSERT_EQ(after.size(), 1u);
+    EXPECT_GT(after[0].rect.width(), before[0].rect.width());
+    const auto resizedRuns = TateChuYokoRuns(SnapshotRuns(resized.get()));
+    ASSERT_EQ(resizedRuns.size(), 1u);
+    EXPECT_FLOAT_EQ(resizedRuns[0].font.getSize(), 80);
+    EXPECT_NEAR(resizedRuns[0].transform.getScaleX(), 1, 0.001);
+}
+
 
 } // namespace

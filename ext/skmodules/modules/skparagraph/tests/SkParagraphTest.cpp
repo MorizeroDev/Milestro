@@ -2910,6 +2910,7 @@ public:
     void drawLine(SkScalar, SkScalar, SkScalar, SkScalar, const DecorationStyle&) override {}
     void clipRect(const SkRect&) override {}
     void translate(SkScalar dx, SkScalar dy) override { fOrigin += SkPoint::Make(dx, dy); }
+    void scale(SkScalar, SkScalar) override {}
     void save() override { fStack.push_back(fOrigin); }
     void restore() override {
         fOrigin = fStack.back();

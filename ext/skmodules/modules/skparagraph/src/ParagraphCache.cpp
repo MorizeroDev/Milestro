@@ -70,6 +70,7 @@ class ParagraphCacheKey {
 public:
     ParagraphCacheKey(const ParagraphImpl* paragraph)
         : fText(paragraph->fText.c_str(), paragraph->fText.size())
+        , fTateChuYokoAnnotations(paragraph->fTateChuYokoAnnotations)
         , fPlaceholders(paragraph->fPlaceholders)
         , fTextStyles(paragraph->fTextStyles)
         , fParagraphStyle(paragraph->paragraphStyle()) {
@@ -80,6 +81,7 @@ public:
 
     ParagraphCacheKey(ParagraphCacheKey&& other)
         : fText(std::move(other.fText))
+        , fTateChuYokoAnnotations(std::move(other.fTateChuYokoAnnotations))
         , fPlaceholders(std::move(other.fPlaceholders))
         , fTextStyles(std::move(other.fTextStyles))
         , fParagraphStyle(std::move(other.fParagraphStyle))
@@ -99,6 +101,7 @@ private:
     uint32_t computeHash() const;
 
     SkString fText;
+    std::vector<TateChuYokoAnnotation> fTateChuYokoAnnotations;
     TArray<Placeholder> fPlaceholders;
     TArray<Block> fTextStyles;
     ParagraphStyle fParagraphStyle;
@@ -177,6 +180,10 @@ uint32_t ParagraphCacheKey::mixTextStyle(uint32_t hash, const TextStyle& style) 
 
 uint32_t ParagraphCacheKey::computeHash() const {
     uint32_t hash = 0;
+    for (const auto& annotation : fTateChuYokoAnnotations) {
+        hash = mix(hash, SkGoodHash()(annotation.range));
+        hash = mix(hash, SkGoodHash()(static_cast<int>(annotation.sizing)));
+    }
     for (auto& ph : fPlaceholders) {
         if (ph.fRange.width() == 0) {
             continue;
@@ -239,6 +246,19 @@ bool ParagraphCacheKey::operator==(const ParagraphCacheKey& other) const {
     }
     if (fText != other.fText) {
         return false;
+    }
+    if (fTateChuYokoAnnotations.size() != other.fTateChuYokoAnnotations.size()) {
+        return false;
+    }
+    for (size_t index = 0; index < fTateChuYokoAnnotations.size(); ++index) {
+        if (fTateChuYokoAnnotations[index].range.start !=
+                    other.fTateChuYokoAnnotations[index].range.start ||
+            fTateChuYokoAnnotations[index].range.end !=
+                    other.fTateChuYokoAnnotations[index].range.end ||
+            fTateChuYokoAnnotations[index].sizing !=
+                    other.fTateChuYokoAnnotations[index].sizing) {
+            return false;
+        }
     }
     if (fTextStyles.size() != other.fTextStyles.size()) {
         return false;

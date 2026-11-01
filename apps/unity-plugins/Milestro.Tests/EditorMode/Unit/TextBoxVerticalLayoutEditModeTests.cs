@@ -1749,6 +1749,265 @@ namespace Milestro.Tests
             }
         }
 
+        [Test]
+        public void TC09_TateChuYokoRangesStayBlockLocalAndDoNotChangeBlockSpacing()
+        {
+            const string annotatedMarkup =
+                "<p><span style=\"text-combine-upright: all\">12</span></p><p>天地</p>";
+            const string plainMarkup = "<p>12</p><p>天地</p>";
+            var annotated = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(
+                VerticalSettings(annotatedMarkup));
+            Assert.That(annotated.Diagnostic, Is.Null);
+            Assert.That(annotated.Payload.TateChuYokoAnnotations, Has.Count.EqualTo(1));
+            Assert.That(annotated.Payload.TateChuYokoAnnotations[0].StartUtf16, Is.EqualTo(0));
+            Assert.That(annotated.Payload.TateChuYokoAnnotations[0].EndUtf16, Is.EqualTo(2));
+
+            using var nativeStyle = VerticalStyle().ToParagraphStyle(false);
+            using var textStyle = TextStyle(40f, 0f).ToTextStyle();
+            var annotatedParagraphs = annotated.Payload.ToParagraphs(nativeStyle, textStyle);
+            var plainParagraphs = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(
+                VerticalSettings(plainMarkup)).Payload.ToParagraphs(nativeStyle, textStyle);
+            try
+            {
+                Assert.That(annotatedParagraphs, Has.Count.EqualTo(2));
+                Assert.That(plainParagraphs, Has.Count.EqualTo(2));
+                foreach (var paragraph in annotatedParagraphs) paragraph.LayoutWithInlineExtent(400f);
+                foreach (var paragraph in plainParagraphs) paragraph.LayoutWithInlineExtent(400f);
+                var groupRects = annotatedParagraphs[0].GetRectsForRange(0, 2);
+                Assert.That(groupRects, Has.Count.EqualTo(1));
+                Assert.That(groupRects[0].height, Is.EqualTo(40f).Within(0.5f));
+                Assert.That(annotatedParagraphs[1].LayoutMetrics.PhysicalSize,
+                    Is.EqualTo(plainParagraphs[1].LayoutMetrics.PhysicalSize));
+
+                var annotatedBlocks = TextBoxVerticalBlockLayout.Layout(annotatedParagraphs, 400f, 13f);
+                var plainBlocks = TextBoxVerticalBlockLayout.Layout(plainParagraphs, 400f, 13f);
+                Assert.That(annotatedBlocks.PhysicalSize.x,
+                    Is.EqualTo(plainBlocks.PhysicalSize.x).Within(0.01f));
+                Assert.That(annotatedBlocks.FrameOffsets[0], Is.EqualTo(plainBlocks.FrameOffsets[0]));
+                Assert.That(annotatedBlocks.FrameOffsets[1], Is.EqualTo(plainBlocks.FrameOffsets[1]));
+            }
+            finally
+            {
+                foreach (var paragraph in annotatedParagraphs) paragraph.Dispose();
+                foreach (var paragraph in plainParagraphs) paragraph.Dispose();
+            }
+        }
+
+        [Test]
+        public void TC10_AutoFontSizeUsesUnscaledTateChuYokoCellAndSqueeze()
+        {
+            const string markup =
+                "<a href=\"fit\"><span style=\"text-combine-upright: all\">ABC</span></a>";
+            var settings = new TextBoxRenderTargetSettings(markup, Margin.FixedZero(), VerticalStyle(),
+                TextStyle(30f, 0f), TextBoxWrapMode.Wrap, TextOverflow.Clip, true, 15f, 15f);
+            using var target = new TextBoxRenderTarget();
+            target.Rebuild(TextBoxRenderViewport.Invisible(new Vector2Int(200, 160), default),
+                ColorSpace.Gamma, settings, true, null);
+            var scale = (float)typeof(TextBoxRenderTarget).GetField("fitScale",
+                System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.Instance)!.GetValue(target);
+            Assert.That(scale, Is.EqualTo(0.5f));
+
+            using var unscaled = BuildParagraph(markup, VerticalStyle(), TextStyle(30f, 0f));
+            unscaled.LayoutWithInlineExtent(320f);
+            var cell = unscaled.GetRectsForRange(0, 3);
+            Assert.That(cell, Has.Count.EqualTo(1));
+            Assert.That(cell[0].width, Is.EqualTo(30f).Within(0.5f));
+            Assert.That(target.ContentSize.x,
+                Is.EqualTo(unscaled.LayoutMetrics.PhysicalSize.x * scale).Within(0.01f));
+        }
+
+        [Test]
+        public void TC18_TateChuYokoSizingParsesDefaultMixedAndInvalid()
+        {
+            var parser = new RichTextParser.RichTextParser();
+            parser.ParseText(
+                "<span style=\"text-combine-upright: all\">12</span>");
+            var defaults = parser.ConvertToSegments();
+            Assert.That(defaults.TateChuYokoAnnotations, Has.Count.EqualTo(1));
+            Assert.That(defaults.TateChuYokoAnnotations[0].Sizing,
+                Is.EqualTo(TateChuYokoSizing.Squeeze));
+
+            parser = new RichTextParser.RichTextParser();
+            parser.ParseText(
+                "<span style=\"text-combine-upright: all; --milestro-text-combine-upright-sizing: grow\">ABC</span>" +
+                "<span style=\"text-combine-upright: all; --milestro-text-combine-upright-sizing: squeeze\">12</span>");
+            var mixed = parser.ConvertToSegments();
+            Assert.That(mixed.TateChuYokoAnnotations, Has.Count.EqualTo(2));
+            Assert.That(mixed.TateChuYokoAnnotations[0].Sizing,
+                Is.EqualTo(TateChuYokoSizing.Grow));
+            Assert.That(mixed.TateChuYokoAnnotations[1].Sizing,
+                Is.EqualTo(TateChuYokoSizing.Squeeze));
+
+            var invalid = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(VerticalSettings(
+                "<span style=\"text-combine-upright: all; --milestro-text-combine-upright-sizing: stretch\">12</span>"));
+            Assert.That(invalid.Diagnostic, Is.Not.Null);
+            Assert.That(invalid.Diagnostic!.Message,
+                Does.Contain("--milestro-text-combine-upright-sizing=stretch defaulted to squeeze"));
+            Assert.That(invalid.Payload.TateChuYokoAnnotations, Has.Count.EqualTo(1));
+            Assert.That(invalid.Payload.TateChuYokoAnnotations[0].Sizing,
+                Is.EqualTo(TateChuYokoSizing.Squeeze));
+        }
+
+        [Test]
+        public void TC19_GrowColumnWidthEntersPhysicalSizeAndAtomicWrap()
+        {
+            const string growMarkup =
+                "<span style=\"text-combine-upright: all; --milestro-text-combine-upright-sizing: grow\">ABC</span>天";
+            const string squeezeMarkup =
+                "<span style=\"text-combine-upright: all\">ABC</span>天";
+            using var grow = BuildParagraph(growMarkup, VerticalStyle(), TextStyle(40f, 0f));
+            using var squeeze = BuildParagraph(squeezeMarkup, VerticalStyle(), TextStyle(40f, 0f));
+            grow.LayoutWithInlineExtent(400f);
+            squeeze.LayoutWithInlineExtent(400f);
+            var growCell = grow.GetRectsForRange(0, 3);
+            var squeezeCell = squeeze.GetRectsForRange(0, 3);
+            Assert.That(growCell, Has.Count.EqualTo(1));
+            Assert.That(squeezeCell, Has.Count.EqualTo(1));
+            Assert.That(growCell[0].width, Is.GreaterThan(squeezeCell[0].width + 1f));
+            Assert.That(growCell[0].height, Is.EqualTo(40f).Within(0.5f));
+            Assert.That(grow.LayoutMetrics.PhysicalSize.x,
+                Is.GreaterThan(squeeze.LayoutMetrics.PhysicalSize.x));
+            Assert.That(growCell[0].width,
+                Is.EqualTo(grow.LayoutMetrics.Columns[0].BlockThickness).Within(0.01f));
+
+            const string wrappedMarkup =
+                "天<span style=\"text-combine-upright: all; --milestro-text-combine-upright-sizing: grow\">ABC</span>地";
+            using var wrapped = BuildParagraph(wrappedMarkup, VerticalStyle(), TextStyle(40f, 0f));
+            wrapped.LayoutWithInlineExtent(50f);
+            Assert.That(wrapped.LayoutMetrics.Columns.Count, Is.EqualTo(3));
+            Assert.That(wrapped.LayoutMetrics.Columns[1].Utf16Start, Is.EqualTo(1));
+            Assert.That(wrapped.LayoutMetrics.Columns[1].Utf16End, Is.EqualTo(4));
+        }
+
+        [Test]
+        public void TC21_GrowAutoFontSizeUsesNaturalCellAtFitScale()
+        {
+            const string markup =
+                "<a href=\"fit\"><span style=\"text-combine-upright: all; " +
+                "--milestro-text-combine-upright-sizing: grow\">ABC</span></a>";
+            var settings = new TextBoxRenderTargetSettings(markup, Margin.FixedZero(), VerticalStyle(),
+                TextStyle(30f, 0f), TextBoxWrapMode.Wrap, TextOverflow.Clip, true, 15f, 15f);
+            using var target = new TextBoxRenderTarget();
+            target.Rebuild(TextBoxRenderViewport.Invisible(new Vector2Int(200, 160), default),
+                ColorSpace.Gamma, settings, true, null);
+            var scale = (float)typeof(TextBoxRenderTarget).GetField("fitScale",
+                System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.Instance)!.GetValue(target);
+            Assert.That(scale, Is.EqualTo(0.5f));
+
+            using var unscaled = BuildParagraph(markup, VerticalStyle(), TextStyle(30f, 0f));
+            unscaled.LayoutWithInlineExtent(320f);
+            var cell = unscaled.GetRectsForRange(0, 3);
+            Assert.That(cell, Has.Count.EqualTo(1));
+            Assert.That(cell[0].width, Is.GreaterThan(30f));
+            Assert.That(target.ContentSize.x,
+                Is.EqualTo(unscaled.LayoutMetrics.PhysicalSize.x * scale).Within(0.01f));
+        }
+
+        [Test]
+        public void TC21_GrowMultiBlockKeepsSecondBlockMetricsAndSpacing()
+        {
+            const string growMarkup =
+                "<p><span style=\"text-combine-upright: all; --milestro-text-combine-upright-sizing: grow\">ABC</span></p><p>天地</p>";
+            const string squeezeMarkup =
+                "<p><span style=\"text-combine-upright: all\">ABC</span></p><p>天地</p>";
+            var growPreparation = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(
+                VerticalSettings(growMarkup));
+            var squeezePreparation = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(
+                VerticalSettings(squeezeMarkup));
+            Assert.That(growPreparation.Diagnostic, Is.Null);
+            Assert.That(squeezePreparation.Diagnostic, Is.Null);
+            using var nativeStyle = VerticalStyle().ToParagraphStyle(false);
+            using var textStyle = TextStyle(40f, 0f).ToTextStyle();
+            var growParagraphs = growPreparation.Payload.ToParagraphs(nativeStyle, textStyle);
+            var squeezeParagraphs = squeezePreparation.Payload.ToParagraphs(nativeStyle, textStyle);
+            try
+            {
+                foreach (var paragraph in growParagraphs) paragraph.LayoutWithInlineExtent(400f);
+                foreach (var paragraph in squeezeParagraphs) paragraph.LayoutWithInlineExtent(400f);
+                var growBlocks = TextBoxVerticalBlockLayout.Layout(growParagraphs, 400f, 9f);
+                var squeezeBlocks = TextBoxVerticalBlockLayout.Layout(squeezeParagraphs, 400f, 9f);
+                Assert.That(growBlocks.PhysicalSize.x,
+                    Is.GreaterThan(squeezeBlocks.PhysicalSize.x + 1f));
+                Assert.That(growBlocks.PhysicalSize.y,
+                    Is.EqualTo(squeezeBlocks.PhysicalSize.y).Within(0.01f));
+                Assert.That(growParagraphs[1].LayoutMetrics.PhysicalSize,
+                    Is.EqualTo(squeezeParagraphs[1].LayoutMetrics.PhysicalSize));
+                Assert.That(growBlocks.PhysicalSize.x - squeezeBlocks.PhysicalSize.x,
+                    Is.EqualTo(growParagraphs[0].LayoutMetrics.PhysicalSize.x -
+                               squeezeParagraphs[0].LayoutMetrics.PhysicalSize.x).Within(0.01f));
+            }
+            finally
+            {
+                foreach (var paragraph in growParagraphs) paragraph.Dispose();
+                foreach (var paragraph in squeezeParagraphs) paragraph.Dispose();
+            }
+        }
+
+        [Test]
+        public void TC12_ComputedCombineRangesSplitAtPlaceholderAndRuby()
+        {
+            var preparation = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(VerticalSettings(
+                "<span style=\"text-combine-upright: all\">1<img width=\"20\" height=\"20\"/>" +
+                "2<ruby>漢<rt>か</rt></ruby>3</span>"));
+            Assert.That(preparation.Diagnostic, Is.Null);
+            var ranges = preparation.Payload.TateChuYokoAnnotations;
+            Assert.That(ranges, Has.Count.EqualTo(3));
+            Assert.That((ranges[0].StartUtf16, ranges[0].EndUtf16), Is.EqualTo((0, 1)));
+            Assert.That((ranges[1].StartUtf16, ranges[1].EndUtf16), Is.EqualTo((2, 3)));
+            Assert.That((ranges[2].StartUtf16, ranges[2].EndUtf16), Is.EqualTo((4, 5)));
+        }
+
+        [Test]
+        public void TC12_NoneOverridesInheritedAllAndArbitraryInlineElementsAcceptStyle()
+        {
+            var parser = new RichTextParser.RichTextParser();
+            parser.ParseText(
+                "<span style=\"text-combine-upright: all\">1<span style=\"text-combine-upright: none\">2</span>3</span>");
+            var nested = parser.ConvertToSegments();
+            Assert.That(nested.TateChuYokoAnnotations, Has.Count.EqualTo(2));
+            Assert.That((nested.TateChuYokoAnnotations[0].StartUtf16,
+                nested.TateChuYokoAnnotations[0].EndUtf16), Is.EqualTo((0, 1)));
+            Assert.That((nested.TateChuYokoAnnotations[1].StartUtf16,
+                nested.TateChuYokoAnnotations[1].EndUtf16), Is.EqualTo((2, 3)));
+
+            parser = new RichTextParser.RichTextParser();
+            parser.ParseText(
+                "<b style=\"text-combine-upright: all\">12</b><em>X</em>" +
+                "<a href=\"anchor\" style=\"text-combine-upright: all\">34</a>");
+            var inline = parser.ConvertToSegments();
+            Assert.That(inline.TateChuYokoAnnotations, Has.Count.EqualTo(2));
+            Assert.That((inline.TateChuYokoAnnotations[0].StartUtf16,
+                inline.TateChuYokoAnnotations[0].EndUtf16), Is.EqualTo((0, 2)));
+            Assert.That((inline.TateChuYokoAnnotations[1].StartUtf16,
+                inline.TateChuYokoAnnotations[1].EndUtf16), Is.EqualTo((3, 5)));
+        }
+
+        [Test]
+        public void TC12_InvalidCombineValueDefaultsToNoneAndReportsIssue()
+        {
+            var vertical = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(VerticalSettings(
+                "<span style=\"text-combine-upright: digits\">12</span>"));
+            Assert.That(vertical.Diagnostic, Is.Not.Null);
+            Assert.That(vertical.Diagnostic!.Message,
+                Does.Contain("text-combine-upright=digits defaulted to none"));
+            Assert.That(vertical.Payload.TateChuYokoAnnotations, Is.Empty);
+
+            var horizontal = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(
+                new TextBoxRenderTargetSettings(
+                    "<span style=\"text-combine-upright: digits\">12</span>",
+                    Margin.FixedZero(),
+                    new ParagraphStyleSettings { writingMode = WritingMode.HorizontalTb },
+                    TextStyle(30f, 0f),
+                    TextBoxWrapMode.Wrap,
+                    TextOverflow.Clip));
+            Assert.That(horizontal.Diagnostic, Is.Not.Null);
+            Assert.That(horizontal.Diagnostic!.Message,
+                Does.Contain("text-combine-upright=digits defaulted to none"));
+            Assert.That(horizontal.Payload.TateChuYokoAnnotations, Is.Empty);
+        }
+
         private static Paragraph BuildParagraph(string content,
             ParagraphStyleSettings paragraphSettings,
             TextStyleSettings textSettings)

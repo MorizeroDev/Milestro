@@ -18,6 +18,16 @@ namespace textlayout {
 
 class ParagraphPainter;
 
+// Tate-chu-yoko sizing mode. kSqueeze keeps the one-em inline cell and
+// compresses overwide content; kGrow keeps the natural content width and lets
+// the column thickness grow.
+enum class TateChuYokoSizing { kSqueeze = 0, kGrow = 1 };
+
+struct TateChuYokoAnnotation {
+    TextRange range;
+    TateChuYokoSizing sizing = TateChuYokoSizing::kSqueeze;
+};
+
 class Paragraph {
 
 public:
@@ -132,6 +142,7 @@ public:
     enum VisitorFlags {
         kWhiteSpace_VisitorFlag = 1 << 0,
         kRubyAnnotation_VisitorFlag = 1 << 1,
+        kTateChuYoko_VisitorFlag = 1 << 2,
     };
     struct VisitorInfo {
         const SkFont&   font;

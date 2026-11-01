@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace Milestro.RichTextParser
 {
     public class Context
@@ -15,5 +17,7 @@ namespace Milestro.RichTextParser
         internal bool HasActiveRuby { get; set; }
 
         internal bool AllowViewportBlockMargins { get; set; }
+
+        internal ICollection<string>? Issues { get; set; }
     }
 }

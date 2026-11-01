@@ -1312,6 +1312,14 @@ ulong len);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphBuilderAddTateChuYoko")]
+        internal static extern unsafe long SkiaTextlayoutParagraphBuilderAddTateChuYoko(IntPtr b,
+ulong startUtf8,
+ulong endUtf8,
+int sizing);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphBuilderAddRubyWithStyle")]
         internal static extern unsafe long SkiaTextlayoutParagraphBuilderAddRubyWithStyle(IntPtr b,
 ulong startUtf8,

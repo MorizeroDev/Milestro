@@ -1105,6 +1105,270 @@ void ParagraphImpl::prepareVerticalRuby() {
     fRubyPrepared = true;
 }
 
+void ParagraphImpl::prepareVerticalTateChuYoko() {
+    fVerticalTateChuYoko.clear();
+    if (fTateChuYokoAnnotations.empty()) {
+        fTateChuYokoPrepared = true;
+        return;
+    }
+
+    std::string original(fText.c_str(), fText.size());
+    skia_private::TArray<SkUnicode::CodeUnitFlags, true> rawFlags;
+    if (!fUnicode->computeCodeUnitFlags(original.data(), original.size(), false, &rawFlags)) {
+        throw std::runtime_error("vertical tate-chu-yoko Unicode analysis failed");
+    }
+    auto isGraphemeStart = [&](TextIndex index) {
+        if (index >= rawFlags.size()) {
+            return index == fText.size();
+        }
+        return SkUnicode::hasGraphemeStartFlag(rawFlags[index]);
+    };
+
+    std::vector<TateChuYokoAnnotation> annotations = fTateChuYokoAnnotations;
+    std::sort(annotations.begin(), annotations.end(),
+              [](const TateChuYokoAnnotation& a, const TateChuYokoAnnotation& b) {
+        return a.range.start < b.range.start;
+    });
+    for (size_t index = 1; index < annotations.size(); ++index) {
+        if (annotations[index].range.start < annotations[index - 1].range.end) {
+            throw std::invalid_argument("tate-chu-yoko ranges overlap or nest");
+        }
+    }
+
+    auto styleAt = [this](TextIndex index) -> const TextStyle& {
+        const TextStyle* style = StyleAt(fTextStyles, index);
+        return style == nullptr ? fParagraphStyle.getTextStyle() : *style;
+    };
+    for (const auto& annotation : annotations) {
+        const TextRange range = annotation.range;
+        if (range.start >= range.end || range.end > fText.size()) {
+            throw std::invalid_argument("tate-chu-yoko range is empty or out of bounds");
+        }
+        if (!isGraphemeStart(range.start) || !isGraphemeStart(range.end)) {
+            throw std::invalid_argument("tate-chu-yoko range is not aligned to grapheme boundaries");
+        }
+
+        bool hasContent = false;
+        const char* current = fText.c_str() + range.start;
+        const char* limit = fText.c_str() + range.end;
+        while (current < limit) {
+            const SkUnichar codepoint = SkUTF::NextUTF8WithReplacement(&current, limit);
+            if (codepoint == 0xFFFC) {
+                throw std::invalid_argument("tate-chu-yoko range contains a placeholder");
+            }
+            if (!IsIgnoredVerticalControl(codepoint)) {
+                hasContent = true;
+            }
+        }
+        if (!hasContent) {
+            throw std::invalid_argument("tate-chu-yoko range has no visible grapheme");
+        }
+
+        const ClusterIndex first = clusterIndex(range.start);
+        const ClusterIndex last = clusterIndex(range.end - 1) + 1;
+        if (first >= last || fClusters[first].textRange().start != range.start ||
+            fClusters[last - 1].textRange().end != range.end) {
+            throw std::invalid_argument("tate-chu-yoko range is not aligned to shaped clusters");
+        }
+        const TextStyle* firstStyle = StyleAt(fTextStyles, range.start);
+        if (firstStyle == nullptr) {
+            firstStyle = &fParagraphStyle.getTextStyle();
+        }
+        for (ClusterIndex index = first; index < last; ++index) {
+            const Cluster& cluster = fClusters[index];
+            if (cluster.isHardBreak()) {
+                throw std::invalid_argument("tate-chu-yoko range contains a hard line break");
+            }
+            const Run* run = cluster.runOrNull();
+            if (run == nullptr || run->isPlaceholder()) {
+                throw std::invalid_argument("tate-chu-yoko range contains a placeholder");
+            }
+            const TextStyle* clusterStyle = StyleAt(fTextStyles, cluster.textRange().start);
+            if (clusterStyle == nullptr) {
+                clusterStyle = &fParagraphStyle.getTextStyle();
+            }
+            if (!clusterStyle->equals(*firstStyle)) {
+                throw std::invalid_argument(
+                        "tate-chu-yoko range crosses a resolved text style boundary");
+            }
+        }
+        for (const auto& ruby : fRubyAnnotations) {
+            if (range.start < ruby.baseRange.end && ruby.baseRange.start < range.end) {
+                throw std::invalid_argument("tate-chu-yoko range intersects a ruby base range");
+            }
+        }
+
+        auto contentStyle = *firstStyle;
+        contentStyle.setBaselineShift(0);
+        auto contentParagraphStyle = fParagraphStyle;
+        contentParagraphStyle.setWritingMode(WritingMode::kHorizontalTb);
+        contentParagraphStyle.setTextStyle(contentStyle);
+        contentParagraphStyle.setTextDirection(TextDirection::kLtr);
+        contentParagraphStyle.setTextAlign(TextAlign::kStart);
+        contentParagraphStyle.setTextIndent(0, false);
+        contentParagraphStyle.setMaxLines(std::numeric_limits<size_t>::max());
+        contentParagraphStyle.setEllipsis(SkString());
+        contentParagraphStyle.setEllipsis(std::u16string());
+        ParagraphBuilderImpl builder(contentParagraphStyle, fFontCollection, fUnicode);
+        builder.addText(original.data() + range.start, range.width());
+        auto content = builder.Build();
+        content->layoutWithInlineExtent(std::numeric_limits<SkScalar>::infinity());
+
+        const SkScalar naturalWidth = std::max(SkScalar(0), content->getMaxIntrinsicWidth());
+        if (!SkIsFinite(naturalWidth)) {
+            throw std::runtime_error("tate-chu-yoko content has a non-finite natural width");
+        }
+        const SkScalar fontSize = firstStyle->getFontSize();
+        if (!SkIsFinite(fontSize) || fontSize <= 0) {
+            throw std::invalid_argument("tate-chu-yoko requires a finite positive font size");
+        }
+        SkScalar lineAscent = fontSize * 0.5f;
+        SkScalar lineDescent = fontSize * 0.5f;
+        std::vector<LineMetrics> lineMetrics;
+        content->getLineMetrics(lineMetrics);
+        if (!lineMetrics.empty()) {
+            const auto& metrics = lineMetrics.front();
+            if (std::isfinite(metrics.fAscent) && std::isfinite(metrics.fDescent)) {
+                lineAscent = SkDoubleToScalar(metrics.fAscent);
+                lineDescent = SkDoubleToScalar(metrics.fDescent);
+            }
+        }
+        if (!SkIsFinite(lineAscent) || !SkIsFinite(lineDescent)) {
+            lineAscent = fontSize * 0.5f;
+            lineDescent = fontSize * 0.5f;
+        }
+
+        VerticalTateChuYokoSpan span;
+        span.range = range;
+        span.clusters = ClusterRange(first, last);
+        span.content = std::move(content);
+        span.style = contentStyle;
+        span.naturalWidth = naturalWidth;
+        span.lineAscent = lineAscent;
+        span.lineDescent = lineDescent;
+        span.inlineExtent = fontSize;
+        span.sizing = annotation.sizing;
+        if (annotation.sizing == TateChuYokoSizing::kGrow) {
+            span.cellWidth = naturalWidth;
+            span.squeeze = 1.0f;
+        } else {
+            span.cellWidth = std::min(naturalWidth, fontSize);
+            span.squeeze = naturalWidth > fontSize ? fontSize / naturalWidth : 1.0f;
+        }
+        span.blockOffset = -fClusters[first].run().baselineShift();
+        span.styleIsDefault = firstStyle->equals(fParagraphStyle.getTextStyle());
+        fVerticalTateChuYoko.push_back(std::move(span));
+    }
+
+    auto boundaryAdvance = [this](ClusterIndex index) {
+        if (index < fClusters.size()) {
+            const Cluster& cluster = fClusters[index];
+            if (cluster.textRange().width() > 0) {
+                if (const Run* run = cluster.runOrNull()) {
+                    return run->offset().y() + run->inlinePosition(cluster.startPos());
+                }
+            }
+        }
+        if (index > 0 && index <= fClusters.size()) {
+            const Cluster& previous = fClusters[index - 1];
+            if (previous.textRange().width() > 0) {
+                if (const Run* run = previous.runOrNull()) {
+                    return run->offset().y() + run->inlinePosition(previous.endPos());
+                }
+            }
+        }
+        if (fRuns.empty()) {
+            return SkScalar(0);
+        }
+        const Run& run = fRuns.back();
+        return run.offset().y() + run.inlinePosition(run.size());
+    };
+    std::vector<SkScalar> underlyingExtents(fVerticalTateChuYoko.size(), 0);
+    for (size_t index = 0; index < fVerticalTateChuYoko.size(); ++index) {
+        const auto& span = fVerticalTateChuYoko[index];
+        const SkScalar extent = boundaryAdvance(span.clusters.end) -
+                                boundaryAdvance(span.clusters.start);
+        if (!SkIsFinite(extent) || extent < 0) {
+            throw std::runtime_error("tate-chu-yoko shaped extent is invalid");
+        }
+        underlyingExtents[index] = extent;
+    }
+
+    SkScalar cumulative = 0;
+    for (auto& run : fRuns) {
+        if (cumulative != 0) {
+            run.fOffset.fY += cumulative;
+        }
+        SkScalar shift = 0;
+        run.iterateThroughClusters([&](Cluster* cluster) {
+            const ClusterIndex index = SkToSizeT(cluster - fClusters.begin());
+            for (size_t glyph = cluster->startPos(); glyph < cluster->endPos(); ++glyph) {
+                run.fPositions[glyph].fY += shift;
+            }
+            for (size_t spanIndex = 0; spanIndex < fVerticalTateChuYoko.size(); ++spanIndex) {
+                auto& span = fVerticalTateChuYoko[spanIndex];
+                if (span.clusters.start == index) {
+                    span.inlineStart = run.offset().y() + run.inlinePosition(cluster->startPos());
+                }
+                if (span.clusters.end - 1 == index) {
+                    shift += span.inlineExtent - underlyingExtents[spanIndex];
+                }
+            }
+        });
+        run.fPositions[run.size()].fY += shift;
+        run.fAdvance.fY += shift;
+        cumulative += shift;
+    }
+    for (const auto& span : fVerticalTateChuYoko) {
+        if (!SkIsFinite(span.inlineStart)) {
+            throw std::runtime_error("tate-chu-yoko inline placement is invalid");
+        }
+    }
+    fTateChuYokoPrepared = true;
+}
+
+const VerticalTateChuYokoSpan*
+ParagraphImpl::verticalTateChuYokoAtCluster(ClusterIndex cluster) const {
+    for (const auto& span : fVerticalTateChuYoko) {
+        if (cluster >= span.clusters.start && cluster < span.clusters.end) {
+            return &span;
+        }
+    }
+    return nullptr;
+}
+
+const VerticalTateChuYokoSpan*
+ParagraphImpl::verticalTateChuYokoStartingAt(ClusterIndex cluster) const {
+    for (const auto& span : fVerticalTateChuYoko) {
+        if (span.clusters.start == cluster) {
+            return &span;
+        }
+    }
+    return nullptr;
+}
+
+std::vector<std::pair<const VerticalTateChuYokoSpan*, SkPoint>>
+ParagraphImpl::verticalTateChuYokoPlacements(size_t columnIndex) const {
+    std::vector<std::pair<const VerticalTateChuYokoSpan*, SkPoint>> result;
+    if (columnIndex >= fVerticalColumns.size() || columnIndex >= fLines.size()) {
+        return result;
+    }
+    const auto& column = fVerticalColumns[columnIndex];
+    const auto& line = fLines[columnIndex];
+    for (const auto& span : fVerticalTateChuYoko) {
+        if (span.clusters.start < column.clusters.start || span.clusters.end > column.clusters.end) {
+            continue;
+        }
+        const SkScalar centerX = line.offset().x() + column.blockDescent + span.blockOffset;
+        const SkScalar originX = centerX - span.cellWidth * 0.5f;
+        const SkScalar originY = line.offset().y() - column.inlineSourceStart + span.inlineStart +
+                                 VerticalClusterShift(column, span.clusters.start) +
+                                 (span.inlineExtent - span.lineAscent - span.lineDescent) * 0.5f;
+        result.emplace_back(&span, SkPoint::Make(originX, originY));
+    }
+    return result;
+}
+
 std::vector<std::pair<const VerticalRubySpan*, SkPoint>>
 ParagraphImpl::verticalRubyPlacements(size_t columnIndex) const {
     std::vector<std::pair<const VerticalRubySpan*, SkPoint>> result;
@@ -1161,6 +1425,7 @@ void ParagraphImpl::invalidateVerticalLayout() {
     fLines.clear();
     fVerticalColumns.clear();
     fVerticalRuby.clear();
+    fVerticalTateChuYoko.clear();
     fVerticalDecorations.clear();
     fVerticalBackgrounds.clear();
     fLayoutMetrics = ParagraphLayoutMetrics{};
@@ -1182,6 +1447,7 @@ void ParagraphImpl::invalidateVerticalLayout() {
     fOldWidth = 0;
     fOldHeight = 0;
     fOldInlineExtent = 0;
+    fTateChuYokoPrepared = false;
 }
 
 void ParagraphImpl::layoutVertical(SkScalar inlineExtent) {
@@ -1198,6 +1464,7 @@ void ParagraphImpl::layoutVertical(SkScalar inlineExtent) {
 
     if (fState < kShaped) {
         fRubyPrepared = false;
+        fTateChuYokoPrepared = false;
         if (!fFontCollection->getParagraphCache()->findParagraph(this)) {
             if (fState < kIndexed) {
                 if (!this->computeCodeUnitProperties()) {
@@ -1230,6 +1497,9 @@ void ParagraphImpl::layoutVertical(SkScalar inlineExtent) {
     if (fState == kShaped) {
         if (hasRuby() && !fRubyPrepared) {
             this->prepareVerticalRuby();
+        }
+        if (hasTateChuYoko() && !fTateChuYokoPrepared) {
+            this->prepareVerticalTateChuYoko();
         }
         this->resetContext();
         this->computeEmptyMetrics();
@@ -1298,6 +1568,21 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
             const SkScalar inlineStart = run->offset().fY + run->inlinePosition(cluster.startPos());
             SkScalar inlineEnd = inlineStart + cluster.width();
             size_t endCluster = index + 1;
+            const VerticalTateChuYokoSpan* tateChuYoko = verticalTateChuYokoStartingAt(index);
+            if (tateChuYoko != nullptr) {
+                if (!units.empty()) {
+                    units.back().softBreak = true;
+                }
+                units.push_back({index,
+                                 tateChuYoko->clusters.end,
+                                 inlineStart,
+                                 inlineStart + tateChuYoko->inlineExtent,
+                                 false,
+                                 true,
+                                 false});
+                index = tateChuYoko->clusters.end - 1;
+                continue;
+            }
             for (const auto& span : fVerticalRuby) {
                 if (span.clusters.start == index) {
                     endCluster = span.clusters.end;
@@ -1399,6 +1684,9 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
                        fClusters[clusterRange.end - 1].textRange().end);
         size_t trimmedEnd = clusterRange.end;
         while (trimmedEnd > clusterRange.start && fClusters[trimmedEnd - 1].isWhitespaceBreak()) {
+            if (verticalTateChuYokoAtCluster(trimmedEnd - 1) != nullptr) {
+                break;
+            }
             --trimmedEnd;
         }
         TextRange trimmed = trimmedEnd == clusterRange.start
@@ -1551,6 +1839,12 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
                     break;
                 }
             }
+            for (const auto& span : fVerticalTateChuYoko) {
+                if (span.clusters.start < insertionCluster && insertionCluster < span.clusters.end) {
+                    insertionCluster = span.clusters.start;
+                    break;
+                }
+            }
             auto boundaryAdvance = [&](ClusterIndex firstExcluded) {
                 if (firstExcluded >= column.clusters.end) {
                     return column.inlineExtent;
@@ -1610,6 +1904,12 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
                             break;
                         }
                     }
+                    for (const auto& span : fVerticalTateChuYoko) {
+                        if (span.clusters.start < insertionCluster && insertionCluster < span.clusters.end) {
+                            insertionCluster = span.clusters.start;
+                            break;
+                        }
+                    }
                     retainedAdvance = boundaryAdvance(insertionCluster);
                 }
                 if (insertionCluster == styledCluster) {
@@ -1642,6 +1942,9 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
     }
 
     auto classifyCluster = [this](ClusterIndex clusterIndex) {
+        if (verticalTateChuYokoStartingAt(clusterIndex) != nullptr) {
+            return VerticalOpportunityKind::Asian;
+        }
         const Cluster& cluster = fClusters[clusterIndex];
         if (cluster.isWhitespaceBreak() || cluster.isHardBreak() || cluster.textRange().empty()) {
             return VerticalOpportunityKind::Neutral;
@@ -1721,7 +2024,10 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
             hasPrevious = true;
             const auto ruby = std::find_if(fVerticalRuby.begin(), fVerticalRuby.end(),
                     [&](const auto& span) { return span.clusters.start == clusterIndex; });
-            clusterIndex = ruby == fVerticalRuby.end() ? clusterIndex + 1 : ruby->clusters.end;
+            const auto tateChuYoko = verticalTateChuYokoStartingAt(clusterIndex);
+            clusterIndex = tateChuYoko != nullptr
+                    ? tateChuYoko->clusters.end
+                    : (ruby == fVerticalRuby.end() ? clusterIndex + 1 : ruby->clusters.end);
         }
 
         if (opportunities.empty()) {
@@ -1841,6 +2147,18 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
             column.blockAscent += growth;
             column.blockDescent += growth;
             column.blockThickness = placeholderWidth;
+        }
+        SkScalar tateChuYokoWidth = 0;
+        for (const auto& span : fVerticalTateChuYoko) {
+            if (span.clusters.start >= column.clusters.start && span.clusters.end <= column.clusters.end) {
+                tateChuYokoWidth = std::max(tateChuYokoWidth, span.cellWidth);
+            }
+        }
+        if (tateChuYokoWidth > column.blockThickness) {
+            const SkScalar growth = (tateChuYokoWidth - column.blockThickness) * 0.5f;
+            column.blockAscent += growth;
+            column.blockDescent += growth;
+            column.blockThickness = tateChuYokoWidth;
         }
         if (column.rubyGrowth > 0) {
             if (placeholderWidth > naturalAscent + naturalDescent) {
@@ -2105,6 +2423,11 @@ void ParagraphImpl::resolveVerticalDecorations() {
                 flush(&lineThrough);
                 continue;
             }
+            if (verticalTateChuYokoAtCluster(index) != nullptr) {
+                flush(&underline);
+                flush(&lineThrough);
+                continue;
+            }
             // Directionality/soft-hyphen controls have no glyph or advance.
             // Keep a pending painted segment alive so they cannot manufacture
             // a gap between otherwise contiguous decorated clusters.
@@ -2211,6 +2534,10 @@ void ParagraphImpl::resolveVerticalBackgrounds() {
                 adjacent = false;
                 continue;
             }
+            if (verticalTateChuYokoAtCluster(index) != nullptr) {
+                adjacent = false;
+                continue;
+            }
             if (run == nullptr || cluster.textRange().empty() || cluster.width() <= 0) {
                 continue;
             }
@@ -2272,6 +2599,9 @@ void ParagraphImpl::resolveVerticalMetrics() {
                 }
                 const TextIndex glyphText = run.textRange().start + run.clusterIndex(glyphIndex);
                 const ClusterIndex clusterIndex = fClustersIndexFromCodeUnit[glyphText];
+                if (verticalTateChuYokoAtCluster(clusterIndex) != nullptr) {
+                    continue;
+                }
                 const SkScalar shift = VerticalClusterShift(column, clusterIndex);
                 SkRect bounds = run.font().getBounds(run.fGlyphs[glyphIndex], nullptr);
                 if (bounds.isEmpty()) {
@@ -2313,6 +2643,31 @@ void ParagraphImpl::resolveVerticalMetrics() {
                 ink.join(bounds);
             }
         });
+        for (const auto& [span, origin] : verticalTateChuYokoPlacements(columnIndex)) {
+            span->content->extendedVisit([&](int, const ExtendedVisitorInfo* info) {
+                if (info == nullptr || info->count == 0) {
+                    return;
+                }
+                SkMatrix transform;
+                transform.setScale(span->squeeze, 1);
+                transform.postConcat(info->glyphTransform);
+                for (int index = 0; index < info->count; ++index) {
+                    SkRect bounds = transform.mapRect(info->bounds[index]);
+                    if (bounds.isEmpty()) {
+                        continue;
+                    }
+                    const SkPoint position = info->positions[index];
+                    bounds.offset(origin.x() + span->squeeze * (info->origin.x() + position.x()),
+                                  origin.y() + info->origin.y() + position.y());
+                    if (!hasInk) {
+                        ink = bounds;
+                        hasInk = true;
+                    } else {
+                        ink.join(bounds);
+                    }
+                }
+            });
+        }
     }
     for (const auto& decoration: fVerticalDecorations) {
         if (!hasInk) {
@@ -2382,6 +2737,18 @@ bool ParagraphImpl::getVerticalClusterCell(ClusterIndex clusterIndex, SkRect* ce
     }
     const TextLine& line = fLines[columnIndex];
     const VerticalColumnGeometry& column = fVerticalColumns[columnIndex];
+    if (const auto* span = verticalTateChuYokoAtCluster(clusterIndex)) {
+        const SkScalar shift = VerticalClusterShift(column, clusterIndex);
+        const SkScalar top = line.offset().y() + span->inlineStart + shift -
+                             column.inlineSourceStart;
+        const SkScalar bottom = top + span->inlineExtent;
+        if (cell != nullptr) {
+            const SkScalar centerX = line.offset().x() + column.blockDescent + span->blockOffset;
+            const SkScalar left = centerX - span->cellWidth * 0.5f;
+            *cell = SkRect::MakeLTRB(left, top, left + span->cellWidth, bottom);
+        }
+        return true;
+    }
     const SkScalar inlineStart = run->offset().y() + run->inlinePosition(cluster.startPos());
     const SkScalar shift = VerticalClusterShift(column, clusterIndex);
     const SkScalar shiftAfter = VerticalClusterShiftAfter(column, clusterIndex);
@@ -2456,6 +2823,10 @@ void ParagraphImpl::paintVertical(ParagraphPainter* painter, SkScalar x, SkScala
                 }
                 const SkPoint position = run.fPositions[glyphIndex] + run.fOffsets[glyphIndex];
                 const TextIndex glyphText = run.textRange().start + run.clusterIndex(glyphIndex);
+                const ClusterIndex clusterIndex = fClustersIndexFromCodeUnit[glyphText];
+                if (verticalTateChuYokoAtCluster(clusterIndex) != nullptr) {
+                    continue;
+                }
                 const TextStyle* glyphStyle = StyleAt(fTextStyles, glyphText);
                 if (glyphStyle == nullptr) {
                     throw std::runtime_error("vertical-rl could not resolve the text style for painting");
@@ -2464,7 +2835,6 @@ void ParagraphImpl::paintVertical(ParagraphPainter* painter, SkScalar x, SkScala
                     flushGlyphs();
                     style = glyphStyle;
                 }
-                const ClusterIndex clusterIndex = fClustersIndexFromCodeUnit[glyphText];
                 const SkScalar shift = VerticalClusterShift(column, clusterIndex) +
                                        verticalRubyShift(clusterIndex);
                 glyphs.push_back(run.fGlyphs[glyphIndex]);
@@ -2571,6 +2941,18 @@ void ParagraphImpl::paintVertical(ParagraphPainter* painter, SkScalar x, SkScala
         });
     }
 
+    for (size_t column = 0; column < fVerticalColumns.size(); ++column) {
+        for (const auto& [span, origin] : verticalTateChuYokoPlacements(column)) {
+            painter->save();
+            painter->translate(x + origin.x(), y + origin.y());
+            if (span->squeeze != 1) {
+                painter->scale(span->squeeze, 1);
+            }
+            span->content->paint(painter, 0, 0);
+            painter->restore();
+        }
+    }
+
     auto paintDecorationType = [&](TextDecoration decoration) {
         for (const auto& segment: decorations) {
             if (segment.decoration != decoration) {
@@ -2610,6 +2992,9 @@ void ParagraphImpl::extendedVisitVertical(const ExtendedVisitor& visitor) {
                 }
                 const TextIndex glyphText = run.textRange().start + run.clusterIndex(glyphIndex);
                 const ClusterIndex clusterIndex = fClustersIndexFromCodeUnit[glyphText];
+                if (verticalTateChuYokoAtCluster(clusterIndex) != nullptr) {
+                    continue;
+                }
                 const SkScalar shift = VerticalClusterShift(column, clusterIndex);
                 glyphs.push_back(run.fGlyphs[glyphIndex]);
                 SkPoint position = run.fPositions[glyphIndex] + run.fOffsets[glyphIndex];
@@ -2670,6 +3055,43 @@ void ParagraphImpl::extendedVisitVertical(const ExtendedVisitor& visitor) {
                 visitor(SkToInt(columnIndex), &info);
             }
         }
+        for (const auto& [span, origin] : verticalTateChuYokoPlacements(columnIndex)) {
+            span->content->extendedVisit([&](int, const ExtendedVisitorInfo* contentInfo) {
+                if (contentInfo == nullptr || contentInfo->count == 0) {
+                    return;
+                }
+                std::vector<SkPoint> positions(contentInfo->count);
+                for (int index = 0; index < contentInfo->count; ++index) {
+                    positions[index] = SkPoint::Make(
+                            span->squeeze * (contentInfo->origin.x() +
+                                             contentInfo->positions[index].x()),
+                            contentInfo->origin.y() + contentInfo->positions[index].y());
+                }
+                std::vector<uint32_t> starts(contentInfo->count + 1);
+                const uint32_t width = SkToU32(span->range.width());
+                for (int index = 0; index < contentInfo->count; ++index) {
+                    starts[index] = SkToU32(span->range.start) +
+                                    std::min(contentInfo->utf8Starts[index], width);
+                }
+                starts[contentInfo->count] = SkToU32(span->range.end);
+                SkMatrix transform;
+                transform.setScale(span->squeeze, 1);
+                transform.postConcat(contentInfo->glyphTransform);
+                ExtendedVisitorInfo info = {
+                        contentInfo->font,
+                        origin,
+                        SkSize::Make(span->cellWidth, span->inlineExtent),
+                        contentInfo->count,
+                        contentInfo->glyphs,
+                        positions.data(),
+                        contentInfo->bounds,
+                        starts.data(),
+                        contentInfo->flags | Paragraph::kTateChuYoko_VisitorFlag,
+                        transform,
+                };
+                visitor(SkToInt(columnIndex), &info);
+            });
+        }
         for (const auto& [span, origin] : verticalRubyPlacements(columnIndex)) {
             span->annotation->extendedVisit([&](int, const ExtendedVisitorInfo* annotationInfo) {
                 if (annotationInfo == nullptr) {
@@ -2710,6 +3132,9 @@ int ParagraphImpl::getVerticalPath(int lineNumber, SkPath* dest) {
             }
             const TextIndex glyphText = run.textRange().start + run.clusterIndex(glyphIndex);
             const ClusterIndex clusterIndex = fClustersIndexFromCodeUnit[glyphText];
+            if (verticalTateChuYokoAtCluster(clusterIndex) != nullptr) {
+                continue;
+            }
             const SkScalar shift = VerticalClusterShift(column, clusterIndex);
             const auto glyphPath = run.font().getPath(run.fGlyphs[glyphIndex]);
             if (!glyphPath) {
@@ -2753,6 +3178,14 @@ int ParagraphImpl::getVerticalPath(int lineNumber, SkPath* dest) {
                 builder.addPath(*glyphPath, total);
             }
         }
+    }
+    for (const auto& [span, origin] : verticalTateChuYokoPlacements(SkToSizeT(lineNumber))) {
+        SkPath contentPath;
+        missing += span->content->getPath(0, &contentPath);
+        SkMatrix transform;
+        transform.setScale(span->squeeze, 1);
+        transform.postTranslate(origin.x(), origin.y());
+        builder.addPath(contentPath, transform);
     }
     for (const auto& [span, origin] : verticalRubyPlacements(SkToSizeT(lineNumber))) {
         SkPath annotationPath;
@@ -2814,6 +3247,17 @@ std::vector<TextBox> ParagraphImpl::getVerticalRectsForRange(unsigned start, uns
         for (ClusterIndex index = column.clusters.start; index < column.clusters.end; ++index) {
             const Cluster& cluster = fClusters[index];
             const TextRange clusterText = cluster.textRange();
+            if (const auto* span = verticalTateChuYokoStartingAt(index)) {
+                if (clusterText.end > utf8Start && clusterText.start < utf8End) {
+                    flush();
+                    SkRect cell;
+                    if (getVerticalClusterCell(index, &cell) && !cell.isEmpty()) {
+                        boxes.emplace_back(cell, TextDirection::kLtr);
+                    }
+                }
+                index = span->clusters.end - 1;
+                continue;
+            }
             if (clusterText.end <= utf8Start || clusterText.start >= utf8End) {
                 continue;
             }
@@ -2901,6 +3345,26 @@ PositionWithAffinity ParagraphImpl::getVerticalGlyphPositionAtCoordinate(SkScala
 
     for (ClusterIndex index = column.clusters.start; index < column.clusters.end; ++index) {
         const Cluster& cluster = fClusters[index];
+        if (const auto* span = verticalTateChuYokoStartingAt(index)) {
+            const SkScalar shift = VerticalClusterShift(column, index);
+            const SkScalar clusterStart = span->inlineStart + shift;
+            const SkScalar clusterWidth = span->inlineExtent;
+            const SkScalar clusterEnd = clusterStart + clusterWidth;
+            const size_t startUtf16 = fUTF16IndexForUTF8Index[span->range.start];
+            const size_t endUtf16 = fUTF16IndexForUTF8Index[span->range.end];
+            if (inlineCoordinate <= clusterStart) {
+                return {SkToInt(startUtf16), Affinity::kDownstream};
+            }
+            if (inlineCoordinate <= clusterEnd) {
+                const SkScalar middle = clusterStart + clusterWidth * 0.5f;
+                if (inlineCoordinate < middle) {
+                    return {SkToInt(startUtf16), Affinity::kUpstream};
+                }
+                return {SkToInt(endUtf16), Affinity::kDownstream};
+            }
+            index = span->clusters.end - 1;
+            continue;
+        }
         const Run* run = cluster.runOrNull();
         if (run == nullptr || cluster.textRange().empty()) {
             continue;

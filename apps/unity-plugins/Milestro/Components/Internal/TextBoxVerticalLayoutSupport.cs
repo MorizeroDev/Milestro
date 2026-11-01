@@ -50,14 +50,15 @@ namespace Milestro.Components.Internal
         {
             var parser = new RichTextParser.RichTextParser();
             parser.ParseText(requested.Content);
-            var payload = parser.ConvertToSegments();
+            var issues = new List<string>();
+            var payload = parser.ConvertToSegments(false, issues);
             var writingMode = requested.ParagraphStyle?.writingMode ?? WritingMode.HorizontalTb;
             if (writingMode == WritingMode.HorizontalTb)
             {
-                return new TextBoxRenderPreparation(requested, payload, null, false);
+                return new TextBoxRenderPreparation(requested, payload,
+                    CreateDiagnostic(issues), false);
             }
 
-            var issues = new List<string>();
             var requestedVertical = writingMode == WritingMode.VerticalRl;
             if (!requestedVertical)
             {
@@ -70,8 +71,14 @@ namespace Milestro.Components.Internal
                 return PrepareHorizontalFallback(requested, payload, issues);
             }
 
-            return PrepareVerticalFallback(requested,
-                parser.ConvertToSegments(allowViewportBlockMargins: true), issues);
+            var verticalIssues = new List<string>();
+            var verticalPayload = parser.ConvertToSegments(true, verticalIssues);
+            foreach (var issue in verticalIssues)
+            {
+                if (!issues.Contains(issue)) issues.Add(issue);
+            }
+
+            return PrepareVerticalFallback(requested, verticalPayload, issues);
         }
 
         internal static TextBoxRenderTargetSettings WithNaturalLineHeight(

@@ -78,6 +78,18 @@ int64_t MilestroSkiaTextlayoutParagraphBuilderAddRuby(milestro::skia::textlayout
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutParagraphBuilderAddTateChuYoko(
+        milestro::skia::textlayout::ParagraphBuilder* b, size_t startUtf8, size_t endUtf8,
+        int32_t sizing) try {
+    if (b == nullptr || startUtf8 >= endUtf8 || sizing < 0 || sizing > 1)
+        return MILESTRO_API_RET_FAILED;
+    b->addTateChuYoko(startUtf8, endUtf8,
+                      static_cast<::skia::textlayout::TateChuYokoSizing>(sizing));
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutParagraphBuilderAddPlaceholder(
         milestro::skia::textlayout::ParagraphBuilder* b,
         float width, float height, int32_t alignment, int32_t baseline, float baselineOffset) try {

@@ -58,6 +58,13 @@ public:
 
     virtual void addRuby(const RubyAnnotation& annotation) = 0;
 
+    // Marks an explicit UTF-8 source range as tate-chu-yoko (text-combine-upright:
+    // all). The sizing mode selects one-em squeeze or natural-width grow.
+    // Horizontal paragraphs ignore the annotation without changing layout.
+    virtual void addTateChuYoko(
+            TextRange range,
+            TateChuYokoSizing sizing = TateChuYokoSizing::kSqueeze) = 0;
+
     // Constructs a SkParagraph object that can be used to layout and paint the text to a SkCanvas.
     virtual std::unique_ptr<Paragraph> Build() = 0;
 

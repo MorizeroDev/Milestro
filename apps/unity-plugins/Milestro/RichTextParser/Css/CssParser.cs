@@ -13,10 +13,13 @@ namespace Milestro.RichTextParser.Css
         internal static void Apply(TextStyleState textStyle,
                                    string declarations,
                                    ParagraphStyleState? paragraphStyle = null,
-                                   bool allowViewportBlockMargins = false)
+                                   bool allowViewportBlockMargins = false,
+                                   ICollection<string>? issues = null)
         {
             FontFeatureOperation? kerningOperation = null;
             List<FontFeatureOperation>? featureOperations = null;
+            bool? textCombineUpright = null;
+            TateChuYokoSizing? tateChuYokoSizing = null;
             TextIndent? textIndent = null;
             float? textIndentEm = null;
             var parser = new CssDeclarationParser(declarations);
@@ -30,6 +33,37 @@ namespace Milestro.RichTextParser.Css
                 else if (declaration.Property.Equals("font-feature-settings", StringComparison.OrdinalIgnoreCase))
                 {
                     if (TryParseFeatureSettings(declaration.Value, out var operations)) featureOperations = operations;
+                }
+                else if (declaration.Property.Equals("text-combine-upright", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (TryParseTextCombineUpright(declaration.Value, out var all))
+                    {
+                        textCombineUpright = all;
+                    }
+                    else
+                    {
+                        issues?.Add($"text-combine-upright={declaration.Value} defaulted to none");
+                        textCombineUpright = false;
+                    }
+                }
+                else if (declaration.Property.Equals(
+                             "--milestro-text-combine-upright-sizing",
+                             StringComparison.OrdinalIgnoreCase))
+                {
+                    if (declaration.Value.Equals("squeeze", StringComparison.OrdinalIgnoreCase))
+                    {
+                        tateChuYokoSizing = TateChuYokoSizing.Squeeze;
+                    }
+                    else if (declaration.Value.Equals("grow", StringComparison.OrdinalIgnoreCase))
+                    {
+                        tateChuYokoSizing = TateChuYokoSizing.Grow;
+                    }
+                    else
+                    {
+                        issues?.Add(
+                            $"--milestro-text-combine-upright-sizing={declaration.Value} defaulted to squeeze");
+                        tateChuYokoSizing = TateChuYokoSizing.Squeeze;
+                    }
                 }
                 else if (paragraphStyle != null &&
                          declaration.Property.Equals("text-indent", StringComparison.OrdinalIgnoreCase) &&
@@ -54,6 +88,9 @@ namespace Milestro.RichTextParser.Css
 
             if (kerningOperation.HasValue) textStyle.FontFeatureOperations.Add(kerningOperation.Value);
             if (featureOperations != null) textStyle.FontFeatureOperations.AddRange(featureOperations);
+            if (textCombineUpright.HasValue) textStyle.TextCombineUprightAll = textCombineUpright.Value;
+            if (tateChuYokoSizing.HasValue)
+                textStyle.TextCombineUprightSizing = tateChuYokoSizing.Value;
             if (paragraphStyle != null && (textIndent.HasValue || textIndentEm.HasValue))
             {
                 paragraphStyle.TextIndent = textIndent;
@@ -85,6 +122,18 @@ namespace Milestro.RichTextParser.Css
 
             operation = default;
             return false;
+        }
+
+        private static bool TryParseTextCombineUpright(CssSlice value, out bool all)
+        {
+            if (value.Equals("all", StringComparison.OrdinalIgnoreCase))
+            {
+                all = true;
+                return true;
+            }
+
+            all = false;
+            return value.Equals("none", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool TryParseFeatureSettings(CssSlice value, out List<FontFeatureOperation> operations)

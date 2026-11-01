@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text;
 using Milestro.Model;
 using Milestro.Skia;
+using Milestro.Skia.TextLayout;
 using Paraparty.Colors;
 using UnityEngine;
 
@@ -52,6 +53,22 @@ namespace Milestro.RichTextParser
         /// Whether line-through decoration should be added to the inherited decoration flags.
         /// </summary>
         public bool Strikethrough { get; set; } = false;
+
+        /// <summary>
+        /// Computed CSS <c>text-combine-upright</c> value. <c>true</c> means the text
+        /// participates in a tate-chu-yoko group; <c>false</c> is the inherited
+        /// <c>none</c> default.
+        /// </summary>
+        public bool TextCombineUprightAll { get; set; } = false;
+
+        /// <summary>
+        /// Computed <c>--milestro-text-combine-upright-sizing</c> value for a
+        /// tate-chu-yoko group. <see cref="TateChuYokoSizing.Squeeze"/> is the
+        /// CSS-compatible default; <see cref="TateChuYokoSizing.Grow"/> keeps the
+        /// natural width and widens the column.
+        /// </summary>
+        public TateChuYokoSizing TextCombineUprightSizing { get; set; } =
+            TateChuYokoSizing.Squeeze;
 
         /// <summary>
         /// Optional numeric font weight override.
@@ -154,6 +171,8 @@ namespace Milestro.RichTextParser
 
             ret.Underline = Underline;
             ret.Strikethrough = Strikethrough;
+            ret.TextCombineUprightAll = TextCombineUprightAll;
+            ret.TextCombineUprightSizing = TextCombineUprightSizing;
 
             ret.FontWeight = FontWeight;
             ret.FontWidth = FontWidth;
@@ -224,7 +243,8 @@ namespace Milestro.RichTextParser
 
             if (LetterSpacing.HasValue || BaselineShift.HasValue || BaselineShiftEm.HasValue ||
                 FontSizeScale.HasValue || Locale != null || FontWidth.HasValue ||
-                (FontSlant.HasValue && FontSlant.Value != Milestro.Model.FontSlant.Italic))
+                (FontSlant.HasValue && FontSlant.Value != Milestro.Model.FontSlant.Italic) ||
+                TextCombineUprightAll)
             {
                 sb.Append("<span");
                 if (FontSizeScale.HasValue)
@@ -260,6 +280,14 @@ namespace Milestro.RichTextParser
                 if (FontSlant.HasValue && FontSlant.Value != Milestro.Model.FontSlant.Italic)
                 {
                     AppendAttribute(sb, "slant", FontSlant.Value.ToString());
+                }
+
+                if (TextCombineUprightAll)
+                {
+                    var style = TextCombineUprightSizing == TateChuYokoSizing.Grow
+                        ? "text-combine-upright: all; --milestro-text-combine-upright-sizing: grow"
+                        : "text-combine-upright: all";
+                    AppendAttribute(sb, "style", style);
                 }
 
                 sb.Append('>');

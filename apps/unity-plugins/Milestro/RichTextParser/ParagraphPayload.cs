@@ -1,15 +1,34 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Milestro.Skia.TextLayout;
 
 namespace Milestro.RichTextParser
 {
+    internal readonly struct TateChuYokoAnnotation
+    {
+        internal TateChuYokoAnnotation(int startUtf16, int endUtf16,
+            TateChuYokoSizing sizing = TateChuYokoSizing.Squeeze)
+        {
+            StartUtf16 = startUtf16;
+            EndUtf16 = endUtf16;
+            Sizing = sizing;
+        }
+
+        internal int StartUtf16 { get; }
+        internal int EndUtf16 { get; }
+        internal TateChuYokoSizing Sizing { get; }
+    }
+
     public class ParagraphPayload
     {
         private static readonly IReadOnlyList<LinkAnnotation> EmptyLinks = Array.Empty<LinkAnnotation>();
         private static readonly IReadOnlyList<RubyAnnotation> EmptyRubyAnnotations = Array.Empty<RubyAnnotation>();
+        private static readonly IReadOnlyList<TateChuYokoAnnotation> EmptyTateChuYokoAnnotations =
+            Array.Empty<TateChuYokoAnnotation>();
         private List<LinkAnnotation>? links;
         private List<RubyAnnotation>? rubyAnnotations;
+        private List<TateChuYokoAnnotation>? tateChuYokoAnnotations;
         private List<ParagraphBlock>? blocks;
         private readonly List<PlaceholderAnnotation> placeholders = new List<PlaceholderAnnotation>();
         public IReadOnlyList<PlaceholderAnnotation> Placeholders => placeholders.AsReadOnly();
@@ -65,6 +84,9 @@ namespace Milestro.RichTextParser
 
         internal IReadOnlyList<RubyAnnotation> RubyAnnotations => rubyAnnotations ?? EmptyRubyAnnotations;
 
+        internal IReadOnlyList<TateChuYokoAnnotation> TateChuYokoAnnotations =>
+            tateChuYokoAnnotations ?? EmptyTateChuYokoAnnotations;
+
         internal ParagraphBlock AddBlock(bool isExplicit, int startUtf16)
         {
             var list = blocks ??= new List<ParagraphBlock> { new ParagraphBlock() };
@@ -96,6 +118,12 @@ namespace Milestro.RichTextParser
         {
             rubyAnnotations ??= new List<RubyAnnotation>();
             rubyAnnotations.Add(annotation);
+        }
+
+        internal void AddTateChuYoko(TateChuYokoAnnotation annotation)
+        {
+            tateChuYokoAnnotations ??= new List<TateChuYokoAnnotation>();
+            tateChuYokoAnnotations.Add(annotation);
         }
 
         public static ParagraphPayload MakeText(string text)

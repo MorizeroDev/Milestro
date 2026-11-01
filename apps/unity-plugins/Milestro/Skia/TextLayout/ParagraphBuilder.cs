@@ -126,6 +126,25 @@ namespace Milestro.Skia.TextLayout
             AddRubyUtf8(startUtf8, _utf8Length, annotation, style);
         }
 
+        public void AddTateChuYokoUtf8(ulong startUtf8, ulong endUtf8,
+            TateChuYokoSizing sizing = TateChuYokoSizing.Squeeze)
+        {
+            if (startUtf8 >= endUtf8 || endUtf8 > _utf8Length)
+                throw new ArgumentOutOfRangeException(nameof(endUtf8));
+            if (sizing != TateChuYokoSizing.Squeeze && sizing != TateChuYokoSizing.Grow)
+                throw new ArgumentOutOfRangeException(nameof(sizing));
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutParagraphBuilderAddTateChuYoko(
+                    NativePtr, startUtf8, endUtf8, (int)sizing));
+        }
+
+        public void AddTateChuYokoUtf16(int startUtf16, int endUtf16,
+            TateChuYokoSizing sizing = TateChuYokoSizing.Squeeze)
+        {
+            Utf16RangeToUtf8(_text.ToString(), startUtf16, endUtf16, out var startUtf8, out var endUtf8);
+            AddTateChuYokoUtf8(startUtf8, endUtf8, sizing);
+        }
+
         internal static void Utf16RangeToUtf8(string text, int startUtf16, int endUtf16,
             out ulong startUtf8, out ulong endUtf8)
         {

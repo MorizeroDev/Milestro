@@ -56,6 +56,10 @@ public:
 
     void addRuby(const RubyAnnotation& annotation) override;
 
+    void addTateChuYoko(
+            TextRange range,
+            TateChuYokoSizing sizing = TateChuYokoSizing::kSqueeze) override;
+
     // Constructs a SkParagraph object that can be used to layout and paint the text to a SkCanvas.
     std::unique_ptr<Paragraph> Build() override;
 
@@ -101,6 +105,7 @@ protected:
 
     SkString fUtf8;
     std::vector<RubyAnnotation> fRubyAnnotations;
+    std::vector<TateChuYokoAnnotation> fTateChuYokoAnnotations;
     // TextStyle, Block, and Placeholder contain std::vector and std::optional, which poison
     // disengaged storage under MSVC STL ASAN and must be relocated via move constructors
     skia_private::STArray<4, TextStyle> fTextStyles;

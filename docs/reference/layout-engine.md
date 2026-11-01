@@ -232,6 +232,19 @@ sides. Paint, paths, visitors, ranges, links, sizing, and scrolling consume the
 resulting geometry. Synthetic affixes use their own shift but still have no
 background or decoration.
 
+Explicit tate-chu-yoko ranges (`ParagraphBuilder::addTateChuYoko`, or
+rich-text `text-combine-upright: all`) reshape a short source range as a
+horizontal sub-paragraph and place it in the column as one atomic unit. The
+inline advance is always one em of the group's font size. With the default
+`squeeze` sizing, a group wider than one em is compressed along physical X by
+a paint transform; `--milestro-text-combine-upright-sizing: grow` keeps the
+natural width and grows the column thickness symmetrically instead. Ranges
+must align to grapheme and shaped-cluster boundaries, use one uniform resolved
+style, and cannot overlap hard breaks, placeholders, or Ruby base ranges;
+horizontal paragraphs ignore the annotation. Group glyphs keep their real
+source indices in visitors, range queries, paths, hit testing, and links, and
+carry `Paragraph::kTateChuYoko_VisitorFlag`.
+
 ## Content sizing
 
 For `vertical-rl` with a fixed height, `TextBoxLayoutElement` can publish
