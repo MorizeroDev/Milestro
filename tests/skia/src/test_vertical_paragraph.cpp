@@ -7955,4 +7955,50 @@ TEST_F(SkiaVerticalParagraph, V87_VerticalPunctuationUsesVchwWhenAvailable) {
     EXPECT_LT(origins[1].y() - origins[0].y(), kSize - 1);
 }
 
+TEST_F(SkiaVerticalParagraph, V88_TateChuYokoIgnoresInheritedLineHeightBaseline) {
+    auto build = [](SkScalar height) {
+        auto style = PrimaryStyle(40);
+        style.setHeightOverride(true);
+        style.setHeight(height);
+        auto paragraph = BuildVerticalTateChuYoko("漢12漢", {{3, 5}}, style);
+        paragraph->layoutWithInlineExtent(400);
+        return paragraph;
+    };
+    auto natural = build(1);
+    auto expanded = build(2.2f);
+
+    const auto naturalRuns = TateChuYokoRuns(SnapshotRuns(natural.get()));
+    const auto expandedRuns = TateChuYokoRuns(SnapshotRuns(expanded.get()));
+    ASSERT_EQ(naturalRuns.size(), 1u);
+    ASSERT_EQ(expandedRuns.size(), 1u);
+    EXPECT_NEAR(expandedRuns[0].origin.y(), naturalRuns[0].origin.y(), kTolerance);
+    ASSERT_EQ(expandedRuns[0].positions.size(), naturalRuns[0].positions.size());
+    for (size_t index = 0; index < expandedRuns[0].positions.size(); ++index) {
+        EXPECT_NEAR(expandedRuns[0].positions[index].y(),
+                    naturalRuns[0].positions[index].y(), kTolerance);
+    }
+    ASSERT_EQ(natural->getLayoutMetrics().columns.size(), 1u);
+    ASSERT_EQ(expanded->getLayoutMetrics().columns.size(), 1u);
+    EXPECT_NEAR(expanded->getLayoutMetrics().columns[0].blockThickness, 88, kTolerance);
+
+    const auto boxes = TightBoxes(expanded.get(), 1, 3);
+    ASSERT_EQ(boxes.size(), 1u);
+    SkRect ink = SkRect::MakeEmpty();
+    for (size_t index = 0; index < expandedRuns[0].glyphs.size(); ++index) {
+        const SkRect bounds = expandedRuns[0].transform.mapRect(expandedRuns[0].bounds[index]);
+        const SkPoint origin = expandedRuns[0].origin + expandedRuns[0].positions[index];
+        const SkRect glyph = SkRect::MakeLTRB(bounds.left() + origin.x(),
+                                              bounds.top() + origin.y(),
+                                              bounds.right() + origin.x(),
+                                              bounds.bottom() + origin.y());
+        if (ink.isEmpty()) {
+            ink = glyph;
+        } else {
+            ink.join(glyph);
+        }
+    }
+    EXPECT_GE(ink.top(), boxes[0].rect.top() - 1);
+    EXPECT_LE(ink.bottom(), boxes[0].rect.bottom() + 1);
+}
+
 } // namespace

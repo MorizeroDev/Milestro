@@ -1288,6 +1288,8 @@ void ParagraphImpl::prepareVerticalTateChuYoko() {
 
         auto contentStyle = *firstStyle;
         contentStyle.setBaselineShift(0);
+        contentStyle.setHeightOverride(false);
+        contentStyle.setHeight(0);
         auto contentParagraphStyle = fParagraphStyle;
         contentParagraphStyle.setWritingMode(WritingMode::kHorizontalTb);
         contentParagraphStyle.setTextStyle(contentStyle);
