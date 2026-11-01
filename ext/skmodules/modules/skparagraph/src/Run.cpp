@@ -72,7 +72,8 @@ Run::Run(const Run& other, bool detachGlyphs)
       fCorrectAscent(other.fCorrectAscent), fCorrectDescent(other.fCorrectDescent),
       fCorrectLeading(other.fCorrectLeading), fEllipsis(other.fEllipsis), fBidiLevel(other.fBidiLevel),
       fScript(other.fScript), fLanguage(other.fLanguage), fVertical(other.fVertical), fSideways(other.fSideways),
-      fBlockAscent(other.fBlockAscent), fBlockDescent(other.fBlockDescent) {
+      fVchwEnabled(other.fVchwEnabled), fBlockAscent(other.fBlockAscent),
+      fBlockDescent(other.fBlockDescent) {
 }
 
 void Run::calculateMetrics() {
@@ -290,10 +291,17 @@ void Run::compressAfter(Cluster* cluster, SkScalar amount) {
     if (amount <= 0) {
         return;
     }
-    for (size_t i = cluster->endPos(); i <= this->size(); ++i) {
-        fPositions[i].fX -= amount;
+    if (fVertical) {
+        for (size_t i = cluster->endPos(); i <= this->size(); ++i) {
+            fPositions[i].fY -= amount;
+        }
+        fAdvance.fY -= amount;
+    } else {
+        for (size_t i = cluster->endPos(); i <= this->size(); ++i) {
+            fPositions[i].fX -= amount;
+        }
+        fAdvance.fX -= amount;
     }
-    fAdvance.fX -= amount;
     cluster->space(-amount);
 }
 

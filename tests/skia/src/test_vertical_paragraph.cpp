@@ -159,6 +159,7 @@ sk_sp<skia_text::FontCollection> TestFontCollection() {
         EXPECT_TRUE(fontMgr->addFontFile(MILESTRO_TEST_FONT_PATH));
         EXPECT_TRUE(fontMgr->addFontFile(MILESTRO_TEST_FALLBACK_FONT_PATH));
         EXPECT_TRUE(fontMgr->addFontFile(MILESTRO_TEST_EMOJI_FONT_PATH));
+        EXPECT_TRUE(fontMgr->addFontFile(MILESTRO_TEST_CHWS_FONT_PATH));
         auto result = sk_make_sp<skia_text::FontCollection>();
         result->setDefaultFontManager(std::move(fontMgr));
         return result;
@@ -847,6 +848,15 @@ SkScalar DecorationThickness(const VisitorRun& run,
     return thickness * multiplier;
 }
 
+SkScalar DecorationBlockCenter(const VisitorRun& run) {
+    if (!run.sideways) {
+        return run.origin.x();
+    }
+    SkFontMetrics metrics;
+    run.font.getMetrics(&metrics);
+    return run.origin.x() - (metrics.fAscent + metrics.fDescent) * 0.5f;
+}
+
 SkScalar UnderlineCenterX(const VisitorRun& run, SkScalar thickness) {
     SkFontMetrics metrics;
     run.font.getMetrics(&metrics);
@@ -855,7 +865,11 @@ SkScalar UnderlineCenterX(const VisitorRun& run, SkScalar thickness) {
         std::isfinite(metrics.fUnderlinePosition) && metrics.fUnderlinePosition > 0) {
         position = metrics.fUnderlinePosition;
     }
-    return run.origin.x() - run.font.getSize() * 0.5f - position;
+    return DecorationBlockCenter(run) - run.font.getSize() * 0.5f - position;
+}
+
+SkScalar LineThroughCenterX(const VisitorRun& run) {
+    return DecorationBlockCenter(run);
 }
 
 void ExpectRectNear(const SkRect& actual, const SkRect& expected, SkScalar tolerance = kTolerance) {
@@ -5591,7 +5605,8 @@ TEST_F(SkiaVerticalParagraph, V75_SidewaysUnderlineUsesTheSamePhysicalSideWithou
     const SkScalar thickness = DecorationThickness(run, skia_text::TextDecoration::kUnderline, 1);
     const SkScalar center = UnderlineCenterX(run, thickness);
     EXPECT_NEAR(decorations.front().rect.centerX(), center, kTolerance);
-    EXPECT_LT(center, run.origin.x() - 48 * 0.5f);
+    EXPECT_LT(center, DecorationBlockCenter(run) - 48 * 0.5f);
+    EXPECT_GT(center, DecorationBlockCenter(run) - 48);
     EXPECT_GT(decorations.front().rect.right(), decorations.front().rect.left());
 }
 
@@ -7858,6 +7873,86 @@ TEST_F(SkiaVerticalParagraph, HorizontalSoftHyphenAndEllipsisHitsStayUpstream) {
         EXPECT_EQ(glyph.fGraphemeClusterTextRange,
                   skia_text::TextRange(ellipsis ? 2 : 5, ellipsis ? 3 : 6));
     }
+}
+
+TEST_F(SkiaVerticalParagraph, V85_MixedCjkAndSidewaysLineThroughShareColumnAxis) {
+    const skia_text::TextDecoration decoration = skia_text::TextDecoration::kLineThrough;
+    auto cjk = DecorationStyleFor(PrimaryStyle(48), decoration, SK_ColorRED);
+    auto latin = DecorationStyleFor(LatinStyle(48), decoration, SK_ColorRED);
+    auto paragraph = BuildCustomParagraph({}, [&](skia_text::ParagraphBuilder* builder) {
+        builder->pushStyle(cjk);
+        builder->addText("天", 3);
+        builder->pop();
+        builder->pushStyle(latin);
+        builder->addText("test", 4);
+        builder->pop();
+    });
+    paragraph->layoutWithInlineExtent(std::numeric_limits<SkScalar>::infinity());
+
+    const auto runs = SnapshotRuns(paragraph.get());
+    const VisitorRun* cjkRun = FindVisitorRun(runs, 0, 0);
+    const VisitorRun* latinRun = FindVisitorRun(runs, 0, 3);
+    ASSERT_NE(cjkRun, nullptr);
+    ASSERT_NE(latinRun, nullptr);
+    ASSERT_TRUE(latinRun->sideways);
+
+    const auto decorations = RecordDecorations(paragraph.get());
+    ASSERT_FALSE(decorations.empty());
+    EXPECT_NEAR(LineThroughCenterX(*cjkRun), LineThroughCenterX(*latinRun), kTolerance);
+    for (const auto& decoration: decorations) {
+        EXPECT_NEAR(decoration.rect.centerX(), LineThroughCenterX(*cjkRun), kTolerance);
+        EXPECT_NEAR(decoration.rect.centerX(), LineThroughCenterX(*latinRun), kTolerance);
+    }
+}
+
+TEST_F(SkiaVerticalParagraph, V86_VerticalPunctuationFallbackStaysOnInlineAxis) {
+    constexpr SkScalar kSize = 48;
+    auto style = PrimaryStyle(kSize);
+    style.addFontFeature(SkString("chws"), 1);
+    auto paragraph = BuildParagraph("，，，，", style, {});
+    paragraph->layoutWithInlineExtent(std::numeric_limits<SkScalar>::infinity());
+
+    const auto runs = SnapshotRuns(paragraph.get());
+    std::vector<SkPoint> origins;
+    for (const auto& run: runs) {
+        const auto runOrigins = AbsoluteGlyphOrigins(run);
+        origins.insert(origins.end(), runOrigins.begin(), runOrigins.end());
+    }
+    ASSERT_EQ(origins.size(), 4u);
+    for (size_t index = 1; index < origins.size(); ++index) {
+        EXPECT_NEAR(origins[index].x(), origins.front().x(), kTolerance) << index;
+        EXPECT_GT(origins[index].y(), origins[index - 1].y());
+        EXPECT_LT(origins[index].y() - origins[index - 1].y(), kSize - 1) << index;
+    }
+}
+
+TEST_F(SkiaVerticalParagraph, V87_VerticalPunctuationUsesVchwWhenAvailable) {
+    constexpr SkScalar kSize = 48;
+    auto enabledStyle = FamilyStyle("LXGW WenKai", kSize);
+    enabledStyle.addFontFeature(SkString("chws"), 1);
+    auto disabledStyle = enabledStyle;
+    disabledStyle.resetFontFeatures();
+    disabledStyle.addFontFeature(SkString("chws"), 0);
+
+    auto enabled = BuildParagraph("、「", enabledStyle, {});
+    auto disabled = BuildParagraph("、「", disabledStyle, {});
+    enabled->layoutWithInlineExtent(std::numeric_limits<SkScalar>::infinity());
+    disabled->layoutWithInlineExtent(std::numeric_limits<SkScalar>::infinity());
+
+    const auto enabledExtent = enabled->getLayoutMetrics().longestInlineExtent;
+    const auto disabledExtent = disabled->getLayoutMetrics().longestInlineExtent;
+    EXPECT_GT(disabledExtent - enabledExtent, 10) << "enabled=" << enabledExtent
+                                                  << " disabled=" << disabledExtent;
+
+    const auto runs = SnapshotRuns(enabled.get());
+    std::vector<SkPoint> origins;
+    for (const auto& run: runs) {
+        const auto runOrigins = AbsoluteGlyphOrigins(run);
+        origins.insert(origins.end(), runOrigins.begin(), runOrigins.end());
+    }
+    ASSERT_EQ(origins.size(), 2u);
+    EXPECT_NEAR(origins[1].x(), origins[0].x(), kTolerance);
+    EXPECT_LT(origins[1].y() - origins[0].y(), kSize - 1);
 }
 
 } // namespace

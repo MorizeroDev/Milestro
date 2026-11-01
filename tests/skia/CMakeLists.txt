@@ -67,6 +67,7 @@ target_link_libraries(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PRIVATE
 target_compile_definitions(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PRIVATE
         MILESTRO_TEST_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/SourceHanSans-VF.otf.woff2.bytes"
         MILESTRO_TEST_FALLBACK_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/LiberationSans-Bold.ttf.bytes"
+        MILESTRO_TEST_CHWS_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/LXGWWenKai-Regular.ttf"
 )
 if (MSVC)
     target_compile_options(${MILESTRO_VERTICAL_TEXT_TEST_NAME} PRIVATE /utf-8)
@@ -85,6 +86,7 @@ target_compile_definitions(${MILESTRO_VERTICAL_PARAGRAPH_TEST_NAME} PRIVATE
         MILESTRO_TEST_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/SourceHanSans-VF.otf.woff2.bytes"
         MILESTRO_TEST_FALLBACK_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/LiberationSans-Bold.ttf.bytes"
         MILESTRO_TEST_EMOJI_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/NotoColorEmoji.ttf.bytes"
+        MILESTRO_TEST_CHWS_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/LXGWWenKai-Regular.ttf"
 )
 if (MSVC)
     target_compile_options(${MILESTRO_VERTICAL_PARAGRAPH_TEST_NAME} PRIVATE /utf-8)

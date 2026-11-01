@@ -743,7 +743,9 @@ bool IsChwsEnabled(const TextStyle& style) {
 }  // namespace
 
 void ParagraphImpl::applyCjkPunctuationCompression() {
-    // This is the Chromium text-spacing-trim fallback for fonts without chws.
+    // This is the Chromium text-spacing-trim fallback for horizontal fonts
+    // without chws, and for vertical fonts without vchw. Upright vertical runs
+    // that shaped with vchw are already compressed by the font.
     // Compress only the first member of an adjacent punctuation pair. Thus a
     // trailing punctuation mark remains full width, while `、，。` compresses
     // the first two marks.
@@ -769,8 +771,14 @@ void ParagraphImpl::applyCjkPunctuationCompression() {
         if (amount <= 0) {
             continue;
         }
-        current.run().compressAfter(&current, amount);
-        fMaxIntrinsicWidth -= amount;
+        Run& run = current.run();
+        if (run.isVertical() && run.vchwEnabled()) {
+            continue;
+        }
+        run.compressAfter(&current, amount);
+        if (!run.isVertical()) {
+            fMaxIntrinsicWidth -= amount;
+        }
     }
 }
 

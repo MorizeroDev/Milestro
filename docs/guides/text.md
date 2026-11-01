@@ -206,7 +206,9 @@ Paragraphs enable the OpenType `chws` feature by default. Fonts that support
 adjacent full-width punctuation marks (for example `、，。`); a punctuation
 mark without an adjacent punctuation mark keeps its normal advance. Calling
 `TextStyle.ResetFontFeature()` disables all font features, including this
-default.
+default. In vertical-rl text, upright runs map that request to `vchw` instead;
+fonts without `vchw` use an inline-axis fallback, so punctuation compression
+never shifts later glyphs across the column.
 
 Component-level spacing is available on `producer.textStyle`:
 

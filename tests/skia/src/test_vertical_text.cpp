@@ -544,6 +544,40 @@ TEST_F(SkiaVerticalTextFeasibility, TtbShaperApiShapesSourceHanUprightWithGlobal
     EXPECT_EQ(actual.unresolvedGlyphs, 0u);
 }
 
+TEST_F(SkiaVerticalTextFeasibility, TtbShaperApiMapsChwsToVchwForUprightRuns) {
+    auto fontContext = LoadFont(MILESTRO_TEST_CHWS_FONT_PATH);
+    ASSERT_NE(fontContext, nullptr) << MILESTRO_TEST_CHWS_FONT_PATH;
+
+    constexpr std::string_view text = "、「";
+    TtbShapeRequest request = MakeUprightRequest(*fontContext, text);
+
+    std::array<TtbFeature, 1> chwsFeatures = {
+            TtbFeatureAt(SkSetFourByteTag('c', 'h', 'w', 's'), 1, 0, text.size()),
+    };
+    request.features = SkSpan<const TtbFeature>(chwsFeatures);
+    TtbShapedRun chwsRun;
+    ASSERT_TRUE(ShapeTtbRun(request, &chwsRun));
+    EXPECT_TRUE(chwsRun.vchwEnabled);
+
+    std::array<TtbFeature, 1> vchwFeatures = {
+            TtbFeatureAt(SkSetFourByteTag('v', 'c', 'h', 'w'), 1, 0, text.size()),
+    };
+    request.features = SkSpan<const TtbFeature>(vchwFeatures);
+    TtbShapedRun vchwRun;
+    ASSERT_TRUE(ShapeTtbRun(request, &vchwRun));
+    EXPECT_TRUE(vchwRun.vchwEnabled);
+    EXPECT_NEAR(chwsRun.advance.y(), vchwRun.advance.y(), 0.01f);
+
+    std::array<TtbFeature, 1> disabledFeatures = {
+            TtbFeatureAt(SkSetFourByteTag('v', 'c', 'h', 'w'), 0, 0, text.size()),
+    };
+    request.features = SkSpan<const TtbFeature>(disabledFeatures);
+    TtbShapedRun disabledRun;
+    ASSERT_TRUE(ShapeTtbRun(request, &disabledRun));
+    EXPECT_FALSE(disabledRun.vchwEnabled);
+    EXPECT_LT(chwsRun.advance.y(), disabledRun.advance.y() - 10);
+}
+
 TEST_F(SkiaVerticalTextFeasibility, TtbShaperApiScopesVrt2ToItsFeatureRange) {
     constexpr std::string_view text = "「漢」。ー";
     constexpr size_t kVrt2Start = 3;

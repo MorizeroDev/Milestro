@@ -20,6 +20,8 @@ namespace {
 
 constexpr float kHarfBuzzToSkia = 1.0f / 64.0f;
 constexpr double kHarfBuzzScale = 64.0;
+constexpr hb_tag_t kChwsTag = HB_TAG('c', 'h', 'w', 's');
+constexpr hb_tag_t kVchwTag = HB_TAG('v', 'c', 'h', 'w');
 
 bool IsUtf8ScalarBoundary(std::string_view utf8, size_t offset) {
     return offset == utf8.size() || (static_cast<unsigned char>(utf8[offset]) & 0xC0) != 0x80;
@@ -109,24 +111,64 @@ void AppendVrt2Suppression(const TtbShapeRequest& request,
     }
 }
 
+bool HasLayoutFeature(hb_face_t* face, hb_tag_t featureTag) {
+    const hb_tag_t tables[] = {HB_OT_TAG_GSUB, HB_OT_TAG_GPOS};
+    for (hb_tag_t table: tables) {
+        unsigned int count =
+                hb_ot_layout_table_get_feature_tags(face, table, 0, nullptr, nullptr);
+        if (count == 0) {
+            continue;
+        }
+        std::vector<hb_tag_t> tags(count);
+        unsigned int written = count;
+        written = hb_ot_layout_table_get_feature_tags(face, table, 0, &written, tags.data());
+        tags.resize(written);
+        if (std::find(tags.begin(), tags.end(), featureTag) != tags.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool BuildFeatures(const TtbShapeRequest& request,
                    hb_tag_t vrt2Tag,
                    hb_tag_t vertTag,
-                   std::vector<hb_feature_t>* features) {
+                   std::vector<hb_feature_t>* features,
+                   bool* vchwRequested) {
     features->clear();
     features->reserve(request.features.size() * 2 + 2);
+    *vchwRequested = false;
+    const size_t runEnd = request.runStart + request.runLength;
+    auto coversRun = [&](const TtbFeature& feature) {
+        return feature.start <= request.runStart && feature.end >= runEnd;
+    };
     for (const TtbFeature& feature: request.features) {
-        // chws is applied by ParagraphImpl's paragraph-level compression pass.
-        if (feature.tag == HB_TAG('c', 'h', 'w', 's')) {
-            continue;
-        }
         if (feature.start > feature.end || feature.end > request.utf8.size()) {
             return false;
+        }
+        // In upright vertical text, the horizontal `chws` default maps to the
+        // vertical contextual half-width feature. Sideways runs remain
+        // horizontal and keep using ParagraphImpl's fallback.
+        if (feature.tag == kChwsTag) {
+            if (request.orientation != TtbOrientation::kUpright) {
+                continue;
+            }
+            features->push_back({kVchwTag,
+                                 feature.value,
+                                 static_cast<unsigned int>(feature.start),
+                                 static_cast<unsigned int>(feature.end)});
+            if (coversRun(feature)) {
+                *vchwRequested = feature.value != 0;
+            }
+            continue;
         }
         features->push_back({static_cast<hb_tag_t>(feature.tag),
                              feature.value,
                              static_cast<unsigned int>(feature.start),
                              static_cast<unsigned int>(feature.end)});
+        if (feature.tag == kVchwTag && coversRun(feature)) {
+            *vchwRequested = feature.value != 0;
+        }
     }
 
     if (request.orientation == TtbOrientation::kUpright) {
@@ -299,7 +341,9 @@ bool ShapeTtbRun(const TtbShapeRequest& request, TtbShapedRun* result) {
                                                                                          : HB_DIRECTION_RTL);
 
     std::vector<hb_feature_t> features;
-    if (!BuildFeatures(request, HB_TAG('v', 'r', 't', '2'), HB_TAG('v', 'e', 'r', 't'), &features)) {
+    bool vchwRequested = false;
+    if (!BuildFeatures(request, HB_TAG('v', 'r', 't', '2'), HB_TAG('v', 'e', 'r', 't'),
+                       &features, &vchwRequested)) {
         // Feature ranges are caller input validation; do not turn malformed
         // requests into successful fallback shaping.
         return false;
@@ -337,6 +381,8 @@ bool ShapeTtbRun(const TtbShapeRequest& request, TtbShapedRun* result) {
     if (glyphCount != 0 && (glyphInfo == nullptr || glyphPosition == nullptr)) {
         return ShapeWithSkFont(request, result);
     }
+    result->vchwEnabled =
+            vchwRequested && HasLayoutFeature(face.get(), kVchwTag);
 
     result->glyphs.reserve(glyphCount);
 

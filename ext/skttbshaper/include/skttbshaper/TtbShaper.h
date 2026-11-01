@@ -56,6 +56,9 @@ struct TtbShapedRun {
     TtbHorizontalDirection sidewaysDirection = TtbHorizontalDirection::kLeftToRight;
     SkVector advance;
     uint32_t unresolvedGlyphs = 0;
+    // True when the font provides `vchw` and upright shaping enabled it for
+    // this run. Callers can then skip their horizontal punctuation fallback.
+    bool vchwEnabled = false;
     std::vector<TtbGlyph> glyphs;
 };
 

@@ -934,6 +934,7 @@ bool ParagraphImpl::shapeVerticalRuns() {
             Run& run = verticalRuns.back();
             run.fVertical = true;
             run.fSideways = sideways;
+            run.fVchwEnabled = shaped.vchwEnabled;
             run.fAdvance = SkVector::Make(0, inlineAdvance);
             run.fOffset = SkVector::Make(0, inlineCursor);
 
@@ -2551,7 +2552,11 @@ void ParagraphImpl::resolveVerticalDecorations() {
                     ? style->getColor()
                     : style->getDecorationColor();
             const SkScalar multiplier = style->getDecorationThicknessMultiplier();
-            const SkScalar runBlockCenter = blockCenter + VerticalRunBlockOffset(*run);
+            // SidewaysBlockOffset only moves a rotated run's baseline origin
+            // onto the column's central baseline. Decorations belong to the
+            // column, not to that adjusted glyph origin; only baselineShift
+            // moves them along the block axis.
+            const SkScalar runBlockCenter = blockCenter - run->baselineShift();
             const bool hasUnderline = HasDecoration(type, TextDecoration::kUnderline);
             const bool hasLineThrough = HasDecoration(type, TextDecoration::kLineThrough);
 

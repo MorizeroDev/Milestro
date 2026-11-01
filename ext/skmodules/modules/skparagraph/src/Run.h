@@ -82,6 +82,7 @@ public:
     SkScalar inlineAdvance() const { return fVertical ? fAdvance.fY : fAdvance.fX; }
     bool isVertical() const { return fVertical; }
     bool isSideways() const { return fSideways; }
+    bool vchwEnabled() const { return fVchwEnabled; }
     SkScalar blockAscent() const { return fBlockAscent; }
     SkScalar blockDescent() const { return fBlockDescent; }
     size_t size() const { return fGlyphs.size(); }
@@ -231,6 +232,7 @@ private:
     SkString fLanguage;
     bool fVertical = false;
     bool fSideways = false;
+    bool fVchwEnabled = false;
     SkScalar fBlockAscent = 0;
     SkScalar fBlockDescent = 0;
 };
