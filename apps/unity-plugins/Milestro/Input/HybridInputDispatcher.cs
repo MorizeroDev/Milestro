@@ -579,6 +579,14 @@ namespace Milestro.Input
                 return;
             }
 
+            if (hasPendingFocusIntent && pendingFocusSinkId != 0 && pendingFocusSinkId != sinkId)
+            {
+                activeSession?.Seal();
+                sessionBoundaryPending = true;
+                Pump();
+                return;
+            }
+
             activeSession?.Seal();
             pendingFocusSinkId = 0;
             hasPendingFocusIntent = true;

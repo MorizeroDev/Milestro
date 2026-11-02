@@ -46,11 +46,11 @@ acquire a strict `TextInput` focus session. See
 | `Text` | Canonical committed value |
 | `SetTextWithoutNotify(string)` | Change the value without firing `onValueChanged` |
 | `placeholder` | Separate uGUI `Graphic` shown while empty |
-| `characterLimit` | Maximum Unicode scalar count; `0` is unlimited |
+| `characterLimit` | Maximum Unicode scalar count, not a grapheme-cluster count; `0` is unlimited |
 | `contentType` | Standard, autocorrected, numeric, alphanumeric, name, email, password, PIN, or custom |
 | `characterValidation` | Built-in character filter; setting it changes `contentType` to `Custom` |
 | `keyboardType` | `TouchScreenKeyboardType` passed to mobile/keyboard providers |
-| `readOnly` | Prevents editing while retaining selection |
+| `readOnly` | Prevents editing while retaining focus, caret navigation, and selection |
 | `maskInput`, `maskChar`, `isPassword` | Password-style display |
 | `allowCopy` | Allows copying the selected value |
 | `submitOnEnter` | In multiline mode, Enter submits instead of inserting a newline; Shift+Enter inserts a newline |
@@ -60,6 +60,26 @@ acquire a strict `TextInput` focus session. See
 `TextInput` also exposes `Submit()`. Submission retains focus; your listener may
 move focus or close the form, which then produces the normal `onEndEdit` and
 `onFocusLost` sequence.
+
+### Focus, selection, and read-only state
+
+These settings control different behavior; there is no separate TMP-style
+`interactable` state to reproduce:
+
+- `readOnly = true` still allows focus, caret navigation, range selection, and
+  copying when `selectionEnabled` and `allowCopy` allow them. It rejects edits
+  and submission and does not open the mobile soft keyboard.
+- `selectionEnabled = false` disables range selection, not focus or editing.
+  The caret and mobile keyboard remain available, and copying still requires a
+  selection permitted by `allowCopy`.
+- `enabled = false`, or an inactive GameObject, rejects dispatcher focus and
+  closes the soft keyboard. Disabling an already focused input ends that
+  session once. Re-enable it and select it through the normal `EventSystem`
+  path to focus it again.
+
+Pointer selection and programmatic uGUI selection enter editing directly. There
+is no intermediate selected-but-not-editing state for ordinary mouse, touch, or
+programmatic selection.
 
 ## Events
 
@@ -81,6 +101,11 @@ contains the canonical value. Assigning the same value does not invoke it.
 Assigning a different value invokes it once, even while the component is
 disabled or inactive. `SetTextWithoutNotify`, deserialization, scene loading,
 and inspector validation are silent.
+
+IME preedit is not committed into `Text` and does not raise `onValueChanged`.
+An actual session end sends its final snapshot through `onEndEdit` once, then
+raises `onFocusLost`. A submit listener may close, disable, destroy, switch, or
+reopen inputs without allowing the old session's cleanup to close the new one.
 
 ## Validation
 
@@ -151,6 +176,13 @@ combining marks and capitalizes word starts. Email validation filters characters
 and duplicate `@`/adjacent dots, but the application must still validate the
 complete address on submission.
 
+Filtering only constrains editing form; it does not prove that the final value
+is parseable. Empty text and incomplete values such as `-`, `.`, and `-.` must
+be handled by the consumer with `TryParse` or equivalent validation. Formatting
+and parsing must use a consistent culture. In particular, the decimal filter
+always accepts the ASCII period, so invariant-culture formatting and parsing are
+usually the simplest match.
+
 Password and PIN presets enable masking and disable copying. Presets other than
 Standard, Autocorrected, and Custom select single-line input. Overriding
 `characterValidation` or `keyboardType` switches `contentType` to `Custom`;
@@ -160,7 +192,14 @@ setting a keyboard type does not validate the text.
 
 On platforms where `TouchScreenKeyboard.isSupported` is true, focusing the
 component opens a keyboard session with the current keyboard type,
-autocorrection, multiline, masking, read-only, and character-limit settings.
+autocorrection, multiline, masking, and read-only settings.
+
+`characterLimit` counts Unicode scalar values. It does not count UTF-16 code
+units or user-perceived grapheme clusters: a supplementary-plane emoji is one
+scalar, while a multi-scalar ZWJ emoji consumes multiple units. Milestro does
+not forward this limit to `TouchScreenKeyboard`, whose platform counting is not
+required to use the same scalar semantics. Managed canonicalization and
+validation remain the single strict limit when native snapshots are applied.
 
 `shouldHideMobileInput` defaults to `true`, matching TextMesh Pro's default:
 
@@ -186,6 +225,46 @@ For `TextInputLineMode.MultiLine`:
 - Enter inserts a newline by default.
 - `submitOnEnter = true` makes Enter submit; Shift+Enter inserts a newline.
 - Enter used to confirm an IME composition does not submit.
+
+## Gamepad selection and editing: future work
+
+**Status: no gamepad is available for verification. Dedicated adaptation is not
+implemented and has not been tested on a device. Existing uGUI navigation or
+controller support in other controls does not mean this input flow is
+supported.**
+
+The expected future interaction is recorded here without introducing a current
+API or changing ordinary pointer/programmatic selection:
+
+1. Directional navigation selects and highlights a field without starting text
+   editing or opening the soft keyboard.
+2. Confirm on the selected field starts editing; that same Confirm must not also
+   submit the new session.
+3. While editing, text navigation does not also move UI focus to another field.
+   Gamepad caret behavior still needs design.
+4. Confirm submits and exits editing; Cancel exits without submitting.
+5. Exiting editing returns to UI navigation with the field still selected.
+6. Future implementation must validate key repeat, input-method switches, field
+   switches, focus loss, and session reentrancy.
+
+A possible Windows keyboard mapping for this future model is:
+
+- While a field is selected but not editing, arrow keys move the active UI
+  navigation selection.
+- Enter starts editing; that same Enter must not also submit the new session.
+- While editing, arrow keys move the text caret, or extend its selection with
+  the appropriate modifiers, and must not also invoke `Selectable` navigation.
+- Enter while editing follows the future Confirm behavior above; Escape exits
+  without submitting and returns to the selected, non-editing state.
+
+`TextInputAccessibility` inherits `Selectable`, so this combination needs
+explicit move-event arbitration before it can claim to support the model. That
+arbitration is not currently implemented or validated with a real
+`InputSystemUIInputModule`, and ordinary `Button` navigation must remain
+unaffected when it is implemented.
+
+No gamepad bridge, two-stage activation property, key-release barrier, or form
+navigation router is currently provided by this flow.
 
 ## `TextInput` versus low-level `InputBox`
 

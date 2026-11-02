@@ -228,11 +228,14 @@ namespace Milestro.Tests
             var controller = new TextInputTouchKeyboardController(source);
             controller.Open(Settings(characterLimit: 4), HelloText, new RangeInt(0, 0));
 
+            Assert.That(source.LastCharacterLimit, Is.Zero);
+            Assert.That(source.Keyboard.CharacterLimit, Is.Zero);
+
             var reopened = controller.Open(Settings(characterLimit: 7), HelloText, new RangeInt(1, 0));
 
             Assert.That(reopened, Is.True);
             Assert.That(source.OpenCount, Is.EqualTo(1));
-            Assert.That(source.Keyboard.CharacterLimit, Is.EqualTo(7));
+            Assert.That(source.Keyboard.CharacterLimit, Is.Zero);
             Assert.That(source.Keyboard.Selection, Is.EqualTo(new RangeInt(1, 0)));
             Assert.That(source.Keyboard.DeactivateCount, Is.EqualTo(0));
         }

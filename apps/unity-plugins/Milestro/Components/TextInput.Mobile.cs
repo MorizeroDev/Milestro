@@ -64,16 +64,19 @@ namespace Milestro.Components
             if (poll.StatusChanged)
             {
                 onTouchScreenKeyboardStatusChanged.Invoke(poll.Status);
+                if (!IsTouchKeyboardSessionCurrent(poll.SessionToken)) return;
             }
             if (poll.HasSnapshot)
             {
-                ApplyTouchKeyboardSnapshot(poll.Text, poll.Selection);
+                ApplyTouchKeyboardSnapshot(poll.Text, poll.Selection, poll.SessionToken);
+                if (!IsTouchKeyboardSessionCurrent(poll.SessionToken)) return;
             }
 
             switch (poll.Action)
             {
                 case TextInputTouchKeyboardAction.Submit:
                     Submit();
+                    if (!IsTouchKeyboardSessionCurrent(poll.SessionToken)) return;
                     CloseTouchKeyboardSession();
                     ReleaseInputFocus();
                     break;
@@ -83,6 +86,11 @@ namespace Milestro.Components
                     ReleaseInputFocus();
                     break;
             }
+        }
+
+        private bool IsTouchKeyboardSessionCurrent(int sessionToken)
+        {
+            return touchKeyboardController.IsCurrent(sessionToken) && IsDispatcherFocused && !m_readOnly;
         }
 
         private TextInputTouchKeyboardSettings GetTouchKeyboardSettings()
@@ -117,7 +125,7 @@ namespace Milestro.Components
             touchKeyboardController.SyncHidden(m_text, CurrentTouchKeyboardSelection());
         }
 
-        private void ApplyTouchKeyboardSnapshot(string rawText, RangeInt? rawSelection)
+        private void ApplyTouchKeyboardSnapshot(string rawText, RangeInt? rawSelection, int sessionToken)
         {
             var editor = inputBox;
             if (editor == null || m_readOnly)
@@ -127,6 +135,10 @@ namespace Milestro.Components
 
             var currentText = editor.Text;
             var candidateText = NormalizeFormText(rawText ?? string.Empty);
+            if (!IsTouchKeyboardSessionCurrent(sessionToken)) return;
+            editor = inputBox;
+            if (editor == null || m_readOnly) return;
+            currentText = editor.Text;
             var accepted = TryValidateEdit(currentText,
                 0,
                 currentText.Length,
@@ -134,6 +146,9 @@ namespace Milestro.Components
                 candidateText,
                 TextInputEditSource.Typing,
                 out var nextText);
+            if (!IsTouchKeyboardSessionCurrent(sessionToken)) return;
+            editor = inputBox;
+            if (editor == null || m_readOnly) return;
             if (!accepted)
             {
                 nextText = currentText;
@@ -154,6 +169,9 @@ namespace Milestro.Components
                 editor.BreakUndoGroup();
                 ApplyInputChange(changed: true, sessionBound: true);
             }
+            if (!IsTouchKeyboardSessionCurrent(sessionToken)) return;
+            editor = inputBox;
+            if (editor == null) return;
 
             ApplyTouchKeyboardSelection(rawSelection, editor.Text);
             touchKeyboardController.WriteVisible(editor.Text, CurrentTouchKeyboardSelection());

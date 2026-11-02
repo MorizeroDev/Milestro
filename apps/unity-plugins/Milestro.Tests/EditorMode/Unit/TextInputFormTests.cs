@@ -357,6 +357,27 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void PasteCountsSupplementaryScalarsAndMultiScalarEmojiIndependently()
+        {
+            var previousClipboard = GUIUtility.systemCopyBuffer;
+            try
+            {
+                input.characterLimit = 8;
+                CreateNativeEditor();
+                GUIUtility.systemCopyBuffer = "a👨‍👩‍👧‍👦b";
+                var frame = new HybridInputFrame(1, 1d, "test", 1, 1,
+                    new[] { HybridInputEvent.KeyState(KeyCode.V, true, 1d) },
+                    new[] { KeyCode.LeftControl });
+                Invoke("ReadKeyboardInput", frame);
+                Assert.That(input.Text, Is.EqualTo("a👨‍👩‍👧‍👦"));
+            }
+            finally
+            {
+                GUIUtility.systemCopyBuffer = previousClipboard;
+            }
+        }
+
+        [Test]
         public void MultilineEnterInsertsOneNewlineAndSubmitModeAllowsShiftEnter()
         {
             input.lineMode = TextInputLineMode.MultiLine;

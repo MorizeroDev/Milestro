@@ -6,9 +6,11 @@ namespace Milestro.Components.Internal
     internal sealed class TextInputFrameState
     {
         internal string CompositionText { get; private set; } = "";
+        internal bool HadComposition { get; private set; }
 
         internal string Apply(HybridInputFrame frame)
         {
+            HadComposition = !string.IsNullOrEmpty(CompositionText);
             StringBuilder? committedText = null;
             for (var i = 0; i < frame.Events.Count; ++i)
             {
@@ -22,6 +24,7 @@ namespace Milestro.Components.Internal
                         break;
                     case HybridInputEventKind.Composition:
                         CompositionText = inputEvent.Text;
+                        HadComposition |= !string.IsNullOrEmpty(inputEvent.Text);
                         break;
                 }
             }
@@ -31,6 +34,7 @@ namespace Milestro.Components.Internal
         internal void Reset()
         {
             CompositionText = "";
+            HadComposition = false;
         }
     }
 }

@@ -1612,7 +1612,7 @@ namespace Milestro.Components
 
             var committedGroupChanged = false;
             var hadCompositionBeforeInput = compositionActive ||
-                                            !string.IsNullOrEmpty(inputFrameState.CompositionText);
+                                            inputFrameState.HadComposition;
             var committedText = ReadCommittedText(frame, providerInput);
             var committedTextHadLineBreak = ContainsLineBreak(committedText);
             if (committedText.Length > 0 && inputBox != null)
@@ -2776,10 +2776,10 @@ namespace Milestro.Components
                 this.owner = owner;
             }
 
-            public GameObject Owner => owner.gameObject;
-            public bool IsActiveAndEnabled => owner.isActiveAndEnabled;
-            public bool CanConsumeInputNow => owner.CanReadInput();
-            public string CommittedText => owner.m_text;
+            public GameObject Owner => owner != null ? owner.gameObject : null!;
+            public bool IsActiveAndEnabled => owner != null && owner.isActiveAndEnabled;
+            public bool CanConsumeInputNow => owner != null && owner.CanReadInput();
+            public string CommittedText => owner != null ? owner.m_text : string.Empty;
             public HybridInputKeyboardOptions KeyboardOptions => owner.GetKeyboardOptions();
 
             public void OnInputFrame(HybridInputFrame frame)
@@ -2789,7 +2789,10 @@ namespace Milestro.Components
 
             public void OnInputReset(HybridInputResetReason reason)
             {
-                owner.OnInputReset(reason);
+                if (owner != null)
+                {
+                    owner.OnInputReset(reason);
+                }
             }
 
             public void OnFocusGained()

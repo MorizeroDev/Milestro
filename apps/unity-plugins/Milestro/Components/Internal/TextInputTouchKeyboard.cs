@@ -145,7 +145,8 @@ namespace Milestro.Components.Internal
             TextInputTouchKeyboardAction action,
             string text,
             RangeInt? selection,
-            bool hasSnapshot)
+            bool hasSnapshot,
+            int sessionToken)
         {
             Status = status;
             StatusChanged = statusChanged;
@@ -153,6 +154,7 @@ namespace Milestro.Components.Internal
             Text = text;
             Selection = selection;
             HasSnapshot = hasSnapshot;
+            SessionToken = sessionToken;
         }
 
         internal TouchScreenKeyboard.Status Status { get; }
@@ -161,6 +163,7 @@ namespace Milestro.Components.Internal
         internal string Text { get; }
         internal RangeInt? Selection { get; }
         internal bool HasSnapshot { get; }
+        internal int SessionToken { get; }
     }
 
     internal sealed class TextInputTouchKeyboardController
@@ -169,6 +172,8 @@ namespace Milestro.Components.Internal
         private ITextInputTouchKeyboardHandle? keyboard;
         private TextInputTouchKeyboardSettings settings;
         private TouchScreenKeyboard.Status? lastStatus;
+        private int nextSessionToken;
+        private int sessionToken;
 
         internal TextInputTouchKeyboardController()
             : this(new UnityTextInputTouchKeyboardSource())
@@ -183,6 +188,7 @@ namespace Milestro.Components.Internal
         internal TouchScreenKeyboard? Keyboard => keyboard?.Keyboard;
         internal bool IsActive => keyboard != null;
         internal bool UsesHiddenInput => keyboard != null && settings.HideMobileInput;
+        internal bool IsCurrent(int token) => token != 0 && keyboard != null && sessionToken == token;
 
         internal bool Open(TextInputTouchKeyboardSettings nextSettings,
             string text,
@@ -197,7 +203,7 @@ namespace Milestro.Components.Internal
             if (keyboard != null && settings.HasSameSessionConfiguration(nextSettings))
             {
                 settings = nextSettings;
-                keyboard.CharacterLimit = nextSettings.CharacterLimit;
+                keyboard.CharacterLimit = 0;
                 if (UsesHiddenInput)
                 {
                     SyncHidden(text, selection);
@@ -224,7 +230,11 @@ namespace Milestro.Components.Internal
                 options.Secure,
                 alert: false,
                 string.Empty,
-                settings.CharacterLimit);
+                characterLimit: 0);
+            unchecked
+            {
+                sessionToken = ++nextSessionToken;
+            }
             if (keyboard.CanSetSelection)
             {
                 keyboard.Selection = ClampSelection(selection, keyboard.Text);
@@ -247,7 +257,7 @@ namespace Milestro.Components.Internal
             }
 
             settings = nextSettings;
-            keyboard.CharacterLimit = nextSettings.CharacterLimit;
+            keyboard.CharacterLimit = 0;
             if (UsesHiddenInput)
             {
                 SyncHidden(text, selection);
@@ -330,7 +340,8 @@ namespace Milestro.Components.Internal
                 action,
                 text,
                 selection,
-                includeSnapshot);
+                includeSnapshot,
+                sessionToken);
         }
 
         internal void Close()
@@ -339,6 +350,7 @@ namespace Milestro.Components.Internal
             keyboard = null;
             settings = default;
             lastStatus = null;
+            sessionToken = 0;
             if (current != null)
             {
                 current.Active = false;

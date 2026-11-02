@@ -2606,6 +2606,10 @@ namespace Milestro.Tests
                 Assert.That(calls, Is.EqualTo(new[] { "value:ab", "submit:ab" }));
                 Assert.That(input.IsDispatcherFocused, Is.True);
                 calls.Clear();
+                input.Submit();
+                Assert.That(calls, Is.EqualTo(new[] { "submit:ab" }));
+                Assert.That(input.IsDispatcherFocused, Is.True);
+                calls.Clear();
                 input.SetTextWithoutNotify("");
                 provider.Emit(HybridInputEvent.Composition("候选", 2d));
                 dispatcher.Drain(2, 2d);
@@ -2613,15 +2617,240 @@ namespace Milestro.Tests
                 provider.Emit(HybridInputEvent.KeyState(KeyCode.Return, true, 3d));
                 dispatcher.Drain(3, 3d);
                 Assert.That(calls, Is.EqualTo(new[] { "value:中" }));
+                calls.Clear();
+                input.SetTextWithoutNotify("");
+                provider.Emit(HybridInputEvent.Composition("候选", 4d));
+                provider.Emit(HybridInputEvent.Composition("", 4d));
+                provider.Emit(HybridInputEvent.KeyState(KeyCode.Return, true, 4d));
+                dispatcher.Drain(4, 4d);
+                Assert.That(calls, Is.Empty);
+                Assert.That(input.IsDispatcherFocused, Is.True);
                 input.readOnly = true;
                 input.Submit();
-                Assert.That(calls, Has.Count.EqualTo(1));
+                Assert.That(calls, Is.Empty);
             }
             finally
             {
                 UnityEngine.Object.DestroyImmediate(owner);
                 HybridInputRuntime.ResetState();
             }
+        }
+
+        [Test]
+        public void MobileDoneAppliesFinalSnapshotBeforeSubmitAndEndsOriginalSession()
+        {
+            using var fixture = new MobileTextInputFixture();
+            var input = fixture.AddInput("mobile", out var source);
+            input.characterLimit = 2;
+            var calls = new List<string>();
+            input.onValueChanged.AddListener(value => calls.Add("value:" + value));
+            input.onSubmit.AddListener(value => calls.Add("submit:" + value));
+            input.onEndEdit.AddListener(value => calls.Add("end:" + value));
+            input.onFocusLost.AddListener(() => calls.Add("lost"));
+            fixture.Selection.Select(input.gameObject);
+            source.Keyboard.Text = "😀中a";
+            source.Keyboard.Status = TouchScreenKeyboard.Status.Done;
+
+            fixture.Poll(input);
+
+            Assert.That(calls, Is.EqualTo(new[]
+            {
+                "value:😀中",
+                "submit:😀中",
+                "end:😀中",
+                "lost"
+            }));
+            Assert.That(input.Text, Is.EqualTo("😀中"));
+            Assert.That(input.IsDispatcherFocused, Is.False);
+            Assert.That(source.Keyboard.DeactivateCount, Is.EqualTo(1));
+        }
+
+        [TestCase("status", "old", 0)]
+        [TestCase("value", "final", 0)]
+        [TestCase("submit", "final", 1)]
+        public void MobileDoneCallbacksCannotApplyOrCloseAReopenedSession(
+            string callbackPoint, string expectedText, int expectedSubmitCount)
+        {
+            using var fixture = new MobileTextInputFixture();
+            var input = fixture.AddInput("mobile", out var source);
+            input.SetTextWithoutNotify("old");
+            fixture.Selection.Select(input.gameObject);
+            var oldKeyboard = source.Keyboard;
+            var submitCount = 0;
+            var endEditCount = 0;
+            var reentered = false;
+
+            void Reopen()
+            {
+                if (reentered) return;
+                reentered = true;
+                input.enabled = false;
+                input.enabled = true;
+            }
+
+            input.onSubmit.AddListener(_ =>
+            {
+                ++submitCount;
+                if (callbackPoint == "submit") Reopen();
+            });
+            input.onEndEdit.AddListener(_ => ++endEditCount);
+            if (callbackPoint == "status")
+            {
+                input.onTouchScreenKeyboardStatusChanged.AddListener(status =>
+                {
+                    if (status == TouchScreenKeyboard.Status.Done) Reopen();
+                });
+            }
+            if (callbackPoint == "value")
+            {
+                input.onValueChanged.AddListener(_ => Reopen());
+            }
+            source.Keyboard.Text = "final";
+            source.Keyboard.Status = TouchScreenKeyboard.Status.Done;
+
+            fixture.Poll(input);
+
+            Assert.That(reentered, Is.True);
+            Assert.That(source.Keyboards, Has.Count.EqualTo(2));
+            Assert.That(source.Keyboard, Is.Not.SameAs(oldKeyboard));
+            Assert.That(oldKeyboard.DeactivateCount, Is.EqualTo(1));
+            Assert.That(source.Keyboard.DeactivateCount, Is.Zero);
+            Assert.That(input.IsDispatcherFocused, Is.True);
+            Assert.That(input.Text, Is.EqualTo(expectedText));
+            Assert.That(submitCount, Is.EqualTo(expectedSubmitCount));
+            Assert.That(endEditCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void MobileDoneSubmitCallbackCanMoveFocusWithoutClosingNextKeyboard()
+        {
+            using var fixture = new MobileTextInputFixture();
+            var first = fixture.AddInput("first", out var firstSource);
+            var second = fixture.AddInput("second", out var secondSource);
+            fixture.Selection.Select(first.gameObject);
+            first.onSubmit.AddListener(_ => fixture.Selection.Select(second.gameObject));
+            var firstEndEditCount = 0;
+            var secondSubmitCount = 0;
+            first.onEndEdit.AddListener(_ => ++firstEndEditCount);
+            second.onSubmit.AddListener(_ => ++secondSubmitCount);
+            firstSource.Keyboard.Text = "final";
+            firstSource.Keyboard.Status = TouchScreenKeyboard.Status.Done;
+
+            fixture.Poll(first);
+
+            Assert.That(first.IsDispatcherFocused, Is.False);
+            Assert.That(second.IsDispatcherFocused, Is.True);
+            Assert.That(firstEndEditCount, Is.EqualTo(1));
+            Assert.That(secondSubmitCount, Is.Zero);
+            Assert.That(secondSource.Keyboard.DeactivateCount, Is.Zero);
+        }
+
+        [Test]
+        public void MobileDoneSubmitCallbackCanDestroyOriginalWithoutClosingNextKeyboard()
+        {
+            using var fixture = new MobileTextInputFixture();
+            var first = fixture.AddInput("first", out var firstSource);
+            var second = fixture.AddInput("second", out var secondSource);
+            fixture.Selection.Select(first.gameObject);
+            first.onSubmit.AddListener(_ =>
+            {
+                fixture.Selection.Select(second.gameObject);
+                UnityEngine.Object.DestroyImmediate(first.gameObject);
+            });
+            firstSource.Keyboard.Text = "final";
+            firstSource.Keyboard.Status = TouchScreenKeyboard.Status.Done;
+
+            Assert.DoesNotThrow(() => fixture.Poll(first));
+
+            Assert.That(second.IsDispatcherFocused, Is.True,
+                $"Selected: {EventSystem.current?.currentSelectedGameObject}");
+            Assert.That(secondSource.Keyboard.DeactivateCount, Is.Zero);
+        }
+
+        [TestCase("status")]
+        [TestCase("value")]
+        public void MobileDoneBeforeSubmitCallbacksCanDestroyOriginalWithoutClosingNextKeyboard(
+            string callbackPoint)
+        {
+            using var fixture = new MobileTextInputFixture();
+            var first = fixture.AddInput("first", out var firstSource);
+            var second = fixture.AddInput("second", out var secondSource);
+            fixture.Selection.Select(first.gameObject);
+            var submitCount = 0;
+            var reentered = false;
+
+            void DestroyFirst()
+            {
+                if (reentered) return;
+                reentered = true;
+                fixture.Selection.Select(second.gameObject);
+                UnityEngine.Object.DestroyImmediate(first.gameObject);
+            }
+
+            first.onSubmit.AddListener(_ => ++submitCount);
+            second.onSubmit.AddListener(_ => ++submitCount);
+            if (callbackPoint == "status")
+            {
+                first.onTouchScreenKeyboardStatusChanged.AddListener(status =>
+                {
+                    if (status == TouchScreenKeyboard.Status.Done) DestroyFirst();
+                });
+            }
+            else
+            {
+                first.onValueChanged.AddListener(_ => DestroyFirst());
+            }
+            firstSource.Keyboard.Text = "final";
+            firstSource.Keyboard.Status = TouchScreenKeyboard.Status.Done;
+
+            Assert.DoesNotThrow(() => fixture.Poll(first));
+
+            Assert.That(reentered, Is.True);
+            Assert.That(second.IsDispatcherFocused, Is.True);
+            Assert.That(secondSource.Keyboard.DeactivateCount, Is.Zero);
+            Assert.That(submitCount, Is.Zero);
+        }
+
+        [Test]
+        public void MobileCancelAppliesValidatedSnapshotAndEndsWithoutSubmit()
+        {
+            using var fixture = new MobileTextInputFixture();
+            var input = fixture.AddInput("mobile", out var source);
+            fixture.Selection.Select(input.gameObject);
+            var submitCount = 0;
+            var endEditCount = 0;
+            input.onSubmit.AddListener(_ => ++submitCount);
+            input.onEndEdit.AddListener(_ => ++endEditCount);
+            source.Keyboard.Text = "final";
+            source.Keyboard.Status = TouchScreenKeyboard.Status.Canceled;
+
+            fixture.Poll(input);
+
+            Assert.That(input.Text, Is.EqualTo("final"));
+            Assert.That(input.IsDispatcherFocused, Is.False);
+            Assert.That(submitCount, Is.Zero);
+            Assert.That(endEditCount, Is.EqualTo(1));
+            Assert.That(source.Keyboard.DeactivateCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void DisabledTextInputRejectsFocusWhileReadOnlyAndSelectionSettingsRetainIt()
+        {
+            using var fixture = new MobileTextInputFixture();
+            var input = fixture.AddInput("mobile", out var source);
+            input.enabled = false;
+            fixture.Selection.Select(input.gameObject);
+
+            input.OnSelect(new BaseEventData(EventSystem.current));
+
+            Assert.That(input.IsDispatcherFocused, Is.False);
+            Assert.That(source.Keyboards, Is.Empty);
+            input.readOnly = true;
+            input.enabled = true;
+            Assert.That(input.IsDispatcherFocused, Is.True);
+            Assert.That(source.Keyboards, Is.Empty);
+            input.selectionEnabled = false;
+            Assert.That(input.IsDispatcherFocused, Is.True);
         }
 
         private static HybridInputDispatcher StartedDispatcher(FakeProvider provider)
@@ -2679,6 +2908,12 @@ namespace Milestro.Tests
         {
             typeof(TextInput).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)!
                 .SetValue(input, value);
+        }
+
+        private static void InvokeTextInput(TextInput input, string methodName)
+        {
+            typeof(TextInput).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(input, null);
         }
 
         private static T GetTextInputPrivateField<T>(TextInput input, string fieldName)
@@ -3030,6 +3265,110 @@ namespace Milestro.Tests
             {
                 sink?.Enqueue(inputEvent);
             }
+        }
+
+        private sealed class MobileTextInputFixture : IDisposable
+        {
+            private readonly List<GameObject> owners = new List<GameObject>();
+            private readonly IDisposable providerRegistration;
+
+            internal MobileTextInputFixture()
+            {
+                HybridInputRuntime.ResetState();
+                Selection = new SelectionFixture();
+                var provider = new FakeProvider("mobile-provider", HybridInputProviderMatch.Exact);
+                providerRegistration = HybridInputRuntime.RegisterProvider(provider);
+                var dispatcher = (HybridInputDispatcher)typeof(HybridInputRuntime)
+                    .GetField("Dispatcher", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+                dispatcher.RefreshEnvironment(FocusedEnvironment());
+            }
+
+            internal SelectionFixture Selection { get; }
+
+            internal TextInput AddInput(string name, out FakeMobileKeyboardSource source)
+            {
+                var owner = new GameObject(name, typeof(RectTransform));
+                owners.Add(owner);
+                owner.SetActive(false);
+                var input = owner.AddComponent<TextInput>();
+                input.shouldHideMobileInput = false;
+                source = new FakeMobileKeyboardSource();
+                SetTextInputPrivateField(input, "touchKeyboardController",
+                    new TextInputTouchKeyboardController(source));
+                owner.SetActive(true);
+                return input;
+            }
+
+            internal void Poll(TextInput input)
+            {
+                InvokeTextInput(input, "PollTouchKeyboardSession");
+            }
+
+            public void Dispose()
+            {
+                foreach (var owner in owners)
+                {
+                    UnityEngine.Object.DestroyImmediate(owner);
+                }
+                providerRegistration.Dispose();
+                Selection.Dispose();
+                HybridInputRuntime.ResetState();
+            }
+        }
+
+        private sealed class FakeMobileKeyboardSource : ITextInputTouchKeyboardSource
+        {
+            internal List<FakeMobileKeyboardHandle> Keyboards { get; } =
+                new List<FakeMobileKeyboardHandle>();
+            internal FakeMobileKeyboardHandle Keyboard => Keyboards[Keyboards.Count - 1];
+            public bool IsSupported => true;
+            public bool IsInPlaceEditingAllowed => false;
+            public bool TouchSupported => true;
+            public RuntimePlatform Platform => RuntimePlatform.IPhonePlayer;
+            public bool HideInput { get; set; }
+
+            public ITextInputTouchKeyboardHandle Open(string text,
+                TouchScreenKeyboardType keyboardType,
+                bool autocorrection,
+                bool multiline,
+                bool secure,
+                bool alert,
+                string textPlaceholder,
+                int characterLimit)
+            {
+                var keyboard = new FakeMobileKeyboardHandle(text, characterLimit);
+                Keyboards.Add(keyboard);
+                return keyboard;
+            }
+        }
+
+        private sealed class FakeMobileKeyboardHandle : ITextInputTouchKeyboardHandle
+        {
+            private bool active = true;
+
+            internal FakeMobileKeyboardHandle(string text, int characterLimit)
+            {
+                Text = text;
+                CharacterLimit = characterLimit;
+            }
+
+            public TouchScreenKeyboard? Keyboard => null;
+            public string Text { get; set; }
+            public bool Active
+            {
+                get => active;
+                set
+                {
+                    if (active && !value) ++DeactivateCount;
+                    active = value;
+                }
+            }
+            public TouchScreenKeyboard.Status Status { get; set; } = TouchScreenKeyboard.Status.Visible;
+            public int CharacterLimit { get; set; }
+            public bool CanGetSelection => true;
+            public bool CanSetSelection => true;
+            public RangeInt Selection { get; set; }
+            internal int DeactivateCount { get; private set; }
         }
 
         private sealed class FakeProvider : IHybridInputProvider, IHybridInputFocusSessionProvider,
