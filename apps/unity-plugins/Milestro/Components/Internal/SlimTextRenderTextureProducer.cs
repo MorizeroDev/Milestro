@@ -15,7 +15,15 @@ namespace Milestro.Components.Internal
     [AddComponentMenu("Milestro/Internal/Slim Text Render Texture Producer")]
     public class SlimTextRenderTextureProducer : RenderTextureProducer, ILayoutElement
     {
-        private const string DefaultFontFamily = "system-ui";
+#if UNITY_EDITOR_WIN
+        internal const string DefaultFontFamily = "Microsoft YaHei UI";
+#elif UNITY_EDITOR_OSX
+        internal const string DefaultFontFamily = "PingFang SC";
+#elif UNITY_EDITOR_LINUX
+        internal const string DefaultFontFamily = "Noto Sans CJK SC";
+#else
+        internal const string DefaultFontFamily = "system-ui";
+#endif
 
         [SerializeField] private string m_text = "";
         [SerializeField] private string m_fontFamily = DefaultFontFamily;

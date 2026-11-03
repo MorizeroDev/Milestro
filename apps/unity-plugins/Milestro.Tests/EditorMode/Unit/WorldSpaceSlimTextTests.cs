@@ -35,6 +35,27 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void NewComponentsUseEditorPlatformDefaultFontFamily()
+        {
+#if UNITY_EDITOR_WIN
+            const string expectedFamily = "Microsoft YaHei UI";
+#elif UNITY_EDITOR_OSX
+            const string expectedFamily = "PingFang SC";
+#elif UNITY_EDITOR_LINUX
+            const string expectedFamily = "Noto Sans CJK SC";
+#else
+            const string expectedFamily = "system-ui";
+#endif
+            root = new GameObject("Slim Text", typeof(RectTransform));
+
+            var producer = root.AddComponent<SlimTextRenderTextureProducer>();
+            var text = root.AddComponent<WorldSpaceSlimText>();
+
+            Assert.That(producer.fontFamily, Is.EqualTo(expectedFamily));
+            Assert.That(text.fontFamily, Is.EqualTo(expectedFamily));
+        }
+
+        [Test]
         public void TextSetterReusesConfiguredInternals()
         {
             root = new GameObject("Slim Text", typeof(RectTransform));

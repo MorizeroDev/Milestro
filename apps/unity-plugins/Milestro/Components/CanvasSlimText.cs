@@ -60,7 +60,7 @@ namespace Milestro.Components
             Color color)
         {
             var target = Producer;
-            target.fontFamily = "system-ui";
+            target.fontFamily = SlimTextRenderTextureProducer.DefaultFontFamily;
             target.fontSize = fontSize;
             target.color = color;
             target.horizontalAlign = horizontalAlignment;

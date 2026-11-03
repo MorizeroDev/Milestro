@@ -17,7 +17,7 @@ namespace Milestro.Components
     [AddComponentMenu("Milestro/World Space Slim Text")]
     public class WorldSpaceSlimText : MonoBehaviour
     {
-        private const string DefaultFontFamily = "system-ui";
+        private const string DefaultFontFamily = SlimTextRenderTextureProducer.DefaultFontFamily;
         private const string DefaultTexturePropertyName = "_MainTex";
 
         [SerializeField] private string m_text = "";
