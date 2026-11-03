@@ -221,6 +221,7 @@ namespace Milestro.Tests.TextBoxVertical
             rect.sizeDelta = new Vector2(200f, 160f);
             rect.anchoredPosition = position;
             var producer = child.AddComponent<TextBoxRenderTextureProducer>();
+            producer.enableRichText = true;
             producer.content = content;
             producer.margin = Margin.FixedZero();
             producer.paragraphStyle.writingMode = writingMode;

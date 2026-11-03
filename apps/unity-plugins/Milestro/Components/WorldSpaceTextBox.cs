@@ -36,6 +36,12 @@ namespace Milestro.Components
         [NonSerialized] private Vector2Int appliedTextureSizePixels;
         [NonSerialized] private float appliedPixelsPerUnit;
 
+        public string Text
+        {
+            get => ProducerComponent().content;
+            set => ProducerComponent().content = value;
+        }
+
         public Vector2Int textureSizePixels
         {
             get => m_textureSizePixels;

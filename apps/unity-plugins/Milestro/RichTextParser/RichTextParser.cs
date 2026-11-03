@@ -110,8 +110,13 @@ namespace Milestro.RichTextParser
 
         public void ParseText(string str)
         {
+            ParseText(str, true);
+        }
+
+        public void ParseText(string str, bool enableRichText)
+        {
             str ??= "";
-            if (str.IndexOf('<') < 0 && str.IndexOf('&') < 0)
+            if (!enableRichText || (str.IndexOf('<') < 0 && str.IndexOf('&') < 0))
             {
                 RootNode = new XmlTextNode(str);
                 return;

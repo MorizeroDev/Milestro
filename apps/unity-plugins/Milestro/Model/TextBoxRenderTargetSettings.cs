@@ -16,9 +16,11 @@ namespace Milestro.Model
             TextSizingResult? sizing = null, Vector2 marginReferenceSize = default,
             TextHeightMode? verticalHeightMode = null,
             MarginResolveContext? verticalMarginContext = null,
-            bool sizingUsesVerticalLayout = false)
+            bool sizingUsesVerticalLayout = false,
+            bool enableRichText = true)
         {
             Content = content ?? "";
+            EnableRichText = enableRichText;
             Margin = margin ?? Margin.FixedZero();
             Margin.Normalize();
             ParagraphStyle = paragraphStyle ?? new ParagraphStyleSettings();
@@ -49,7 +51,7 @@ namespace Milestro.Model
         {
             return new TextBoxRenderTargetSettings(Content, Margin, ParagraphStyle, TextStyle,
                 WrapMode, TextOverflow, AutoFontSize, MinSize, MaxSize, sizing, referenceSize,
-                verticalHeightMode, verticalMarginContext, sizingUsesVerticalLayout);
+                verticalHeightMode, verticalMarginContext, sizingUsesVerticalLayout, EnableRichText);
         }
 
         public TextBoxRenderTargetSettings WithVerticalLayout(MarginResolveContext marginContext,
@@ -57,10 +59,11 @@ namespace Milestro.Model
         {
             return new TextBoxRenderTargetSettings(Content, Margin, ParagraphStyle, TextStyle,
                 WrapMode, TextOverflow, AutoFontSize, MinSize, MaxSize, Sizing,
-                MarginReferenceSize, heightMode, marginContext, SizingUsesVerticalLayout);
+                MarginReferenceSize, heightMode, marginContext, SizingUsesVerticalLayout, EnableRichText);
         }
 
         public string Content { get; }
+        public bool EnableRichText { get; }
         public Margin Margin { get; }
         public ParagraphStyleSettings ParagraphStyle { get; }
         public TextStyleSettings TextStyle { get; }

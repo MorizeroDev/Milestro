@@ -766,6 +766,7 @@ namespace Milestro.Tests
             rect = (RectTransform)child.transform;
             rect.sizeDelta = new Vector2(300f, 200f);
             var producer = child.AddComponent<TextBoxRenderTextureProducer>();
+            producer.enableRichText = true;
             producer.content = content;
             producer.paragraphStyle = VerticalStyle();
             producer.textStyle = TextStyle();

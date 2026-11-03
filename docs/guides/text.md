@@ -118,9 +118,11 @@ registered family names before assuming that the text has no glyphs.
 
 ## Rich text
 
-`TextBoxRenderTextureProducer.content` is parsed as rich text. Plain text is
-valid; when the string contains `<` or `&`, the parser treats it as XML-like
-markup. The supported subset is smaller than TextMesh Pro's tag set.
+Rich-text parsing is disabled by default. Turn on **Enable RichText** in the
+Inspector, or set `producer.enableRichText = true`, to parse
+`TextBoxRenderTextureProducer.content` as XML-like markup. When disabled, `<`
+and `&` have no special meaning and the content is rendered literally. The
+supported subset is smaller than TextMesh Pro's tag set.
 
 ### Supported tags
 
@@ -361,7 +363,8 @@ Current limits:
 ## Parser behavior to remember
 
 - Tags are case-sensitive XML element names.
-- Plain text containing `&` is parsed as markup; escape it as `&amp;`.
+- With rich text enabled, plain text containing `&` is parsed as markup; escape
+  it as `&amp;`.
 - Anchor targets are application data. Milestro reports them but never opens or
   interprets the target.
 - A malformed document does not silently degrade to plain text.

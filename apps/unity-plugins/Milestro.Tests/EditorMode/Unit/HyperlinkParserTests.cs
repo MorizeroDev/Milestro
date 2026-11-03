@@ -53,6 +53,19 @@ namespace Milestro.Tests
             Assert.That(payload.Links, Is.Empty);
         }
 
+        [Test]
+        public void DisabledRichTextSkipsMarkupAndEntityDecoding()
+        {
+            const string content = "plain <b>&amp;</b> <a href=\"target\">link</a>";
+            var parser = new RichTextParser.RichTextParser();
+            parser.ParseText(content, enableRichText: false);
+
+            var payload = parser.ConvertToSegments();
+
+            Assert.That(PlainText(payload), Is.EqualTo(content));
+            Assert.That(payload.Links, Is.Empty);
+        }
+
         [TestCase("<a>missing href</a>")]
         [TestCase("<a href=\"\">empty href</a>")]
         [TestCase("<a href=\"target\" id=\"\">empty id</a>")]

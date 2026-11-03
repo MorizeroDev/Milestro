@@ -208,6 +208,7 @@ namespace Milestro.Tests.TextBoxHyperlinkIntegration.Editor
             var root = new GameObject("Persistent Hyperlink TextBox", typeof(RectTransform));
             root.SetActive(false);
             var producer = root.AddComponent<TextBoxRenderTextureProducer>();
+            producer.enableRichText = true;
             producer.content =
                 "<a href=\"milestro://integration/task201\" id=\"task201-link\">Open integration link</a>";
             producer.textStyle.size = 36f;

@@ -86,6 +86,12 @@ namespace Milestro.Components
 
         public LinkClickedEvent onLinkClicked => m_OnLinkClicked ??= new LinkClickedEvent();
 
+        public string Text
+        {
+            get => ProducerComponent().content;
+            set => ProducerComponent().content = value;
+        }
+
         protected override void OnEnable()
         {
             base.OnEnable();

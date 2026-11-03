@@ -380,6 +380,7 @@ namespace Milestro.Tests.ScreenSpaceHiDpiIntegration.Editor
             textBoxObject.transform.SetParent(canvasObject.transform, false);
             ConfigureRect(textBoxObject.GetComponent<RectTransform>(), new Vector2(720f, 150f), new Vector2(0f, 350f));
             var textBoxProducer = textBoxObject.AddComponent<TextBoxRenderTextureProducer>();
+            textBoxProducer.enableRichText = true;
             textBoxProducer.content =
                 "<a href=\"milestro://integration/screen-space-hidpi\" id=\"screen-space-hidpi-link\">Screen Space HiDPI physical link — 清晰文本</a>\nLogical layout must not move.";
             textBoxProducer.textStyle.size = 34f;

@@ -18,6 +18,9 @@ namespace Milestro.Components.Internal
         [SerializeField]
         private string m_content = "";
 
+        [SerializeField, InspectorName("Enable RichText")]
+        private bool m_enableRichText;
+
         [SerializeField]
         private Margin m_margin = new Margin();
 
@@ -338,6 +341,21 @@ namespace Milestro.Components.Internal
                 }
 
                 m_content = nextValue;
+                MarkContentChanged();
+            }
+        }
+
+        public bool enableRichText
+        {
+            get => m_enableRichText;
+            set
+            {
+                if (m_enableRichText == value)
+                {
+                    return;
+                }
+
+                m_enableRichText = value;
                 MarkContentChanged();
             }
         }

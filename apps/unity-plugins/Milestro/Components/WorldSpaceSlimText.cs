@@ -55,6 +55,12 @@ namespace Milestro.Components
         [NonSerialized] private Vector2Int appliedTextureSizePixels;
         [NonSerialized] private float appliedPixelsPerUnit;
 
+        public string Text
+        {
+            get => text;
+            set => text = value;
+        }
+
         public string text
         {
             get => m_text;

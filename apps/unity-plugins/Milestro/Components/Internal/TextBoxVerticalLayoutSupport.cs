@@ -49,7 +49,7 @@ namespace Milestro.Components.Internal
             TextBoxRenderTargetSettings requested)
         {
             var parser = new RichTextParser.RichTextParser();
-            parser.ParseText(requested.Content);
+            parser.ParseText(requested.Content, requested.EnableRichText);
             var issues = new List<string>();
             var payload = parser.ConvertToSegments(false, issues);
             var writingMode = requested.ParagraphStyle?.writingMode ?? WritingMode.HorizontalTb;
@@ -99,7 +99,8 @@ namespace Milestro.Components.Internal
                 settings.MarginReferenceSize,
                 settings.VerticalHeightMode,
                 settings.VerticalMarginContext,
-                settings.SizingUsesVerticalLayout);
+                settings.SizingUsesVerticalLayout,
+                settings.EnableRichText);
         }
 
         private static TextBoxRenderPreparation PrepareVerticalFallback(
@@ -172,7 +173,8 @@ namespace Milestro.Components.Internal
                 verticalHeightMode: requested.VerticalHeightMode,
                 verticalMarginContext: requested.VerticalMarginContext,
                 sizingUsesVerticalLayout: sizing.HasValue &&
-                                          requested.SizingUsesVerticalLayout);
+                                          requested.SizingUsesVerticalLayout,
+                enableRichText: requested.EnableRichText);
             return new TextBoxRenderPreparation(effective, payload,
                 CreateDiagnostic(issues), false);
         }
@@ -204,7 +206,8 @@ namespace Milestro.Components.Internal
                 requested.MarginReferenceSize,
                 requested.VerticalHeightMode,
                 requested.VerticalMarginContext,
-                false);
+                false,
+                requested.EnableRichText);
             return new TextBoxRenderPreparation(effective, payload,
                 CreateDiagnostic(issues), true);
         }

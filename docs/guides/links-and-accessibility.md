@@ -29,6 +29,7 @@ using Milestro.Events;
 using UnityEngine;
 
 var producer = textBox.GetComponent<TextBoxRenderTextureProducer>();
+producer.enableRichText = true;
 producer.content = "Open the <a href=\"help\">help</a>.";
 
 textBox.onLinkClicked.AddListener((LinkClickedEventArgs args) =>

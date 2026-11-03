@@ -2748,6 +2748,7 @@ namespace Milestro.Tests
             child.transform.SetParent(parent != null ? parent : root.transform, false);
             child.GetComponent<RectTransform>().sizeDelta = new Vector2(200f, 100f);
             producer = child.AddComponent<TextBoxRenderTextureProducer>();
+            producer.enableRichText = true;
             producer.textOverflow = TextOverflow.Clip;
             producer.wrapMode = TextBoxWrapMode.Wrap;
             producer.margin = margin;

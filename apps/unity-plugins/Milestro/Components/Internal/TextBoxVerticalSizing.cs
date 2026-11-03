@@ -38,7 +38,7 @@ namespace Milestro.Components.Internal
         {
             this.settings = settings;
             var parser = new RichTextParser.RichTextParser();
-            parser.ParseText(settings.Content);
+            parser.ParseText(settings.Content, settings.EnableRichText);
             payload = parser.ConvertToSegments(allowViewportBlockMargins: true);
             ZeroPercentageTextIndent(payload);
             using var paragraphStyle = settings.ParagraphStyle.ToParagraphStyle(

@@ -96,6 +96,17 @@ namespace Milestro.Tests
             Assert.AreEqual(before, target.PropertiesChangedCount);
         }
 
+        [Test]
+        public void RichTextIsDisabledByDefaultAndPropagatesToRenderSettings()
+        {
+            Assert.That(producer.enableRichText, Is.False);
+            Assert.That(TextBoxRenderTargetSettingsBuilder.BuildFrom(producer).EnableRichText, Is.False);
+
+            producer.enableRichText = true;
+
+            Assert.That(TextBoxRenderTargetSettingsBuilder.BuildFrom(producer).EnableRichText, Is.True);
+        }
+
         private sealed class CountingRenderTarget : ITextBoxRenderTarget
         {
             public Texture? OutputTexture => null;
