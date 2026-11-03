@@ -4,6 +4,7 @@
     "references": [
         "Milestro",
         "Milestro.Tests.Support",
+        "Unity.InputSystem",
         "party.para.util.unitynative",
         "Unity.UGUI"
     ],

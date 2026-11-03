@@ -14,6 +14,7 @@ recipes and parameter explanations.
 | `WorldSpaceSlimText` | `Milestro.Components` | Single-line label in world space |
 | `WorldSpaceTextBatch` | `Milestro.Components` | Batch compatible world-space text renderers |
 | `TextInput` | `Milestro.Components` | Editable UI text field |
+| `MilestroDropdown` | `Milestro.Components` | Single-select UI option with a scrollable popup |
 | `TextBoxLayoutElement` | `Milestro.Components` | Content-based sizing for `TextBox` |
 | `TextBoxScrollbar` | `Milestro.Components` | Connect `TextBox`/`TextInput` to uGUI scrollbars |
 | `MilestroScrollRect` | `Milestro.Components` | `ScrollRect` with Milestro wheel/Elastic behavior |
@@ -81,6 +82,20 @@ an internal native `InputBox`; do not add a child `TMP_InputField` or a manual
 - Validation: `onValidateInput`, `onValidateEdit`
 
 See [Input and IME](../guides/input.md).
+
+## `MilestroDropdown`
+
+`MilestroDropdown` is a `Selectable` with text-only options and an index-based
+committed value. Its public surface is `options`, `optionCount`,
+`GetOptionText`, `SetOptions`, `ClearOptions`, `SetOptionText`, `value`,
+`SetValueWithoutNotify`, `onValueChanged`, `Show`, `Hide`, and `isExpanded`.
+Presentation references are `captionText`, `placeholderText`, `placeholder`,
+`template`, and `maxVisibleItems`.
+
+List replacement is silent. Actual value changes notify once; candidate
+highlight and cancellation do not change the committed value. See
+[Dropdown](../guides/dropdown.md) for initialization, translation refresh,
+input, and popup layout.
 
 ## `SlimText` components
 

@@ -36,6 +36,7 @@ run the first-text example.
 | A paragraph in world space | `WorldSpaceTextBox` | [World-space text](guides/world-space.md) |
 | A short single-line label in world space | `WorldSpaceSlimText` | [World-space text](guides/world-space.md) |
 | An editable UI field | `TextInput` | [Input and IME](guides/input.md) |
+| A single-select settings option | `MilestroDropdown` | [Dropdown](guides/dropdown.md) |
 | Custom paragraph or editing behaviour | `ParagraphBuilder` / `InputBox` | [Layout engine parameters](reference/layout-engine.md) |
 
 `TextBox` creates its `TextBoxRenderTextureProducer` automatically. Set the
@@ -57,6 +58,8 @@ Use these when you already have a scene working:
   sizing, auto font size, and color gradients.
 - [Input and IME](guides/input.md): configure `TextInput`, validate input,
   handle events, and use the mobile keyboard.
+- [Dropdown](guides/dropdown.md): initialize options, commit or synchronize a
+  value, refresh translations, and configure popup interaction and layout.
 - [Scrolling and scrollbars](guides/scrolling.md): wheel scrolling, scrollbar
   binding, and Elastic overscroll.
 - [Links and accessibility](guides/links-and-accessibility.md): clickable text,
