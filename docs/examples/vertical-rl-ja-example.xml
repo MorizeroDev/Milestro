@@ -1,0 +1,118 @@
+<font size="32"><span lang="ja">
+    <p style="margin-top: 0; margin-bottom: 6px"><font color="#7dd3fc" size="56" weight="700">Milestro 縦書き見本帳</font></p>
+    <p style="margin-top: 0; margin-bottom: 18px"><font color="#94a3b8">日本語版。文字は上から下へ、列は右から左へ進みます。コンポーネントの組方向を VerticalRl、文字サイズを３２に設定し、自動文字サイズを無効にしてください。</font></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">01 · 文字の強調と装飾</font></p>
+    <p style="margin-bottom: 12px"><b>太字</b>・<strong>強い強調</strong>・<i>斜体</i>・<em>斜体の強調</em>・<u>下線</u>・<s>取り消し線</s>・<del>削除の表現</del></p>
+    <p style="margin-bottom: 12px"><b><i><u>太字と斜体と下線</u></i></b>・<u><s>下線と取り消し線</s></u>。タグを閉じると元の装飾に戻ります。</p>
+    <p style="margin-bottom: 12px">下付き: H<sub>2</sub>O・CO<sub>2</sub> ／ 上付き: E = mc<sup>2</sup>・x<sup>2<sup>3</sup></sup> ／ 入れ子: a<sub>i<sub>j</sub></sub></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">02 · 文字サイズと太さ</font></p>
+    <p style="margin-bottom: 12px"><font size="24">文字 24</font>・<font size="32">文字 32</font>・<font size="40">文字 40</font>・<font size="48">文字 48</font>・<font size="32.5">文字 32.5</font></p>
+    <p style="margin-bottom: 12px"><font weight="100">極細 100</font>・<font weight="200">細め 200</font>・<font weight="300">細字 300</font>・<font weight="400">標準 400</font>・<font weight="500">中太 500</font></p>
+    <p style="margin-bottom: 12px"><font weight="600">やや太い 600</font>・<font weight="700">太字 700</font>・<font weight="800">極太 800</font>・<font weight="900">最太 900</font>・<font weight="1000">最大 1000</font></p>
+    <p style="margin-bottom: 12px"><span weight="550">中間の太さ５５０</span>・<font size="40" weight="650" color="#38bdf8">サイズ・太さ・色の組み合わせ</font>。太さには１〜１０００の整数を指定できます。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">03 · 文字色と透明度</font></p>
+    <p style="margin-bottom: 12px"><font color="#f80">三桁の色</font>・<font color="#38bdf8">六桁の色</font>・<font color="#38bdf880">半透明の色</font>・<font color="4286578943">符号なし整数の色</font></p>
+    <p style="margin-bottom: 12px"><font color="oklab(0.7 0.1 -0.1)">OKLab</font>・<font color="oklch(70% 0.15 250)">OKLCH</font>・<font color="oklch(70% 0.15 250 / 50%)">透明度つきの OKLCH</font></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">04 · 書体とフォールバック</font></p>
+    <p style="margin-bottom: 12px"><font face="system-ui">システム書体</font>・<font face="sans-serif">ゴシック体</font>・<font face="serif">明朝体</font>・<font face="monospace">等幅書体 0123456789</font></p>
+    <p style="margin-bottom: 12px"><font face="&quot;Google Sans&quot;, system-ui">引用符つきの書体名と代替書体</font>・<span face="&quot;Source Han Sans VF&quot;, sans-serif">思源ゴシックの指定</span></p>
+    <p style="margin-bottom: 12px"><font face="&quot;Source Han Sans VF&quot;, &quot;Noto Color Emoji&quot;, system-ui">順番に書体を探します：春の便り・Hello・你好・😀 🎉 🌈</font></p>
+    <p style="margin-bottom: 12px">引用符のない名前は設定済みの書体キーワードとして解決されます。二重引用符つきの名前は実際の書体名です。太さ・幅・傾き・文字機能の見え方は、利用できる書体によって変わります。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">05 · 文字幅と傾き</font></p>
+    <p style="margin-bottom: 12px"><span width="UltraCondensed">最も狭い</span>・<span width="ExtraCondensed">とても狭い</span>・<span width="Condensed">狭い</span>・<span width="SemiCondensed">やや狭い</span></p>
+    <p style="margin-bottom: 12px"><span width="Normal">標準</span>・<span width="SemiExpanded">やや広い</span>・<span width="Expanded">広い</span>・<span width="ExtraExpanded">とても広い</span>・<span width="UltraExpanded">最も広い</span></p>
+    <p style="margin-bottom: 12px"><span slant="Upright">直立</span>・<span slant="Italic">斜体</span>・<span slant="Oblique">傾斜体</span>・<i>親は斜体、<span slant="Upright">子は直立</span>、再び斜体</i></p>
+    <p style="margin-bottom: 12px"><span face="sans-serif" weight="700" width="Condensed" slant="Italic">書体・太さ・幅・傾きの組み合わせ</span></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">06 · 字間と文字倍率</font></p>
+    <p style="margin-bottom: 12px"><span cspace="0">字間 0：春の光と風</span>・<span cspace="2">字間 2：春の光と風</span>・<span cspace="6">字間 6：春の光と風</span></p>
+    <p style="margin-bottom: 12px"><span fscale="0.5">倍率 0.5（16）</span>・<span fscale="1">倍率 1（32）</span>・<span fscale="1.5">倍率 1.5（48）</span></p>
+    <p style="margin-bottom: 12px"><font size="40"><span fscale="0.8">サイズ４０×倍率０・８＝３２</span></font>・<span fscale="1.5">外側４８、<span fscale="1">内側３２</span>、外側４８に戻る</span></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">07 · 基準線の移動と上付き・下付き</font></p>
+    <p style="margin-bottom: 12px">基準線・<span voffset="12">右へ１２</span>・基準線・<span voffset="-8">左へ８</span>・基準線</p>
+    <p style="margin-bottom: 12px"><span voffset-em="0.5">文字サイズの半分、右へ１６</span>・<span voffset-em="-0.25">−０・２５ em、左へ８</span></p>
+    <p style="margin-bottom: 12px">手動の上付き: x<span fscale="0.5" voffset-em="0.5">2</span> ／ 手動の下付き: H<span fscale="0.5" voffset-em="-0.25">2</span>O ／ 自動: x<sup>2</sup>・H<sub>2</sub>O</p>
+    <p style="margin-bottom: 12px"><span voffset="0" voffset-em="0.5">絶対指定の０が em 指定より優先されます。</span>上付き・下付きは倍率を半分にし、入れ子では em 移動量を加算します。移動量の基準は倍率適用前の文字サイズです。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">08 · 言語と多言語の混植</font></p>
+    <p style="margin-bottom: 12px"><span lang="en">en: Typography</span>・<span lang="zh-Hans">zh-Hans: 简体中文，骨直令</span>・<span lang="zh-Hant">zh-Hant: 繁體中文，骨直令</span></p>
+    <p style="margin-bottom: 12px"><span lang="ja">ja: 日本語の組版、骨直令</span>・<span lang="ko">ko: 한글</span>・<span lang="hi">hi: नमस्ते</span>・絵文字: 😀 👩‍💻 🏳️‍🌈</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">09 · 段落・改行・行揃え</font></p>
+    <p style="margin-bottom: 12px">一列目は上から下へ進みます。<br />改行すると左の列へ移ります。<br />三列目も同じ段落に含まれます。</p>
+    <p align="Center" style="margin-bottom: 12px">中央揃え。各列の文字を縦方向の中央に配置します。</p>
+    <p align="Justify" style="margin-bottom: 12px">両端揃え。この長い段落では、縦方向の余白が文字の間に配分されます。窓の高さを小さくして、自然な折り返しによって次の列へ移る様子を比べてください。最後の列と明示的な改行の直前の列には、通常の行揃えが適用されます。春の光が窓辺に届き、静かな部屋に新しい一日が始まります。</p>
+    <p align="Start" dir="Ltr" style="margin-bottom: 12px">先頭揃え。各列は上端から始まり、列は右から左へ進みます。</p>
+    <p align="End" dir="Ltr" style="margin-bottom: 12px">末尾揃え。各列の文字を下端に寄せて配置します。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">10 · 文字の向きと縦中横</font></p>
+    <p style="text-orientation: mixed; margin-bottom: 12px">混在。漢字と仮名は直立し、欧文 ABC 123 は時計回りに回転します。「春の便り」、句読点の形も比べてください。</p>
+    <p style="text-orientation: upright; margin-bottom: 12px">直立。ABC123 が一文字ずつ縦に並びます。<span style="text-orientation: mixed">子では混在 ABC123</span>。親に戻ると XYZ も直立します。</p>
+    <p style="text-orientation: sideways; margin-bottom: 12px">横倒し。漢字も ABC123 も時計回りに回転します。<span style="text-orientation: upright">子だけ直立</span>。ここから再び横倒しです。</p>
+    <p style="margin-bottom: 12px">縦中横の日付：<span style="text-combine-upright: all">2026</span>年<span style="text-combine-upright: all">11</span>月<span style="text-combine-upright: all">01</span>日・第<span style="text-combine-upright: all">12</span>回。指定のない数字：2026。</p>
+    <p style="margin-bottom: 12px">幅を圧縮：<span style="text-combine-upright: all; --milestro-text-combine-upright-sizing: squeeze">2026</span>・列幅を拡張：<span style="text-combine-upright: all; --milestro-text-combine-upright-sizing: grow">Milestro</span>。どちらも縦方向には一文字分を占めます。拡張では自然な文字幅を保ちます。</p>
+    <p style="margin-bottom: 12px"><span style="text-combine-upright: all">12<span style="text-combine-upright: none">結合しない</span>34</span>・<a href="milestro://action/date" id="vertical-date-link"><font color="#38bdf8"><u>リンク内の縦中横：<span style="text-combine-upright: all">11</span>月</u></font></a></p>
+    <p style="margin-bottom: 12px">縦中横の一群では文字スタイルを統一し、改行・画像用の空き枠・ルビの親文字を含めないでください。横倒しの範囲では縦中横は無効です。縦書きでは右から左への本文方向と左右揃えは使えません。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">11 · 最初の列の字下げ</font></p>
+    <p style="text-indent: 0; margin-bottom: 12px">字下げなし。最初の列は上端から始まります。自動で折り返した列も、改行後の列も字下げしません。</p>
+    <p style="text-indent: 64px; margin-bottom: 12px">最初の列を６４単位下げます。窓の高さを小さくすると、折り返した次の列が通常の上端に戻る様子を確認できます。<br />改行後の列も上端から始まります。</p>
+    <p style="text-indent: 10%; margin-bottom: 12px">一割の字下げ。折り返し時に、上下の余白を引いた有効な高さを基準にします。窓の高さを変えると最初の列だけ字下げ量が変わります。</p>
+    <p style="text-indent: -3em; margin-bottom: 12px">負の字下げ。最初の列が９６単位上にはみ出します。上側に空間を用意してください。切り抜き表示では窓の外側が隠れます。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">12 · 段落の上下余白</font></p>
+    <p style="margin-top: 0; margin-bottom: 0">上下の余白はともにゼロです。</p>
+    <p style="margin-top: 16px; margin-bottom: 24px">上に１６、下に２４単位の余白を設けます。</p>
+    <p style="margin-top: 1em; margin-bottom: 0.5em">上に一文字、下に半文字分の余白。基準は外側のタグではなく、コンポーネントの文字サイズ３２です。</p>
+    <p style="margin-top: 1%; margin-bottom: 1%">上下それぞれ一パーセント。基準は本文に使える高さです。</p>
+    <p style="margin-top: 0; margin-bottom: 16px">段落その一。下余白１６。上下の余白は各段落の列の有効な高さを短くします。</p>
+    <p style="margin-top: 32px; margin-bottom: 16px">段落その二。上余白３２。縦書きでは隣の段落と余白を相殺しません。段落間の横方向の間隔は paragraphSpacing で指定します。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">13 · カーニング</font></p>
+    <p style="margin-bottom: 12px"><span style="font-kerning: normal">有効: AVATAR To Wa Yo</span>・<span style="font-kerning: none">無効: AVATAR To Wa Yo</span>・<span style="font-kerning: auto">自動: AVATAR To Wa Yo</span></p>
+    <p style="margin-bottom: 12px"><span style="font-kerning: none">親は無効: AVATAR・<span style="font-kerning: normal">子は有効: AVATAR</span>・<span style="font-kerning: auto">子は自動: AVATAR</span>・親は再び無効: AVATAR</span></p>
+    <p style="font-kerning: normal; margin-bottom: 12px">段落では有効: AVATAR・<font style="font-kerning: none">文字タグでは無効: AVATAR</font>・<span style="font-kerning: normal">範囲タグでは有効: AVATAR</span></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">14 · OpenType の文字機能</font></p>
+    <p style="margin-bottom: 12px"><span style="font-feature-settings: 'liga'">値の省略は１: office ffi fl</span>・<span style="font-feature-settings: 'liga' on">合字あり: office ffi fl</span>・<span style="font-feature-settings: 'liga' off">合字なし: office ffi fl</span></p>
+    <p style="margin-bottom: 12px"><span style="font-feature-settings: 'tnum' 1, 'pnum' 0">等幅数字: 1111 2222 8888</span>・<span style="font-feature-settings: 'pnum' 1, 'tnum' 0">可変幅数字: 1111 2222 8888</span></p>
+    <p style="margin-bottom: 12px"><span style="font-feature-settings: 'smcp' 1">小型大文字: Typography</span>・<span style="font-feature-settings: 'frac' 1">分数: 1/2 3/4</span>・<span style="font-feature-settings: 'salt' 2">異体字２: abcde</span></p>
+    <p style="margin-bottom: 12px"><span style="font-feature-settings: 'liga' 0, 'kern' 0">親で無効化: office AVATAR・<span style="font-feature-settings: normal">子で全機能を解除: office AVATAR</span>・再び無効: office AVATAR</span></p>
+    <p style="font-feature-settings: 'kern' 1; margin-bottom: 12px">段落の設定: AVATAR・<font style="font-feature-settings: 'liga' 1">文字タグで合字あり: office</font>・<span style="font-feature-settings: 'liga' 0">範囲タグで合字なし: office</span></p>
+    <p style="margin-bottom: 12px"><span style="font-feature-settings: 'chws' 1">約物の詰めあり：「春」、花。</span>・<span style="font-feature-settings: 'chws' 0">詰めなし：「春」、花。</span></p>
+    <p style="margin-bottom: 12px"><span style="font-kerning: none; font-feature-settings: 'kern' 1, 'liga' 1">明示した kern は font-kerning より優先されます。normal は既定の chws も含め、継承した全機能を解除します。</span></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">15 · リンクと識別子</font></p>
+    <p style="margin-bottom: 12px"><a href="https://example.com"><font color="#38bdf8"><u>移動先つきのリンク</u></font></a>・<a href="https://example.com/details?from=milestro&amp;view=demo" id="details-link"><font color="#a78bfa"><b><u>識別子と装飾つきのリンク</u></b></font></a></p>
+    <p style="margin-bottom: 12px">リンクはイベントで移動先と識別子を通知します。実際の移動はアプリ側で処理してください。</p>
+    <p style="margin-bottom: 12px"><a href="milestro://action/open" id="action-link"><font color="#34d399"><u>アプリ独自の操作</u></font></a>。リンクの色と下線は内側の装飾タグで指定します。</p>
+    <a href="https://example.com/article" id="paragraph-link"><p style="margin-bottom: 6px"><font color="#38bdf8"><u>段落全体を一つのリンクにできます。</u></font></p><p style="margin-bottom: 16px"><font color="#38bdf8"><u>次の段落も同じリンクに含まれます。</u></font></p></a>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">16 · ルビと読みの配置</font></p>
+    <p style="margin-bottom: 12px">標準のルビ：<ruby>漢字<rt>かんじ</rt></ruby>。大きさは親文字の半分、間隔は２、位置は列の右側。均等な外側余白とはみ出しを許し、親文字の幅を保ちます。</p>
+    <p style="margin-bottom: 12px">位置：<ruby style="ruby-position: over">東京<rt>とうきょう</rt></ruby>。縦書きでは右側に置きます。下側の指定も右側へ置き換えられます。</p>
+    <p style="margin-bottom: 12px">先頭揃え・中央揃え：<ruby style="ruby-align: start">文字組版<rt>くみ</rt></ruby>・<ruby style="ruby-align: center">文字組版<rt>くみ</rt></ruby></p>
+    <p style="margin-bottom: 12px">外側余白あり・文字間のみ：<ruby style="ruby-align: space-around">文字組版<rt>くみ</rt></ruby>・<ruby style="ruby-align: space-between">文字組版<rt>くみ</rt></ruby></p>
+    <p style="margin-bottom: 12px">はみ出しなし：前<ruby style="ruby-overhang: none">字<rt>ながいよみかた</rt></ruby>後・自動：前<ruby style="ruby-overhang: auto">字<rt>ながいよみかた</rt></ruby>後</p>
+    <p style="margin-bottom: 12px">親文字を保持：前<ruby style="--milestro-ruby-overflow: preserve-base; ruby-overhang: none">字<rt>ながいよみかた</rt></ruby>後・行内を拡張：前<ruby style="--milestro-ruby-overflow: inline; ruby-overhang: none">字<rt>ながいよみかた</rt></ruby>後</p>
+    <p style="margin-bottom: 12px">大きさ：半分と四分の三。<ruby style="--milestro-ruby-size: 0.5">漢字<rt>かんじ</rt></ruby>・<ruby style="--milestro-ruby-size: 0.75">漢字<rt>かんじ</rt></ruby></p>
+    <p style="margin-bottom: 12px">間隔：ゼロと８。<ruby style="--milestro-ruby-gap: 0">漢字<rt>かんじ</rt></ruby>・<ruby style="--milestro-ruby-gap: 8">漢字<rt>かんじ</rt></ruby></p>
+    <p style="margin-bottom: 12px">代替の括弧：<ruby>漢字<rp>（</rp><rt>かんじ</rt><rp>）</rp></ruby>。括弧の内容は表示しません。</p>
+    <p style="margin-bottom: 12px">親文字の装飾：<ruby><font color="#f59e0b"><b>漢字</b></font><rt>かんじ</rt></ruby>・隣り合うルビ：<ruby>東<rt>とう</rt></ruby><ruby>京<rt>きょう</rt></ruby></p>
+    <p style="margin-bottom: 12px">複合指定：<ruby style="ruby-position: over; ruby-align: center; ruby-overhang: none; --milestro-ruby-overflow: inline; --milestro-ruby-size: 0.6; --milestro-ruby-gap: 4">文字組版<rt>くみ</rt></ruby></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">17 · 特殊文字と入れ子の組み合わせ</font></p>
+    <p style="margin-bottom: 12px">特殊文字：&lt;tag&gt;・A &amp; B・&quot;引用&quot;・&apos;引用&apos;。数値参照：&#9733; &#x2605;。改行しない空白：A&#160;B</p>
+    <p style="text-indent: 32px; font-kerning: normal; margin-bottom: 16px"><font color="#38bdf8" weight="600">色と太さを継承し、<i>子を斜体に、<u>さらに下線を加えます</u></i>。親の装飾に戻ります。<font color="#f59e0b" size="40"><span cspace="2">新しい色・サイズ・字間</span></font>。サイズ３２に戻ります。</font>ここから通常の文字です。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">18 · 画像用の空き枠</font></p>
+    <p style="margin-bottom: 12px">得点：［<img width="24" height="24" key="coin-icon" />］１２００・状態：［<img width="32" height="32" key="status-icon" />］準備完了</p>
+    <p style="margin-bottom: 12px">横長：［<img width="64" height="24" />］・縦長：［<img width="24" height="64" key="tall-icon" />］・<a href="milestro://action/reward" id="reward-link"><font color="#34d399"><u>報酬［<img width="32" height="32" key="reward-icon" />］を受け取る</u></font></a></p>
+    <p style="margin-bottom: 12px">括弧の間の空白は意図した表示です。画像タグは領域だけを確保し、画像自体は描きません。幅と高さは正の数で指定し、キーは省略できます。配置情報は TextBox.TryGetPlaceholderGeometrySnapshot から取得し、アプリ側で描画してください。</p>
+</span></font>

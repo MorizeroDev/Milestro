@@ -1,0 +1,118 @@
+<font size="32"><span lang="zh-Hant">
+    <p style="margin-top: 0; margin-bottom: 6px"><font color="#7dd3fc" size="56" weight="700">Milestro 直排展示</font></p>
+    <p style="margin-top: 0; margin-bottom: 18px"><font color="#94a3b8">繁體中文版。文字由上而下，欄由右向左排列。請將元件書寫模式設為 VerticalRl、字級設為３２，並停用自動字級。</font></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">01 · 文字強調與裝飾</font></p>
+    <p style="margin-bottom: 12px"><b>粗體</b>・<strong>加強強調</strong>・<i>斜體</i>・<em>斜體強調</em>・<u>底線</u>・<s>刪除線</s>・<del>刪除標記</del></p>
+    <p style="margin-bottom: 12px"><b><i><u>粗體、斜體與底線</u></i></b>・<u><s>底線與刪除線</s></u>。標籤結束後恢復原本的樣式。</p>
+    <p style="margin-bottom: 12px">下標: H<sub>2</sub>O・CO<sub>2</sub> ／ 上標: E = mc<sup>2</sup>・x<sup>2<sup>3</sup></sup> ／ 巢狀: a<sub>i<sub>j</sub></sub></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">02 · 字級與字重</font></p>
+    <p style="margin-bottom: 12px"><font size="24">文字 24</font>・<font size="32">文字 32</font>・<font size="40">文字 40</font>・<font size="48">文字 48</font>・<font size="32.5">文字 32.5</font></p>
+    <p style="margin-bottom: 12px"><font weight="100">極細 100</font>・<font weight="200">特細 200</font>・<font weight="300">細體 300</font>・<font weight="400">標準 400</font>・<font weight="500">中等 500</font></p>
+    <p style="margin-bottom: 12px"><font weight="600">半粗 600</font>・<font weight="700">粗體 700</font>・<font weight="800">特粗 800</font>・<font weight="900">極粗 900</font>・<font weight="1000">最粗 1000</font></p>
+    <p style="margin-bottom: 12px"><span weight="550">中間字重５５０</span>・<font size="40" weight="650" color="#38bdf8">字級、字重與色彩的組合</font>。字重可指定１至１０００的整數。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">03 · 文字色彩與透明度</font></p>
+    <p style="margin-bottom: 12px"><font color="#f80">三位色碼</font>・<font color="#38bdf8">六位色碼</font>・<font color="#38bdf880">半透明色彩</font>・<font color="4286578943">無號整數色彩</font></p>
+    <p style="margin-bottom: 12px"><font color="oklab(0.7 0.1 -0.1)">OKLab</font>・<font color="oklch(70% 0.15 250)">OKLCH</font>・<font color="oklch(70% 0.15 250 / 50%)">帶透明度的 OKLCH</font></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">04 · 字型與後備字型</font></p>
+    <p style="margin-bottom: 12px"><font face="system-ui">系統字型</font>・<font face="sans-serif">無襯線字型</font>・<font face="serif">襯線字型</font>・<font face="monospace">等寬字型 0123456789</font></p>
+    <p style="margin-bottom: 12px"><font face="&quot;Google Sans&quot;, system-ui">引號內的字型名稱與後備字型</font>・<span face="&quot;Source Han Sans VF&quot;, sans-serif">指定思源黑體</span></p>
+    <p style="margin-bottom: 12px"><font face="&quot;Source Han Sans VF&quot;, &quot;Noto Color Emoji&quot;, system-ui">依序尋找字型：春日來信・Hello・日本語・😀 🎉 🌈</font></p>
+    <p style="margin-bottom: 12px">未加引號的名稱可解析為已設定的字型關鍵字；雙引號內的名稱表示實際字型名稱。字重、字寬、傾斜與字型功能的效果取決於可用字型。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">05 · 字寬與傾斜</font></p>
+    <p style="margin-bottom: 12px"><span width="UltraCondensed">極窄</span>・<span width="ExtraCondensed">特窄</span>・<span width="Condensed">窄體</span>・<span width="SemiCondensed">半窄</span></p>
+    <p style="margin-bottom: 12px"><span width="Normal">標準</span>・<span width="SemiExpanded">半寬</span>・<span width="Expanded">寬體</span>・<span width="ExtraExpanded">特寬</span>・<span width="UltraExpanded">極寬</span></p>
+    <p style="margin-bottom: 12px"><span slant="Upright">直立</span>・<span slant="Italic">斜體</span>・<span slant="Oblique">傾斜體</span>・<i>父層斜體，<span slant="Upright">子層直立</span>，回到斜體</i></p>
+    <p style="margin-bottom: 12px"><span face="sans-serif" weight="700" width="Condensed" slant="Italic">字型、字重、字寬與傾斜的組合</span></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">06 · 字距與文字縮放</font></p>
+    <p style="margin-bottom: 12px"><span cspace="0">字距 0：春日微風</span>・<span cspace="2">字距 2：春日微風</span>・<span cspace="6">字距 6：春日微風</span></p>
+    <p style="margin-bottom: 12px"><span fscale="0.5">倍率 0.5（16）</span>・<span fscale="1">倍率 1（32）</span>・<span fscale="1.5">倍率 1.5（48）</span></p>
+    <p style="margin-bottom: 12px"><font size="40"><span fscale="0.8">字級４０×倍率０．８＝３２</span></font>・<span fscale="1.5">外層４８，<span fscale="1">內層３２</span>，回到外層４８</span></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">07 · 基線位移與上下標</font></p>
+    <p style="margin-bottom: 12px">基線・<span voffset="12">向右１２</span>・基線・<span voffset="-8">向左８</span>・基線</p>
+    <p style="margin-bottom: 12px"><span voffset-em="0.5">０．５ em，向右１６</span>・<span voffset-em="-0.25">−０．２５ em，向左８</span></p>
+    <p style="margin-bottom: 12px">手動上標: x<span fscale="0.5" voffset-em="0.5">2</span> ／ 手動下標: H<span fscale="0.5" voffset-em="-0.25">2</span>O ／ 自動: x<sup>2</sup>・H<sub>2</sub>O</p>
+    <p style="margin-bottom: 12px"><span voffset="0" voffset-em="0.5">絕對位移０優先於 em 位移。</span>上下標將繼承的文字倍率減半，巢狀標記會累加 em 位移。位移依縮放前的字級計算。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">08 · 語系與多語混排</font></p>
+    <p style="margin-bottom: 12px"><span lang="en">en: Typography</span>・<span lang="zh-Hans">zh-Hans: 简体中文，骨直令</span>・<span lang="zh-Hant">zh-Hant: 繁體中文，骨直令</span></p>
+    <p style="margin-bottom: 12px"><span lang="ja">ja: 日本語の組版、骨直令</span>・<span lang="ko">ko: 한글</span>・<span lang="hi">hi: नमस्ते</span>・表情符號: 😀 👩‍💻 🏳️‍🌈</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">09 · 段落、換行與對齊</font></p>
+    <p style="margin-bottom: 12px">第一欄由上而下排列。<br />換行後移至左側一欄。<br />第三欄仍屬於同一段落。</p>
+    <p align="Center" style="margin-bottom: 12px">置中對齊。每欄文字沿垂直方向置中。</p>
+    <p align="Justify" style="margin-bottom: 12px">左右對齊。這段長文展示直排時如何沿垂直方向分配剩餘空間。請縮小文字框的高度，觀察自動換欄後的文字間距。最後一欄與明確換行前的一欄維持一般對齊。春日的陽光穿過窗邊，微風翻動書頁，遠方傳來清脆的鳥鳴，安靜的午後便在字裡行間緩緩展開。</p>
+    <p align="Start" dir="Ltr" style="margin-bottom: 12px">起點對齊。每欄從頂端開始，欄由右向左排列。</p>
+    <p align="End" dir="Ltr" style="margin-bottom: 12px">終點對齊。每欄文字沿垂直方向靠底端排列。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">10 · 文字朝向與縱中橫</font></p>
+    <p style="text-orientation: mixed; margin-bottom: 12px">混合朝向。漢字保持直立，西文 ABC 123 順時針側轉。「春日來信」，也可觀察標點的方向。</p>
+    <p style="text-orientation: upright; margin-bottom: 12px">直立。ABC123 逐字直立排列。<span style="text-orientation: mixed">子層混合朝向 ABC123</span>。回到父層後，XYZ 恢復直立。</p>
+    <p style="text-orientation: sideways; margin-bottom: 12px">側轉。漢字與 ABC123 都順時針旋轉。<span style="text-orientation: upright">子層保持直立</span>。此處恢復側轉。</p>
+    <p style="margin-bottom: 12px">縱中橫日期：<span style="text-combine-upright: all">2026</span>年<span style="text-combine-upright: all">11</span>月<span style="text-combine-upright: all">01</span>日・第<span style="text-combine-upright: all">12</span>回。未標記的數字：2026。</p>
+    <p style="margin-bottom: 12px">壓縮字寬：<span style="text-combine-upright: all; --milestro-text-combine-upright-sizing: squeeze">2026</span>・擴大欄寬：<span style="text-combine-upright: all; --milestro-text-combine-upright-sizing: grow">Milestro</span>。兩者在垂直方向都佔一個 em；擴大模式保留自然字寬。</p>
+    <p style="margin-bottom: 12px"><span style="text-combine-upright: all">12<span style="text-combine-upright: none">不合併</span>34</span>・<a href="milestro://action/date" id="vertical-date-link"><font color="#38bdf8"><u>連結內的縱中橫：<span style="text-combine-upright: all">11</span>月</u></font></a></p>
+    <p style="margin-bottom: 12px">同一縱中橫群組須使用一致樣式，不能包含換行、圖片佔位框或注音底文。側轉範圍內不啟用縱中橫。直排不支援由右至左的本文方向及實體左右對齊。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">11 · 首欄縮排</font></p>
+    <p style="text-indent: 0; margin-bottom: 12px">無縮排。首欄從頂端開始，自動換欄與明確換行後的欄也不縮排。</p>
+    <p style="text-indent: 64px; margin-bottom: 12px">首欄向下縮排６４個排版單位。縮小文字框的高度，可觀察自動換欄後回到正常頂端的效果。<br />明確換行後的欄也從頂端開始。</p>
+    <p style="text-indent: 10%; margin-bottom: 12px">百分之十縮排。自動換欄時，以扣除上下邊距後的可用高度為基準。調整文字框高度，首欄的縮排量便會隨之改變。</p>
+    <p style="text-indent: -3em; margin-bottom: 12px">負值縮排。首欄向上懸掛９６個單位，請預留頂部空間。裁切模式會隱藏超出視窗的部分。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">12 · 段落上下邊距</font></p>
+    <p style="margin-top: 0; margin-bottom: 0">上下邊距皆為零。</p>
+    <p style="margin-top: 16px; margin-bottom: 24px">上方１６、下方２４個單位的邊距。</p>
+    <p style="margin-top: 1em; margin-bottom: 0.5em">上方一個 em、下方半個 em。基準為元件字級３２，而非外層字型標籤。</p>
+    <p style="margin-top: 1%; margin-bottom: 1%">上下各百分之一，以可用的內容高度為基準。</p>
+    <p style="margin-top: 0; margin-bottom: 16px">段落甲。下邊距１６；上下邊距會縮短該段落每欄的可用高度。</p>
+    <p style="margin-top: 32px; margin-bottom: 16px">段落乙。上邊距３２；直排時相鄰段落的邊距不會折疊。段落之間的水平間距由 paragraphSpacing 設定。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">13 · 字偶間距</font></p>
+    <p style="margin-bottom: 12px"><span style="font-kerning: normal">啟用: AVATAR To Wa Yo</span>・<span style="font-kerning: none">停用: AVATAR To Wa Yo</span>・<span style="font-kerning: auto">自動: AVATAR To Wa Yo</span></p>
+    <p style="margin-bottom: 12px"><span style="font-kerning: none">父層停用: AVATAR・<span style="font-kerning: normal">子層啟用: AVATAR</span>・<span style="font-kerning: auto">子層自動: AVATAR</span>・回到父層停用: AVATAR</span></p>
+    <p style="font-kerning: normal; margin-bottom: 12px">段落啟用: AVATAR・<font style="font-kerning: none">字型標籤停用: AVATAR</font>・<span style="font-kerning: normal">範圍標籤啟用: AVATAR</span></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">14 · OpenType 字型功能</font></p>
+    <p style="margin-bottom: 12px"><span style="font-feature-settings: 'liga'">省略值為１: office ffi fl</span>・<span style="font-feature-settings: 'liga' on">啟用連字: office ffi fl</span>・<span style="font-feature-settings: 'liga' off">停用連字: office ffi fl</span></p>
+    <p style="margin-bottom: 12px"><span style="font-feature-settings: 'tnum' 1, 'pnum' 0">等寬數字: 1111 2222 8888</span>・<span style="font-feature-settings: 'pnum' 1, 'tnum' 0">比例數字: 1111 2222 8888</span></p>
+    <p style="margin-bottom: 12px"><span style="font-feature-settings: 'smcp' 1">小型大寫: Typography</span>・<span style="font-feature-settings: 'frac' 1">分數: 1/2 3/4</span>・<span style="font-feature-settings: 'salt' 2">替代字形２: abcde</span></p>
+    <p style="margin-bottom: 12px"><span style="font-feature-settings: 'liga' 0, 'kern' 0">父層停用: office AVATAR・<span style="font-feature-settings: normal">子層清除所有功能: office AVATAR</span>・恢復停用: office AVATAR</span></p>
+    <p style="font-feature-settings: 'kern' 1; margin-bottom: 12px">段落設定: AVATAR・<font style="font-feature-settings: 'liga' 1">字型標籤啟用連字: office</font>・<span style="font-feature-settings: 'liga' 0">範圍標籤停用連字: office</span></p>
+    <p style="margin-bottom: 12px"><span style="font-feature-settings: 'chws' 1">啟用標點壓縮：「春」，花。</span>・<span style="font-feature-settings: 'chws' 0">停用壓縮：「春」，花。</span></p>
+    <p style="margin-bottom: 12px"><span style="font-kerning: none; font-feature-settings: 'kern' 1, 'liga' 1">明確指定的 kern 優先於 font-kerning。normal 會清除所有繼承的功能，也包含預設的 chws。</span></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">15 · 連結與識別碼</font></p>
+    <p style="margin-bottom: 12px"><a href="https://example.com"><font color="#38bdf8"><u>含目標的連結</u></font></a>・<a href="https://example.com/details?from=milestro&amp;view=demo" id="details-link"><font color="#a78bfa"><b><u>含識別碼與巢狀樣式的連結</u></b></font></a></p>
+    <p style="margin-bottom: 12px">連結透過事件回報目標與識別碼；實際導覽由應用程式處理。</p>
+    <p style="margin-bottom: 12px"><a href="milestro://action/open" id="action-link"><font color="#34d399"><u>應用程式自訂動作</u></font></a>。連結色彩與底線由內層樣式標籤指定。</p>
+    <a href="https://example.com/article" id="paragraph-link"><p style="margin-bottom: 6px"><font color="#38bdf8"><u>一個連結可包住整個段落。</u></font></p><p style="margin-bottom: 16px"><font color="#38bdf8"><u>下一段也可屬於同一連結。</u></font></p></a>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">16 · 讀音註記與配置</font></p>
+    <p style="margin-bottom: 12px">預設讀音：<ruby>漢字<rt>ㄏㄢˋ ㄗˋ</rt></ruby>。註記大小為底文的一半，間距為２，位於欄的右側；採均勻外側留白、允許外伸，並保留底文寬度。</p>
+    <p style="margin-bottom: 12px">位置：<ruby style="ruby-position: over">臺北<rt>ㄊㄞˊ ㄅㄟˇ</rt></ruby>。直排時置於右側；指定下方時也會回退至右側。</p>
+    <p style="margin-bottom: 12px">起點對齊與置中：<ruby style="ruby-align: start">文字排版<rt>排版</rt></ruby>・<ruby style="ruby-align: center">文字排版<rt>排版</rt></ruby></p>
+    <p style="margin-bottom: 12px">均勻外側留白與僅分配字間：<ruby style="ruby-align: space-around">文字排版<rt>排版</rt></ruby>・<ruby style="ruby-align: space-between">文字排版<rt>排版</rt></ruby></p>
+    <p style="margin-bottom: 12px">不允許外伸：前<ruby style="ruby-overhang: none">字<rt>較長的讀音註記</rt></ruby>後・自動：前<ruby style="ruby-overhang: auto">字<rt>較長的讀音註記</rt></ruby>後</p>
+    <p style="margin-bottom: 12px">保留底文：前<ruby style="--milestro-ruby-overflow: preserve-base; ruby-overhang: none">字<rt>較長的讀音註記</rt></ruby>後・行內擴張：前<ruby style="--milestro-ruby-overflow: inline; ruby-overhang: none">字<rt>較長的讀音註記</rt></ruby>後</p>
+    <p style="margin-bottom: 12px">大小：二分之一與四分之三。<ruby style="--milestro-ruby-size: 0.5">漢字<rt>ㄏㄢˋ ㄗˋ</rt></ruby>・<ruby style="--milestro-ruby-size: 0.75">漢字<rt>ㄏㄢˋ ㄗˋ</rt></ruby></p>
+    <p style="margin-bottom: 12px">間距：零與８。<ruby style="--milestro-ruby-gap: 0">漢字<rt>ㄏㄢˋ ㄗˋ</rt></ruby>・<ruby style="--milestro-ruby-gap: 8">漢字<rt>ㄏㄢˋ ㄗˋ</rt></ruby></p>
+    <p style="margin-bottom: 12px">後備括號：<ruby>漢字<rp>（</rp><rt>ㄏㄢˋ ㄗˋ</rt><rp>）</rp></ruby>。括號內容不會顯示。</p>
+    <p style="margin-bottom: 12px">底文樣式：<ruby><font color="#f59e0b"><b>漢字</b></font><rt>ㄏㄢˋ ㄗˋ</rt></ruby>・相鄰註記：<ruby>臺<rt>ㄊㄞˊ</rt></ruby><ruby>北<rt>ㄅㄟˇ</rt></ruby></p>
+    <p style="margin-bottom: 12px">組合設定：<ruby style="ruby-position: over; ruby-align: center; ruby-overhang: none; --milestro-ruby-overflow: inline; --milestro-ruby-size: 0.6; --milestro-ruby-gap: 4">文字排版<rt>排版</rt></ruby></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">17 · 特殊字元與巢狀組合</font></p>
+    <p style="margin-bottom: 12px">特殊字元：&lt;tag&gt;・A &amp; B・&quot;引文&quot;・&apos;引文&apos;。數值參照：&#9733; &#x2605;。不換行空白：A&#160;B</p>
+    <p style="text-indent: 32px; font-kerning: normal; margin-bottom: 16px"><font color="#38bdf8" weight="600">繼承色彩與字重，<i>子層斜體，<u>再加上底線</u></i>。回到父層樣式。<font color="#f59e0b" size="40"><span cspace="2">新的色彩、字級與字距</span></font>。回到字級３２。</font>此處恢復一般文字。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">18 · 行內佔位框</font></p>
+    <p style="margin-bottom: 12px">分數：［<img width="24" height="24" key="coin-icon" />］１２００・狀態：［<img width="32" height="32" key="status-icon" />］準備完成</p>
+    <p style="margin-bottom: 12px">寬框：［<img width="64" height="24" />］・高框：［<img width="24" height="64" key="tall-icon" />］・<a href="milestro://action/reward" id="reward-link"><font color="#34d399"><u>獎勵［<img width="32" height="32" key="reward-icon" />］領取</u></font></a></p>
+    <p style="margin-bottom: 12px">括號之間的空白為預期效果。圖片標籤只保留幾何區域，不繪製圖片。寬度與高度須為正數，識別鍵可省略。請透過 TextBox.TryGetPlaceholderGeometrySnapshot 取得位置，再由應用程式繪製圖像。</p>
+</span></font>

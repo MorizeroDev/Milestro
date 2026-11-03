@@ -1,0 +1,117 @@
+<font size="32">
+    <p style="margin-top: 0px; margin-bottom: 6px"><font color="#7dd3fc" size="56" weight="700">Milestro Horizontal Rich Text Showcase</font></p>
+    <p style="margin-top: 0px; margin-bottom: 18px"><font color="#64748b">Supported tags, attributes and CSS declarations. Run with component font size 32 and auto font size disabled.</font></p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">01 · Inline Emphasis</font></p>
+    <p style="margin-bottom: 12px"><b>Bold (b)</b> / <strong>Bold (strong)</strong> / <i>Italic (i)</i> / <em>Italic (em)</em> / <u>Underline (u)</u> / <s>Strikethrough (s)</s> / <del>Strikethrough (del)</del></p>
+    <p style="margin-bottom: 12px"><b><i><u>Bold + italic + underline</u></i></b> / <u><s>Underline + strikethrough</s></u> / Normal text resumes after closing tags.</p>
+    <p style="margin-bottom: 16px">Subscript: H<sub>2</sub>O, CO<sub>2</sub> / Superscript: E = mc<sup>2</sup>, x<sup>2<sup>3</sup></sup> / Nested subscript: a<sub>i<sub>j</sub></sub></p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">02 · Font Size and Weight</font></p>
+    <p style="margin-bottom: 12px"><font size="24">24</font> / <font size="32">32 (base)</font> / <font size="40">40</font> / <font size="48">48</font> / <font size="32.5">32.5</font></p>
+    <p style="margin-bottom: 12px"><font weight="100">100 Thin</font> / <font weight="200">200 Extra Light</font> / <font weight="300">300 Light</font> / <font weight="400">400 Normal</font> / <font weight="500">500 Medium</font></p>
+    <p style="margin-bottom: 12px"><font weight="600">600 Semi Bold</font> / <font weight="700">700 Bold</font> / <font weight="800">800 Extra Bold</font> / <font weight="900">900 Black</font> / <font weight="1000">1000 Extra Black</font></p>
+    <p style="margin-bottom: 16px"><span weight="550">Span weight: 550</span> / <font size="40" weight="650" color="#38bdf8">Size + weight + color</font> / Numeric weights accept integers from 1 to 1000.</p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">03 · Text Color and Opacity</font></p>
+    <p style="margin-bottom: 12px"><font color="#f80">#RGB</font> / <font color="#38bdf8">#RRGGBB</font> / <font color="#38bdf880">#RRGGBBAA (50% alpha)</font> / <font color="4286578943">Unsigned RGBA integer (0xFF8000FF)</font></p>
+    <p style="margin-bottom: 16px"><font color="oklab(0.7 0.1 -0.1)">OKLab</font> / <font color="oklch(70% 0.15 250)">OKLCH</font> / <font color="oklch(70% 0.15 250 / 50%)">OKLCH with alpha</font></p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">04 · Font Families and Fallback</font></p>
+    <p style="margin-bottom: 12px"><font face="system-ui">system-ui</font> / <font face="sans-serif">sans-serif</font> / <font face="serif">serif</font> / <font face="monospace">monospace: 0123456789</font></p>
+    <p style="margin-bottom: 12px"><font face="&quot;Google Sans&quot;, system-ui">Quoted family name + fallback: Google Sans</font> / <span face="&quot;Source Han Sans VF&quot;, sans-serif">Span face: 思源黑体，字体回退</span></p>
+    <p style="margin-bottom: 12px"><font face="&quot;Google Sans&quot;, &quot;Source Han Sans VF&quot;, &quot;Noto Color Emoji&quot;, system-ui">Ordered fallback: Hello · 你好 · 日本語 · 😀 🎉 🌈</font></p>
+    <p style="margin-bottom: 16px">Bare names can resolve configured font keywords; double-quoted names select literal font families. Font face, width, slant and OpenType effects depend on available fonts.</p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">05 · Font Width and Slant</font></p>
+    <p style="margin-bottom: 12px"><span width="UltraCondensed">UltraCondensed</span> / <span width="ExtraCondensed">ExtraCondensed</span> / <span width="Condensed">Condensed</span> / <span width="SemiCondensed">SemiCondensed</span></p>
+    <p style="margin-bottom: 12px"><span width="Normal">Normal</span> / <span width="SemiExpanded">SemiExpanded</span> / <span width="Expanded">Expanded</span> / <span width="ExtraExpanded">ExtraExpanded</span> / <span width="UltraExpanded">UltraExpanded</span></p>
+    <p style="margin-bottom: 12px"><span slant="Upright">Upright</span> / <span slant="Italic">Italic</span> / <span slant="Oblique">Oblique</span> / <i>Italic parent, <span slant="Upright">upright child</span>, italic again</i></p>
+    <p style="margin-bottom: 16px"><span face="sans-serif" weight="700" width="Condensed" slant="Italic">Family + weight + width + slant</span></p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">06 · Letter Spacing and Font Scale</font></p>
+    <p style="margin-bottom: 12px"><span cspace="-1">cspace = -1: TIGHT</span> / <span cspace="0">cspace = 0: NORMAL</span> / <span cspace="2">cspace = 2: SPACED</span> / <span cspace="6">cspace = 6: WIDE</span></p>
+    <p style="margin-bottom: 12px"><span fscale="0.5">fscale = 0.5 (16)</span> / <span fscale="1">fscale = 1 (32)</span> / <span fscale="1.5">fscale = 1.5 (48)</span></p>
+    <p style="margin-bottom: 16px"><font size="40"><span fscale="0.8">Explicit size 40 × scale 0.8 = 32</span></font> / <span fscale="1.5">48 outside, <span fscale="1">32 inside</span>, 48 again</span></p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">07 · Baseline Shift and Script Sizing</font></p>
+    <p style="margin-bottom: 12px">Baseline / <span voffset="12">voffset = 12 (raised)</span> / Baseline / <span voffset="-8">voffset = -8 (lowered)</span> / Baseline</p>
+    <p style="margin-bottom: 12px">Baseline / <span voffset-em="0.5">voffset-em = 0.5 (raised 16 at size 32)</span> / <span voffset-em="-0.25">voffset-em = -0.25 (lowered 8)</span></p>
+    <p style="margin-bottom: 12px">Manual superscript: x<span fscale="0.5" voffset-em="0.5">2</span> / Manual subscript: H<span fscale="0.5" voffset-em="-0.25">2</span>O / Automatic: x<sup>2</sup>, H<sub>2</sub>O</p>
+    <p style="margin-bottom: 16px">Absolute offset takes precedence: <span voffset="0" voffset-em="0.5">voffset = 0 overrides voffset-em = 0.5</span>. Sup/sub halve the inherited font scale and accumulate em offsets when nested; em shifts use the font size before fscale.</p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">08 · Locale and Multilingual Text</font></p>
+    <p style="margin-bottom: 12px"><span lang="en">en: Typography and shaping</span> / <span lang="zh-Hans">zh-Hans: 简体中文，骨直令</span> / <span lang="zh-Hant">zh-Hant: 繁體中文，骨直令</span></p>
+    <p style="margin-bottom: 16px"><span lang="ja">ja: 日本語の組版，骨直令</span> / <span lang="ko">ko: 한글 타이포그래피</span> / <span lang="ar">ar: العربية</span> / <span lang="hi">hi: नमस्ते</span> / Emoji: 😀 👩‍💻 🏳️‍🌈</p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">09 · Paragraphs, Line Breaks and Alignment</font></p>
+    <p style="margin-bottom: 12px">One paragraph, first line.<br />Second line after &lt;br /&gt;.<br />Third line in the same paragraph.</p>
+    <p align="Left" style="margin-bottom: 12px">Left: the paragraph is aligned to the left edge.</p>
+    <p align="Center" style="margin-bottom: 12px">Center: the paragraph is centered.</p>
+    <p align="Right" style="margin-bottom: 12px">Right: the paragraph is aligned to the right edge.</p>
+    <p align="Justify" style="margin-bottom: 12px">Justify: this longer paragraph demonstrates automatic line wrapping and justified spacing. Resize the text box to compare how words fill each wrapped line. Each paragraph keeps its own alignment while the final line follows the paragraph's normal ending behavior.</p>
+    <p align="Start" dir="Ltr" style="margin-bottom: 12px">Start with Ltr: alignment follows the start of the writing direction.</p>
+    <p align="End" dir="Ltr" style="margin-bottom: 16px">End with Ltr: alignment follows the end of the writing direction.</p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">10 · Text Direction and Bidirectional Layout</font></p>
+    <p dir="Ltr" align="Start" style="margin-bottom: 12px">Ltr + Start: English 123 · <span lang="ar">مرحبا بالعالم</span> · English again.</p>
+    <p dir="Rtl" align="Start" style="margin-bottom: 12px"><span lang="ar">من اليمين إلى اليسار: مرحباً بالعالم ١٢٣</span> / Rtl + Start</p>
+    <p dir="Rtl" align="End" style="margin-bottom: 12px"><span lang="ar">محاذاة نهاية الفقرة: مرحباً بالعالم</span> / Rtl + End</p>
+    <p dir="Rtl" align="Right" style="margin-bottom: 16px"><span lang="he">שלום עולם</span> / <span lang="ar">العربية</span> / English 2026 / Mixed scripts in one paragraph.</p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">11 · First Line Indent</font></p>
+    <p style="text-indent: 0; margin-bottom: 12px">text-indent: 0 — the first line starts at the normal paragraph edge. Wrapped lines use the same edge.</p>
+    <p style="text-indent: 64px; margin-bottom: 12px">text-indent: 64px — the first line begins 64 text units inward. This paragraph is long enough to wrap in a narrow text box, making it easy to compare the indented first line with the remaining lines.</p>
+    <p style="text-indent: 10%; margin-bottom: 12px">text-indent: 10% — the first line indent scales with the paragraph layout width. Resize the text box to see the indent change while the following lines retain their normal starting edge.</p>
+    <p style="text-indent: -3em; margin-bottom: 16px">text-indent: -3em — a negative value moves the first line outward. Allow space around the text box to see the hanging first line.</p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">12 · Paragraph Margins</font></p>
+    <p style="margin-top: 0; margin-bottom: 0">Zero margins: margin-top: 0; margin-bottom: 0.</p>
+    <p style="margin-top: 16px; margin-bottom: 24px">Pixel margins: margin-top: 16px; margin-bottom: 24px.</p>
+    <p style="margin-top: 1em; margin-bottom: 0.5em">Font-relative margins: margin-top: 1em; margin-bottom: 0.5em. Block margins use the component font size (32), not the outer font tag.</p>
+    <p style="margin-top: 1%; margin-bottom: 1%">Percentage margins: margin-top: 1%; margin-bottom: 1%. Percentages use the container height.</p>
+    <p style="margin-top: 0; margin-bottom: 16px">Margin collapse, paragraph A: bottom margin = 16px.</p>
+    <p style="margin-top: 32px; margin-bottom: 16px">Margin collapse, paragraph B: top margin = 32px. The shared margin is 32px; component paragraph spacing is added separately.</p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">13 · Font Kerning</font></p>
+    <p style="margin-bottom: 12px"><span style="font-kerning: normal">normal: AVATAR · To Wa Yo</span> / <span style="font-kerning: none">none: AVATAR · To Wa Yo</span> / <span style="font-kerning: auto">auto: AVATAR · To Wa Yo</span></p>
+    <p style="margin-bottom: 12px"><span style="font-kerning: none">Parent none: AVATAR / <span style="font-kerning: normal">child normal: AVATAR</span> / <span style="font-kerning: auto">child auto: AVATAR</span> / parent none again: AVATAR</span></p>
+    <p style="font-kerning: normal; margin-bottom: 16px">Paragraph style: AVATAR / <font style="font-kerning: none">Font style: AVATAR</font> / <span style="font-kerning: normal">Span style: AVATAR</span></p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">14 · OpenType Font Features</font></p>
+    <p style="margin-bottom: 12px"><span style="font-feature-settings: 'liga'">Implicit value 1: office affine ffi fl</span> / <span style="font-feature-settings: 'liga' on">Explicit on: office affine ffi fl</span> / <span style="font-feature-settings: 'liga' off">Explicit off: office affine ffi fl</span></p>
+    <p style="margin-bottom: 12px"><span style="font-feature-settings: 'tnum' 1, 'pnum' 0">Tabular numerals: 1111 2222 8888 0123456789</span> / <span style="font-feature-settings: 'pnum' 1, 'tnum' 0">Proportional numerals: 1111 2222 8888</span></p>
+    <p style="margin-bottom: 12px"><span style="font-feature-settings: 'smcp' 1">Small capitals: Typography</span> / <span style="font-feature-settings: 'frac' 1">Fractions: 1/2 3/4 5/8</span> / <span style="font-feature-settings: 'salt' 2">Alternate value 2: abcde</span></p>
+    <p style="margin-bottom: 12px"><span style="font-feature-settings: 'liga' 0, 'kern' 0">Parent features disabled: office AVATAR / <span style="font-feature-settings: normal">Child clears all features: office AVATAR</span> / disabled again: office AVATAR</span></p>
+    <p style="font-feature-settings: 'kern' 1; margin-bottom: 12px">Paragraph feature settings: AVATAR / <font style="font-feature-settings: 'liga' 1">Font feature settings: office</font> / <span style="font-feature-settings: 'liga' 0">Span feature settings: office</span></p>
+    <p style="margin-bottom: 12px"><span style="font-feature-settings: 'chws' 1">CJK punctuation compression on: 「你好」，世界。</span> / <span style="font-feature-settings: 'chws' 0">Off: 「你好」，世界。</span></p>
+    <p style="margin-bottom: 16px"><span style="font-kerning: none; font-feature-settings: 'kern' 1, 'liga' 1">Combined CSS: explicit 'kern' in font-feature-settings takes precedence over font-kerning.</span></p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">15 · Links and Link Identifiers</font></p>
+    <p style="margin-bottom: 12px"><a href="https://example.com"><font color="#38bdf8"><u>Link with href</u></font></a> / <a href="https://example.com/details?from=milestro&amp;view=demo" id="details-link"><font color="#a78bfa"><b><u>Link with href + id + nested styling</u></b></font></a></p>
+    <p style="margin-bottom: 12px">Links report href and id through TextBox events; the application handles navigation.</p>
+    <p style="margin-bottom: 12px"><a href="milestro://action/open" id="action-link"><font color="#34d399"><u>Custom action URI</u></font></a> / Link color and underline are supplied by the nested formatting tags.</p>
+    <a href="https://example.com/article" id="paragraph-link"><p style="margin-bottom: 6px"><font color="#38bdf8"><u>One link can wrap a whole paragraph.</u></font></p><p style="margin-bottom: 16px"><font color="#38bdf8"><u>The same link can continue across another paragraph.</u></font></p></a>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">16 · Ruby Annotations</font></p>
+    <p style="margin-top: 16px; margin-bottom: 16px">Default ruby: <ruby>漢字<rt>かんじ</rt></ruby> / <ruby>Milestro<rt>mi-les-tro</rt></ruby> / Default annotation size is 50%, gap is 2, position is over, alignment is space-around, overhang is auto, overflow preserves the base.</p>
+    <p style="margin-top: 16px; margin-bottom: 16px">Position: <ruby style="ruby-position: over">東京<rt>とうきょう</rt></ruby> (over) / <ruby style="ruby-position: under">東京<rt>とうきょう</rt></ruby> (under)</p>
+    <p style="margin-top: 16px; margin-bottom: 16px">Alignment: <ruby style="ruby-align: start">Typography<rt>type</rt></ruby> (start) / <ruby style="ruby-align: center">Typography<rt>type</rt></ruby> (center)</p>
+    <p style="margin-top: 16px; margin-bottom: 16px">Alignment: <ruby style="ruby-align: space-around">Typography<rt>type</rt></ruby> (space-around) / <ruby style="ruby-align: space-between">Typography<rt>type</rt></ruby> (space-between)</p>
+    <p style="margin-top: 16px; margin-bottom: 16px">Overhang none: 前<ruby style="ruby-overhang: none">字<rt>ながいよみかた</rt></ruby>後 / Overhang auto: 前<ruby style="ruby-overhang: auto">字<rt>ながいよみかた</rt></ruby>後</p>
+    <p style="margin-top: 16px; margin-bottom: 16px">Preserve base: 前<ruby style="--milestro-ruby-overflow: preserve-base; ruby-overhang: none">字<rt>ながいよみかた</rt></ruby>後 / Inline overflow: 前<ruby style="--milestro-ruby-overflow: inline; ruby-overhang: none">字<rt>ながいよみかた</rt></ruby>後</p>
+    <p style="margin-top: 16px; margin-bottom: 16px">Annotation size: <ruby style="--milestro-ruby-size: 0.5">漢字<rt>かんじ</rt></ruby> (0.5 = 16 at base 32) / <ruby style="--milestro-ruby-size: 0.75">漢字<rt>かんじ</rt></ruby> (0.75 = 24)</p>
+    <p style="margin-top: 16px; margin-bottom: 16px">Annotation gap: <ruby style="--milestro-ruby-gap: 0">漢字<rt>かんじ</rt></ruby> (0) / <ruby style="--milestro-ruby-gap: 8">漢字<rt>かんじ</rt></ruby> (8)</p>
+    <p style="margin-top: 16px; margin-bottom: 16px">Fallback parentheses: <ruby>漢字<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby> / The rp content is accepted and omitted from the rendered ruby.</p>
+    <p style="margin-top: 16px; margin-bottom: 16px">Styled base: <ruby><font color="#f59e0b"><b>漢字</b></font><rt>かんじ</rt></ruby> / Adjacent groups: <ruby>東<rt>とう</rt></ruby><ruby>京<rt>きょう</rt></ruby></p>
+    <p style="margin-top: 16px; margin-bottom: 16px">Combined ruby CSS: <ruby style="ruby-position: over; ruby-align: center; ruby-overhang: none; --milestro-ruby-overflow: inline; --milestro-ruby-size: 0.6; --milestro-ruby-gap: 4">排版<rt>typography</rt></ruby></p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">17 · Escaping and Nested Composition</font></p>
+    <p style="margin-bottom: 12px">XML entities: &lt;tag&gt; / A &amp; B / &quot;quoted&quot; / &apos;apostrophe&apos; / Numeric references: &#9733; &#x2605; / Non-breaking space: A&#160;B</p>
+    <p style="text-indent: 32px; font-kerning: normal; margin-bottom: 16px"><font color="#38bdf8" weight="600">Inherited color and weight, <i>italic child, <u>underlined child</u></i>, back to the parent. <font color="#f59e0b" size="40"><span cspace="2">New color + size + spacing</span></font>, back to size 32.</font> Normal text resumes here.</p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">18 · Inline Placeholders</font></p>
+    <p style="margin-bottom: 12px">Score: [<img width="24" height="24" key="coin-icon" />] 1200 / Status: [<img width="32" height="32" key="status-icon" />] Ready</p>
+    <p style="margin-bottom: 12px">Wide box: [<img width="64" height="24" />] / Tall box: [<img width="24" height="64" key="tall-icon" />] / <a href="milestro://action/reward" id="reward-link"><font color="#34d399"><u>Reward [<img width="32" height="32" key="reward-icon" />] claim</u></font></a></p>
+    <p style="margin-bottom: 16px">The gaps in brackets are intentional: img reserves geometry but paints no image. Width and height are required positive numbers; key is optional. Use TextBox.TryGetPlaceholderGeometrySnapshot to position application visuals.</p>
+</font>

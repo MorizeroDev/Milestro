@@ -69,6 +69,12 @@ Use these when you already have a scene working:
 - [Coming from TextMesh Pro](guides/coming-from-tmpro.md): map TMP concepts to
   Milestro components and avoid one-to-one assumptions.
 
+## Examples
+
+- [Rich text showcases](examples/README.md): ready-to-paste English horizontal,
+  Japanese vertical, and Traditional Chinese vertical XML covering styles,
+  layout, links, Ruby, and inline placeholders.
+
 ## Reference
 
 Reference pages describe exact behavior and advanced configuration:
