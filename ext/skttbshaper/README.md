@@ -11,6 +11,6 @@ The module builds the static target `milestro_skttbshaper`, also available as
 Unity dependency. It reuses the HarfBuzz library already built for the `skia`
 target and does not compile a second HarfBuzz or SkShaper.
 
-See [the TTB target contract](../../docs/reference/ttb-shaper-target.md) for the
-dependency contract and [the vertical text research](../../docs/reference/vertical-text-research.md)
+See [the vertical writing guide](../../docs/en/guides/text.md#vertical-writing) for the
+Unity feature scope and [the layout reference](../../docs/en/reference/layout-engine.md)
 for the shaping behavior and future paragraph integration boundary.

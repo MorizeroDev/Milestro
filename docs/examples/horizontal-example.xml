@@ -114,4 +114,27 @@
     <p style="margin-bottom: 12px">Score: [<img width="24" height="24" key="coin-icon" />] 1200 / Status: [<img width="32" height="32" key="status-icon" />] Ready</p>
     <p style="margin-bottom: 12px">Wide box: [<img width="64" height="24" />] / Tall box: [<img width="24" height="64" key="tall-icon" />] / <a href="milestro://action/reward" id="reward-link"><font color="#34d399"><u>Reward [<img width="32" height="32" key="reward-icon" />] claim</u></font></a></p>
     <p style="margin-bottom: 16px">The gaps in brackets are intentional: img reserves geometry but paints no image. Width and height are required positive numbers; key is optional. Use TextBox.TryGetPlaceholderGeometrySnapshot to position application visuals.</p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">19 · Inline Wrapping</font></p>
+    <p style="margin-bottom: 12px">Normal: Alpha Beta Gamma Delta / No wrap: <span style="white-space: nowrap">Alpha Beta Gamma Delta</span>. Narrow the viewport to compare.</p>
+    <p style="margin-bottom: 12px"><span style="white-space: nowrap">No soft breaks here / <span style="white-space: normal">this nested range can wrap at spaces again</span> / no soft breaks here.</span></p>
+    <p style="margin-bottom: 12px"><span style="white-space: nowrap">Hard breaks remain active:<br/>Alpha Beta Gamma</span></p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">20 · Case Conversion and Small Caps</font></p>
+    <p style="margin-bottom: 12px"><span lang="en" style="text-transform: lowercase">LOWERCASE AbCd</span> / <span lang="de" style="text-transform: uppercase">uppercase Straße</span> / <span style="text-transform: smallcaps">Small Caps AbCd</span></p>
+    <p style="margin-bottom: 12px"><span lang="tr" style="text-transform: uppercase">istanbul / <span style="text-transform: none">Original AbCd</span> / istanbul</span>. Small caps scales original lowercase letters to 80%; OpenType smcp above is font-dependent.</p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">21 · Text Backgrounds</font></p>
+    <p style="margin-bottom: 12px"><mark><font color="#172554">Default yellow</font></mark> / <mark style="background-color: #3366ff80">Translucent blue</mark> / <span style="background-color: #14532d">Span background</span></p>
+    <p style="margin-bottom: 12px"><span style="background-color: #7c2d12">Inherited background / <span style="background-color: transparent">transparent child</span> / inherited again</span></p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">22 · Four-Sided Margins</font></p>
+    <p style="margin: 16px 48px 24px 80px">Four values: top 16, right 48, bottom 24, left 80. Both horizontal insets apply to every wrapped line. Resize the viewport to compare this paragraph with the next.</p>
+    <p style="margin: 12px 2em">Two values: top/bottom 12px, left/right 2em.</p>
+    <p style="margin: 12px; margin-left: 10%; margin-right: 10%">Later longhands override shorthand: each horizontal inset is 10% of the container width.</p>
+
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">23 · Element Geometry and Empty Anchors</font></p>
+    <p id="chapter-anchor"></p>
+    <p id="geometry-paragraph" style="margin-bottom: 12px">Query <span id="geometry-span"><b>this styled range</b></span>, the whole paragraph, or the empty anchor immediately above by id.</p>
+    <p style="margin-bottom: 12px">Image geometry: [<img id="geometry-image" width="32" height="32" key="geometry-icon"/>]. IDs do not navigate automatically; the application queries their content and Canvas rectangles.</p>
 </font>

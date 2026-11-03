@@ -42,7 +42,7 @@ These overlays are preserved by `scripts/vendor-skia-modules.sh`; its `overlay_p
 array supplies both upstream conflict detection and synchronization exclusions,
 including the vertical layout, metrics, painter, shaping, style, and cache overlays.
 
-See [horizontal Ruby](../../docs/reference/ruby-layout.md) for the API and layout policy.
+See [horizontal Ruby](../../docs/en/reference/ruby-layout.md) for the API and layout policy.
 
 When updating Skia, compare the old and new upstream revisions for the preserved paths,
 merge those changes into the vendor tree, then run the vendor script with the new revision

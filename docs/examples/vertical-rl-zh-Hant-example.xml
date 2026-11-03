@@ -115,4 +115,26 @@
     <p style="margin-bottom: 12px">分數：［<img width="24" height="24" key="coin-icon" />］１２００・狀態：［<img width="32" height="32" key="status-icon" />］準備完成</p>
     <p style="margin-bottom: 12px">寬框：［<img width="64" height="24" />］・高框：［<img width="24" height="64" key="tall-icon" />］・<a href="milestro://action/reward" id="reward-link"><font color="#34d399"><u>獎勵［<img width="32" height="32" key="reward-icon" />］領取</u></font></a></p>
     <p style="margin-bottom: 12px">括號之間的空白為預期效果。圖片標籤只保留幾何區域，不繪製圖片。寬度與高度須為正數，識別鍵可省略。請透過 TextBox.TryGetPlaceholderGeometrySnapshot 取得位置，再由應用程式繪製圖像。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">19 · 範圍內換欄控制</font></p>
+    <p>一般換欄：春夏秋冬花鳥風月。不換欄：<span style="white-space: nowrap">春夏秋冬花鳥風月</span>。調整視口高度比較兩者。</p>
+    <p><span style="white-space: nowrap">禁止軟換欄<span style="white-space: normal">此範圍恢復一般換欄行為</span>再次禁止軟換欄</span></p>
+    <p><span style="white-space: nowrap">明確換欄仍然有效：<br/>春夏秋冬</span></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">20 · 大小寫與小型大寫</font></p>
+    <p><span lang="en" style="text-transform: lowercase">LOWERCASE AbCd</span>・<span lang="de" style="text-transform: uppercase">Straße</span>・<span style="text-transform: smallcaps">Small Caps AbCd</span></p>
+    <p><span lang="tr" style="text-transform: uppercase">istanbul<span style="text-transform: none"> AbCd </span>istanbul</span>。smallcaps 將原小寫字母轉為大寫，並使用八成字級；不是字型的 OpenType 小型大寫功能。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">21 · 文字背景</font></p>
+    <p><mark><font color="#172554">預設黃色</font></mark>・<mark style="background-color: #3366ff80">半透明藍色</mark>・<span style="background-color: #14532d">範圍背景</span></p>
+    <p><span style="background-color: #7c2d12">繼承背景<span style="background-color: transparent">透明子元素</span>恢復繼承背景</span></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">22 · 四側段落邊距</font></p>
+    <p style="margin: 24px 48px 40px 12px">上二十四、右四十八、下四十、左十二。上下邊距縮小每欄的文字範圍，右左邊距控制段落前後間隔。</p>
+    <p style="margin: 1em 12px; margin-top: 10%; margin-bottom: 10%">先設定兩值簡寫，再以百分比覆寫上下邊距。調整視口高度觀察差異。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">23 · 元素位置與空錨點</font></p>
+    <p id="chapter-anchor"></p>
+    <p id="geometry-paragraph">可依識別碼查詢<span id="geometry-span"><b>這段文字</b></span>、整個段落，或前面的空段落。</p>
+    <p>圖片位置：［<img id="geometry-image" width="32" height="32" key="geometry-icon"/>］。直排使用 ContentRect.x 取得水平內容位置；跳轉由應用程式處理。</p>
 </span></font>

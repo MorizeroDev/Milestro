@@ -115,4 +115,26 @@
     <p style="margin-bottom: 12px">得点：［<img width="24" height="24" key="coin-icon" />］１２００・状態：［<img width="32" height="32" key="status-icon" />］準備完了</p>
     <p style="margin-bottom: 12px">横長：［<img width="64" height="24" />］・縦長：［<img width="24" height="64" key="tall-icon" />］・<a href="milestro://action/reward" id="reward-link"><font color="#34d399"><u>報酬［<img width="32" height="32" key="reward-icon" />］を受け取る</u></font></a></p>
     <p style="margin-bottom: 12px">括弧の間の空白は意図した表示です。画像タグは領域だけを確保し、画像自体は描きません。幅と高さは正の数で指定し、キーは省略できます。配置情報は TextBox.TryGetPlaceholderGeometrySnapshot から取得し、アプリ側で描画してください。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">19 · 範囲内の改段制御</font></p>
+    <p>通常：春夏秋冬花鳥風月。改段なし：<span style="white-space: nowrap">春夏秋冬花鳥風月</span>。表示領域の高さを変えて比較します。</p>
+    <p><span style="white-space: nowrap">改段なし<span style="white-space: normal">この範囲は通常どおり改段します</span>再び改段なし</span></p>
+    <p><span style="white-space: nowrap">明示的な改段は有効：<br/>春夏秋冬</span></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">20 · 大文字と小文字</font></p>
+    <p><span lang="en" style="text-transform: lowercase">LOWERCASE AbCd</span>・<span lang="de" style="text-transform: uppercase">Straße</span>・<span style="text-transform: smallcaps">Small Caps AbCd</span></p>
+    <p><span lang="tr" style="text-transform: uppercase">istanbul<span style="text-transform: none"> AbCd </span>istanbul</span>。smallcaps は元の小文字を大文字に変換し、字級を八割にします。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">21 · 文字の背景</font></p>
+    <p><mark><font color="#172554">既定の黄色</font></mark>・<mark style="background-color: #3366ff80">半透明の青</mark>・<span style="background-color: #14532d">範囲の背景</span></p>
+    <p><span style="background-color: #7c2d12">背景を継承<span style="background-color: transparent">透明な子要素</span>継承に戻る</span></p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">22 · 四辺の段落余白</font></p>
+    <p style="margin: 24px 48px 40px 12px">上二十四、右四十八、下四十、左十二。上下の余白は各列の文字領域を狭め、右と左は段落前後の間隔になります。</p>
+    <p style="margin: 1em 12px; margin-top: 10%; margin-bottom: 10%">二値の指定を上下の百分率で上書きします。表示領域の高さを変えて比較します。</p>
+
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">23 · 要素の位置と空の目印</font></p>
+    <p id="chapter-anchor"></p>
+    <p id="geometry-paragraph"><span id="geometry-span"><b>この文字範囲</b></span>、段落全体、直前の空の段落を識別子で検索できます。</p>
+    <p>画像の位置：［<img id="geometry-image" width="32" height="32" key="geometry-icon"/>］。直排では ContentRect.x が横方向の内容位置を表します。移動はアプリで実装します。</p>
 </span></font>
