@@ -16,3 +16,6 @@
 [submodule "ext/icu"]
 	path = ext/icu
 	url = https://github.com/ParaParty/icu.git
+[submodule "ext/markdig"]
+	path = ext/markdig
+	url = https://github.com/xoofx/markdig.git
