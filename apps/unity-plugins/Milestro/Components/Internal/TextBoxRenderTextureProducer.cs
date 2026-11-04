@@ -1,5 +1,6 @@
 using System;
 using Milestro.Model;
+using Milestro.RichTextParser;
 using Milestro.Skia;
 using Milestro.Util;
 #if UNITY_EDITOR
@@ -18,8 +19,10 @@ namespace Milestro.Components.Internal
         [SerializeField]
         private string m_content = "";
 
-        [SerializeField, InspectorName("Enable RichText")]
-        private bool m_enableRichText;
+        [SerializeField, InspectorName("Rich Text Parser")]
+        [RichTextParserId]
+        [Tooltip("Id of the parser used to render content as rich text. Empty renders content as plain text.")]
+        private string? m_richTextParserId;
 
         [SerializeField]
         private Margin m_margin = new Margin();
@@ -345,17 +348,18 @@ namespace Milestro.Components.Internal
             }
         }
 
-        public bool enableRichText
+        public string? richTextParserId
         {
-            get => m_enableRichText;
+            get => m_richTextParserId;
             set
             {
-                if (m_enableRichText == value)
+                var nextValue = string.IsNullOrEmpty(value) ? null : value;
+                if (string.Equals(m_richTextParserId, nextValue, StringComparison.Ordinal))
                 {
                     return;
                 }
 
-                m_enableRichText = value;
+                m_richTextParserId = nextValue;
                 MarkContentChanged();
             }
         }

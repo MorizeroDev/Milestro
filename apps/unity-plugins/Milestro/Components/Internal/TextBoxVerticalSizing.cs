@@ -37,9 +37,7 @@ namespace Milestro.Components.Internal
         public TextBoxVerticalIntrinsicMeasurement(TextBoxRenderTargetSettings settings)
         {
             this.settings = settings;
-            var parser = new RichTextParser.RichTextParser();
-            parser.ParseText(settings.Content, settings.EnableRichText);
-            payload = parser.ConvertToSegments(allowViewportBlockMargins: true);
+            payload = settings.ParseContent(allowViewportBlockMargins: true);
             ZeroPercentageTextIndent(payload);
             using var paragraphStyle = settings.ParagraphStyle.ToParagraphStyle(
                 settings.TextOverflow == TextOverflow.Ellipsis);

@@ -378,7 +378,8 @@ namespace Milestro.Components.Internal
                    string.Equals(settings.Content,
                        cachedRequestedSettings.Content,
                        StringComparison.Ordinal) &&
-                   settings.EnableRichText == cachedRequestedSettings.EnableRichText &&
+                   string.Equals(settings.ParserId, cachedRequestedSettings.ParserId,
+                       StringComparison.Ordinal) &&
                    TextBoxVerticalLayoutSupport.MarginsEqual(settings.Margin,
                        cachedRequestedSettings.Margin) &&
                    ReferenceEquals(settings.ParagraphStyle, cachedRequestedSettings.ParagraphStyle) &&

@@ -4,6 +4,7 @@ using System.IO;
 using Milestro.Components;
 using Milestro.Components.Internal;
 using Milestro.Model;
+using Milestro.RichTextParser;
 using UnityEngine;
 using UnityEngine.UI;
 using RenderTextureAtlas = Milestro.Skia.RenderTextureAtlas;
@@ -221,7 +222,7 @@ namespace Milestro.Tests.TextBoxVertical
             rect.sizeDelta = new Vector2(200f, 160f);
             rect.anchoredPosition = position;
             var producer = child.AddComponent<TextBoxRenderTextureProducer>();
-            producer.enableRichText = true;
+            producer.richTextParserId = XmlRichTextParser.Id;
             producer.content = content;
             producer.margin = Margin.FixedZero();
             producer.paragraphStyle.writingMode = writingMode;

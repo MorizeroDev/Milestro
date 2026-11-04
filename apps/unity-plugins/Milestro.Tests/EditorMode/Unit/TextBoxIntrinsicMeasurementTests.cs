@@ -1,6 +1,7 @@
 using Milestro.Components.Internal;
 using Milestro.Extensions;
 using Milestro.Model;
+using Milestro.RichTextParser;
 using NUnit.Framework;
 
 namespace Milestro.Tests
@@ -14,7 +15,7 @@ namespace Milestro.Tests
             const string content = "互联网小章鱼1";
             var settings = new TextBoxRenderTargetSettings(content, new Margin(),
                 new ParagraphStyleSettings(), new TextStyleSettings { size = 36f },
-                wrapMode, TextOverflow.Clip);
+                XmlRichTextParser.Id, wrapMode, TextOverflow.Clip);
             using var measurement = new TextBoxIntrinsicMeasurement(settings);
             var parser = new Milestro.RichTextParser.RichTextParser();
             parser.ParseText(content);
@@ -111,9 +112,9 @@ namespace Milestro.Tests
             var style = new ParagraphStyleSettings { paragraphSpacing = 9f };
             var textStyle = new TextStyleSettings { size = 20f };
             var baselineSettings = new TextBoxRenderTargetSettings(baseline, new Margin(), style,
-                textStyle, wrapMode, TextOverflow.Clip);
+                textStyle, XmlRichTextParser.Id, wrapMode, TextOverflow.Clip);
             var settings = new TextBoxRenderTargetSettings(content, new Margin(), style,
-                textStyle, wrapMode, TextOverflow.Clip);
+                textStyle, XmlRichTextParser.Id, wrapMode, TextOverflow.Clip);
             using var expected = new TextBoxIntrinsicMeasurement(baselineSettings);
             using var actual = new TextBoxIntrinsicMeasurement(settings);
             using var baselineTarget = new TextBoxRenderTarget();
@@ -147,6 +148,7 @@ namespace Milestro.Tests
                 new Margin(),
                 paragraphStyle,
                 textStyle,
+                XmlRichTextParser.Id,
                 TextBoxWrapMode.Wrap,
                 overflow);
             return new TextBoxIntrinsicMeasurement(settings);

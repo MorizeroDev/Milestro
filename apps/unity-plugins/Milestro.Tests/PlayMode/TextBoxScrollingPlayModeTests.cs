@@ -3,6 +3,7 @@ using Milestro.Components;
 using Milestro.Components.Internal;
 using Milestro.Configuration;
 using Milestro.Model;
+using Milestro.RichTextParser;
 using Milestro.Skia;
 using NUnit.Framework;
 using UnityEngine;
@@ -125,7 +126,7 @@ namespace Milestro.Tests
             child.transform.SetParent(root.transform, false);
             child.GetComponent<RectTransform>().sizeDelta = new Vector2(200f, 100f);
             producer = child.AddComponent<TextBoxRenderTextureProducer>();
-            producer.enableRichText = true;
+            producer.richTextParserId = XmlRichTextParser.Id;
             producer.textOverflow = TextOverflow.Overflow;
             producer.wrapMode = wrapMode;
             producer.content = content;

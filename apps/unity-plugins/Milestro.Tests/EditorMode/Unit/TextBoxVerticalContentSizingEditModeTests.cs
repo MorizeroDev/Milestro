@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Milestro.Components;
 using Milestro.Components.Internal;
 using Milestro.Model;
+using Milestro.RichTextParser;
 using Milestro.Skia;
 using NUnit.Framework;
 using UnityEngine;
@@ -164,7 +165,7 @@ namespace Milestro.Tests
             layout.widthMode = TextWidthMode.MaxContent;
             layout.heightMode = TextHeightMode.Fixed;
             producer.margin.Left = new MarginValue
-                { Value = 10f, Unit = MarginUnit.ContainerPercent };
+            { Value = 10f, Unit = MarginUnit.ContainerPercent };
             producer.margin.Top = new MarginValue { Value = 10f, Unit = MarginUnit.Vw };
             producer.margin.Right = new MarginValue { Value = 10f, Unit = MarginUnit.Vh };
             producer.margin.Bottom = new MarginValue { Value = 1f, Unit = MarginUnit.Em };
@@ -185,9 +186,9 @@ namespace Milestro.Tests
             layout.widthMode = TextWidthMode.MaxContent;
             layout.heightMode = TextHeightMode.Fixed;
             producer.margin.Left = new MarginValue
-                { Auto = true, Value = 9f, Unit = MarginUnit.ContainerPercent };
+            { Auto = true, Value = 9f, Unit = MarginUnit.ContainerPercent };
             producer.margin.Right = new MarginValue
-                { Auto = true, Value = 2f, Unit = MarginUnit.Em };
+            { Auto = true, Value = 2f, Unit = MarginUnit.Em };
             var automatic = producer.ResolveSizing();
 
             producer.margin.Left.Auto = false;
@@ -254,6 +255,7 @@ namespace Milestro.Tests
                 margin,
                 VerticalStyle(),
                 TextStyle(),
+                XmlRichTextParser.Id,
                 TextBoxWrapMode.Wrap,
                 TextOverflow.Clip,
                 sizing: new TextSizingResult(
@@ -294,7 +296,7 @@ namespace Milestro.Tests
             producer.paragraphStyle = VerticalStyle();
             producer.textStyle = TextStyle();
             producer.margin.Left = new MarginValue
-                { Value = 10f, Unit = MarginUnit.ContainerPercent };
+            { Value = 10f, Unit = MarginUnit.ContainerPercent };
             producer.margin.Right = new MarginValue { Value = 10f, Unit = MarginUnit.Vw };
             layout.widthMode = TextWidthMode.MaxContent;
             layout.heightMode = TextHeightMode.Fixed;
@@ -766,7 +768,7 @@ namespace Milestro.Tests
             rect = (RectTransform)child.transform;
             rect.sizeDelta = new Vector2(300f, 200f);
             var producer = child.AddComponent<TextBoxRenderTextureProducer>();
-            producer.enableRichText = true;
+            producer.richTextParserId = XmlRichTextParser.Id;
             producer.content = content;
             producer.paragraphStyle = VerticalStyle();
             producer.textStyle = TextStyle();
@@ -815,6 +817,7 @@ namespace Milestro.Tests
                 new Margin(),
                 paragraphStyle,
                 textStyle,
+                XmlRichTextParser.Id,
                 TextBoxWrapMode.Wrap,
                 TextOverflow.Clip);
         }

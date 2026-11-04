@@ -32,7 +32,7 @@ on the same GameObject.
 | Member | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `content` | `string` | `""` | Plain text or supported rich text |
-| `enableRichText` | `bool` | `false` | Parse Milestro markup instead of rendering content literally |
+| `richTextParserId` | `string?` | `null` | Id of the registered rich text parser for content; `null` renders literally |
 | `margin` | `Margin` | all zero | Inset around the paragraph viewport |
 | `textStyle` | `TextStyleSettings` | see below | Run-level typography |
 | `paragraphStyle` | `ParagraphStyleSettings` | see below | Paragraph alignment and block behavior |

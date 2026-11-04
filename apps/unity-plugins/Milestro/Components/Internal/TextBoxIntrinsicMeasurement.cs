@@ -34,9 +34,7 @@ namespace Milestro.Components.Internal
             }
 
             this.settings = settings;
-            var parser = new RichTextParser.RichTextParser();
-            parser.ParseText(settings.Content, settings.EnableRichText);
-            payload = parser.ConvertToSegments();
+            payload = settings.ParseContent();
             using var paragraphStyle = settings.ParagraphStyle.ToParagraphStyle(false);
             paragraphStyle.ClearMaxLines();
             using var textStyle = settings.TextStyle.ToTextStyle();

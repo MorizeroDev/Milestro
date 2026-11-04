@@ -10,12 +10,12 @@ namespace Milestro.Components.Internal
                 producer.margin,
                 producer.paragraphStyle,
                 producer.textStyle,
+                producer.richTextParserId,
                 producer.wrapMode,
                 producer.textOverflow,
                 producer.enableAutoFontSize,
                 producer.fontSizeMin,
-                producer.fontSizeMax,
-                enableRichText: producer.enableRichText);
+                producer.fontSizeMax);
         }
     }
 }

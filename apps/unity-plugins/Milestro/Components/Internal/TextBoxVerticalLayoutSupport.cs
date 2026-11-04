@@ -48,10 +48,8 @@ namespace Milestro.Components.Internal
         internal static TextBoxRenderPreparation PrepareRenderConfiguration(
             TextBoxRenderTargetSettings requested)
         {
-            var parser = new RichTextParser.RichTextParser();
-            parser.ParseText(requested.Content, requested.EnableRichText);
             var issues = new List<string>();
-            var payload = parser.ConvertToSegments(false, issues);
+            var payload = requested.ParseContent(false, issues);
             var writingMode = requested.ParagraphStyle?.writingMode ?? WritingMode.HorizontalTb;
             if (writingMode == WritingMode.HorizontalTb)
             {
@@ -72,7 +70,7 @@ namespace Milestro.Components.Internal
             }
 
             var verticalIssues = new List<string>();
-            var verticalPayload = parser.ConvertToSegments(true, verticalIssues);
+            var verticalPayload = requested.ParseContent(true, verticalIssues);
             foreach (var issue in verticalIssues)
             {
                 if (!issues.Contains(issue)) issues.Add(issue);
@@ -90,6 +88,7 @@ namespace Milestro.Components.Internal
                 CloneMargin(settings.Margin),
                 CloneParagraphStyle(settings.ParagraphStyle),
                 textStyle,
+                settings.ParserId,
                 settings.WrapMode,
                 settings.TextOverflow,
                 settings.AutoFontSize,
@@ -99,8 +98,7 @@ namespace Milestro.Components.Internal
                 settings.MarginReferenceSize,
                 settings.VerticalHeightMode,
                 settings.VerticalMarginContext,
-                settings.SizingUsesVerticalLayout,
-                settings.EnableRichText);
+                settings.SizingUsesVerticalLayout);
         }
 
         private static TextBoxRenderPreparation PrepareVerticalFallback(
@@ -163,6 +161,7 @@ namespace Milestro.Components.Internal
                 margin,
                 paragraphStyle,
                 textStyle,
+                requested.ParserId,
                 requested.WrapMode,
                 textOverflow,
                 autoFontSize: autoFontSize,
@@ -173,8 +172,7 @@ namespace Milestro.Components.Internal
                 verticalHeightMode: requested.VerticalHeightMode,
                 verticalMarginContext: requested.VerticalMarginContext,
                 sizingUsesVerticalLayout: sizing.HasValue &&
-                                          requested.SizingUsesVerticalLayout,
-                enableRichText: requested.EnableRichText);
+                                          requested.SizingUsesVerticalLayout);
             return new TextBoxRenderPreparation(effective, payload,
                 CreateDiagnostic(issues), false);
         }
@@ -197,6 +195,7 @@ namespace Milestro.Components.Internal
                 margin,
                 paragraphStyle,
                 textStyle,
+                requested.ParserId,
                 requested.WrapMode,
                 textOverflow,
                 requested.AutoFontSize,
@@ -206,8 +205,7 @@ namespace Milestro.Components.Internal
                 requested.MarginReferenceSize,
                 requested.VerticalHeightMode,
                 requested.VerticalMarginContext,
-                false,
-                requested.EnableRichText);
+                false);
             return new TextBoxRenderPreparation(effective, payload,
                 CreateDiagnostic(issues), true);
         }

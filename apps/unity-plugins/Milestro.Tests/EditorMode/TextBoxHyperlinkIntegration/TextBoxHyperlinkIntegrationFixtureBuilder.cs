@@ -3,6 +3,7 @@ using System.Linq;
 using Milestro.Components;
 using Milestro.Components.Internal;
 using Milestro.Events;
+using Milestro.RichTextParser;
 using UnityEditor;
 using UnityEditor.Events;
 using UnityEditor.SceneManagement;
@@ -208,7 +209,7 @@ namespace Milestro.Tests.TextBoxHyperlinkIntegration.Editor
             var root = new GameObject("Persistent Hyperlink TextBox", typeof(RectTransform));
             root.SetActive(false);
             var producer = root.AddComponent<TextBoxRenderTextureProducer>();
-            producer.enableRichText = true;
+            producer.richTextParserId = XmlRichTextParser.Id;
             producer.content =
                 "<a href=\"milestro://integration/task201\" id=\"task201-link\">Open integration link</a>";
             producer.textStyle.size = 36f;

@@ -10,6 +10,7 @@ using Milestro.Components.Internal;
 using Milestro.Configuration;
 using Milestro.Extensions;
 using Milestro.Model;
+using Milestro.RichTextParser;
 using Milestro.Skia;
 using Milestro.Skia.TextLayout;
 using NUnit.Framework;
@@ -2748,7 +2749,7 @@ namespace Milestro.Tests
             child.transform.SetParent(parent != null ? parent : root.transform, false);
             child.GetComponent<RectTransform>().sizeDelta = new Vector2(200f, 100f);
             producer = child.AddComponent<TextBoxRenderTextureProducer>();
-            producer.enableRichText = true;
+            producer.richTextParserId = XmlRichTextParser.Id;
             producer.textOverflow = TextOverflow.Clip;
             producer.wrapMode = TextBoxWrapMode.Wrap;
             producer.margin = margin;
@@ -2961,6 +2962,7 @@ namespace Milestro.Tests
                     textAlign = TextAlign.Start,
                 },
                 TextStyle(fontSize),
+                XmlRichTextParser.Id,
                 wrap,
                 overflow);
         }
@@ -3122,6 +3124,7 @@ namespace Milestro.Tests
                 margin,
                 settings.ParagraphStyle,
                 settings.TextStyle,
+                settings.ParserId,
                 settings.WrapMode,
                 settings.TextOverflow,
                 settings.AutoFontSize,

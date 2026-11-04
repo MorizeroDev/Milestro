@@ -6,6 +6,7 @@ using System.Reflection;
 using Milestro.Components;
 using Milestro.Components.Internal;
 using Milestro.Model;
+using Milestro.RichTextParser;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -659,7 +660,7 @@ namespace Milestro.Tests.TextBoxVertical
             child.GetComponent<RectTransform>().sizeDelta = new Vector2(200f, 100f);
 
             var producer = child.AddComponent<TextBoxRenderTextureProducer>();
-            producer.enableRichText = true;
+            producer.richTextParserId = XmlRichTextParser.Id;
             producer.content = Content;
             producer.margin = margin;
             producer.paragraphStyle.writingMode = WritingMode.VerticalRl;
@@ -702,7 +703,7 @@ namespace Milestro.Tests.TextBoxVertical
             rect.sizeDelta = new Vector2(200f, 120f);
 
             var producer = child.AddComponent<TextBoxRenderTextureProducer>();
-            producer.enableRichText = true;
+            producer.richTextParserId = XmlRichTextParser.Id;
             producer.content = Content;
             producer.margin = new Margin
             {
@@ -741,7 +742,7 @@ namespace Milestro.Tests.TextBoxVertical
             var rect = child.GetComponent<RectTransform>();
             rect.sizeDelta = new Vector2(180f, 120f);
             var producer = child.AddComponent<TextBoxRenderTextureProducer>();
-            producer.enableRichText = true;
+            producer.richTextParserId = XmlRichTextParser.Id;
             producer.content = Content;
             producer.margin = new Margin();
             producer.paragraphStyle.writingMode = WritingMode.VerticalRl;
@@ -776,7 +777,7 @@ namespace Milestro.Tests.TextBoxVertical
             rect.anchoredPosition = new Vector2(420f, -140f);
 
             var producer = child.AddComponent<TextBoxRenderTextureProducer>();
-            producer.enableRichText = true;
+            producer.richTextParserId = XmlRichTextParser.Id;
             producer.content = IndentContent;
             producer.margin = new Margin();
             producer.paragraphStyle.writingMode = WritingMode.VerticalRl;
@@ -806,7 +807,7 @@ namespace Milestro.Tests.TextBoxVertical
             rect.anchoredPosition = new Vector2(20f, -280f);
 
             var producer = child.AddComponent<TextBoxRenderTextureProducer>();
-            producer.enableRichText = true;
+            producer.richTextParserId = XmlRichTextParser.Id;
             producer.content = JustifyContent;
             producer.margin = new Margin();
             producer.paragraphStyle.writingMode = WritingMode.VerticalRl;
@@ -836,7 +837,7 @@ namespace Milestro.Tests.TextBoxVertical
             rect.anchoredPosition = new Vector2(220f, -420f);
 
             var producer = child.AddComponent<TextBoxRenderTextureProducer>();
-            producer.enableRichText = true;
+            producer.richTextParserId = XmlRichTextParser.Id;
             producer.content = EllipsisContent;
             producer.margin = new Margin
             {
@@ -873,7 +874,7 @@ namespace Milestro.Tests.TextBoxVertical
             rect.anchoredPosition = Vector2.zero;
 
             var producer = child.AddComponent<TextBoxRenderTextureProducer>();
-            producer.enableRichText = true;
+            producer.richTextParserId = XmlRichTextParser.Id;
             producer.content = DecorationContent;
             producer.margin = new Margin
             {

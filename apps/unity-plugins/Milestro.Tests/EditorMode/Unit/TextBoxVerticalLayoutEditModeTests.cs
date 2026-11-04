@@ -178,7 +178,7 @@ namespace Milestro.Tests
             Assert.That(preserve.LayoutMetrics.InkBounds.yMin, Is.LessThan(inline.LayoutMetrics.InkBounds.yMin));
             var settings = new TextBoxRenderTargetSettings("<a href=\"fit\"><ruby style=\"ruby-overhang: none\">" +
                 "漢字<rt>かな</rt></ruby></a>", Margin.FixedZero(), VerticalStyle(), TextStyle(30f, 0f),
-                TextBoxWrapMode.Wrap, TextOverflow.Clip, true, 15f, 15f);
+                XmlRichTextParser.Id, TextBoxWrapMode.Wrap, TextOverflow.Clip, true, 15f, 15f);
             using var target = new TextBoxRenderTarget();
             target.Rebuild(TextBoxRenderViewport.Invisible(new Vector2Int(200, 160), default),
                 ColorSpace.Gamma, settings, true, null);
@@ -201,8 +201,8 @@ namespace Milestro.Tests
             int width, int height, float minimum, float maximum, float expectedMin, float expectedMax)
         {
             var settings = new TextBoxRenderTargetSettings("天地玄黃宇宙洪荒日月盈昃",
-                Margin.FixedZero(), VerticalStyle(), TextStyle(30f, 0f), wrap, TextOverflow.Clip,
-                true, minimum, maximum);
+                Margin.FixedZero(), VerticalStyle(), TextStyle(30f, 0f), XmlRichTextParser.Id,
+                wrap, TextOverflow.Clip, true, minimum, maximum);
             using var target = new TextBoxRenderTarget();
             Assert.That(target.Rebuild(TextBoxRenderViewport.Invisible(new Vector2Int(width, height), default),
                 ColorSpace.Gamma, settings, true, null), Is.True);
@@ -244,8 +244,8 @@ namespace Milestro.Tests
                 300f, 200f, 300f, true, 30f);
             var sizing = new TextSizingResult(request, 300f, 200f, 45f, default, default, 0f, 0f);
             var settings = new TextBoxRenderTargetSettings("天", Margin.FixedZero(),
-                VerticalStyle(), TextStyle(30f, 0f), TextBoxWrapMode.Wrap, TextOverflow.Clip,
-                true, 6f, 12f, sizing);
+                VerticalStyle(), TextStyle(30f, 0f), XmlRichTextParser.Id, TextBoxWrapMode.Wrap,
+                TextOverflow.Clip, true, 6f, 12f, sizing);
             using var target = new TextBoxRenderTarget();
             target.Rebuild(TextBoxRenderViewport.Invisible(new Vector2Int(300, 200), default),
                 ColorSpace.Gamma, settings, true, null);
@@ -259,7 +259,7 @@ namespace Milestro.Tests
         public void AF06_AutoHeightDisablesSearchAndReportsIssue()
         {
             var settings = new TextBoxRenderTargetSettings("天", Margin.FixedZero(), VerticalStyle(),
-                TextStyle(30f, 0f), TextBoxWrapMode.Wrap, TextOverflow.Clip,
+                TextStyle(30f, 0f), XmlRichTextParser.Id, TextBoxWrapMode.Wrap, TextOverflow.Clip,
                 true, 6f, 60f, verticalHeightMode: TextHeightMode.Auto);
             var prepared = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(settings);
             Assert.That(prepared.Settings.AutoFontSize, Is.False);
@@ -845,6 +845,7 @@ namespace Milestro.Tests
                 ellipsis.Margin,
                 ellipsis.ParagraphStyle,
                 ellipsis.TextStyle,
+                ellipsis.ParserId,
                 ellipsis.WrapMode,
                 TextOverflow.Ellipsis);
             Assert.DoesNotThrow(() => TextBoxVerticalLayoutSupport.ValidateSettings(ellipsis));
@@ -881,6 +882,7 @@ namespace Milestro.Tests
                 autoMargin,
                 VerticalStyle(),
                 TextStyle(),
+                XmlRichTextParser.Id,
                 TextBoxWrapMode.Wrap,
                 TextOverflow.Clip);
             Assert.DoesNotThrow(() => TextBoxVerticalLayoutSupport.ValidateSettings(autoSettings));
@@ -914,6 +916,7 @@ namespace Milestro.Tests
                     margin,
                     paragraphStyle,
                     TextStyle(36f, 0f),
+                    XmlRichTextParser.Id,
                     wrapMode,
                     TextOverflow.Ellipsis);
                 using var target = new TextBoxRenderTarget();
@@ -947,6 +950,7 @@ namespace Milestro.Tests
                 margin,
                 paragraphStyle,
                 TextStyle(),
+                XmlRichTextParser.Id,
                 TextBoxWrapMode.NoWrap,
                 TextOverflow.Clip);
             using (var target = new TextBoxRenderTarget())
@@ -960,6 +964,7 @@ namespace Milestro.Tests
                 margin,
                 VerticalStyle(),
                 TextStyle(),
+                XmlRichTextParser.Id,
                 TextBoxWrapMode.NoWrap,
                 TextOverflow.Ellipsis);
             using (var target = new TextBoxRenderTarget())
@@ -990,6 +995,7 @@ namespace Milestro.Tests
                 margin,
                 paragraphStyle,
                 textStyle,
+                XmlRichTextParser.Id,
                 TextBoxWrapMode.Wrap,
                 TextOverflow.Ellipsis,
                 autoFontSize: true);
@@ -1134,12 +1140,14 @@ namespace Milestro.Tests
                 shared,
                 firstStyle,
                 TextStyle(),
+                XmlRichTextParser.Id,
                 TextBoxWrapMode.Wrap,
                 TextOverflow.Clip);
             var secondRequest = new TextBoxRenderTargetSettings(MixedText,
                 shared,
                 secondStyle,
                 TextStyle(),
+                XmlRichTextParser.Id,
                 TextBoxWrapMode.Wrap,
                 TextOverflow.Clip);
 
@@ -1571,7 +1579,8 @@ namespace Milestro.Tests
         public void BlockMarginUnitsUseBaseFontExternalHeightAndRootViewport(MarginUnit unit, float expected)
         {
             var settings = new TextBoxRenderTargetSettings("<p>天</p>", new Margin(),
-                VerticalStyle(), TextStyle(), TextBoxWrapMode.Wrap, TextOverflow.Clip,
+                VerticalStyle(), TextStyle(), XmlRichTextParser.Id, TextBoxWrapMode.Wrap,
+                TextOverflow.Clip,
                 verticalMarginContext: new MarginResolveContext(123f, 456f, 36f, 800f, 600f,
                     hasViewport: true));
             var margin = new MarginValue { Value = 10f, Unit = unit };
@@ -1595,7 +1604,7 @@ namespace Milestro.Tests
                 "<a href=\"both\"><p style=\"margin-top: 12px; margin-bottom: 9px\">天地玄黃宇宙</p>" +
                 "<p style=\"margin-top: 5px; margin-bottom: 23px\"></p>" +
                 "<p style=\"margin-top: 31px; margin-bottom: 7px\">洪荒日月</p></a>",
-                new Margin(), style, TextStyle(), wrap, overflow);
+                new Margin(), style, TextStyle(), XmlRichTextParser.Id, wrap, overflow);
             var prepared = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(settings);
             using var nativeStyle = style.ToParagraphStyle(overflow == TextOverflow.Ellipsis);
             using var nativeTextStyle = TextStyle().ToTextStyle();
@@ -1799,7 +1808,8 @@ namespace Milestro.Tests
             const string markup =
                 "<a href=\"fit\"><span style=\"text-combine-upright: all\">ABC</span></a>";
             var settings = new TextBoxRenderTargetSettings(markup, Margin.FixedZero(), VerticalStyle(),
-                TextStyle(30f, 0f), TextBoxWrapMode.Wrap, TextOverflow.Clip, true, 15f, 15f);
+                TextStyle(30f, 0f), XmlRichTextParser.Id, TextBoxWrapMode.Wrap, TextOverflow.Clip,
+                true, 15f, 15f);
             using var target = new TextBoxRenderTarget();
             target.Rebuild(TextBoxRenderViewport.Invisible(new Vector2Int(200, 160), default),
                 ColorSpace.Gamma, settings, true, null);
@@ -1887,7 +1897,8 @@ namespace Milestro.Tests
                 "<a href=\"fit\"><span style=\"text-combine-upright: all; " +
                 "--milestro-text-combine-upright-sizing: grow\">ABC</span></a>";
             var settings = new TextBoxRenderTargetSettings(markup, Margin.FixedZero(), VerticalStyle(),
-                TextStyle(30f, 0f), TextBoxWrapMode.Wrap, TextOverflow.Clip, true, 15f, 15f);
+                TextStyle(30f, 0f), XmlRichTextParser.Id, TextBoxWrapMode.Wrap, TextOverflow.Clip,
+                true, 15f, 15f);
             using var target = new TextBoxRenderTarget();
             target.Rebuild(TextBoxRenderViewport.Invisible(new Vector2Int(200, 160), default),
                 ColorSpace.Gamma, settings, true, null);
@@ -2000,6 +2011,7 @@ namespace Milestro.Tests
                     Margin.FixedZero(),
                     new ParagraphStyleSettings { writingMode = WritingMode.HorizontalTb },
                     TextStyle(30f, 0f),
+                    XmlRichTextParser.Id,
                     TextBoxWrapMode.Wrap,
                     TextOverflow.Clip));
             Assert.That(horizontal.Diagnostic, Is.Not.Null);
@@ -2054,6 +2066,7 @@ namespace Milestro.Tests
                     Margin.FixedZero(),
                     new ParagraphStyleSettings { writingMode = WritingMode.HorizontalTb },
                     TextStyle(30f, 0f),
+                    XmlRichTextParser.Id,
                     TextBoxWrapMode.Wrap,
                     TextOverflow.Clip));
             Assert.That(horizontal.Diagnostic, Is.Not.Null);
@@ -2142,6 +2155,7 @@ namespace Milestro.Tests
                 new Margin(),
                 paragraphStyle ?? VerticalStyle(),
                 textStyle ?? TextStyle(),
+                XmlRichTextParser.Id,
                 TextBoxWrapMode.Wrap,
                 TextOverflow.Clip);
         }

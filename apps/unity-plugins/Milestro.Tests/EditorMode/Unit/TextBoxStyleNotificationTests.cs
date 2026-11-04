@@ -1,6 +1,7 @@
 using System;
 using Milestro.Components.Internal;
 using Milestro.Model;
+using Milestro.RichTextParser;
 using NUnit.Framework;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -97,14 +98,15 @@ namespace Milestro.Tests
         }
 
         [Test]
-        public void RichTextIsDisabledByDefaultAndPropagatesToRenderSettings()
+        public void RichTextParserIsUnsetByDefaultAndPropagatesToRenderSettings()
         {
-            Assert.That(producer.enableRichText, Is.False);
-            Assert.That(TextBoxRenderTargetSettingsBuilder.BuildFrom(producer).EnableRichText, Is.False);
+            Assert.That(producer.richTextParserId, Is.Null);
+            Assert.That(TextBoxRenderTargetSettingsBuilder.BuildFrom(producer).ParserId, Is.Null);
 
-            producer.enableRichText = true;
+            producer.richTextParserId = XmlRichTextParser.Id;
 
-            Assert.That(TextBoxRenderTargetSettingsBuilder.BuildFrom(producer).EnableRichText, Is.True);
+            Assert.That(TextBoxRenderTargetSettingsBuilder.BuildFrom(producer).ParserId,
+                Is.EqualTo(XmlRichTextParser.Id));
         }
 
         private sealed class CountingRenderTarget : ITextBoxRenderTarget

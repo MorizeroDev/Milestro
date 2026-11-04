@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using Milestro.RichTextParser;
 using UnityEngine;
 
 namespace Milestro.Model
@@ -8,6 +10,7 @@ namespace Milestro.Model
             Margin margin,
             ParagraphStyleSettings paragraphStyle,
             TextStyleSettings textStyle,
+            string? parserName,
             TextBoxWrapMode wrapMode,
             TextOverflow textOverflow,
             bool autoFontSize = false,
@@ -16,11 +19,10 @@ namespace Milestro.Model
             TextSizingResult? sizing = null, Vector2 marginReferenceSize = default,
             TextHeightMode? verticalHeightMode = null,
             MarginResolveContext? verticalMarginContext = null,
-            bool sizingUsesVerticalLayout = false,
-            bool enableRichText = true)
+            bool sizingUsesVerticalLayout = false)
         {
             Content = content ?? "";
-            EnableRichText = enableRichText;
+            ParserId = parserName;
             Margin = margin ?? Margin.FixedZero();
             Margin.Normalize();
             ParagraphStyle = paragraphStyle ?? new ParagraphStyleSettings();
@@ -50,20 +52,20 @@ namespace Milestro.Model
             bool sizingUsesVerticalLayout = false)
         {
             return new TextBoxRenderTargetSettings(Content, Margin, ParagraphStyle, TextStyle,
-                WrapMode, TextOverflow, AutoFontSize, MinSize, MaxSize, sizing, referenceSize,
-                verticalHeightMode, verticalMarginContext, sizingUsesVerticalLayout, EnableRichText);
+                ParserId, WrapMode, TextOverflow, AutoFontSize, MinSize, MaxSize, sizing, referenceSize,
+                verticalHeightMode, verticalMarginContext, sizingUsesVerticalLayout);
         }
 
         public TextBoxRenderTargetSettings WithVerticalLayout(MarginResolveContext marginContext,
             TextHeightMode heightMode)
         {
             return new TextBoxRenderTargetSettings(Content, Margin, ParagraphStyle, TextStyle,
-                WrapMode, TextOverflow, AutoFontSize, MinSize, MaxSize, Sizing,
-                MarginReferenceSize, heightMode, marginContext, SizingUsesVerticalLayout, EnableRichText);
+                ParserId, WrapMode, TextOverflow, AutoFontSize, MinSize, MaxSize, Sizing,
+                MarginReferenceSize, heightMode, marginContext, SizingUsesVerticalLayout);
         }
 
         public string Content { get; }
-        public bool EnableRichText { get; }
+        public string? ParserId { get; }
         public Margin Margin { get; }
         public ParagraphStyleSettings ParagraphStyle { get; }
         public TextStyleSettings TextStyle { get; }
@@ -72,5 +74,23 @@ namespace Milestro.Model
         public bool AutoFontSize { get; }
         public float MinSize { get; }
         public float MaxSize { get; }
+
+        internal ParagraphPayload ParseContent(bool allowViewportBlockMargins = false,
+            ICollection<string>? issues = null)
+        {
+            if (string.IsNullOrEmpty(ParserId))
+            {
+                return ParagraphPayload.MakeText(Content);
+            }
+
+            if (!RichTextParserService.TryCreate(ParserId, out var parser) || parser == null)
+            {
+                issues?.Add($"unknown rich text parser id '{ParserId}'; content rendered as plain text");
+                return ParagraphPayload.MakeText(Content);
+            }
+
+            return parser.Parse(Content,
+                new RichTextParseContext(allowViewportBlockMargins, issues));
+        }
     }
 }

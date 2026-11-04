@@ -118,11 +118,21 @@ registered family names before assuming that the text has no glyphs.
 
 ## Rich text
 
-Rich-text parsing is disabled by default. Turn on **Enable RichText** in the
-Inspector, or set `producer.enableRichText = true`, to parse
-`TextBoxRenderTextureProducer.content` as XML-like markup. When disabled, `<`
-and `&` have no special meaning and the content is rendered literally. The
-supported subset is smaller than TextMesh Pro's tag set.
+Rich-text parsing is disabled by default. Pick a parser in the **Rich Text
+Parser** dropdown in the Inspector, or set
+`producer.richTextParserId = XmlRichTextParser.Id`, to parse
+`TextBoxRenderTextureProducer.content` as XML-like markup (the built-in
+`milestro_rich_text` parser, shown as "Milestro Rich Text"). When no parser is
+selected, `<` and `&` have no special meaning and the content is rendered
+literally. The supported subset is smaller than TextMesh Pro's tag set.
+
+Parsers are plugins selected by id per text box. Modules implement
+`IRichTextParserProvider` (id, display name, parser factory) and register it
+with `RichTextParserService.Register(provider)`. Ids match
+`[A-Za-z_][A-Za-z0-9_-]*` and live in serialized data, so never rename a
+shipped id — register an alias instead. Display names only appear in the
+inspector and may change freely. The dropdown lists every registered parser,
+and the field also accepts ids typed by hand.
 
 ### Supported tags
 

@@ -1,6 +1,7 @@
 using System.Reflection;
 using Milestro.Components.Internal;
 using Milestro.Model;
+using Milestro.RichTextParser;
 using Milestro.Skia;
 using NUnit.Framework;
 using UnityEngine;
@@ -29,6 +30,7 @@ namespace Milestro.Tests
                 margin,
                 new ParagraphStyleSettings { textDirection = direction },
                 new TextStyleSettings { size = 20f },
+                XmlRichTextParser.Id,
                 TextBoxWrapMode.Wrap,
                 overflow);
             var size = new Vector2Int(200, 200);

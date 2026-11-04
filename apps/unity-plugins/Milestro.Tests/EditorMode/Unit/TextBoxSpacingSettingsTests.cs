@@ -1,4 +1,5 @@
 using Milestro.Model;
+using Milestro.RichTextParser;
 using NUnit.Framework;
 
 namespace Milestro.Tests
@@ -12,6 +13,7 @@ namespace Milestro.Tests
                 null,
                 new ParagraphStyleSettings(),
                 new TextStyleSettings(),
+                XmlRichTextParser.Id,
                 TextBoxWrapMode.Wrap,
                 TextOverflow.Clip);
 
@@ -36,6 +38,7 @@ namespace Milestro.Tests
                 null,
                 paragraphStyle,
                 textStyle,
+                XmlRichTextParser.Id,
                 TextBoxWrapMode.Wrap,
                 TextOverflow.Clip);
 
@@ -52,6 +55,7 @@ namespace Milestro.Tests
         public void NullStyleSettingsFallBackToDefaults()
         {
             var settings = new TextBoxRenderTargetSettings("content",
+                null,
                 null,
                 null,
                 null,

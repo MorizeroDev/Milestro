@@ -26,10 +26,11 @@ Subscribe to the event:
 ```csharp
 using Milestro.Components.Internal;
 using Milestro.Events;
+using Milestro.RichTextParser;
 using UnityEngine;
 
 var producer = textBox.GetComponent<TextBoxRenderTextureProducer>();
-producer.enableRichText = true;
+producer.richTextParserId = XmlRichTextParser.Id;
 producer.content = "Open the <a href=\"help\">help</a>.";
 
 textBox.onLinkClicked.AddListener((LinkClickedEventArgs args) =>
