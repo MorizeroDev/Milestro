@@ -40,6 +40,7 @@ val unityPackageSourceRoots = listOf(
     "Milestro.Editor",
     "Milestro.Experimental",
     "Milestro.InputSystem",
+    "Milestro.RichText.Markdown",
     "Resources",
 )
 val unityPackageSourceEntries = unityPackageSourceRoots + unityPackageSourceRoots

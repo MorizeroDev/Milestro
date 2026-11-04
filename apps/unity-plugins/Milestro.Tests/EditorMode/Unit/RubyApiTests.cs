@@ -58,7 +58,10 @@ namespace Milestro.Tests
             using var paragraphStyle = new ParagraphStyle();
             using var textStyle = new TextStyle
             {
-                FontSize = 32, HeightOverride = true, Height = 3, HalfLeading = true,
+                FontSize = 32,
+                HeightOverride = true,
+                Height = 3,
+                HalfLeading = true,
             };
             paragraphStyle.SetTextStyle(textStyle);
             using var plainBuilder = new ParagraphBuilder(paragraphStyle);

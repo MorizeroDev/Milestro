@@ -4,6 +4,10 @@ unity-plugins/Milestro/Plugins/**/*.dll
 unity-plugins/Milestro/Plugins/**/*.dylib
 unity-plugins/Milestro/Plugins/iOS/Milestro.framework
 
+# ignore locally built Markdig
+unity-plugins/Milestro.RichText.Markdown/Plugins/**/*.dll
+!unity-plugins/Milestro.RichText.Markdown/Plugins/**/*.dll.meta
+
 # ignore icudtl
 unity-plugins/Resources/Milestro/icudtl.dat.bytes
 !unity-plugins/Resources/Milestro/icudtl.dat.bytes.meta

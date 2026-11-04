@@ -33,6 +33,21 @@ Initialize submodules before configuring:
 git submodule update --init --recursive
 ```
 
+The Markdown rich text parser module requires Unity projects to use the .NET
+Standard 2.1 API compatibility level. Building its dependency requires the .NET
+SDK version declared in `ext/markdig/src/global.json` (10.0.100, with
+latest-minor roll-forward). After the first clone and whenever the Markdig
+submodule changes, build and vendor its managed dependency:
+
+```sh
+./tools/build-markdig.sh
+```
+
+This builds Markdig for `netstandard2.1` and copies `Markdig.dll` to
+`apps/unity-plugins/Milestro.RichText.Markdown/Plugins/`. The DLL is ignored;
+its Unity `.meta` file is tracked. The module cannot compile in Unity until this
+step has been run.
+
 The normal CMake flow downloads the native dependencies it needs; a separate
 Skia build step is not required.
 
