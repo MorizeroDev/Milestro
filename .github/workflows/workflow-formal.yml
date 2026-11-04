@@ -38,6 +38,10 @@ jobs:
     name: iOS arm64
     uses: ./.github/workflows/build-ios.yml
 
+  build-markdig:
+    name: Markdig netstandard2.1
+    uses: ./.github/workflows/build-markdig.yml
+
   unity-plugins:
     name: Unity plugins
     needs:
@@ -46,6 +50,7 @@ jobs:
       - build-android-arm64
       - build-macos-arm64
       - build-ios-arm64
+      - build-markdig
     runs-on: ubuntu-24.04
     timeout-minutes: 60
 
@@ -78,7 +83,7 @@ jobs:
         with:
           path: downloaded-artifacts
 
-      - name: Assemble Unity plugin native binaries
+      - name: Assemble Unity plugin binaries and licenses
         run: |
           set -euo pipefail
 
@@ -97,6 +102,10 @@ jobs:
             build/unity-plugins/Milestro/Plugins/MacOS/Aarch64/libMilestro.dylib
           install -D extracted/windows/milestro-native-windows-amd64/bin/libMilestro.dll \
             build/unity-plugins/Milestro/Plugins/Win64/libMilestro.dll
+          install -D downloaded-artifacts/markdig-netstandard2.1/Markdig.dll \
+            build/unity-plugins/Milestro.RichText.Markdown/Plugins/Markdig.dll
+          install -D downloaded-artifacts/markdig-netstandard2.1/license.txt \
+            build/unity-plugins/Milestro.RichText.Markdown/license.txt
 
           rm -rf build/unity-plugins/Milestro/Plugins/iOS/Milestro.framework
           cp -R extracted/ios/milestro-native-ios-arm64/lib/Milestro.framework \

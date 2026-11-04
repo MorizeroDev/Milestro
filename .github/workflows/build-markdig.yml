@@ -1,0 +1,42 @@
+name: Markdig Managed
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.0
+
+      - name: Initialize Markdig submodule
+        run: git submodule update --init --depth 1 ext/markdig
+
+      - name: Set up .NET SDK from Markdig global.json
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: ext/markdig/src/global.json
+
+      - name: Build Markdig
+        run: dotnet build ext/markdig/src/Markdig/Markdig.csproj -c Release -f netstandard2.1 --nologo
+
+      - name: Stage managed binary and license
+        run: |
+          set -euo pipefail
+
+          install -D ext/markdig/src/Markdig/bin/Release/netstandard2.1/Markdig.dll \
+            markdig-artifact/Markdig.dll
+          install -D ext/markdig/license.txt markdig-artifact/license.txt
+
+      - name: Upload Markdig artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: markdig-netstandard2.1
+          path: markdig-artifact/**
+          retention-days: 1
