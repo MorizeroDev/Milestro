@@ -8,10 +8,12 @@ namespace Milestro.RichTextParser
     public sealed class RichTextParseContext
     {
         public RichTextParseContext(bool allowViewportBlockMargins = false,
-            ICollection<string>? issues = null)
+            ICollection<string>? issues = null,
+            string locale = "en")
         {
             AllowViewportBlockMargins = allowViewportBlockMargins;
             Issues = issues;
+            Locale = locale;
         }
 
         /// <summary>
@@ -25,5 +27,7 @@ namespace Milestro.RichTextParser
         /// Optional sink for non-fatal parse diagnostics, in source order.
         /// </summary>
         public ICollection<string>? Issues { get; }
+
+        public string Locale { get; }
     }
 }

@@ -22,6 +22,7 @@ namespace Milestro.RichTextParser.Css
             TateChuYokoSizing? tateChuYokoSizing = null;
             VerticalTextOrientation? textOrientation = null;
             bool? noWrap = null;
+            TextTransform? textTransform = null;
             TextIndent? textIndent = null;
             float? textIndentEm = null;
             var parser = new CssDeclarationParser(declarations);
@@ -90,6 +91,13 @@ namespace Milestro.RichTextParser.Css
                         noWrap = true;
                     }
                 }
+                else if (declaration.Property.Equals("text-transform", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (TryParseTextTransform(declaration.Value, out var transform))
+                    {
+                        textTransform = transform;
+                    }
+                }
                 else if (paragraphStyle != null &&
                          declaration.Property.Equals("text-indent", StringComparison.OrdinalIgnoreCase) &&
                          TryParseTextIndent(declaration.Value, out var indent, out var isEm))
@@ -112,6 +120,7 @@ namespace Milestro.RichTextParser.Css
             if (textOrientation.HasValue)
                 textStyle.TextOrientation = textOrientation.Value;
             if (noWrap.HasValue) textStyle.NoWrap = noWrap.Value;
+            if (textTransform.HasValue) textStyle.TextTransform = textTransform.Value;
             if (paragraphStyle != null && (textIndent.HasValue || textIndentEm.HasValue))
             {
                 paragraphStyle.TextIndent = textIndent;
@@ -179,6 +188,36 @@ namespace Milestro.RichTextParser.Css
             }
 
             orientation = VerticalTextOrientation.Mixed;
+            return false;
+        }
+
+        private static bool TryParseTextTransform(CssSlice value, out TextTransform textTransform)
+        {
+            if (value.Equals("none", StringComparison.OrdinalIgnoreCase))
+            {
+                textTransform = TextTransform.None;
+                return true;
+            }
+
+            if (value.Equals("lowercase", StringComparison.OrdinalIgnoreCase))
+            {
+                textTransform = TextTransform.Lowercase;
+                return true;
+            }
+
+            if (value.Equals("uppercase", StringComparison.OrdinalIgnoreCase))
+            {
+                textTransform = TextTransform.Uppercase;
+                return true;
+            }
+
+            if (value.Equals("smallcaps", StringComparison.OrdinalIgnoreCase))
+            {
+                textTransform = TextTransform.SmallCaps;
+                return true;
+            }
+
+            textTransform = TextTransform.None;
             return false;
         }
 

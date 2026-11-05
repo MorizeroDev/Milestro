@@ -90,7 +90,7 @@ namespace Milestro.Model
             }
 
             return parser.Parse(Content,
-                new RichTextParseContext(allowViewportBlockMargins, issues));
+                new RichTextParseContext(allowViewportBlockMargins, issues, TextStyle.locale));
         }
     }
 }

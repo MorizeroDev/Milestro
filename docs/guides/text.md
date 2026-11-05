@@ -184,6 +184,14 @@ with a small CSS subset:
 - `font-feature-settings: normal` or comma-separated settings such as
   `'liga' 0`, `'tnum' on`, and `'kern' 1`
 - `white-space: normal | nowrap`
+- `text-transform: none | lowercase | uppercase | smallcaps`
+
+`lowercase` and `uppercase` use ICU case mappings with the component locale;
+an inline `lang` attribute overrides that locale. `smallcaps` follows TextMesh
+Pro: original lowercase letters become uppercase at 80% of the effective font
+size, while original uppercase letters and other characters keep their full
+size. The property inherits through nested markup; use `none` to restore
+untransformed text.
 
 `normal` keeps the default automatic wrapping. `nowrap` suppresses soft line
 breaks inside the inline range, matching the purpose of TMPro's `<nobr>` tag;

@@ -19,5 +19,7 @@ namespace Milestro.RichTextParser
         internal bool AllowViewportBlockMargins { get; set; }
 
         internal ICollection<string>? Issues { get; set; }
+
+        internal string Locale { get; set; } = "en";
     }
 }

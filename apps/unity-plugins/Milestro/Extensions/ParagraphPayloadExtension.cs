@@ -160,7 +160,13 @@ namespace Milestro.Extensions
             }
 
             var unscaledFontSize = t.FontSize ?? baseTextStyle.FontSize;
-            ret.FontSize = unscaledFontSize * (t.FontSizeScale ?? 1f);
+            var fontSizeScale = t.FontSizeScale ?? 1f;
+            if (t.IsSmallCapsLowercase)
+            {
+                fontSizeScale *= global::Milestro.RichTextParser.RichTextParser.SmallCapsFontSizeScale;
+            }
+
+            ret.FontSize = unscaledFontSize * fontSizeScale;
 
             ret.Locale = t.Locale ?? baseTextStyle.Locale;
             if (t.BaselineShift.HasValue)

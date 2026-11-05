@@ -1,5 +1,6 @@
 #include "../../../include/Milestro/skia/unicode/Unicode.h"
 #include "Milestro/game/milestro_game_interface.h"
+#include "Milestro/game/milestro_game_model.h"
 #include "Milestro/game/milestro_game_retcode.h"
 #include "include/core/SkString.h"
 #include "modules/skunicode/include/SkUnicode.h"
@@ -9,6 +10,7 @@
 #include <fstream>
 #include <gtest/gtest.h>
 #include <iostream>
+#include <memory>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -63,6 +65,33 @@ TEST_F(IcuTest, CollationZhuyinTest) {
               MILESTRO_API_RET_OK);
     EXPECT_GE(result, 0);
     EXPECT_EQ(MilestroStringComparatorDestroy(col), MILESTRO_API_RET_OK);
+}
+
+TEST_F(IcuTest, CaseMappingUsesFullLocaleAwareMappings) {
+    auto asBytes = [](const char* text) {
+        return reinterpret_cast<uint8_t*>(const_cast<char*>(text));
+    };
+    auto readBytes = [](milestro::game::model::BytesWrapper* value) {
+        return std::string(reinterpret_cast<char*>(value->GetPtr()), value->GetSize());
+    };
+
+    milestro::game::model::BytesWrapper* upper = nullptr;
+    ASSERT_EQ(MilestroUnicodeCaseMapToUpper(upper, asBytes("en"), asBytes("Straße")),
+              MILESTRO_API_RET_OK);
+    std::unique_ptr<milestro::game::model::BytesWrapper> upperOwner(upper);
+    EXPECT_EQ(readBytes(upper), "STRASSE");
+
+    milestro::game::model::BytesWrapper* lower = nullptr;
+    ASSERT_EQ(MilestroUnicodeCaseMapToLower(lower, asBytes("en"), asBytes("İ")),
+              MILESTRO_API_RET_OK);
+    std::unique_ptr<milestro::game::model::BytesWrapper> lowerOwner(lower);
+    EXPECT_EQ(readBytes(lower), "i̇");
+
+    milestro::game::model::BytesWrapper* turkishUpper = nullptr;
+    ASSERT_EQ(MilestroUnicodeCaseMapToUpper(turkishUpper, asBytes("tr"), asBytes("istanbul")),
+              MILESTRO_API_RET_OK);
+    std::unique_ptr<milestro::game::model::BytesWrapper> turkishUpperOwner(turkishUpper);
+    EXPECT_EQ(readBytes(turkishUpper), "İSTANBUL");
 }
 
 TEST_F(IcuTest, SkUnicodeProviderUsesIcuBreakIterator) {

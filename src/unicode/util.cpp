@@ -7,7 +7,6 @@ std::string toLower(const std::string &locale, const std::string &data) {
     EnsureLoadICU();
 
     UErrorCode status = U_ZERO_ERROR;
-    icu::Locale icuLocale(locale.c_str());
 
     std::string result;
     icu::StringByteSink sink(&result, static_cast<int32_t>( data.length()));
@@ -27,7 +26,6 @@ std::string toUpper(const std::string &locale, const std::string &data) {
     EnsureLoadICU();
 
     UErrorCode status = U_ZERO_ERROR;
-    icu::Locale icuLocale(locale.c_str());
 
     std::string result;
     icu::StringByteSink sink(&result, static_cast<int32_t>( data.length()));
@@ -35,7 +33,7 @@ std::string toUpper(const std::string &locale, const std::string &data) {
 
     if (U_FAILURE(status)) {
         std::stringstream ss;
-        ss << "CaseMap toLower failed: " << u_errorName(status) << std::endl;
+        ss << "CaseMap toUpper failed: " << u_errorName(status) << std::endl;
         MILESTROLOG_ERROR("{}", ss.str());
         throw std::runtime_error(ss.str());
     }

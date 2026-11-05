@@ -9,6 +9,7 @@ using Milestro.RichTextParser.AST;
 using Milestro.RichTextParser.Css;
 using Milestro.Skia;
 using Milestro.Skia.TextLayout;
+using Milestro.Unicode;
 using Paraparty.Colors;
 using UnityEngine;
 using XmlNode = Milestro.RichTextParser.AST.XmlNode;
@@ -22,6 +23,8 @@ namespace Milestro.RichTextParser
         /// Matches the TextMesh Pro default superscript/subscript size factor.
         /// </summary>
         public const float ScriptFontSizeScale = 0.5f;
+
+        public const float SmallCapsFontSizeScale = 0.8f;
 
         /// <summary>
         /// Baseline raise applied to <c>&lt;sup&gt;</c> content, in em units of the
@@ -195,7 +198,8 @@ namespace Milestro.RichTextParser
         }
 
         internal ParagraphPayload ConvertToSegments(bool allowViewportBlockMargins,
-            ICollection<string>? issues = null)
+            ICollection<string>? issues = null,
+            string locale = "en")
         {
             var rootNode = RootNode;
             if (rootNode is XmlTextNode textNode)
@@ -209,6 +213,7 @@ namespace Milestro.RichTextParser
                 {
                     AllowViewportBlockMargins = allowViewportBlockMargins,
                     Issues = issues,
+                    Locale = locale,
                 };
                 ConvertToSegments(ctx, root);
                 CollectTateChuYokoRanges(ctx.Result);
@@ -908,9 +913,58 @@ namespace Milestro.RichTextParser
         {
             var block = ctx.CurrentBlock ?? ctx.Result.AddBlock(false, ctx.TextLengthUtf16);
             ctx.CurrentBlock = block;
+
+            if (state.TextTransform == TextTransform.SmallCaps && text.Length > 0)
+            {
+                var runStart = 0;
+                while (runStart < text.Length)
+                {
+                    var isLowercase = char.IsLower(text[runStart]);
+                    var runEnd = runStart + 1;
+                    while (runEnd < text.Length && char.IsLower(text[runEnd]) == isLowercase)
+                    {
+                        runEnd++;
+                    }
+
+                    var runText = text.Substring(runStart, runEnd - runStart);
+                    var runState = state;
+                    if (isLowercase)
+                    {
+                        runText = TransformCase(runText, TextTransform.Uppercase,
+                            state.Locale ?? ctx.Locale);
+                        runState = state.Clone();
+                        runState.IsSmallCapsLowercase = true;
+                    }
+
+                    AddTextSegment(ctx, block, runState, runText);
+                    runStart = runEnd;
+                }
+
+                return;
+            }
+
+            if (state.TextTransform == TextTransform.Lowercase ||
+                state.TextTransform == TextTransform.Uppercase)
+            {
+                text = TransformCase(text, state.TextTransform, state.Locale ?? ctx.Locale);
+            }
+
+            AddTextSegment(ctx, block, state, text);
+        }
+
+        private static void AddTextSegment(Context ctx, ParagraphBlock block, TextStyleState state,
+            string text)
+        {
             block.Segments.Add(TextSegment.MakeText(state, text));
             block.LengthUtf16 += text.Length;
             ctx.TextLengthUtf16 += text.Length;
+        }
+
+        private static string TransformCase(string text, TextTransform textTransform, string locale)
+        {
+            return textTransform == TextTransform.Uppercase
+                ? text.IcuToUpper(locale)
+                : text.IcuToLower(locale);
         }
 
         private static readonly CultureInfo ParseCulture = CultureInfo.GetCultureInfo("en");

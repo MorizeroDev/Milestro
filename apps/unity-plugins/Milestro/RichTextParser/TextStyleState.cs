@@ -83,6 +83,10 @@ namespace Milestro.RichTextParser
         /// </summary>
         public bool NoWrap { get; set; } = false;
 
+        public TextTransform TextTransform { get; set; } = TextTransform.None;
+
+        internal bool IsSmallCapsLowercase { get; set; }
+
         /// <summary>
         /// Optional numeric font weight override.
         /// </summary>
@@ -188,6 +192,8 @@ namespace Milestro.RichTextParser
             ret.TextCombineUprightSizing = TextCombineUprightSizing;
             ret.TextOrientation = TextOrientation;
             ret.NoWrap = NoWrap;
+            ret.TextTransform = TextTransform;
+            ret.IsSmallCapsLowercase = IsSmallCapsLowercase;
 
             ret.FontWeight = FontWeight;
             ret.FontWidth = FontWidth;
@@ -259,7 +265,8 @@ namespace Milestro.RichTextParser
             if (LetterSpacing.HasValue || BaselineShift.HasValue || BaselineShiftEm.HasValue ||
                 FontSizeScale.HasValue || Locale != null || FontWidth.HasValue ||
                 (FontSlant.HasValue && FontSlant.Value != Milestro.Model.FontSlant.Italic) ||
-                TextCombineUprightAll || TextOrientation != VerticalTextOrientation.Mixed || NoWrap)
+                TextCombineUprightAll || TextOrientation != VerticalTextOrientation.Mixed || NoWrap ||
+                TextTransform != TextTransform.None)
             {
                 sb.Append("<span");
                 if (FontSizeScale.HasValue)
@@ -298,6 +305,11 @@ namespace Milestro.RichTextParser
                 }
 
                 var styles = new List<string>();
+                if (TextTransform != TextTransform.None)
+                {
+                    styles.Add($"text-transform: {TextTransform.ToString().ToLowerInvariant()}");
+                }
+
                 if (NoWrap)
                 {
                     styles.Add("white-space: nowrap");

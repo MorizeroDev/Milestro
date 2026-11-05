@@ -118,6 +118,10 @@ Use `<span style="white-space: nowrap">...</span>` where TMPro uses
 `<nobr>...</nobr>`. The default `white-space: normal` restores automatic
 wrapping for nested content; explicit line breaks remain active in both modes.
 
+Use `<span style="text-transform: smallcaps">...</span>` for TMPro-style small
+caps. `lowercase`, `uppercase`, and the inherited default `none` are also
+supported.
+
 - A `TMP_FontAsset` is not a Milestro text property. Register font files and
   select a family list such as `{"Inter", "sans-serif"}`.
 - TMP material presets and per-character vertex animation do not have a direct

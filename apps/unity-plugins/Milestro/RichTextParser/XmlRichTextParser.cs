@@ -22,7 +22,7 @@ namespace Milestro.RichTextParser
         {
             var parser = new RichTextParser();
             parser.ParseText(source);
-            return parser.ConvertToSegments(context.AllowViewportBlockMargins, context.Issues);
+            return parser.ConvertToSegments(context.AllowViewportBlockMargins, context.Issues, context.Locale);
         }
     }
 }
