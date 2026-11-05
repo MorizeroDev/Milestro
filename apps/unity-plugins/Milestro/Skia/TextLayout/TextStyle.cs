@@ -57,6 +57,43 @@ namespace Milestro.Skia.TextLayout
             }
         }
 
+        public bool HasBackground
+        {
+            get
+            {
+                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleHasBackground(NativePtr, out var ret));
+                return ret != 0;
+            }
+        }
+
+        public Color32 BackgroundColor
+        {
+            get
+            {
+                int r = 0;
+                int g = 0;
+                int b = 0;
+                int a = 0;
+                ExitCodeUtil.ThrowIfFailed(
+                    BindingC.SkiaTextlayoutTextStyleGetBackgroundColor(NativePtr, out r, out g, out b, out a));
+                return new Color32((byte)r, (byte)g, (byte)b, (byte)a);
+            }
+            set
+            {
+                int r = value.r;
+                int g = value.g;
+                int b = value.b;
+                int a = value.a;
+                ExitCodeUtil.ThrowIfFailed(
+                    BindingC.SkiaTextlayoutTextStyleSetBackgroundColor(NativePtr, r, g, b, a));
+            }
+        }
+
+        public void ClearBackgroundColor()
+        {
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleClearBackgroundColor(NativePtr));
+        }
+
         public TextDecoration Decoration
         {
             get

@@ -159,6 +159,15 @@ namespace Milestro.Extensions
                 ret.Color = baseTextStyle.Color;
             }
 
+            if (t.BackgroundColor.HasValue)
+            {
+                ret.BackgroundColor = t.BackgroundColor.Value;
+            }
+            else if (baseTextStyle.HasBackground)
+            {
+                ret.BackgroundColor = baseTextStyle.BackgroundColor;
+            }
+
             var unscaledFontSize = t.FontSize ?? baseTextStyle.FontSize;
             var fontSizeScale = t.FontSizeScale ?? 1f;
             if (t.IsSmallCapsLowercase)

@@ -1421,6 +1421,31 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutTextStyleGetColor (milestro::skia:
     return MilestroSkiaTextlayoutTextStyleGetColor(s, r, g, b, a);
 }
 
+int64_t FrameworkBindingMilestroSkiaTextlayoutTextStyleHasBackground (milestro::skia::textlayout::TextStyle* s,
+                                                      int32_t& ret) {
+    return MilestroSkiaTextlayoutTextStyleHasBackground(s, ret);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutTextStyleSetBackgroundColor (milestro::skia::textlayout::TextStyle* s,
+                                                           int32_t r,
+                                                           int32_t g,
+                                                           int32_t b,
+                                                           int32_t a) {
+    return MilestroSkiaTextlayoutTextStyleSetBackgroundColor(s, r, g, b, a);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutTextStyleGetBackgroundColor (milestro::skia::textlayout::TextStyle* s,
+                                                           int32_t& r,
+                                                           int32_t& g,
+                                                           int32_t& b,
+                                                           int32_t& a) {
+    return MilestroSkiaTextlayoutTextStyleGetBackgroundColor(s, r, g, b, a);
+}
+
+int64_t FrameworkBindingMilestroSkiaTextlayoutTextStyleClearBackgroundColor (milestro::skia::textlayout::TextStyle* s) {
+    return MilestroSkiaTextlayoutTextStyleClearBackgroundColor(s);
+}
+
 int64_t FrameworkBindingMilestroSkiaTextlayoutTextStyleGetDecoration (milestro::skia::textlayout::TextStyle* s,
                                                       int32_t& decoration) {
     return MilestroSkiaTextlayoutTextStyleGetDecoration(s, decoration);

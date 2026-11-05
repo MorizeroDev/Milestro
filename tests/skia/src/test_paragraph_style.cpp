@@ -75,6 +75,23 @@ TEST(SkiaParagraphStyleTest, EnablesCjkPunctuationCompressionByDefault) {
     EXPECT_EQ(textFeatures[0].fValue, 1);
 }
 
+TEST(SkiaTextStyleTest, BackgroundColorCanBeSetCopiedAndCleared) {
+    milestro_textlayout::TextStyle textStyle;
+    EXPECT_FALSE(textStyle.hasBackground());
+
+    const auto color = SkColorSetARGB(0x80, 0x12, 0x34, 0x56);
+    textStyle.setBackgroundColor(color);
+    ASSERT_TRUE(textStyle.hasBackground());
+    EXPECT_EQ(textStyle.getBackgroundColor(), color);
+    EXPECT_EQ(textStyle.spawn().getBackground().getColor(), color);
+
+    milestro_textlayout::TextStyle copy = textStyle;
+    textStyle.clearBackgroundColor();
+    EXPECT_FALSE(textStyle.hasBackground());
+    ASSERT_TRUE(copy.hasBackground());
+    EXPECT_EQ(copy.getBackgroundColor(), color);
+}
+
 TEST(SkiaTextStyleTest, FontFeaturesCanBeSetRemovedAndCopied) {
     milestro_textlayout::TextStyle source;
     source.setLocale(SkString("en"));

@@ -773,6 +773,19 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetColor(milestro::skia::tex
                                                              int32_t& g,
                                                              int32_t& b,
                                                              int32_t& a);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleHasBackground(milestro::skia::textlayout::TextStyle* s,
+                                                                  int32_t& ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetBackgroundColor(milestro::skia::textlayout::TextStyle* s,
+                                                                       int32_t r,
+                                                                       int32_t g,
+                                                                       int32_t b,
+                                                                       int32_t a);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetBackgroundColor(milestro::skia::textlayout::TextStyle* s,
+                                                                       int32_t& r,
+                                                                       int32_t& g,
+                                                                       int32_t& b,
+                                                                       int32_t& a);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleClearBackgroundColor(milestro::skia::textlayout::TextStyle* s);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleGetDecoration(milestro::skia::textlayout::TextStyle* s,
                                                                   int32_t& decoration);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetDecoration(milestro::skia::textlayout::TextStyle* s,

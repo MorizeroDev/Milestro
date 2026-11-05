@@ -43,6 +43,39 @@ int64_t MilestroSkiaTextlayoutTextStyleGetColor(milestro::skia::textlayout::Text
     return MILESTRO_API_RET_OK;
 }
 
+int64_t MilestroSkiaTextlayoutTextStyleHasBackground(milestro::skia::textlayout::TextStyle *s,
+                                                      int32_t &ret) {
+    ret = s->hasBackground() ? 1 : 0;
+    return MILESTRO_API_RET_OK;
+}
+
+int64_t MilestroSkiaTextlayoutTextStyleSetBackgroundColor(milestro::skia::textlayout::TextStyle *s,
+                                                           int32_t r,
+                                                           int32_t g,
+                                                           int32_t b,
+                                                           int32_t a) {
+    s->setBackgroundColor(SkColorSetARGB(a, r, g, b));
+    return MILESTRO_API_RET_OK;
+}
+
+int64_t MilestroSkiaTextlayoutTextStyleGetBackgroundColor(milestro::skia::textlayout::TextStyle *s,
+                                                           int32_t &r,
+                                                           int32_t &g,
+                                                           int32_t &b,
+                                                           int32_t &a) {
+    auto color = s->getBackgroundColor();
+    r = SkColorGetR(color);
+    g = SkColorGetG(color);
+    b = SkColorGetB(color);
+    a = SkColorGetA(color);
+    return MILESTRO_API_RET_OK;
+}
+
+int64_t MilestroSkiaTextlayoutTextStyleClearBackgroundColor(milestro::skia::textlayout::TextStyle *s) {
+    s->clearBackgroundColor();
+    return MILESTRO_API_RET_OK;
+}
+
 int64_t MilestroSkiaTextlayoutTextStyleGetDecoration(milestro::skia::textlayout::TextStyle *s, int32_t &decoration) {
     decoration = s->getDecoration();
     return MILESTRO_API_RET_OK;

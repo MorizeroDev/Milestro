@@ -5,6 +5,8 @@ using System.Globalization;
 using Milestro.Model;
 using Milestro.RichTextParser;
 using Milestro.Skia.TextLayout;
+using Paraparty.Colors;
+using UnityEngine;
 
 namespace Milestro.RichTextParser.Css
 {
@@ -23,6 +25,7 @@ namespace Milestro.RichTextParser.Css
             VerticalTextOrientation? textOrientation = null;
             bool? noWrap = null;
             TextTransform? textTransform = null;
+            Color? backgroundColor = null;
             TextIndent? textIndent = null;
             float? textIndentEm = null;
             var parser = new CssDeclarationParser(declarations);
@@ -98,6 +101,13 @@ namespace Milestro.RichTextParser.Css
                         textTransform = transform;
                     }
                 }
+                else if (declaration.Property.Equals("background-color", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (ColorUtils.TryParseColor(declaration.Value.ToString(), out var color))
+                    {
+                        backgroundColor = color;
+                    }
+                }
                 else if (paragraphStyle != null &&
                          declaration.Property.Equals("text-indent", StringComparison.OrdinalIgnoreCase) &&
                          TryParseTextIndent(declaration.Value, out var indent, out var isEm))
@@ -121,6 +131,7 @@ namespace Milestro.RichTextParser.Css
                 textStyle.TextOrientation = textOrientation.Value;
             if (noWrap.HasValue) textStyle.NoWrap = noWrap.Value;
             if (textTransform.HasValue) textStyle.TextTransform = textTransform.Value;
+            if (backgroundColor.HasValue) textStyle.BackgroundColor = backgroundColor.Value;
             if (paragraphStyle != null && (textIndent.HasValue || textIndentEm.HasValue))
             {
                 paragraphStyle.TextIndent = textIndent;

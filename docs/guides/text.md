@@ -141,6 +141,7 @@ and the field also accepts ids typed by hand.
 | `<b>`, `<strong>` | Weight 700 |
 | `<i>`, `<em>` | Italic slant |
 | `<u>` | Underline |
+| `<mark>` | Yellow text background by default |
 | `<s>`, `<del>` | Strikethrough |
 | `<sup>`, `<sub>` | Superscript or subscript run |
 | `<font>` | Inline color, size, weight, family, and CSS style |
@@ -190,6 +191,17 @@ with a small CSS subset:
   `'liga' 0`, `'tnum' on`, and `'kern' 1`
 - `white-space: normal | nowrap`
 - `text-transform: none | lowercase | uppercase | smallcaps`
+- `background-color: <color>` with basic CSS color names, `transparent`,
+  `#RGB[A]`, `#RRGGBB[AA]`, `oklab()`, or `oklch()` colors
+
+`<mark>` uses a yellow background unless its inline `background-color`
+overrides it. The property also works on other inline elements and paints the
+background of the affected text runs without changing their foreground color:
+
+```xml
+<mark>Yellow highlight</mark>
+<mark style="background-color: #3366ff80">Custom translucent highlight</mark>
+```
 
 `lowercase` and `uppercase` use ICU case mappings with the component locale;
 an inline `lang` attribute overrides that locale. `smallcaps` follows TextMesh

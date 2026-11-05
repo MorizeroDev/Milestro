@@ -269,6 +269,10 @@ namespace Milestro.RichTextParser
             {
                 state.Underline = true;
             }
+            else if (node.Tag == "mark")
+            {
+                state.BackgroundColor = new Color32(255, 255, 0, 255);
+            }
             else if (node.Tag == "i" || node.Tag == "em")
             {
                 state.FontSlant = FontSlant.Italic;

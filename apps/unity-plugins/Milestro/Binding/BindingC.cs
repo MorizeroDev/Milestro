@@ -1697,6 +1697,35 @@ out int a);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleHasBackground")]
+        internal static extern unsafe long SkiaTextlayoutTextStyleHasBackground(IntPtr s,
+out int ret);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleSetBackgroundColor")]
+        internal static extern unsafe long SkiaTextlayoutTextStyleSetBackgroundColor(IntPtr s,
+int r,
+int g,
+int b,
+int a);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleGetBackgroundColor")]
+        internal static extern unsafe long SkiaTextlayoutTextStyleGetBackgroundColor(IntPtr s,
+out int r,
+out int g,
+out int b,
+out int a);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleClearBackgroundColor")]
+        internal static extern unsafe long SkiaTextlayoutTextStyleClearBackgroundColor(IntPtr s);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleGetDecoration")]
         internal static extern unsafe long SkiaTextlayoutTextStyleGetDecoration(IntPtr s,
 out int decoration);

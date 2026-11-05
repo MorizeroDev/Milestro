@@ -25,6 +25,15 @@ public:
     SkColor getColor() const { return textStyle.getColor(); }
     void setColor(SkColor color) { textStyle.setColor(color); }
 
+    bool hasBackground() const { return textStyle.hasBackground(); }
+    SkColor getBackgroundColor() const { return textStyle.getBackground().getColor(); }
+    void setBackgroundColor(SkColor color) {
+        SkPaint paint;
+        paint.setColor(color);
+        textStyle.setBackgroundPaint(std::move(paint));
+    }
+    void clearBackgroundColor() { textStyle.clearBackgroundColor(); }
+
     ::skia::textlayout::TextDecoration getDecoration() const { return textStyle.getDecorationType(); }
     ::skia::textlayout::TextDecorationMode getDecorationMode() const { return textStyle.getDecorationMode(); }
     SkColor getDecorationColor() const { return textStyle.getDecorationColor(); }

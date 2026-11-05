@@ -139,6 +139,11 @@ namespace Milestro.RichTextParser
         public Color? Color { get; set; } = null;
 
         /// <summary>
+        /// Optional text-run background color override.
+        /// </summary>
+        public Color? BackgroundColor { get; set; } = null;
+
+        /// <summary>
         /// Optional font size override in paragraph text units.
         /// </summary>
         public float? FontSize { get; set; } = null;
@@ -201,6 +206,7 @@ namespace Milestro.RichTextParser
             ret.FontFamilies = FontFamilies == null ? null : new List<string>(FontFamilies);
             ret.FontFamilyTokens = FontFamilyTokens == null ? null : new List<FontFamilyToken>(FontFamilyTokens);
             ret.Color = Color;
+            ret.BackgroundColor = BackgroundColor;
             ret.FontSize = FontSize;
             ret.FontSizeScale = FontSizeScale;
             ret.LetterSpacing = LetterSpacing;
@@ -266,7 +272,7 @@ namespace Milestro.RichTextParser
                 FontSizeScale.HasValue || Locale != null || FontWidth.HasValue ||
                 (FontSlant.HasValue && FontSlant.Value != Milestro.Model.FontSlant.Italic) ||
                 TextCombineUprightAll || TextOrientation != VerticalTextOrientation.Mixed || NoWrap ||
-                TextTransform != TextTransform.None)
+                TextTransform != TextTransform.None || BackgroundColor.HasValue)
             {
                 sb.Append("<span");
                 if (FontSizeScale.HasValue)
@@ -305,6 +311,11 @@ namespace Milestro.RichTextParser
                 }
 
                 var styles = new List<string>();
+                if (BackgroundColor.HasValue)
+                {
+                    styles.Add($"background-color: {ColorUtils.SerializeColor(BackgroundColor.Value)}");
+                }
+
                 if (TextTransform != TextTransform.None)
                 {
                     styles.Add($"text-transform: {TextTransform.ToString().ToLowerInvariant()}");
