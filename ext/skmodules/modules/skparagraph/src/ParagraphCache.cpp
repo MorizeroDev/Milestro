@@ -72,6 +72,7 @@ public:
         : fText(paragraph->fText.c_str(), paragraph->fText.size())
         , fTateChuYokoAnnotations(paragraph->fTateChuYokoAnnotations)
         , fOrientationOverrides(paragraph->fOrientationOverrides)
+        , fNoWrapRanges(paragraph->fNoWrapRanges)
         , fPlaceholders(paragraph->fPlaceholders)
         , fTextStyles(paragraph->fTextStyles)
         , fParagraphStyle(paragraph->paragraphStyle()) {
@@ -84,6 +85,7 @@ public:
         : fText(std::move(other.fText))
         , fTateChuYokoAnnotations(std::move(other.fTateChuYokoAnnotations))
         , fOrientationOverrides(std::move(other.fOrientationOverrides))
+        , fNoWrapRanges(std::move(other.fNoWrapRanges))
         , fPlaceholders(std::move(other.fPlaceholders))
         , fTextStyles(std::move(other.fTextStyles))
         , fParagraphStyle(std::move(other.fParagraphStyle))
@@ -105,6 +107,7 @@ private:
     SkString fText;
     std::vector<TateChuYokoAnnotation> fTateChuYokoAnnotations;
     std::vector<OrientationOverride> fOrientationOverrides;
+    std::vector<TextRange> fNoWrapRanges;
     TArray<Placeholder> fPlaceholders;
     TArray<Block> fTextStyles;
     ParagraphStyle fParagraphStyle;
@@ -191,6 +194,9 @@ uint32_t ParagraphCacheKey::computeHash() const {
         hash = mix(hash, SkGoodHash()(override.range));
         hash = mix(hash, SkGoodHash()(static_cast<int>(override.orientation)));
     }
+    for (const auto& range : fNoWrapRanges) {
+        hash = mix(hash, SkGoodHash()(range));
+    }
     for (auto& ph : fPlaceholders) {
         if (ph.fRange.width() == 0) {
             continue;
@@ -252,6 +258,9 @@ bool ParagraphCacheKey::operator==(const ParagraphCacheKey& other) const {
         return false;
     }
     if (fText != other.fText) {
+        return false;
+    }
+    if (fNoWrapRanges != other.fNoWrapRanges) {
         return false;
     }
     if (fTateChuYokoAnnotations.size() != other.fTateChuYokoAnnotations.size()) {

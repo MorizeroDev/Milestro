@@ -35,6 +35,18 @@ namespace Milestro.RichTextParser
         internal VerticalTextOrientation Orientation { get; }
     }
 
+    internal readonly struct NoWrapAnnotation
+    {
+        internal NoWrapAnnotation(int startUtf16, int endUtf16)
+        {
+            StartUtf16 = startUtf16;
+            EndUtf16 = endUtf16;
+        }
+
+        internal int StartUtf16 { get; }
+        internal int EndUtf16 { get; }
+    }
+
     public class ParagraphPayload
     {
         private static readonly IReadOnlyList<LinkAnnotation> EmptyLinks = Array.Empty<LinkAnnotation>();
@@ -43,10 +55,13 @@ namespace Milestro.RichTextParser
             Array.Empty<TateChuYokoAnnotation>();
         private static readonly IReadOnlyList<OrientationAnnotation> EmptyOrientationAnnotations =
             Array.Empty<OrientationAnnotation>();
+        private static readonly IReadOnlyList<NoWrapAnnotation> EmptyNoWrapAnnotations =
+            Array.Empty<NoWrapAnnotation>();
         private List<LinkAnnotation>? links;
         private List<RubyAnnotation>? rubyAnnotations;
         private List<TateChuYokoAnnotation>? tateChuYokoAnnotations;
         private List<OrientationAnnotation>? orientationAnnotations;
+        private List<NoWrapAnnotation>? noWrapAnnotations;
         private List<ParagraphBlock>? blocks;
         private readonly List<PlaceholderAnnotation> placeholders = new List<PlaceholderAnnotation>();
         public IReadOnlyList<PlaceholderAnnotation> Placeholders => placeholders.AsReadOnly();
@@ -108,6 +123,9 @@ namespace Milestro.RichTextParser
         internal IReadOnlyList<OrientationAnnotation> OrientationAnnotations =>
             orientationAnnotations ?? EmptyOrientationAnnotations;
 
+        internal IReadOnlyList<NoWrapAnnotation> NoWrapAnnotations =>
+            noWrapAnnotations ?? EmptyNoWrapAnnotations;
+
         internal ParagraphBlock AddBlock(bool isExplicit, int startUtf16)
         {
             var list = blocks ??= new List<ParagraphBlock> { new ParagraphBlock() };
@@ -151,6 +169,12 @@ namespace Milestro.RichTextParser
         {
             orientationAnnotations ??= new List<OrientationAnnotation>();
             orientationAnnotations.Add(annotation);
+        }
+
+        internal void AddNoWrap(NoWrapAnnotation annotation)
+        {
+            noWrapAnnotations ??= new List<NoWrapAnnotation>();
+            noWrapAnnotations.Add(annotation);
         }
 
         public static ParagraphPayload MakeText(string text)

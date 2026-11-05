@@ -192,6 +192,7 @@ std::unique_ptr<Paragraph> ParagraphBuilderImpl::Build() {
     paragraph->setRubyAnnotations(fRubyAnnotations);
     paragraph->setTateChuYokoAnnotations(fTateChuYokoAnnotations);
     paragraph->setOrientationOverrides(fOrientationOverrides);
+    paragraph->setNoWrapRanges(fNoWrapRanges);
     return paragraph;
 }
 
@@ -205,6 +206,10 @@ void ParagraphBuilderImpl::addTateChuYoko(TextRange range, TateChuYokoSizing siz
 
 void ParagraphBuilderImpl::addOrientationOverride(TextRange range, VerticalTextOrientation orientation) {
     fOrientationOverrides.push_back({range, orientation});
+}
+
+void ParagraphBuilderImpl::addNoWrap(TextRange range) {
+    fNoWrapRanges.push_back(range);
 }
 
 SkSpan<char> ParagraphBuilderImpl::getText() {
@@ -276,6 +281,7 @@ void ParagraphBuilderImpl::Reset() {
     fRubyAnnotations.clear();
     fTateChuYokoAnnotations.clear();
     fOrientationOverrides.clear();
+    fNoWrapRanges.clear();
     fTextStyles.clear();
     fUtf8.reset();
     fStyledBlocks.clear();

@@ -1116,6 +1116,11 @@ int32_t orientation) {
         return MilestroSkiaTextlayoutParagraphBuilderAddOrientationOverride(b, startUtf8, endUtf8, orientation);
     }
 
+    int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphBuilderAddNoWrap (
+milestro::skia::textlayout::ParagraphBuilder* b, size_t startUtf8, size_t endUtf8) {
+        return MilestroSkiaTextlayoutParagraphBuilderAddNoWrap(b, startUtf8, endUtf8);
+    }
+
 int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphBuilderAddRubyWithStyle (milestro::skia::textlayout::ParagraphBuilder* b,
                                            size_t startUtf8,
                                            size_t endUtf8,

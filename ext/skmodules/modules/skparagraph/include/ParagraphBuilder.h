@@ -69,6 +69,10 @@ public:
     // range. Horizontal paragraphs ignore the override without changing layout.
     virtual void addOrientationOverride(TextRange range, VerticalTextOrientation orientation) = 0;
 
+    // Suppresses soft line breaks strictly inside a UTF-8 source range. Breaks at
+    // the range boundaries and explicit hard line breaks remain available.
+    virtual void addNoWrap(TextRange range) = 0;
+
     // Constructs a SkParagraph object that can be used to layout and paint the text to a SkCanvas.
     virtual std::unique_ptr<Paragraph> Build() = 0;
 

@@ -78,6 +78,12 @@ namespace Milestro.RichTextParser
             VerticalTextOrientation.Mixed;
 
         /// <summary>
+        /// Whether soft line breaks are suppressed inside this inline range.
+        /// The default preserves normal wrapping; explicit line breaks are unaffected.
+        /// </summary>
+        public bool NoWrap { get; set; } = false;
+
+        /// <summary>
         /// Optional numeric font weight override.
         /// </summary>
         public int? FontWeight { get; set; } = null;
@@ -181,6 +187,7 @@ namespace Milestro.RichTextParser
             ret.TextCombineUprightAll = TextCombineUprightAll;
             ret.TextCombineUprightSizing = TextCombineUprightSizing;
             ret.TextOrientation = TextOrientation;
+            ret.NoWrap = NoWrap;
 
             ret.FontWeight = FontWeight;
             ret.FontWidth = FontWidth;
@@ -252,7 +259,7 @@ namespace Milestro.RichTextParser
             if (LetterSpacing.HasValue || BaselineShift.HasValue || BaselineShiftEm.HasValue ||
                 FontSizeScale.HasValue || Locale != null || FontWidth.HasValue ||
                 (FontSlant.HasValue && FontSlant.Value != Milestro.Model.FontSlant.Italic) ||
-                TextCombineUprightAll || TextOrientation != VerticalTextOrientation.Mixed)
+                TextCombineUprightAll || TextOrientation != VerticalTextOrientation.Mixed || NoWrap)
             {
                 sb.Append("<span");
                 if (FontSizeScale.HasValue)
@@ -290,23 +297,28 @@ namespace Milestro.RichTextParser
                     AppendAttribute(sb, "slant", FontSlant.Value.ToString());
                 }
 
-                if (TextCombineUprightAll || TextOrientation != VerticalTextOrientation.Mixed)
+                var styles = new List<string>();
+                if (NoWrap)
                 {
-                    var styles = new List<string>();
-                    if (TextCombineUprightAll)
-                    {
-                        styles.Add("text-combine-upright: all");
-                        if (TextCombineUprightSizing == TateChuYokoSizing.Grow)
-                        {
-                            styles.Add("--milestro-text-combine-upright-sizing: grow");
-                        }
-                    }
+                    styles.Add("white-space: nowrap");
+                }
 
-                    if (TextOrientation != VerticalTextOrientation.Mixed)
+                if (TextCombineUprightAll)
+                {
+                    styles.Add("text-combine-upright: all");
+                    if (TextCombineUprightSizing == TateChuYokoSizing.Grow)
                     {
-                        styles.Add($"text-orientation: {TextOrientation.ToString().ToLowerInvariant()}");
+                        styles.Add("--milestro-text-combine-upright-sizing: grow");
                     }
+                }
 
+                if (TextOrientation != VerticalTextOrientation.Mixed)
+                {
+                    styles.Add($"text-orientation: {TextOrientation.ToString().ToLowerInvariant()}");
+                }
+
+                if (styles.Count > 0)
+                {
                     AppendAttribute(sb, "style", string.Join("; ", styles));
                 }
 

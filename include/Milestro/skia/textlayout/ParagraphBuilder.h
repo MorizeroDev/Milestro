@@ -67,6 +67,10 @@ public:
         builder->addOrientationOverride({startUtf8, endUtf8}, orientation);
     }
 
+    void addNoWrap(size_t startUtf8, size_t endUtf8) {
+        builder->addNoWrap({startUtf8, endUtf8});
+    }
+
     Paragraph *build() {
         auto paragraph = builder->Build();
         auto ret = new Paragraph(std::move(paragraph));

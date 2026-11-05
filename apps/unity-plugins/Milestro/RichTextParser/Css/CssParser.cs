@@ -21,6 +21,7 @@ namespace Milestro.RichTextParser.Css
             bool? textCombineUpright = null;
             TateChuYokoSizing? tateChuYokoSizing = null;
             VerticalTextOrientation? textOrientation = null;
+            bool? noWrap = null;
             TextIndent? textIndent = null;
             float? textIndentEm = null;
             var parser = new CssDeclarationParser(declarations);
@@ -78,6 +79,17 @@ namespace Milestro.RichTextParser.Css
                         textOrientation = VerticalTextOrientation.Mixed;
                     }
                 }
+                else if (declaration.Property.Equals("white-space", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (declaration.Value.Equals("normal", StringComparison.OrdinalIgnoreCase))
+                    {
+                        noWrap = false;
+                    }
+                    else if (declaration.Value.Equals("nowrap", StringComparison.OrdinalIgnoreCase))
+                    {
+                        noWrap = true;
+                    }
+                }
                 else if (paragraphStyle != null &&
                          declaration.Property.Equals("text-indent", StringComparison.OrdinalIgnoreCase) &&
                          TryParseTextIndent(declaration.Value, out var indent, out var isEm))
@@ -99,6 +111,7 @@ namespace Milestro.RichTextParser.Css
                 textStyle.TextCombineUprightSizing = tateChuYokoSizing.Value;
             if (textOrientation.HasValue)
                 textStyle.TextOrientation = textOrientation.Value;
+            if (noWrap.HasValue) textStyle.NoWrap = noWrap.Value;
             if (paragraphStyle != null && (textIndent.HasValue || textIndentEm.HasValue))
             {
                 paragraphStyle.TextIndent = textIndent;

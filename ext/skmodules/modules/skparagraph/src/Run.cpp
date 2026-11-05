@@ -476,6 +476,11 @@ bool Cluster::isSoftBreak() const {
                                        SkUnicode::CodeUnitFlags::kSoftLineBreakBefore);
 }
 
+bool Cluster::canBreakBefore() const {
+    return fOwner->codeUnitHasProperty(fTextRange.start,
+                                       SkUnicode::CodeUnitFlags::kSoftLineBreakBefore);
+}
+
 bool Cluster::isSoftHyphen() const {
     auto text = fOwner->text();
     const char* p = text.begin() + fTextRange.start;

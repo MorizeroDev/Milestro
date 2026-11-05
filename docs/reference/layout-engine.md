@@ -114,6 +114,11 @@ The hierarchy is:
 3. `wrapMode == NoWrap` keeps each paragraph on one line.
 4. Explicit newlines and `<br>` always create hard breaks.
 
+Within a wrapping paragraph, `<span style="white-space: nowrap">` suppresses
+soft breaks inside that inline range while retaining break opportunities at its
+boundaries. `white-space: normal` restores the default, including in nested
+spans. Hard breaks still apply inside a `nowrap` range.
+
 Skia's paragraph implementation uses ICU line-break and bidi data. It keeps
 grapheme clusters, shaped runs, and bidirectional ordering intact. A word or
 unbreakable sequence wider than the available line can still overflow rather
@@ -200,8 +205,9 @@ explicit bidi controls are not painted; they add no glyph or advance and native
 layout logs the skip rather than rejecting the paragraph. Their source bidi
 levels are normalized to LTR so they cannot reorder vertical clusters, range
 queries, or column breaking. The current text
-model has no `white-space` or `tab-size` mode, so preserved-whitespace tab stops
-are not implemented. Other missing glyphs use the normal shaping and fallback
+model supports only `white-space: normal | nowrap`; it has no
+preserved-whitespace or `tab-size` mode, so preserved-whitespace tab stops are
+not implemented. Other missing glyphs use the normal shaping and fallback
 path. Vertical punctuation glyph choice, including locale-specific `vert`
 forms, remains font-driven.
 

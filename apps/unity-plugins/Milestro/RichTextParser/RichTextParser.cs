@@ -213,6 +213,7 @@ namespace Milestro.RichTextParser
                 ConvertToSegments(ctx, root);
                 CollectTateChuYokoRanges(ctx.Result);
                 CollectOrientationRanges(ctx.Result);
+                CollectNoWrapRanges(ctx.Result);
                 return ctx.Result;
             }
 
@@ -654,6 +655,77 @@ namespace Milestro.RichTextParser
                     {
                         groupStart = index;
                         groupOrientation = orientation[index];
+                    }
+                }
+            }
+        }
+
+        private static void CollectNoWrapRanges(ParagraphPayload payload)
+        {
+            foreach (var block in payload.Blocks)
+            {
+                if (block.LengthUtf16 <= 0) continue;
+
+                var noWrap = new bool[block.LengthUtf16];
+                var placeholders = new List<PlaceholderAnnotation>();
+                foreach (var placeholder in payload.Placeholders)
+                {
+                    if (block.ContainsRange(placeholder.StartUtf16, placeholder.EndUtf16))
+                    {
+                        placeholders.Add(placeholder);
+                    }
+                }
+
+                placeholders.Sort((left, right) => left.StartUtf16.CompareTo(right.StartUtf16));
+                var nextPlaceholder = 0;
+                var cursor = block.StartUtf16;
+
+                void ConsumePlaceholders()
+                {
+                    while (nextPlaceholder < placeholders.Count &&
+                           placeholders[nextPlaceholder].StartUtf16 == cursor)
+                    {
+                        noWrap[cursor - block.StartUtf16] = placeholders[nextPlaceholder].TextStyle.NoWrap;
+                        ++cursor;
+                        ++nextPlaceholder;
+                    }
+                }
+
+                foreach (var segment in block.Segments)
+                {
+                    var content = segment.Content ?? string.Empty;
+                    var segmentNoWrap = segment.TextStyle?.NoWrap == true;
+                    var offset = 0;
+                    while (offset < content.Length)
+                    {
+                        ConsumePlaceholders();
+                        var position = cursor - block.StartUtf16;
+                        if (position < 0 || position >= block.LengthUtf16)
+                        {
+                            throw new InvalidOperationException("Invalid white-space source position");
+                        }
+
+                        noWrap[position] = segmentNoWrap;
+                        ++cursor;
+                        ++offset;
+                    }
+                }
+
+                ConsumePlaceholders();
+
+                var groupStart = -1;
+                for (var index = 0; index <= noWrap.Length; ++index)
+                {
+                    var active = index < noWrap.Length && noWrap[index];
+                    if (active && groupStart < 0)
+                    {
+                        groupStart = index;
+                    }
+                    else if (!active && groupStart >= 0)
+                    {
+                        payload.AddNoWrap(new NoWrapAnnotation(
+                            block.StartUtf16 + groupStart, block.StartUtf16 + index));
+                        groupStart = -1;
                     }
                 }
             }

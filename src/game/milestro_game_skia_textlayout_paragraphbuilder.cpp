@@ -102,6 +102,16 @@ int64_t MilestroSkiaTextlayoutParagraphBuilderAddOrientationOverride(
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutParagraphBuilderAddNoWrap(
+        milestro::skia::textlayout::ParagraphBuilder* b, size_t startUtf8, size_t endUtf8) try {
+    if (b == nullptr || startUtf8 >= endUtf8)
+        return MILESTRO_API_RET_FAILED;
+    b->addNoWrap(startUtf8, endUtf8);
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutParagraphBuilderAddPlaceholder(
         milestro::skia::textlayout::ParagraphBuilder* b,
         float width, float height, int32_t alignment, int32_t baseline, float baselineOffset) try {

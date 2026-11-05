@@ -1681,7 +1681,7 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
                     break;
                 }
             }
-            if (run->isPlaceholder() && !units.empty()) {
+            if (run->isPlaceholder() && cluster.canBreakBefore() && !units.empty()) {
                 units.back().softBreak = true;
             }
             units.push_back({index,
@@ -1689,7 +1689,7 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
                              inlineStart,
                              inlineEnd,
                              cluster.isHardBreak(),
-                             fClusters[endCluster - 1].isSoftBreak() || run->isPlaceholder(),
+                             fClusters[endCluster - 1].isSoftBreak(),
                              cluster.isWhitespaceBreak()});
             index = endCluster - 1;
         }

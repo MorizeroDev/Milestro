@@ -62,6 +62,8 @@ public:
 
     void addOrientationOverride(TextRange range, VerticalTextOrientation orientation) override;
 
+    void addNoWrap(TextRange range) override;
+
     // Constructs a SkParagraph object that can be used to layout and paint the text to a SkCanvas.
     std::unique_ptr<Paragraph> Build() override;
 
@@ -109,6 +111,7 @@ protected:
     std::vector<RubyAnnotation> fRubyAnnotations;
     std::vector<TateChuYokoAnnotation> fTateChuYokoAnnotations;
     std::vector<OrientationOverride> fOrientationOverrides;
+    std::vector<TextRange> fNoWrapRanges;
     // TextStyle, Block, and Placeholder contain std::vector and std::optional, which poison
     // disengaged storage under MSVC STL ASAN and must be relocated via move constructors
     skia_private::STArray<4, TextStyle> fTextStyles;

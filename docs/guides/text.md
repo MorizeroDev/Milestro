@@ -183,6 +183,12 @@ with a small CSS subset:
 - `font-kerning: auto | normal | none`
 - `font-feature-settings: normal` or comma-separated settings such as
   `'liga' 0`, `'tnum' on`, and `'kern' 1`
+- `white-space: normal | nowrap`
+
+`normal` keeps the default automatic wrapping. `nowrap` suppresses soft line
+breaks inside the inline range, matching the purpose of TMPro's `<nobr>` tag;
+explicit `<br>` elements and newline characters still force breaks. Content
+that exceeds the available inline size overflows instead of shrinking.
 
 The vertical-only properties (`text-combine-upright`, `text-orientation`, and
 `--milestro-text-combine-upright-sizing`) are documented in

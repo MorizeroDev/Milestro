@@ -625,6 +625,8 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderAddTateChuYoko(
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderAddOrientationOverride(
         milestro::skia::textlayout::ParagraphBuilder* b, size_t startUtf8, size_t endUtf8,
         int32_t orientation);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphBuilderAddNoWrap(
+        milestro::skia::textlayout::ParagraphBuilder* b, size_t startUtf8, size_t endUtf8);
 MILESTRO_API int64_t
 MilestroSkiaTextlayoutParagraphBuilderAddRubyWithStyle(milestro::skia::textlayout::ParagraphBuilder* b,
                                                        size_t startUtf8,

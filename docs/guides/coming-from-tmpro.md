@@ -114,6 +114,10 @@ separate TMP input field. See [Input and IME](../guides/input.md).
 
 ## Things that do not translate one-to-one
 
+Use `<span style="white-space: nowrap">...</span>` where TMPro uses
+`<nobr>...</nobr>`. The default `white-space: normal` restores automatic
+wrapping for nested content; explicit line breaks remain active in both modes.
+
 - A `TMP_FontAsset` is not a Milestro text property. Register font files and
   select a family list such as `{"Inter", "sans-serif"}`.
 - TMP material presets and per-character vertex animation do not have a direct

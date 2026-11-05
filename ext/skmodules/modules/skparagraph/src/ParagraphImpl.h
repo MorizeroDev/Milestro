@@ -259,6 +259,9 @@ public:
                       return a.range.start < b.range.start;
                   });
     }
+    void setNoWrapRanges(std::vector<TextRange> ranges) {
+        fNoWrapRanges = std::move(ranges);
+    }
     bool hasTateChuYoko() const { return !fTateChuYokoAnnotations.empty(); }
     bool hasOrientationOverrides() const { return !fOrientationOverrides.empty(); }
     void prepareVerticalTateChuYoko();
@@ -336,6 +339,7 @@ public:
     void resolveStrut();
 
     bool computeCodeUnitProperties();
+    void applyNoWrapRanges();
     void applySpacingAndBuildClusterTable();
     void applyCjkPunctuationCompression();
     void buildClusterTable();
@@ -409,6 +413,19 @@ public:
         return (fCodeUnitProperties[index] & property) == property;
     }
 
+    bool isNoWrapBoundary(TextIndex index, bool atLineStart) const {
+        for (const auto& range : fNoWrapRanges) {
+            if (atLineStart && index == range.start && index < range.end) {
+                return true;
+            }
+            if (range.start < index &&
+                (index < range.end || (index == range.end && index == fText.size()))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     sk_sp<SkUnicode> getUnicode() { return fUnicode; }
 
 private:
@@ -426,6 +443,7 @@ private:
     std::vector<RubyAnnotation> fRubyAnnotations;
     std::vector<TateChuYokoAnnotation> fTateChuYokoAnnotations;
     std::vector<OrientationOverride> fOrientationOverrides;
+    std::vector<TextRange> fNoWrapRanges;
     std::vector<RubySpan> fRubySpans;
     std::vector<RubyLayoutUnit> fRubyUnits;
     std::vector<std::vector<SkPoint>> fRubyOffsets;

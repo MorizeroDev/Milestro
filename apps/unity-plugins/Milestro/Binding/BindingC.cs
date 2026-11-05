@@ -1328,6 +1328,13 @@ int orientation);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphBuilderAddNoWrap")]
+        internal static extern unsafe long SkiaTextlayoutParagraphBuilderAddNoWrap(IntPtr b,
+ulong startUtf8,
+ulong endUtf8);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphBuilderAddRubyWithStyle")]
         internal static extern unsafe long SkiaTextlayoutParagraphBuilderAddRubyWithStyle(IntPtr b,
 ulong startUtf8,

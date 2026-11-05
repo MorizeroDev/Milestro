@@ -107,15 +107,17 @@ void TextWrapper::lookAhead(SkScalar maxWidth,
         } else if (
                 // TODO: Trying to deal with flutter rounding problem. Must be removed...
                 SkScalar width = fWords.width() + fClusters.width() + cluster->width();
-                breaker.breakLine(width)) {
-            if (cluster->isWhitespaceBreak()) {
+                breaker.breakLine(width) &&
+                !cluster->owner()->isNoWrapBoundary(cluster->textRange().start,
+                                                    fWords.empty() && fClusters.empty())) {
+            if (cluster->isWhitespaceBreak() && cluster->isSoftBreak()) {
                 // It's the end of the word
                 fClusters.extend(cluster);
                 this->updateMinIntrinsicWidth(this->getClustersTrimmedWidth());
                 fWords.extend(fClusters);
                 softHyphenBreakTooWide = false;
                 continue;
-            } else if (cluster->run().isPlaceholder()) {
+            } else if (cluster->run().isPlaceholder() && cluster->canBreakBefore()) {
                 if (!fClusters.empty()) {
                     // Placeholder ends the previous word
                     this->updateMinIntrinsicWidth(this->getClustersTrimmedWidth());
@@ -168,7 +170,8 @@ void TextWrapper::lookAhead(SkScalar maxWidth,
             bool reusable = true;
             auto further = sameWord ? endOfClusters : cluster;
             for (; further != endOfClusters; ++further) {
-                if (further->isHardBreak() || further->isWhitespaceBreak()) {
+                if (further->isHardBreak() ||
+                    (further->isWhitespaceBreak() && further->isSoftBreak())) {
                     break;
                 }
                 if (further->isSoftBreak() && !further->isSoftHyphen()) {
@@ -176,7 +179,7 @@ void TextWrapper::lookAhead(SkScalar maxWidth,
                     // cluster; only a soft hyphen's own (letter-spaced) width counts here
                     break;
                 }
-                if (further->run().isPlaceholder()) {
+                if (further->run().isPlaceholder() && further->canBreakBefore()) {
                   // Placeholder ends the word
                   break;
                 }
@@ -244,7 +247,7 @@ void TextWrapper::lookAhead(SkScalar maxWidth,
             break;
         }
 
-        if (cluster->run().isPlaceholder()) {
+        if (cluster->run().isPlaceholder() && cluster->isSoftBreak()) {
             if (!fClusters.empty()) {
                 // Placeholder ends the previous word (placeholders are ignored in trimming)
                 this->updateMinIntrinsicWidth(getClustersTrimmedWidth());
@@ -568,18 +571,22 @@ void TextWrapper::breakTextIntoLines(ParagraphImpl* parent,
                 softLineMaxIntrinsicWidth = 0;
                 this->updateMinIntrinsicWidth(lastWordLength);
                 lastWordLength = 0;
-            } else if (cluster->isWhitespaceBreak()) {
+            } else if (cluster->isWhitespaceBreak() && cluster->isSoftBreak()) {
                 // Whitespaces end the word
                 softLineMaxIntrinsicWidth += cluster->width();
                 this->updateMinIntrinsicWidth(lastWordLength);
                 lastWordLength = 0;
             } else if (cluster->run().isPlaceholder()) {
-                // Placeholder ends the previous word and creates a separate one
-                this->updateMinIntrinsicWidth(lastWordLength);
-                // Placeholder width now counts in fMinIntrinsicWidth
+                if (cluster->canBreakBefore()) {
+                    this->updateMinIntrinsicWidth(lastWordLength);
+                    lastWordLength = 0;
+                }
                 softLineMaxIntrinsicWidth += cluster->width();
-                this->updateMinIntrinsicWidth(cluster->width());
-                lastWordLength = 0;
+                lastWordLength += cluster->width();
+                if (cluster->isSoftBreak()) {
+                    this->updateMinIntrinsicWidth(lastWordLength);
+                    lastWordLength = 0;
+                }
             } else {
                 // Nothing out of ordinary - just add this cluster to the word and to the line
                 softLineMaxIntrinsicWidth += cluster->width();

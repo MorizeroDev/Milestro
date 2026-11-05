@@ -330,6 +330,15 @@ bool ParagraphImpl::computeCodeUnitProperties() {
     return true;
 }
 
+void ParagraphImpl::applyNoWrapRanges() {
+    for (const auto& range : fNoWrapRanges) {
+        const auto end = std::min(range.end, fText.size());
+        for (auto index = range.start + 1; index < end; ++index) {
+            fCodeUnitProperties[index] &= ~SkUnicode::CodeUnitFlags::kSoftLineBreakBefore;
+        }
+    }
+}
+
 static bool is_ascii_7bit_space(int c) {
     SkASSERT(c >= 0 && c <= 127);
 
@@ -695,6 +704,8 @@ void ParagraphImpl::buildClusterTable() {
             fClustersIndexFromCodeUnit[i] = lastValidCluster;
         }
     }
+
+    this->applyNoWrapRanges();
 }
 
 namespace {
