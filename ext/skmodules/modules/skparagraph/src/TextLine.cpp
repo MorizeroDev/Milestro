@@ -666,6 +666,7 @@ void TextLine::shiftCluster(const Cluster* cluster, SkScalar shift, SkScalar pre
 
     if (run.fJustificationShifts.empty()) {
         // Do not fill this array until needed
+        run.fJustificationShifts.reserve_exact(run.size() + 1);
         run.fJustificationShifts.push_back_n(run.size() + 1, { 0, 0 });
     }
 
@@ -808,10 +809,11 @@ std::unique_ptr<Run> TextLine::ShapeString(ParagraphImpl* owner,
         Buffer runBuffer(const RunInfo& info) override {
             SkASSERT(!fRun);
             fRun = std::make_unique<Run>(nullptr, info, 0, fLineHeight, fUseHalfLeading, fBaselineShift, 0, 0);
-            return fRun->newRunBuffer();
+            return fRun->newRunBuffer(&fBuffer, info.glyphCount);
         }
 
         void commitRunBuffer(const RunInfo& info) override {
+            fRun->commit(fBuffer);
             fRun->fAdvance.fX = info.fAdvance.fX;
             fRun->fAdvance.fY = fRun->advance().fY;
             fRun->fPlaceholderIndex = std::numeric_limits<size_t>::max();
@@ -821,6 +823,7 @@ std::unique_ptr<Run> TextLine::ShapeString(ParagraphImpl* owner,
         void commitLine() override {}
 
         std::unique_ptr<Run> fRun;
+        Run::ShapingBuffer fBuffer;
         SkScalar fLineHeight;
         bool fUseHalfLeading;
         SkScalar fBaselineShift;

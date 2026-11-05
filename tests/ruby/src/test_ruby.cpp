@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 #include <fstream>
 #include <tuple>
+#include <unordered_set>
 #include <unicode/udata.h>
 
 using namespace skia::textlayout;
@@ -607,6 +608,30 @@ TEST_F(RubyLayoutTest, LongUnbreakableWordsPreserveIndentAcrossRelayout) {
             EXPECT_NEAR(paragraph->getMaxIntrinsicWidth(), controlMax + indent, 0.5f);
         }
     }
+}
+
+TEST_F(RubyLayoutTest, CachedMissingCodepointsSurviveUncachedReshaping) {
+    fonts->disableFontFallback();
+    const std::string text = "\xee\x80\x80\xee\x80\x81\xee\x80\x82";
+    const std::unordered_set<SkUnichar> expected = {0xe000, 0xe001, 0xe002};
+    auto original = build(text, {}, 180);
+    ASSERT_EQ(original->unresolvedCodepoints(), expected);
+    ASSERT_GT(fonts->getParagraphCache()->count(), 0);
+
+    auto cached = build(text, {}, 150);
+    EXPECT_EQ(cached->unresolvedGlyphs(), original->unresolvedGlyphs());
+    EXPECT_EQ(cached->unresolvedCodepoints(), expected);
+
+    fonts->getParagraphCache()->turnOn(false);
+    cached->markDirty();
+    cached->layout(120);
+    EXPECT_EQ(cached->unresolvedCodepoints(), expected);
+    EXPECT_EQ(original->unresolvedCodepoints(), expected);
+
+    fonts->getParagraphCache()->turnOn(true);
+    auto restored = build(text, {}, 100);
+    EXPECT_EQ(restored->unresolvedCodepoints(), expected);
+    EXPECT_EQ(restored->unresolvedGlyphs(), original->unresolvedGlyphs());
 }
 
 TEST_F(RubyLayoutTest, FontManagerReplacementUpdatesCachedParagraphTypeface) {

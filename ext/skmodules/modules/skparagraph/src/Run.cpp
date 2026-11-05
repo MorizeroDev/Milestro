@@ -9,10 +9,27 @@
 #include "modules/skparagraph/src/ParagraphImpl.h"
 #include "modules/skparagraph/src/Run.h"
 #include "modules/skshaper/include/SkShaper.h"
+#include "src/core/SkFloatBits.h"
 #include "src/core/SkUTF.h"
+
+#include <cstring>
+#include <new>
 
 namespace skia {
 namespace textlayout {
+
+sk_sp<Run::GlyphData> Run::GlyphData::Make(size_t n, bool hasOffsets) {
+    // Positions, cluster indexes, glyphs, then offsets. The arrays never grow after this.
+    static_assert(alignof(GlyphData) >= alignof(SkPoint));
+    static_assert(alignof(SkPoint) == alignof(uint32_t) && alignof(uint32_t) >= alignof(SkGlyphID));
+    void* mem = sk_malloc_throw(sizeof(GlyphData) + (n + 1) * (sizeof(SkPoint) + sizeof(uint32_t)) +
+                                (hasOffsets ? SkAlign2(n) : n) * sizeof(SkGlyphID) +
+                                (hasOffsets ? n * sizeof(SkPoint) : 0));
+    GlyphData* data = new (mem) GlyphData;
+    data->fSize = n;
+    data->fHasOffsets = hasOffsets;
+    return sk_sp<GlyphData>(data);
+}
 
 Run::Run(ParagraphImpl* owner,
          const SkShaper::RunHandler::RunInfo& info,
@@ -27,11 +44,6 @@ Run::Run(ParagraphImpl* owner,
     , fClusterRange(EMPTY_CLUSTERS)
     , fFont(info.fFont)
     , fClusterStart(firstChar)
-    , fGlyphData(std::make_shared<GlyphData>())
-    , fGlyphs(fGlyphData->glyphs)
-    , fPositions(fGlyphData->positions)
-    , fOffsets(fGlyphData->offsets)
-    , fClusterIndexes(fGlyphData->clusterIndexes)
     , fHeightMultiplier(heightMultiplier)
     , fUseHalfLeading(useHalfLeading)
     , fBaselineShift(baselineShift)
@@ -44,18 +56,10 @@ Run::Run(ParagraphImpl* owner,
     fUtf8Range = info.utf8Range;
     fOffset = SkVector::Make(offsetX, 0);
 
-    fGlyphs.push_back_n(info.glyphCount);
-    fPositions.push_back_n(info.glyphCount + 1);
-    fOffsets.push_back_n(info.glyphCount + 1);
-    fClusterIndexes.push_back_n(info.glyphCount + 1);
     info.fFont.getMetrics(&fFontMetrics);
 
     this->calculateMetrics();
 
-    // To make edge cases easier:
-    fPositions[info.glyphCount] = fOffset + fAdvance;
-    fOffsets[info.glyphCount] = {0, 0};
-    fClusterIndexes[info.glyphCount] = this->leftToRight() ? info.utf8Range.end() : info.utf8Range.begin();
     fEllipsis = false;
     fPlaceholderIndex = std::numeric_limits<size_t>::max();
 }
@@ -64,9 +68,8 @@ Run::Run(const Run& other, bool detachGlyphs)
     : fOwner(other.fOwner), fTextRange(other.fTextRange), fClusterRange(other.fClusterRange), fFont(other.fFont),
       fPlaceholderIndex(other.fPlaceholderIndex), fIndex(other.fIndex), fAdvance(other.fAdvance),
       fOffset(other.fOffset), fClusterStart(other.fClusterStart), fUtf8Range(other.fUtf8Range),
-      fGlyphData(detachGlyphs ? std::make_shared<GlyphData>(*other.fGlyphData) : other.fGlyphData),
-      fGlyphs(fGlyphData->glyphs), fPositions(fGlyphData->positions), fOffsets(fGlyphData->offsets),
-      fClusterIndexes(fGlyphData->clusterIndexes), fJustificationShifts(other.fJustificationShifts),
+      fGlyphData(other.fGlyphData),
+      fJustificationShifts(other.fJustificationShifts),
       fFontMetrics(other.fFontMetrics), fHeightMultiplier(other.fHeightMultiplier),
       fUseHalfLeading(other.fUseHalfLeading), fBaselineShift(other.fBaselineShift),
       fCorrectAscent(other.fCorrectAscent), fCorrectDescent(other.fCorrectDescent),
@@ -74,6 +77,62 @@ Run::Run(const Run& other, bool detachGlyphs)
       fScript(other.fScript), fLanguage(other.fLanguage), fVertical(other.fVertical), fSideways(other.fSideways),
       fVchwEnabled(other.fVchwEnabled), fBlockAscent(other.fBlockAscent),
       fBlockDescent(other.fBlockDescent) {
+    if (detachGlyphs) {
+        auto data = GlyphData::Make(this->size(), true);
+        std::copy_n(fGlyphData->positions(), this->size() + 1, data->positions());
+        std::copy_n(fGlyphData->clusterIndexes(), this->size() + 1, data->clusterIndexes());
+        std::copy_n(fGlyphData->glyphs(), this->size(), data->glyphs());
+        for (size_t index = 0; index < this->size(); ++index) {
+            data->offsets()[index] = this->glyphOffset(index);
+        }
+        fGlyphData = std::move(data);
+    }
+}
+
+void Run::setEndOfRun() {
+    // To make edge cases easier:
+    fGlyphData->positions()[this->size()] = fOffset + fAdvance;
+    fGlyphData->clusterIndexes()[this->size()] =
+            this->leftToRight() ? fUtf8Range.end() : fUtf8Range.begin();
+}
+
+void Run::allocateGlyphData(size_t glyphCount, bool hasOffsets) {
+    fGlyphData = GlyphData::Make(glyphCount, hasOffsets);
+    this->setEndOfRun();
+}
+
+SkShaper::RunHandler::Buffer Run::newRunBuffer(ShapingBuffer* buffer, size_t glyphCount) {
+    // Most runs have no offsets, so first make the glyph data without them.
+    this->allocateGlyphData(glyphCount, /*hasOffsets=*/false);
+    if (buffer->fOffsets.size() < SkToInt(glyphCount)) {
+        buffer->fOffsets.resize_back(SkToInt(glyphCount));
+    }
+    return {fGlyphData->glyphs(),
+            fGlyphData->positions(),
+            buffer->fOffsets.data(),
+            fGlyphData->clusterIndexes(),
+            fOffset};
+}
+
+void Run::commit(const ShapingBuffer& buffer) {
+    const size_t n = this->size();
+    const SkPoint* offsets = buffer.fOffsets.data();
+    // The bits of all offsets; -0.0 counts as zero. No branches, so it vectorizes.
+    uint32_t bits = 0;
+    for (size_t i = 0; i < n; ++i) {
+        bits |= SkFloat2Bits(offsets[i].fX) | SkFloat2Bits(offsets[i].fY);
+    }
+    if ((bits & 0x7fffffff) == 0) {
+        return;
+    }
+    // Most runs do not get here: only marks and some kerning have offsets.
+    sk_sp<GlyphData> data = GlyphData::Make(n, /*hasOffsets=*/true);
+    // The positions, cluster indexes and glyphs are in the same place in both blocks.
+    memcpy(data->positions(),
+           fGlyphData->positions(),
+           (n + 1) * (sizeof(SkPoint) + sizeof(uint32_t)) + n * sizeof(SkGlyphID));
+    memcpy(data->offsets(), offsets, n * sizeof(SkPoint));
+    fGlyphData = std::move(data);
 }
 
 void Run::calculateMetrics() {
@@ -98,21 +157,20 @@ void Run::calculateMetrics() {
     // apply fBaselineShift on read
 }
 
-SkShaper::RunHandler::Buffer Run::newRunBuffer() {
-    return {fGlyphs.data(), fPositions.data(), fOffsets.data(), fClusterIndexes.data(), fOffset};
-}
-
 void Run::copyTo(SkTextBlobBuilder& builder, size_t pos, size_t size) const {
     SkASSERT(pos + size <= this->size());
     const auto& blobBuffer = builder.allocRunPos(fFont, SkToInt(size));
-    sk_careful_memcpy(blobBuffer.glyphs, fGlyphs.data() + pos, size * sizeof(SkGlyphID));
+    sk_careful_memcpy(blobBuffer.glyphs, fGlyphData->glyphs() + pos, size * sizeof(SkGlyphID));
 
+    const SkPoint* offsets = fGlyphData->offsets();
     for (size_t i = 0; i < size; ++i) {
-        auto point = fPositions[i + pos];
+        SkPoint point = fGlyphData->positions()[i + pos];
         if (!fJustificationShifts.empty()) {
             point.fX += fJustificationShifts[i + pos].fX;
         }
-        point += fOffsets[i + pos];
+        if (offsets) {
+            point += offsets[i + pos];
+        }
         blobBuffer.points()[i] = point;
     }
 }
@@ -194,17 +252,17 @@ SkScalar Run::addLetterSpacesEvenly(SkScalar space) {
     SkScalar advance = fVertical ? fAdvance.fY : fAdvance.fX;
     for (size_t i = 0; i < this->size(); ++i) {
         if (fVertical) {
-            fPositions[i].fY += shift;
+            fGlyphData->positions()[i].fY += shift;
         } else {
-            fPositions[i].fX += shift;
+            fGlyphData->positions()[i].fX += shift;
         }
         shift += space;
     }
     if (fVertical) {
-        fPositions[this->size()].fY += shift;
+        fGlyphData->positions()[this->size()].fY += shift;
         fAdvance.fY = advance + shift;
     } else {
-        fPositions[this->size()].fX += shift;
+        fGlyphData->positions()[this->size()].fX += shift;
         fAdvance.fX = advance + shift;
     }
     return shift;
@@ -215,18 +273,18 @@ SkScalar Run::addLetterSpacesEvenly(SkScalar space, Cluster* cluster) {
     SkScalar shift = 0;
     for (size_t i = cluster->startPos(); i < cluster->endPos(); ++i) {
         if (fVertical) {
-            fPositions[i].fY += shift;
+            fGlyphData->positions()[i].fY += shift;
         } else {
-            fPositions[i].fX += shift;
+            fGlyphData->positions()[i].fX += shift;
         }
         shift += space;
     }
     if (this->size() == cluster->endPos()) {
         // To make calculations easier
         if (fVertical) {
-            fPositions[cluster->endPos()].fY += shift;
+            fGlyphData->positions()[cluster->endPos()].fY += shift;
         } else {
-            fPositions[cluster->endPos()].fX += shift;
+            fGlyphData->positions()[cluster->endPos()].fX += shift;
         }
     }
     // Increment the run width
@@ -263,17 +321,17 @@ void Run::shift(const Cluster* cluster, SkScalar offset) {
     }
     for (size_t i = cluster->startPos(); i < cluster->endPos(); ++i) {
         if (fVertical) {
-            fPositions[i].fY += offset;
+            fGlyphData->positions()[i].fY += offset;
         } else {
-            fPositions[i].fX += offset;
+            fGlyphData->positions()[i].fX += offset;
         }
     }
     if (this->size() == cluster->endPos()) {
         // To make calculations easier
         if (fVertical) {
-            fPositions[cluster->endPos()].fY += offset;
+            fGlyphData->positions()[cluster->endPos()].fY += offset;
         } else {
-            fPositions[cluster->endPos()].fX += offset;
+            fGlyphData->positions()[cluster->endPos()].fX += offset;
         }
     }
 }
@@ -281,9 +339,9 @@ void Run::shift(const Cluster* cluster, SkScalar offset) {
 void Run::extend(const Cluster* cluster, SkScalar offset) {
     // Extend the cluster at the end
     if (fVertical) {
-        fPositions[cluster->endPos()].fY += offset;
+        fGlyphData->positions()[cluster->endPos()].fY += offset;
     } else {
-        fPositions[cluster->endPos()].fX += offset;
+        fGlyphData->positions()[cluster->endPos()].fX += offset;
     }
 }
 
@@ -293,12 +351,12 @@ void Run::compressAfter(Cluster* cluster, SkScalar amount) {
     }
     if (fVertical) {
         for (size_t i = cluster->endPos(); i <= this->size(); ++i) {
-            fPositions[i].fY -= amount;
+            fGlyphData->positions()[i].fY -= amount;
         }
         fAdvance.fY -= amount;
     } else {
         for (size_t i = cluster->endPos(); i <= this->size(); ++i) {
-            fPositions[i].fX -= amount;
+            fGlyphData->positions()[i].fX -= amount;
         }
         fAdvance.fX -= amount;
     }
@@ -446,7 +504,7 @@ PlaceholderStyle* Run::placeholderStyle() const {
 }
 
 bool Run::isResolved() const {
-    for (auto& glyph :fGlyphs) {
+    for (auto glyph : this->glyphs()) {
         if (glyph == 0) {
             return false;
         }

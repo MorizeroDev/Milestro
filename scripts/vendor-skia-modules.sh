@@ -122,6 +122,7 @@ overlay_paths=(
     modules/skparagraph/include/Metrics.h
     modules/skparagraph/include/ParagraphPainter.h
     modules/skparagraph/src/OneLineShaper.cpp
+    modules/skparagraph/src/OneLineShaper.h
     modules/skparagraph/src/ParagraphCache.cpp
     modules/skparagraph/src/ParagraphPainterImpl.cpp
     modules/skparagraph/src/ParagraphPainterImpl.h

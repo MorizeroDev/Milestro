@@ -786,7 +786,7 @@ bool ParagraphImpl::shapeVerticalRuns() {
     // an odd source bidi level produced by those controls must not leak into
     // the forced vertical shaping runs. Keeping every run LTR preserves logical
     // cluster order for ranges, hit testing, and column breaking.
-    skia_private::TArray<Run, false> verticalRuns;
+    skia_private::TArray<Run> verticalRuns;
     size_t unresolvedGlyphs = 0;
     size_t runIndex = 0;
     SkScalar inlineCursor = 0;
@@ -810,7 +810,8 @@ bool ParagraphImpl::shapeVerticalRuns() {
             run.fPlaceholderIndex = source.fPlaceholderIndex;
             run.fAdvance = SkVector::Make(0, placeholder.fHeight);
             run.fOffset = SkVector::Make(0, inlineCursor);
-            run.fPositions[0] = SkPoint::Make(0, 0);
+            run.allocateGlyphData(0, false);
+            run.fGlyphData->positions()[0] = SkPoint::Make(0, 0);
             inlineCursor += placeholder.fHeight;
             continue;
         }
@@ -845,6 +846,8 @@ bool ParagraphImpl::shapeVerticalRuns() {
                 run.fSideways = false;
                 run.fAdvance = SkVector::Make(0, 0);
                 run.fOffset = SkVector::Make(0, inlineCursor);
+                run.allocateGlyphData(0, false);
+                run.fGlyphData->positions()[0] = SkPoint::Make(0, 0);
                 run.fBlockAscent = 0;
                 run.fBlockDescent = 0;
                 ++runIndex;
@@ -937,6 +940,7 @@ bool ParagraphImpl::shapeVerticalRuns() {
             run.fVchwEnabled = shaped.vchwEnabled;
             run.fAdvance = SkVector::Make(0, inlineAdvance);
             run.fOffset = SkVector::Make(0, inlineCursor);
+            run.allocateGlyphData(glyphCount, true);
 
             std::vector<SkGlyphID> glyphs;
             glyphs.reserve(glyphCount);
@@ -948,16 +952,15 @@ bool ParagraphImpl::shapeVerticalRuns() {
                     RotateClockwise(&position);
                     RotateClockwise(&offset);
                 }
-                run.fGlyphs[index] = glyph.glyph;
-                run.fPositions[index] = position;
-                run.fOffsets[index] = offset;
+                run.fGlyphData->glyphs()[index] = glyph.glyph;
+                run.fGlyphData->positions()[index] = position;
+                run.fGlyphData->offsets()[index] = offset;
                 const size_t cluster = glyph.clusterUtf8 >= segmentStart ? glyph.clusterUtf8 - segmentStart : 0;
-                run.fClusterIndexes[index] = SkToU32(std::min(cluster, segmentLength));
+                run.fGlyphData->clusterIndexes()[index] = SkToU32(std::min(cluster, segmentLength));
                 glyphs.push_back(glyph.glyph);
             }
-            run.fPositions[glyphCount] = SkPoint::Make(0, inlineAdvance);
-            run.fOffsets[glyphCount] = {0, 0};
-            run.fClusterIndexes[glyphCount] = SkToU32(segmentLength);
+            run.fGlyphData->positions()[glyphCount] = SkPoint::Make(0, inlineAdvance);
+            run.fGlyphData->clusterIndexes()[glyphCount] = SkToU32(segmentLength);
 
             run.fBlockAscent = 0;
             run.fBlockDescent = 0;
@@ -979,7 +982,7 @@ bool ParagraphImpl::shapeVerticalRuns() {
                 for (size_t index = 0; index < glyphCount; ++index) {
                     const SkRect rotated = RotateClockwiseBounds(bounds[index]);
                     const SkScalar originX =
-                            blockOffset + run.fPositions[index].fX + run.fOffsets[index].fX;
+                            blockOffset + run.fGlyphData->positions()[index].fX + run.fGlyphData->offsets()[index].fX;
                     run.fBlockAscent = std::max(run.fBlockAscent, originX + rotated.fRight);
                     run.fBlockDescent = std::max(run.fBlockDescent, -(originX + rotated.fLeft));
                 }
@@ -994,7 +997,7 @@ bool ParagraphImpl::shapeVerticalRuns() {
                                          nullptr);
                 }
                 for (size_t index = 0; index < glyphCount; ++index) {
-                    const SkScalar baselineX = run.fPositions[index].fX + run.fOffsets[index].fX;
+                    const SkScalar baselineX = run.fGlyphData->positions()[index].fX + run.fGlyphData->offsets()[index].fX;
                     run.fBlockAscent = std::max(run.fBlockAscent, baselineX + bounds[index].fRight);
                     run.fBlockDescent = std::max(run.fBlockDescent, -(baselineX + bounds[index].fLeft));
                 }
@@ -1050,11 +1053,11 @@ void ParagraphImpl::prepareVerticalRuby() {
             const auto& cluster = fClusters[index];
             const auto& run = cluster.run();
             for (size_t glyph = cluster.startPos(); glyph < cluster.endPos(); ++glyph) {
-                SkRect bounds = run.font().getBounds(run.fGlyphs[glyph], nullptr);
+                SkRect bounds = run.font().getBounds(run.fGlyphData->glyphs()[glyph], nullptr);
                 if (run.isSideways()) {
                     bounds = RotateClockwiseBounds(bounds);
                 }
-                bounds.offset(run.fPositions[glyph] + run.fOffsets[glyph] +
+                bounds.offset(run.fGlyphData->positions()[glyph] + run.fGlyphData->offsets()[glyph] +
                               SkPoint::Make(0, run.offset().y() - sourceStart));
                 baseInk.join(bounds);
             }
@@ -1143,7 +1146,7 @@ void ParagraphImpl::prepareVerticalRuby() {
                 before(input.style.alignment, extent - bounds.height()) - bounds.top(),
                 leading[first], baseExtent});
     }
-    skia_private::TArray<Run, false> detached;
+    skia_private::TArray<Run> detached;
     for (const auto& run : fRuns) {
         detached.emplace_back(run, true);
     }
@@ -1155,13 +1158,13 @@ void ParagraphImpl::prepareVerticalRuby() {
         run.iterateThroughClusters([&](Cluster* cluster) {
             const size_t index = cluster - fClusters.begin();
             for (size_t glyph = cluster->startPos(); glyph < cluster->endPos(); ++glyph) {
-                run.fPositions[glyph].fY += shift;
-                run.fOffsets[glyph].fY += leading[index];
+                run.fGlyphData->positions()[glyph].fY += shift;
+                run.fGlyphData->offsets()[glyph].fY += leading[index];
             }
             shift += leading[index] + trailing[index];
             cluster->space(leading[index] + trailing[index]);
         });
-        run.fPositions[run.size()].fY += shift;
+        run.fGlyphData->positions()[run.size()].fY += shift;
         run.fAdvance.fY += shift;
         cumulative += shift;
     }
@@ -1393,7 +1396,7 @@ void ParagraphImpl::prepareVerticalTateChuYoko() {
         run.iterateThroughClusters([&](Cluster* cluster) {
             const ClusterIndex index = SkToSizeT(cluster - fClusters.begin());
             for (size_t glyph = cluster->startPos(); glyph < cluster->endPos(); ++glyph) {
-                run.fPositions[glyph].fY += shift;
+                run.fGlyphData->positions()[glyph].fY += shift;
             }
             for (size_t spanIndex = 0; spanIndex < fVerticalTateChuYoko.size(); ++spanIndex) {
                 auto& span = fVerticalTateChuYoko[spanIndex];
@@ -1405,7 +1408,7 @@ void ParagraphImpl::prepareVerticalTateChuYoko() {
                 }
             }
         });
-        run.fPositions[run.size()].fY += shift;
+        run.fGlyphData->positions()[run.size()].fY += shift;
         run.fAdvance.fY += shift;
         cumulative += shift;
     }
@@ -2698,14 +2701,14 @@ void ParagraphImpl::resolveVerticalMetrics() {
                     continue;
                 }
                 const SkScalar shift = VerticalClusterShift(column, clusterIndex);
-                SkRect bounds = run.font().getBounds(run.fGlyphs[glyphIndex], nullptr);
+                SkRect bounds = run.font().getBounds(run.fGlyphData->glyphs()[glyphIndex], nullptr);
                 if (bounds.isEmpty()) {
                     continue;
                 }
                 if (sideways) {
                     bounds = RotateClockwiseBounds(bounds);
                 }
-                const SkPoint position = run.fPositions[glyphIndex] + run.fOffsets[glyphIndex];
+                const SkPoint position = run.fGlyphData->positions()[glyphIndex] + run.fGlyphData->offsets()[glyphIndex];
                 bounds.offset(runBaselineX + position.x(),
                               inlineOrigin + run.offset().y() + position.y() + shift +
                               verticalRubyShift(clusterIndex));
@@ -2916,7 +2919,7 @@ void ParagraphImpl::paintVertical(ParagraphPainter* painter, SkScalar x, SkScala
                 if (!GlyphInColumn(run, glyphIndex, column)) {
                     continue;
                 }
-                const SkPoint position = run.fPositions[glyphIndex] + run.fOffsets[glyphIndex];
+                const SkPoint position = run.fGlyphData->positions()[glyphIndex] + run.fGlyphData->offsets()[glyphIndex];
                 const TextIndex glyphText = run.textRange().start + run.clusterIndex(glyphIndex);
                 const ClusterIndex clusterIndex = fClustersIndexFromCodeUnit[glyphText];
                 if (verticalTateChuYokoAtCluster(clusterIndex) != nullptr) {
@@ -2932,7 +2935,7 @@ void ParagraphImpl::paintVertical(ParagraphPainter* painter, SkScalar x, SkScala
                 }
                 const SkScalar shift = VerticalClusterShift(column, clusterIndex) +
                                        verticalRubyShift(clusterIndex);
-                glyphs.push_back(run.fGlyphs[glyphIndex]);
+                glyphs.push_back(run.fGlyphData->glyphs()[glyphIndex]);
                 SkPoint point = sideways ? ReverseClockwise(position) : position;
                 if (sideways) {
                     point.fX += shift;
@@ -3091,12 +3094,12 @@ void ParagraphImpl::extendedVisitVertical(const ExtendedVisitor& visitor) {
                     continue;
                 }
                 const SkScalar shift = VerticalClusterShift(column, clusterIndex);
-                glyphs.push_back(run.fGlyphs[glyphIndex]);
-                SkPoint position = run.fPositions[glyphIndex] + run.fOffsets[glyphIndex];
+                glyphs.push_back(run.fGlyphData->glyphs()[glyphIndex]);
+                SkPoint position = run.fGlyphData->positions()[glyphIndex] + run.fGlyphData->offsets()[glyphIndex];
                 position.fY += shift + verticalRubyShift(clusterIndex);
                 positions.push_back(position);
-                bounds.push_back(run.font().getBounds(run.fGlyphs[glyphIndex], nullptr));
-                starts.push_back(SkToU32(run.fClusterStart + run.fClusterIndexes[glyphIndex]));
+                bounds.push_back(run.font().getBounds(run.fGlyphData->glyphs()[glyphIndex], nullptr));
+                starts.push_back(SkToU32(run.fClusterStart + run.fGlyphData->clusterIndexes()[glyphIndex]));
             }
             if (glyphs.empty()) {
                 continue;
@@ -3231,12 +3234,12 @@ int ParagraphImpl::getVerticalPath(int lineNumber, SkPath* dest) {
                 continue;
             }
             const SkScalar shift = VerticalClusterShift(column, clusterIndex);
-            const auto glyphPath = run.font().getPath(run.fGlyphs[glyphIndex]);
+            const auto glyphPath = run.font().getPath(run.fGlyphData->glyphs()[glyphIndex]);
             if (!glyphPath) {
                 ++missing;
                 continue;
             }
-            const SkPoint position = run.fPositions[glyphIndex] + run.fOffsets[glyphIndex];
+            const SkPoint position = run.fGlyphData->positions()[glyphIndex] + run.fGlyphData->offsets()[glyphIndex];
             const SkScalar originX = baselineX + VerticalRunBlockOffset(run) + position.x();
             const SkScalar originY = inlineOrigin + run.offset().y() + position.y() + shift +
                                     verticalRubyShift(clusterIndex);

@@ -6238,6 +6238,13 @@ UNIX_ONLY_TEST(SkParagraph_CachePreservesUnresolvedGlyphs, reporter) {
     auto cached = make(180);
     REPORTER_ASSERT(reporter, cached->unresolvedGlyphs() == cold->unresolvedGlyphs());
     REPORTER_ASSERT(reporter, cached->unresolvedCodepoints() == unresolved);
+    // Shaping again after a cache hit must not change the set the cache shares
+    fonts->getParagraphCache()->turnOn(false);
+    cached->markDirty();
+    cached->layout(150);
+    REPORTER_ASSERT(reporter, cached->unresolvedCodepoints() == unresolved);
+    REPORTER_ASSERT(reporter, cold->unresolvedCodepoints() == unresolved);
+    REPORTER_ASSERT(reporter, make(120)->unresolvedCodepoints() == unresolved);
 }
 
 UNIX_ONLY_TEST(SkParagraph_CacheText, reporter) {
@@ -12474,4 +12481,316 @@ DEF_TEST(SkParagraph_JustifyEllipsisRemovesRuns, reporter) {
     auto impl = static_cast<ParagraphImpl*>(paragraph.get());
     REPORTER_ASSERT(reporter, impl->lines().size() == 1);
     REPORTER_ASSERT(reporter, paragraph->didExceedMaxLines());
+}
+
+// Justification fills the lines to the full width, also when the paragraph is laid out again
+DEF_TEST(SkParagraph_JustifyFillsLines, reporter) {
+    sk_sp<ResourceFontCollection> fontCollection = sk_make_sp<ResourceFontCollection>();
+    SKIP_IF_FONTS_NOT_FOUND(reporter, fontCollection)
+    fontCollection->disableFontFallback();
+
+    TextStyle style;
+    style.setFontFamilies({SkString("Roboto")});
+    style.setFontSize(20);
+    style.setColor(SK_ColorBLACK);
+    ParagraphStyle paragraphStyle;
+    paragraphStyle.setTextStyle(style);
+    paragraphStyle.setTextAlign(TextAlign::kJustify);
+    ParagraphBuilderImpl builder(paragraphStyle, fontCollection, get_unicode());
+    builder.pushStyle(style);
+    builder.addText("The quick brown fox jumps over the lazy dog and runs far away");
+    auto paragraph = builder.Build();
+    auto impl = static_cast<ParagraphImpl*>(paragraph.get());
+
+    for (SkScalar width : {200.0f, 260.0f}) {
+        paragraph->layout(width);
+        REPORTER_ASSERT(reporter, impl->lines().size() > 1);
+        // The last line is not justified
+        for (size_t i = 0; i + 1 < impl->lines().size(); ++i) {
+            auto range = impl->lines()[i].trimmedText();
+            auto boxes = paragraph->getRectsForRange(
+                    range.start, range.end, RectHeightStyle::kTight, RectWidthStyle::kTight);
+            REPORTER_ASSERT(reporter, !boxes.empty());
+            REPORTER_ASSERT(reporter,
+                            SkScalarNearlyEqual(boxes.back().rect.fRight, width, 0.01f),
+                            "line %zu: %f != %f",
+                            i,
+                            boxes.back().rect.fRight,
+                            width);
+        }
+    }
+}
+
+// Paragraphs that get their shaped runs from ParagraphCache share the glyph data of the runs.
+// Justification of one of them must not change the others.
+DEF_TEST(SkParagraph_CacheSharedGlyphData, reporter) {
+    sk_sp<ResourceFontCollection> fontCollection = sk_make_sp<ResourceFontCollection>();
+    SKIP_IF_FONTS_NOT_FOUND(reporter, fontCollection)
+    fontCollection->disableFontFallback();
+    // The reference does not use the cache
+    sk_sp<ResourceFontCollection> referenceFonts = sk_make_sp<ResourceFontCollection>();
+    referenceFonts->disableFontFallback();
+    referenceFonts->getParagraphCache()->turnOn(false);
+
+    int found = 0;
+    fontCollection->getParagraphCache()->setChecker(
+            [&found](ParagraphImpl*, const char* event, bool) {
+                found += strcmp(event, "foundParagraph") == 0;
+            });
+
+    auto build = [&](sk_sp<FontCollection> fonts, TextAlign align) {
+        TextStyle style;
+        style.setFontFamilies({SkString("Roboto")});
+        style.setFontSize(20);
+        style.setColor(SK_ColorBLACK);
+        ParagraphStyle paragraphStyle;
+        paragraphStyle.setTextStyle(style);
+        paragraphStyle.setTextAlign(align);
+        ParagraphBuilderImpl builder(paragraphStyle, fonts, get_unicode());
+        builder.pushStyle(style);
+        builder.addText("The quick brown fox jumps over the lazy dog and runs far away");
+        auto paragraph = builder.Build();
+        paragraph->layout(200);
+        return paragraph;
+    };
+    auto boxes = [](Paragraph* paragraph) {
+        std::vector<SkRect> rects;
+        for (auto& box :
+             paragraph->getRectsForRange(0, 62, RectHeightStyle::kTight, RectWidthStyle::kTight)) {
+            rects.push_back(box.rect);
+        }
+        return rects;
+    };
+
+    auto referenceLeft = boxes(build(referenceFonts, TextAlign::kLeft).get());
+    auto referenceJustified = boxes(build(referenceFonts, TextAlign::kJustify).get());
+    REPORTER_ASSERT(reporter, referenceLeft != referenceJustified);
+
+    auto justified = build(fontCollection, TextAlign::kJustify);
+    REPORTER_ASSERT(reporter, found == 0);
+    auto left = build(fontCollection, TextAlign::kLeft);
+    REPORTER_ASSERT(reporter, found == 1);
+    REPORTER_ASSERT(reporter, boxes(justified.get()) == referenceJustified);
+    REPORTER_ASSERT(reporter, boxes(left.get()) == referenceLeft);
+
+    // The runs of the paragraph that was shaped first are gone, the others still have the data
+    justified.reset();
+    auto again = build(fontCollection, TextAlign::kJustify);
+    REPORTER_ASSERT(reporter, found == 2);
+    REPORTER_ASSERT(reporter, boxes(again.get()) == referenceJustified);
+    REPORTER_ASSERT(reporter, boxes(left.get()) == referenceLeft);
+    fontCollection->getParagraphCache()->setChecker([](ParagraphImpl*, const char*, bool) {});
+}
+
+// ExtendedVisitorInfo::positions can be changed: the change stays in the glyph data. If the
+// paragraph was not painted or visited yet, the next paint() draws the glyphs at the changed
+// positions. paint() and visit() build the text blobs one time for each layout().
+DEF_TEST(SkParagraph_ExtendedVisitPositionsAreWritable, reporter) {
+    sk_sp<ResourceFontCollection> fontCollection = sk_make_sp<ResourceFontCollection>();
+    SKIP_IF_FONTS_NOT_FOUND(reporter, fontCollection)
+    fontCollection->disableFontFallback();
+
+    TextStyle style;
+    style.setFontFamilies({SkString("Roboto")});
+    style.setFontSize(20);
+    style.setColor(SK_ColorBLACK);
+    ParagraphStyle paragraphStyle;
+    paragraphStyle.setTextStyle(style);
+
+    auto build = [&] {
+        ParagraphBuilderImpl builder(paragraphStyle, fontCollection, get_unicode());
+        builder.pushStyle(style);
+        builder.addText("Hello world");
+        auto paragraph = builder.Build();
+        paragraph->layout(300);
+        return paragraph;
+    };
+    // The first row that has a pixel which is not white
+    auto firstInkRow = [](Paragraph* paragraph) {
+        SkBitmap bitmap;
+        bitmap.allocN32Pixels(300, 100);
+        SkCanvas canvas(bitmap);
+        canvas.clear(SK_ColorWHITE);
+        paragraph->paint(&canvas, 0, 0);
+        for (int y = 0; y < bitmap.height(); ++y) {
+            for (int x = 0; x < bitmap.width(); ++x) {
+                if (bitmap.getColor(x, y) != SK_ColorWHITE) {
+                    return y;
+                }
+            }
+        }
+        return -1;
+    };
+
+    auto reference = build();
+    int referenceRow = firstInkRow(reference.get());
+    REPORTER_ASSERT(reporter, referenceRow >= 0);
+
+    auto paragraph = build();
+    int glyphs = 0;
+    SkPoint* firstPosition = nullptr;
+    paragraph->extendedVisit([&](int, const Paragraph::ExtendedVisitorInfo* info) {
+        for (int i = 0; info && i < info->count; ++i) {
+            info->positions[i].fY += 30;
+            ++glyphs;
+        }
+        if (info && !firstPosition) {
+            firstPosition = info->positions;
+        }
+    });
+    REPORTER_ASSERT(reporter, glyphs == 11);
+
+    // The pointer stays valid, and the paragraph keeps the change
+    int checked = 0;
+    paragraph->extendedVisit([&](int, const Paragraph::ExtendedVisitorInfo* info) {
+        if (info && checked++ == 0) {
+            REPORTER_ASSERT(reporter, info->positions == firstPosition);
+        }
+        for (int i = 0; info && i < info->count; ++i) {
+            REPORTER_ASSERT(reporter, info->positions[i].fY == 30);
+        }
+    });
+    REPORTER_ASSERT(reporter, firstInkRow(paragraph.get()) == referenceRow + 30);
+}
+
+namespace {
+// Vocalized Arabic: every harakah is a mark that HarfBuzz places with a non-zero glyph offset
+constexpr char16_t kVocalizedArabic[] =
+        u"\u0645\u064E\u0631\u0652\u062D\u064E\u0628\u064B\u0627 "
+        u"\u0634\u064F\u0643\u0652\u0631\u064B\u0627 "
+        u"\u0645\u064E\u0631\u0652\u062D\u064E\u0628\u064B\u0627";
+
+std::unique_ptr<Paragraph> buildVocalizedArabic(sk_sp<FontCollection> fontCollection,
+                                                const ParagraphStyle& paragraphStyle,
+                                                SkScalar width) {
+    TextStyle arabic;
+    arabic.setFontFamilies({SkString("Noto Naskh Arabic")});
+    arabic.setFontSize(20);
+    arabic.setColor(SK_ColorBLACK);
+    ParagraphBuilderImpl builder(paragraphStyle, fontCollection, get_unicode());
+    builder.pushStyle(arabic);
+    builder.addText(kVocalizedArabic);
+    builder.pop();
+    auto paragraph = builder.Build();
+    paragraph->layout(width);
+    return paragraph;
+}
+
+std::vector<SkPoint> drawnPositions(Paragraph* paragraph) {
+    std::vector<SkPoint> positions;
+    paragraph->visit([&](int, const Paragraph::VisitorInfo* info) {
+        for (int i = 0; info && i < info->count; ++i) {
+            positions.push_back(info->positions[i]);
+        }
+    });
+    return positions;
+}
+
+bool hasNonZeroOffset(const Run& run) {
+    bool nonZero = false;
+    for (auto offset : run.offsets()) {
+        nonZero |= offset != SkPoint{0, 0};
+    }
+    return nonZero;
+}
+}  // namespace
+
+// The ellipsis is shaped outside OneLineShaper, and its marks still need their offsets
+DEF_TEST(SkParagraph_EllipsisKeepsGlyphOffsets, reporter) {
+    sk_sp<ResourceFontCollection> fontCollection = sk_make_sp<ResourceFontCollection>();
+    SKIP_IF_FONTS_NOT_FOUND(reporter, fontCollection)
+    fontCollection->disableFontFallback();
+
+    ParagraphStyle paragraphStyle;
+    paragraphStyle.setMaxLines(1);
+    paragraphStyle.setEllipsis(std::u16string(u"\u0628\u064E\u0628\u064E"));
+    paragraphStyle.setTextDirection(TextDirection::kRtl);
+    auto paragraph = buildVocalizedArabic(fontCollection, paragraphStyle, 120);
+
+    auto impl = static_cast<ParagraphImpl*>(paragraph.get());
+    REPORTER_ASSERT(reporter, impl->lines().size() == 1);
+    const Run* ellipsis = impl->lines()[0].ellipsis();
+    REPORTER_ASSERT(reporter, ellipsis != nullptr);
+    if (ellipsis) {
+        REPORTER_ASSERT(reporter, hasNonZeroOffset(*ellipsis));
+    }
+}
+
+// A paragraph built from the cache shares the glyph data, offsets included, with the
+// paragraph that filled the cache, so both draw the same glyph positions
+DEF_TEST(SkParagraph_CachedRunsKeepGlyphOffsets, reporter) {
+    sk_sp<ResourceFontCollection> fontCollection = sk_make_sp<ResourceFontCollection>();
+    SKIP_IF_FONTS_NOT_FOUND(reporter, fontCollection)
+    fontCollection->disableFontFallback();
+    fontCollection->getParagraphCache()->reset();
+    fontCollection->getParagraphCache()->turnOn(true);
+
+    ParagraphStyle paragraphStyle;
+    auto cold = buildVocalizedArabic(fontCollection, paragraphStyle, 1000);
+    REPORTER_ASSERT(reporter, fontCollection->getParagraphCache()->count() == 1);
+    auto cached = buildVocalizedArabic(fontCollection, paragraphStyle, 1000);
+
+    auto cachedImpl = static_cast<ParagraphImpl*>(cached.get());
+    bool anyOffsets = false;
+    for (auto& run : cachedImpl->runs()) {
+        anyOffsets |= hasNonZeroOffset(run);
+    }
+    REPORTER_ASSERT(reporter, anyOffsets);
+    REPORTER_ASSERT(reporter, drawnPositions(cold.get()) == drawnPositions(cached.get()));
+    fontCollection->getParagraphCache()->turnOn(false);
+}
+
+// A run keeps glyph offsets only if one of them is not zero, and the drawn glyphs use them
+DEF_TEST(SkParagraph_GlyphOffsetsOnlyWhenNeeded, reporter) {
+    sk_sp<ResourceFontCollection> fontCollection = sk_make_sp<ResourceFontCollection>();
+    SKIP_IF_FONTS_NOT_FOUND(reporter, fontCollection)
+    fontCollection->disableFontFallback();
+
+    TextStyle latin;
+    latin.setFontFamilies({SkString("Roboto")});
+    latin.setFontSize(20);
+    latin.setColor(SK_ColorBLACK);
+    TextStyle arabic = latin;
+    // U+2605 is not in Noto Naskh Arabic, so the Arabic run is cut into pieces around it
+    arabic.setFontFamilies({SkString("Noto Naskh Arabic"), SkString("Noto Sans CJK JP")});
+    ParagraphStyle paragraphStyle;
+    paragraphStyle.setTextStyle(latin);
+    ParagraphBuilderImpl builder(paragraphStyle, fontCollection, get_unicode());
+    builder.pushStyle(latin);
+    builder.addText("Hello ");
+    builder.pop();
+    builder.pushStyle(arabic);
+    builder.addText(
+            u"\u0645\u064E\u0631\u0652\u062D\u064E\u0628\u064B\u0627\u2605"
+            u"\u0634\u064F\u0643\u0652\u0631\u064B\u0627");
+    builder.pop();
+    auto paragraph = builder.Build();
+    paragraph->layout(1000);
+
+    auto impl = static_cast<ParagraphImpl*>(paragraph.get());
+    int runsWithOffsets = 0;
+    for (auto& run : impl->runs()) {
+        SkString family;
+        run.font().getTypeface()->getFamilyName(&family);
+        if (family.equals("Roboto")) {
+            REPORTER_ASSERT(reporter, run.offsets().empty());
+        } else if (family.equals("Noto Naskh Arabic")) {
+            bool nonZero = false;
+            for (auto offset : run.offsets()) {
+                nonZero |= offset != SkPoint{0, 0};
+            }
+            REPORTER_ASSERT(reporter, nonZero);
+            runsWithOffsets += nonZero;
+        }
+    }
+    REPORTER_ASSERT(reporter, runsWithOffsets == 2);
+
+    // The marks are drawn above and below the letters
+    bool movedUpOrDown = false;
+    paragraph->visit([&](int, const Paragraph::VisitorInfo* info) {
+        for (int i = 0; info && i < info->count; ++i) {
+            movedUpOrDown |= info->positions[i].fY != 0;
+        }
+    });
+    REPORTER_ASSERT(reporter, movedUpOrDown);
 }

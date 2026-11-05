@@ -16,13 +16,13 @@ namespace textlayout {
 
 void OneLineShaper::commitRunBuffer(const RunInfo&) {
 
-    fCurrentRun->commit();
+    fCurrentRun->commit(fShapingBuffer);
 
     auto oldUnresolvedCount = fUnresolvedBlocks.size();
 /*
     SkDebugf("Run [%zu:%zu)\n", fCurrentRun->fTextRange.start, fCurrentRun->fTextRange.end);
     for (size_t i = 0; i < fCurrentRun->size(); ++i) {
-        SkDebugf("[%zu] %hu %u %f\n", i, fCurrentRun->fGlyphs[i], fCurrentRun->fClusterIndexes[i], fCurrentRun->fPositions[i].fX);
+        SkDebugf("[%zu] %hu %zu %f\n", i, fCurrentRun->glyphs()[i], fCurrentRun->clusterIndex(i), fCurrentRun->posX(i));
     }
 */
     // Find all unresolved blocks
@@ -165,6 +165,12 @@ void OneLineShaper::finish(const Block& block, SkScalar height, SkScalar& advanc
                 return a.fText.start < b.fText.start;
               });
 
+    if (fParagraph->fRuns.empty()) {
+        // Usually all runs come from this block. Then the run array gets its exact size here, and
+        // shrink_to_fit() after shaping has little or nothing to do.
+        fParagraph->fRuns.reserve_exact(SkToInt(fResolvedBlocks.size()));
+    }
+
     // Go through all of them
     size_t lastTextEnd = blockText.start;
     for (auto& resolvedBlock : fResolvedBlocks) {
@@ -218,25 +224,34 @@ void OneLineShaper::finish(const Block& block, SkScalar height, SkScalar& advanc
                     advanceX
                 );
         auto piece = &this->fParagraph->fRuns.back();
+        SkSpan<const SkPoint> offsets = run->offsets();
+        bool hasOffsets = false;
+        for (size_t i = glyphs.start; i < glyphs.end && !offsets.empty(); ++i) {
+            hasOffsets |= offsets[i] != SkPoint{0, 0};
+        }
+        piece->allocateGlyphData(glyphs.width(), hasOffsets);
+        Run::GlyphData* pieceData = piece->fGlyphData.get();
 
         // TODO: Optimize copying
-        SkPoint zero = {run->fPositions[glyphs.start].fX, 0};
+        SkPoint zero = {run->posX(glyphs.start), 0};
         for (size_t i = glyphs.start; i <= glyphs.end; ++i) {
 
             auto index = i - glyphs.start;
             if (i < glyphs.end) {
                 // There are only n glyphs in a run, not n+1.
-                piece->fGlyphs[index] = run->fGlyphs[i];
+                pieceData->glyphs()[index] = run->glyphs()[i];
 
-                // fClusterIndexes n+1 is already set to the end of the run.
+                // The cluster index n+1 is already set to the end of the run.
                 // Do not attempt to overwrite this value with the cluster index
                 // that starts the next Run.
                 // It is assumed later that all clusters in a Run are contained by the Run.
-                piece->fClusterIndexes[index] = run->fClusterIndexes[i];
+                pieceData->clusterIndexes()[index] = run->clusterIndex(i);
+                if (hasOffsets) {
+                    pieceData->offsets()[index] = offsets[i];
+                }
             }
-            piece->fPositions[index] = run->fPositions[i] - zero;
-            piece->fOffsets[index] = run->fOffsets[i];
-            piece->addX(index, advanceX);
+            pieceData->positions()[index] = run->positions()[i] - zero;
+            pieceData->positions()[index].fX += advanceX;
         }
 
         // Carve out the line text out of the entire run text
@@ -325,7 +340,7 @@ void OneLineShaper::sortOutGlyphs(std::function<void(GlyphRange)>&& sortOutUnres
         // Removing all pretty optimizations for whitespaces
         // because they get in a way of grapheme rounding
         // Inspect the glyph
-        auto glyph = fCurrentRun->fGlyphs[i];
+        auto glyph = fCurrentRun->glyphs()[i];
 
         // This is the Flutter change
         // Do not count control codepoints as unresolved
@@ -628,9 +643,10 @@ bool OneLineShaper::iterateThroughShapingRegions(const ShapeVisitor& shape) {
                                        fParagraph->fRuns.size(),
                                        advanceX);
 
-        run.fPositions[0] = { advanceX, 0 };
-        run.fOffsets[0] = {0, 0};
-        run.fClusterIndexes[0] = 0;
+        run.allocateGlyphData(1, /*hasOffsets=*/false);
+        run.fGlyphData->glyphs()[0] = 0;
+        run.fGlyphData->positions()[0] = {advanceX, 0};
+        run.fGlyphData->clusterIndexes()[0] = 0;
         run.fPlaceholderIndex = &placeholder - fParagraph->fPlaceholders.begin();
         advanceX += placeholder.fStyle.fWidth;
     }

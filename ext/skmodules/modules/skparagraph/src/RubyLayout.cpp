@@ -190,7 +190,7 @@ void ParagraphImpl::prepareRuby() {
             std::vector<SkRect> bounds(cluster.size());
             run.font().getBounds(run.glyphs().subspan(cluster.startPos(), cluster.size()), bounds, nullptr);
             for (size_t glyph = 0; glyph < cluster.size(); ++glyph) {
-                auto position = run.positions()[cluster.startPos() + glyph] + run.offsets()[cluster.startPos() + glyph];
+                auto position = run.positions()[cluster.startPos() + glyph] + run.glyphOffset(cluster.startPos() + glyph);
                 position.fX += advance - run.posX(cluster.startPos());
                 bounds[glyph].offset(position);
                 baseInk.join(bounds[glyph]);
@@ -269,7 +269,7 @@ void ParagraphImpl::prepareRuby() {
                               annotationLeft,
                               ideographic});
     }
-    skia_private::TArray<Run, false> detached;
+    skia_private::TArray<Run> detached;
     for (const auto& run : fRuns) detached.emplace_back(run, true);
     fRuns = std::move(detached);
     for (auto& run : fRuns) {
@@ -277,13 +277,13 @@ void ParagraphImpl::prepareRuby() {
         run.iterateThroughClusters([&](Cluster* cluster) {
             auto index = static_cast<size_t>(cluster - fClusters.begin());
             for (size_t glyph = cluster->startPos(); glyph < cluster->endPos(); ++glyph) {
-                run.fPositions[glyph].fX += shift;
-                run.fOffsets[glyph].fX += leading[index];
+                run.fGlyphData->positions()[glyph].fX += shift;
+                run.fGlyphData->offsets()[glyph].fX += leading[index];
             }
             shift += leading[index] + trailing[index];
             cluster->space(leading[index] + trailing[index]);
         });
-        run.fPositions[run.size()].fX += shift;
+        run.fGlyphData->positions()[run.size()].fX += shift;
         run.fAdvance.fX += shift;
     }
     fRubyOffsets.clear();
@@ -405,7 +405,7 @@ void ParagraphImpl::positionRuby() {
                 const auto& cluster = fClusters[index];
                 auto& run = cluster.run();
                 for (size_t glyph = cluster.startPos(); glyph < cluster.endPos(); ++glyph)
-                    run.fOffsets[glyph].fX += span.overflowShift;
+                    run.fGlyphData->offsets()[glyph].fX += span.overflowShift;
             }
         }
     }

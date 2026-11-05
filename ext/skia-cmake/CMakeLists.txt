@@ -10,7 +10,7 @@ set(MILESTRO_SKIA_REPOSITORY_URL
         "Skia git repository URL used when the source checkout is missing."
 )
 set(MILESTRO_SKIA_COMMIT
-        "e43478a2f9f8c7f68d6c7e2ca79441dac7df9b75"
+        "443876974ffca0982aa10ab21d6e7f4b9f5fd66e"
         CACHE STRING
         "Skia git commit checked out after cloning. Leave empty to use the repository default branch."
 )
