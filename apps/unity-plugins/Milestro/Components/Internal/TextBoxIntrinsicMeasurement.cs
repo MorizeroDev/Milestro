@@ -15,14 +15,14 @@ namespace Milestro.Components.Internal
         private readonly List<Paragraph> paragraphs;
         private readonly List<float> heights = new List<float>();
         private readonly List<float> marginTops = new List<float>();
+        private readonly List<float> marginRights = new List<float>();
         private readonly List<float> marginBottoms = new List<float>();
+        private readonly List<float> marginLefts = new List<float>();
         private readonly List<float> tops = new List<float>();
         private readonly Dictionary<(float, float), TextIntrinsicMetrics> cache =
             new Dictionary<(float, float), TextIntrinsicMetrics>();
         private Vector2 availableSize;
         private readonly bool empty;
-        private readonly float minWidth;
-        private readonly float maxWidth;
         private readonly List<float> naturalHeights = new List<float>();
 
         public TextBoxIntrinsicMeasurement(TextBoxRenderTargetSettings settings)
@@ -50,16 +50,9 @@ namespace Milestro.Components.Internal
             foreach (var paragraph in paragraphs)
             {
                 paragraph.Layout(float.MaxValue);
-                var paragraphMinWidth = paragraph.MinIntrinsicWidth;
                 var paragraphMaxWidth = paragraph.MaxIntrinsicWidth;
-                minWidth = Math.Max(minWidth, paragraphMinWidth);
-                maxWidth = Math.Max(maxWidth, paragraphMaxWidth);
                 paragraph.Layout(Paragraph.ResolveNoWrapLayoutWidth(0f, paragraphMaxWidth));
                 naturalHeights.Add(paragraph.Height);
-            }
-            if (settings.ParagraphStyle.singleLine || settings.WrapMode == TextBoxWrapMode.NoWrap)
-            {
-                minWidth = maxWidth;
             }
         }
 
@@ -79,26 +72,39 @@ namespace Milestro.Components.Internal
             var wrap = settings.WrapMode == TextBoxWrapMode.Wrap && !settings.ParagraphStyle.singleLine;
             var width = wrap ? contentWidth / scale : float.PositiveInfinity;
             var measuredWidth = 0f;
+            var measuredMinWidth = 0f;
+            var measuredMaxWidth = 0f;
             heights.Clear();
+            ResolveMargins(fontSize);
             for (var index = 0; index < paragraphs.Count; ++index)
             {
                 var paragraph = paragraphs[index];
+                var horizontalMargins = (marginLefts[index] + marginRights[index]) / scale;
+                var availableWidth = width - horizontalMargins;
                 var usesNaturalLayout = float.IsPositiveInfinity(width) ||
-                                        width + 0.001f >= paragraph.MaxIntrinsicWidth;
+                                        availableWidth + 0.001f >= paragraph.MaxIntrinsicWidth;
                 paragraph.Layout(usesNaturalLayout
                     ? Paragraph.ResolveNoWrapLayoutWidth(0f, paragraph.MaxIntrinsicWidth)
-                    : Math.Max(1f, Mathf.Ceil(width)));
-                measuredWidth = Math.Max(measuredWidth, paragraph.LongestLine * scale);
+                    : Math.Max(1f, Mathf.Ceil(availableWidth)));
+                measuredWidth = Math.Max(measuredWidth,
+                    paragraph.LongestLine * scale + marginLefts[index] + marginRights[index]);
+                measuredMinWidth = Math.Max(measuredMinWidth,
+                    paragraph.MinIntrinsicWidth * scale + marginLefts[index] + marginRights[index]);
+                measuredMaxWidth = Math.Max(measuredMaxWidth,
+                    paragraph.MaxIntrinsicWidth * scale + marginLefts[index] + marginRights[index]);
                 heights.Add(paragraph.Height * scale);
             }
-            ResolveMargins(fontSize);
             var height = TextBoxBlockStack.Layout(heights, marginTops, marginBottoms,
                 settings.ParagraphStyle.paragraphSpacing * scale, tops);
             heights.Clear();
             foreach (var naturalHeight in naturalHeights) heights.Add(naturalHeight * scale);
             var natural = TextBoxBlockStack.Layout(heights, marginTops, marginBottoms,
                 settings.ParagraphStyle.paragraphSpacing * scale, tops);
-            result = new TextIntrinsicMetrics(minWidth * scale, maxWidth * scale,
+            if (settings.ParagraphStyle.singleLine || settings.WrapMode == TextBoxWrapMode.NoWrap)
+            {
+                measuredMinWidth = measuredMaxWidth;
+            }
+            result = new TextIntrinsicMetrics(measuredMinWidth, measuredMaxWidth,
                 natural, measuredWidth, height);
             if (cache.Count >= 128) cache.Clear();
             cache[key] = result;
@@ -108,12 +114,16 @@ namespace Milestro.Components.Internal
         private void ResolveMargins(float fontSize)
         {
             marginTops.Clear();
+            marginRights.Clear();
             marginBottoms.Clear();
+            marginLefts.Clear();
             var context = new MarginResolveContext(availableSize.x, availableSize.y, fontSize);
             foreach (var block in payload.Blocks)
             {
                 marginTops.Add(block.Style.MarginTop.Resolve(context, MarginAxis.Vertical));
+                marginRights.Add(block.Style.MarginRight.Resolve(context, MarginAxis.Horizontal));
                 marginBottoms.Add(block.Style.MarginBottom.Resolve(context, MarginAxis.Vertical));
+                marginLefts.Add(block.Style.MarginLeft.Resolve(context, MarginAxis.Horizontal));
             }
         }
 

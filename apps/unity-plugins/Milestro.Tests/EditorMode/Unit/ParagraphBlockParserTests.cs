@@ -76,6 +76,47 @@ namespace Milestro.Tests
             Assert.That(payload.Blocks[2].Style.MarginBottom.Unit, Is.EqualTo(MarginUnit.ContainerPercent));
         }
 
+        [Test]
+        public void AllFourMarginsParseFromShorthand()
+        {
+            var payload = Parse("<p style=\"margin: 10px 20px 30px 40px\">alpha</p>");
+            var style = payload.Blocks[0].Style;
+            Assert.That(style.MarginTop.Value, Is.EqualTo(10f));
+            Assert.That(style.MarginBottom.Value, Is.EqualTo(30f));
+            Assert.That(typeof(ParagraphStyleState).GetProperty("MarginRight")?.GetValue(style),
+                Is.EqualTo(new MarginValue { Value = 20f }));
+            Assert.That(typeof(ParagraphStyleState).GetProperty("MarginLeft")?.GetValue(style),
+                Is.EqualTo(new MarginValue { Value = 40f }));
+        }
+
+        [TestCase("8px", 8f, 8f, 8f, 8f)]
+        [TestCase("8px 12px", 8f, 12f, 8f, 12f)]
+        [TestCase("8px 12px 16px", 8f, 12f, 16f, 12f)]
+        public void MarginShorthandExpandsOneToThreeValues(string declarations,
+            float top, float right, float bottom, float left)
+        {
+            var style = Parse($"<p style=\"margin: {declarations}\">alpha</p>").Blocks[0].Style;
+
+            Assert.That(style.MarginTop.Value, Is.EqualTo(top));
+            Assert.That(style.MarginRight.Value, Is.EqualTo(right));
+            Assert.That(style.MarginBottom.Value, Is.EqualTo(bottom));
+            Assert.That(style.MarginLeft.Value, Is.EqualTo(left));
+        }
+
+        [Test]
+        public void AllFourMarginsParseLonghandsInDeclarationOrder()
+        {
+            var style = Parse("<p style=\"margin: 1px; margin-left: 2em; margin-right: 3%; " +
+                              "margin-top: 4px; margin-bottom: 5px\">alpha</p>").Blocks[0].Style;
+
+            Assert.That(style.MarginTop.Value, Is.EqualTo(4f));
+            Assert.That(style.MarginRight.Value, Is.EqualTo(3f));
+            Assert.That(style.MarginRight.Unit, Is.EqualTo(MarginUnit.ContainerPercent));
+            Assert.That(style.MarginBottom.Value, Is.EqualTo(5f));
+            Assert.That(style.MarginLeft.Value, Is.EqualTo(2f));
+            Assert.That(style.MarginLeft.Unit, Is.EqualTo(MarginUnit.Em));
+        }
+
         [TestCase("-5px")]
         [TestCase("abc")]
         [TestCase("NaNpx")]

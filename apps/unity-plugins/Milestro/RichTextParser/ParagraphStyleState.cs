@@ -25,9 +25,19 @@ namespace Milestro.RichTextParser
         public MarginValue MarginTop { get; set; } = new MarginValue();
 
         /// <summary>
+        /// Block right margin. In vertical-rl layout this is the margin before the block.
+        /// </summary>
+        public MarginValue MarginRight { get; set; } = new MarginValue();
+
+        /// <summary>
         /// Block bottom margin applied when the payload stacks multiple paragraphs.
         /// Adjacent vertical block margins collapse: the larger one wins.
         /// </summary>
         public MarginValue MarginBottom { get; set; } = new MarginValue();
+
+        /// <summary>
+        /// Block left margin. In vertical-rl layout this is the margin after the block.
+        /// </summary>
+        public MarginValue MarginLeft { get; set; } = new MarginValue();
     }
 }

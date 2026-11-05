@@ -553,10 +553,22 @@ namespace Milestro.Components.Internal
                     style.MarginTop = new MarginValue();
                 }
 
+                if (!TextBoxVerticalBlockLayout.IsValidMargin(style.MarginRight))
+                {
+                    issues.Add($"{owner}.marginRight defaulted to 0");
+                    style.MarginRight = new MarginValue();
+                }
+
                 if (!TextBoxVerticalBlockLayout.IsValidMargin(style.MarginBottom))
                 {
                     issues.Add($"{owner}.marginBottom defaulted to 0");
                     style.MarginBottom = new MarginValue();
+                }
+
+                if (!TextBoxVerticalBlockLayout.IsValidMargin(style.MarginLeft))
+                {
+                    issues.Add($"{owner}.marginLeft defaulted to 0");
+                    style.MarginLeft = new MarginValue();
                 }
 
                 return;
@@ -750,7 +762,9 @@ namespace Milestro.Components.Internal
             {
                 ValidateParagraphState(block.Style, "block");
                 if (!TextBoxVerticalBlockLayout.IsValidMargin(block.Style.MarginTop) ||
-                    !TextBoxVerticalBlockLayout.IsValidMargin(block.Style.MarginBottom))
+                    !TextBoxVerticalBlockLayout.IsValidMargin(block.Style.MarginRight) ||
+                    !TextBoxVerticalBlockLayout.IsValidMargin(block.Style.MarginBottom) ||
+                    !TextBoxVerticalBlockLayout.IsValidMargin(block.Style.MarginLeft))
                 {
                     throw new NotSupportedException(
                         "Vertical-rl Canvas TextBox requires finite nonnegative block margins.");

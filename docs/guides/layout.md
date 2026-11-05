@@ -180,8 +180,10 @@ X placement uses the complete column-box width, while Y placement uses the
 laid-out content bounds, so short text can be centered in a finite-height box.
 Auto placement does not change the clip or scroll range.
 
-Rich-text `<p>` blocks can also add `margin-top` and `margin-bottom`. Those are
-between blocks, not around the whole `TextBox`.
+Rich-text `<p>` blocks also support four physical margins and the `margin`
+shorthand. Horizontal left/right margins inset every line; vertical-rl top/bottom
+margins inset each column. Block-start/end margins add spacing between blocks,
+not around the whole `TextBox`.
 
 ## Auto font size
 

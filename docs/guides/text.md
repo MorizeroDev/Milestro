@@ -202,9 +202,13 @@ attribute.
 ```
 
 Supported paragraph CSS includes `text-indent` in `px`, `em`, or `%`, plus
-`margin-top` and `margin-bottom` in `px`, `em`, or `%`. These margins are
-between rich-text blocks. They are not the same as the `TextBox` margin around
-the whole viewport.
+`margin`, `margin-top`, `margin-right`, `margin-bottom`, and `margin-left`.
+Margins accept `px`, `em`, or `%`; the shorthand accepts one through four values
+using the usual CSS expansion order. In horizontal layout, left and right margins
+inset every line while top and bottom margins add block spacing. In `vertical-rl`,
+top and bottom margins inset the column while right and left margins add spacing
+before and after the block. These margins are not the same as the `TextBox` margin
+around the whole viewport.
 
 The `em` unit resolves against the paragraph's inherited font size. A negative
 text indent can paint into the horizontal margin, but layout still uses the
@@ -242,8 +246,9 @@ producer.paragraphStyle.paragraphSpacing = 12f;
 ```
 
 This is applied between adjacent blocks. Rich-text `<p>` elements can add their
-own `margin-top` and `margin-bottom`; adjacent vertical margins collapse, and
-the producer spacing is added as the default gap.
+own block-start and block-end margins (`top`/`bottom` horizontally and
+`right`/`left` in `vertical-rl`); adjacent margins collapse, and the producer
+spacing is added as the default gap.
 
 ### Ruby
 

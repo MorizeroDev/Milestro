@@ -10,6 +10,35 @@ namespace Milestro.Tests
 {
     public class TextBoxTextIndentTests
     {
+        [Test]
+        public void HorizontalBlockMarginsReduceLayoutWidthAndOffsetPainting()
+        {
+            var settings = new TextBoxRenderTargetSettings(
+                "<p style=\"margin-left: 24px; margin-right: 16px\">test</p>",
+                Margin.FixedZero(),
+                new ParagraphStyleSettings(),
+                new TextStyleSettings { size = 20f },
+                XmlRichTextParser.Id,
+                TextBoxWrapMode.Wrap,
+                TextOverflow.Clip);
+            var size = new Vector2Int(200, 100);
+            using var target = new TextBoxRenderTarget();
+            Assert.That(target.Rebuild(TextBoxRenderViewport.Invisible(size, default),
+                ColorSpace.Gamma, settings, true, null), Is.True);
+            var viewport = TextBoxRenderViewport.Fixed(size, default, Vector2.zero, Vector2.zero);
+            var arguments = new object[] { settings, viewport, size, size, null, Vector2.zero, default(Rect) };
+            var commands = (UnitySkiaRenderCommandList)typeof(TextBoxRenderTarget)
+                .GetMethod("BuildRenderCommands", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(target, arguments);
+            var widths = (System.Collections.Generic.List<float>)typeof(TextBoxRenderTarget)
+                .GetField("blockLayoutWidths", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(target);
+
+            Assert.That(commands.Count, Is.EqualTo(1));
+            Assert.That(commands.Commands[0].X, Is.EqualTo(24f));
+            Assert.That(widths, Is.EqualTo(new[] { 160f }));
+        }
+
         [TestCase(TextOverflow.Clip, TextDirection.Ltr, false)]
         [TestCase(TextOverflow.Ellipsis, TextDirection.Ltr, false)]
         [TestCase(TextOverflow.Clip, TextDirection.Rtl, false)]

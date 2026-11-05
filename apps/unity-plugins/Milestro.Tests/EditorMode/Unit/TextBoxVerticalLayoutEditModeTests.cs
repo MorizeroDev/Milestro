@@ -2133,6 +2133,48 @@ namespace Milestro.Tests
                 Is.EqualTo((startUtf16, endUtf16, orientation)));
         }
 
+        [Test]
+        public void VerticalBlockMarginsAddOuterSpacingAndCollapseBetweenColumns()
+        {
+            var metrics = new[]
+            {
+                new ParagraphLayoutMetrics(WritingMode.VerticalRl, new Vector2(40f, 100f),
+                    new Rect(0f, 0f, 40f, 100f), new Rect(0f, 0f, 40f, 100f),
+                    100f, 40f, 100f, Array.Empty<ParagraphColumnMetrics>()),
+                new ParagraphLayoutMetrics(WritingMode.VerticalRl, new Vector2(30f, 80f),
+                    new Rect(0f, 0f, 30f, 80f), new Rect(0f, 0f, 30f, 80f),
+                    80f, 30f, 80f, Array.Empty<ParagraphColumnMetrics>()),
+            };
+            var inlineMargins = new[] { new Vector2(4f, 6f), new Vector2(8f, 10f) };
+            var blockMargins = new[] { new Vector2(20f, 5f), new Vector2(7f, 11f) };
+
+            var layout = TextBoxVerticalBlockLayout.Compose(metrics, 17f,
+                inlineMargins, blockMargins);
+
+            Assert.That(layout.PhysicalSize, Is.EqualTo(new Vector2(125f, 110f)));
+            Assert.That(layout.FrameOffsets[0], Is.EqualTo(new Vector2(65f, 4f)));
+            Assert.That(layout.FrameOffsets[1], Is.EqualTo(new Vector2(11f, 8f)));
+        }
+
+        [Test]
+        public void VerticalIntrinsicWidthIncludesCollapsedRightAndLeftMargins()
+        {
+            var baselineStyle = VerticalStyle();
+            baselineStyle.paragraphSpacing = 17f;
+            var marginedStyle = VerticalStyle();
+            marginedStyle.paragraphSpacing = 17f;
+            using var baseline = new TextBoxVerticalIntrinsicMeasurement(
+                VerticalSettings("<p>天</p><p>地</p>", baselineStyle));
+            using var margined = new TextBoxVerticalIntrinsicMeasurement(VerticalSettings(
+                "<p style=\"margin-right: 20px; margin-left: 5px\">天</p>" +
+                "<p style=\"margin-right: 7px; margin-left: 11px\">地</p>", marginedStyle));
+
+            var expected = baseline.Measure(100f).PhysicalWidth;
+            var actual = margined.Measure(100f).PhysicalWidth;
+
+            Assert.That(actual - expected, Is.EqualTo(38f).Within(0.01f));
+        }
+
         private static Paragraph BuildParagraph(string content,
             ParagraphStyleSettings paragraphSettings,
             TextStyleSettings textSettings)

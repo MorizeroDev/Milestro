@@ -40,6 +40,23 @@ namespace Milestro.Components.Internal
             return result;
         }
 
+        internal static Vector2[] ResolveBlockMargins(IReadOnlyList<MarginValue> rights,
+            IReadOnlyList<MarginValue> lefts, float contentWidth,
+            TextBoxRenderTargetSettings settings)
+        {
+            var context = settings.VerticalMarginContext;
+            var referenceWidth = context.HasValue && context.Value.HasContainerWidth
+                ? context.Value.ContainerWidth
+                : contentWidth;
+            var result = new Vector2[rights.Count];
+            for (var index = 0; index < result.Length; ++index)
+            {
+                result[index] = new Vector2(ResolveMargin(rights[index], referenceWidth, settings),
+                    ResolveMargin(lefts[index], referenceWidth, settings));
+            }
+            return result;
+        }
+
         private static float ResolveMargin(MarginValue margin, float contentHeight,
             TextBoxRenderTargetSettings settings)
         {
@@ -84,6 +101,13 @@ namespace Milestro.Components.Internal
         internal static TextBoxVerticalBlockLayout Layout(IReadOnlyList<Paragraph> paragraphs,
             float inlineExtent, float paragraphSpacing, IReadOnlyList<Vector2>? margins)
         {
+            return Layout(paragraphs, inlineExtent, paragraphSpacing, margins, null);
+        }
+
+        internal static TextBoxVerticalBlockLayout Layout(IReadOnlyList<Paragraph> paragraphs,
+            float inlineExtent, float paragraphSpacing, IReadOnlyList<Vector2>? margins,
+            IReadOnlyList<Vector2>? blockMargins)
+        {
             var metrics = new ParagraphLayoutMetrics[paragraphs.Count];
             for (var index = 0; index < paragraphs.Count; ++index)
             {
@@ -93,19 +117,20 @@ namespace Milestro.Components.Internal
                 paragraphs[index].LayoutWithInlineExtent(extent);
                 metrics[index] = paragraphs[index].LayoutMetrics;
             }
-            return Compose(metrics, paragraphSpacing, margins);
+            return Compose(metrics, paragraphSpacing, margins, blockMargins);
         }
 
         internal static TextBoxVerticalBlockLayout Compose(
             IReadOnlyList<ParagraphLayoutMetrics> metrics, float paragraphSpacing,
-            IReadOnlyList<Vector2>? margins = null)
+            IReadOnlyList<Vector2>? margins = null,
+            IReadOnlyList<Vector2>? blockMargins = null)
         {
             if (!FloatUtil.IsFinite(paragraphSpacing) || paragraphSpacing < 0f)
             {
                 throw new ArgumentOutOfRangeException(nameof(paragraphSpacing));
             }
 
-            double width = 0;
+            double width = metrics.Count > 0 ? BlockMargin(blockMargins, 0).x : 0f;
             var height = 0f;
             for (var index = 0; index < metrics.Count; ++index)
             {
@@ -118,10 +143,18 @@ namespace Milestro.Components.Internal
                     throw new InvalidOperationException("Invalid vertical block metrics.");
                 }
                 width += current.PhysicalSize.x;
+                var blockMargin = BlockMargin(blockMargins, index);
+                if (blockMargin.x < 0f || blockMargin.y < 0f)
+                {
+                    throw new InvalidOperationException("Invalid vertical block progression margins.");
+                }
                 if (index > 0)
                 {
                     width += paragraphSpacing;
                 }
+                width += index + 1 < metrics.Count
+                    ? Math.Max(blockMargin.y, BlockMargin(blockMargins, index + 1).x)
+                    : blockMargin.y;
                 var margin = margins?[index] ?? Vector2.zero;
                 if (margin.x < 0f || margin.y < 0f)
                 {
@@ -134,7 +167,7 @@ namespace Milestro.Components.Internal
             var offsets = new Vector2[metrics.Count];
             var bounds = default(Rect);
             var hasBounds = false;
-            double left = 0;
+            double left = metrics.Count > 0 ? BlockMargin(blockMargins, metrics.Count - 1).y : 0f;
             for (var index = metrics.Count - 1; index >= 0; --index)
             {
                 var offset = new Vector2(Finite(left), margins?[index].x ?? 0f);
@@ -161,7 +194,9 @@ namespace Milestro.Components.Internal
                 }
                 if (index > 0)
                 {
-                    left += (double)metrics[index].PhysicalSize.x + paragraphSpacing;
+                    left += (double)metrics[index].PhysicalSize.x + paragraphSpacing +
+                            Math.Max(BlockMargin(blockMargins, index).x,
+                                BlockMargin(blockMargins, index - 1).y);
                 }
             }
             return new TextBoxVerticalBlockLayout(new Vector2(physicalWidth, height), bounds,
@@ -175,6 +210,11 @@ namespace Milestro.Components.Internal
                 throw new InvalidOperationException("Vertical block layout is not finite.");
             }
             return (float)value;
+        }
+
+        private static Vector2 BlockMargin(IReadOnlyList<Vector2>? margins, int index)
+        {
+            return margins?[index] ?? Vector2.zero;
         }
     }
 }

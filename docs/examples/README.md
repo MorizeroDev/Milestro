@@ -58,8 +58,7 @@ layout engine.
 Horizontal section headings declare `margin-top: 64px` and
 `margin-bottom: 6px`. Vertical section headings declare `margin-right: 64px`
 and `margin-left: 6px`, placing the larger margin on the side of the preceding
-paragraph. The current parser does not yet apply these left/right paragraph
-margin declarations.
+paragraph.
 
 ## What to expect
 

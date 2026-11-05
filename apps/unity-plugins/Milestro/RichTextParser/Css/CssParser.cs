@@ -86,16 +86,9 @@ namespace Milestro.RichTextParser.Css
                     textIndentEm = isEm ? indent.Value : (float?)null;
                 }
                 else if (paragraphStyle != null &&
-                         declaration.Property.Equals("margin-top", StringComparison.OrdinalIgnoreCase) &&
-                         TryParseBlockMargin(declaration.Value, allowViewportBlockMargins, out var marginTop))
+                         TryApplyBlockMargin(paragraphStyle, declaration.Property, declaration.Value,
+                             allowViewportBlockMargins))
                 {
-                    paragraphStyle.MarginTop = marginTop;
-                }
-                else if (paragraphStyle != null &&
-                         declaration.Property.Equals("margin-bottom", StringComparison.OrdinalIgnoreCase) &&
-                         TryParseBlockMargin(declaration.Value, allowViewportBlockMargins, out var marginBottom))
-                {
-                    paragraphStyle.MarginBottom = marginBottom;
                 }
             }
 
@@ -347,6 +340,76 @@ namespace Milestro.RichTextParser.Css
 
             if (suffixLength == 0 && result != 0f) return false;
             margin = new MarginValue { Value = result, Unit = unit };
+            return true;
+        }
+
+        private static bool TryApplyBlockMargin(ParagraphStyleState style, CssSlice property,
+            CssSlice value, bool allowViewportBlockMargins)
+        {
+            if (property.Equals("margin", StringComparison.OrdinalIgnoreCase))
+            {
+                return TryApplyBlockMarginShorthand(style, value, allowViewportBlockMargins);
+            }
+
+            if (!TryParseBlockMargin(value, allowViewportBlockMargins, out var margin))
+            {
+                return false;
+            }
+
+            if (property.Equals("margin-top", StringComparison.OrdinalIgnoreCase))
+            {
+                style.MarginTop = margin;
+            }
+            else if (property.Equals("margin-right", StringComparison.OrdinalIgnoreCase))
+            {
+                style.MarginRight = margin;
+            }
+            else if (property.Equals("margin-bottom", StringComparison.OrdinalIgnoreCase))
+            {
+                style.MarginBottom = margin;
+            }
+            else if (property.Equals("margin-left", StringComparison.OrdinalIgnoreCase))
+            {
+                style.MarginLeft = margin;
+            }
+            else
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryApplyBlockMarginShorthand(ParagraphStyleState style, CssSlice value,
+            bool allowViewportBlockMargins)
+        {
+            var slices = new CssSlice[4];
+            var count = 0;
+            var position = 0;
+            while (position < value.Length)
+            {
+                while (position < value.Length && char.IsWhiteSpace(value[position])) position++;
+                if (position == value.Length) break;
+                if (count == slices.Length) return false;
+                var start = position;
+                while (position < value.Length && !char.IsWhiteSpace(value[position])) position++;
+                slices[count++] = value.Slice(start, position - start);
+            }
+
+            if (count == 0) return false;
+            var margins = new MarginValue[count];
+            for (var index = 0; index < count; ++index)
+            {
+                if (!TryParseBlockMargin(slices[index], allowViewportBlockMargins, out margins[index]))
+                {
+                    return false;
+                }
+            }
+
+            style.MarginTop = margins[0];
+            style.MarginRight = margins[count == 1 ? 0 : 1];
+            style.MarginBottom = margins[count < 3 ? 0 : 2];
+            style.MarginLeft = margins[count == 1 ? 0 : count == 2 ? 1 : count == 3 ? 1 : 3];
             return true;
         }
     }

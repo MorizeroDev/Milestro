@@ -85,9 +85,13 @@ namespace Milestro.Components.Internal
                 payload.Blocks.Select(block => block.Style.MarginTop).ToArray(),
                 payload.Blocks.Select(block => block.Style.MarginBottom).ToArray(),
                 contentHeight, settings);
+            var blockMargins = TextBoxVerticalBlockLayout.ResolveBlockMargins(
+                payload.Blocks.Select(block => block.Style.MarginRight).ToArray(),
+                payload.Blocks.Select(block => block.Style.MarginLeft).ToArray(),
+                settings.MarginReferenceSize.x, settings);
             var layout = TextBoxVerticalBlockLayout.Layout(paragraphs,
                 wraps ? contentHeight : float.PositiveInfinity,
-                settings.ParagraphStyle.paragraphSpacing, margins);
+                settings.ParagraphStyle.paragraphSpacing, margins, blockMargins);
             var result = new TextBoxVerticalMeasurement(layout.PhysicalSize.x,
                 layout.PhysicalSize.y);
             if (cache.Count >= 32)

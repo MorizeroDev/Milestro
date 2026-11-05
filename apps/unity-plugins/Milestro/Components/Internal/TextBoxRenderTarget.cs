@@ -19,11 +19,16 @@ namespace Milestro.Components.Internal
         private readonly List<int> blockStartsUtf16 = new List<int>();
         private readonly List<string> blockPlainTexts = new List<string>();
         private readonly List<MarginValue> blockMarginTopValues = new List<MarginValue>();
+        private readonly List<MarginValue> blockMarginRightValues = new List<MarginValue>();
         private readonly List<MarginValue> blockMarginBottomValues = new List<MarginValue>();
+        private readonly List<MarginValue> blockMarginLeftValues = new List<MarginValue>();
         private readonly List<TextAlign> blockPhysicalAligns = new List<TextAlign>();
         private readonly List<float> blockHeights = new List<float>();
         private readonly List<float> blockMarginTops = new List<float>();
+        private readonly List<float> blockMarginRights = new List<float>();
         private readonly List<float> blockMarginBottoms = new List<float>();
+        private readonly List<float> blockMarginLefts = new List<float>();
+        private readonly List<float> blockLayoutWidths = new List<float>();
         private readonly List<float> blockTops = new List<float>();
         private readonly List<float> blockAlignmentOffsetsX = new List<float>();
         private readonly List<float> blockContentWidths = new List<float>();
@@ -66,6 +71,7 @@ namespace Milestro.Components.Internal
         private bool hasVerticalLayoutMetrics;
         private TextBoxVerticalBlockLayout verticalLayoutMetrics;
         private Vector2[] verticalBlockMargins = Array.Empty<Vector2>();
+        private Vector2[] verticalBlockSpacingMargins = Array.Empty<Vector2>();
         private WritingMode requestedWritingMode;
         private bool hasRequestedWritingMode;
         private ResolvedMargin verticalMargin;
@@ -917,10 +923,14 @@ namespace Milestro.Components.Internal
             verticalBottomAuto = bottomAuto;
             var margins = TextBoxVerticalBlockLayout.ResolveMargins(blockMarginTopValues,
                 blockMarginBottomValues, contentHeight, settings);
-            var blockMarginsChanged = margins.Length != verticalBlockMargins.Length;
+            var blockSpacingMargins = TextBoxVerticalBlockLayout.ResolveBlockMargins(
+                blockMarginRightValues, blockMarginLeftValues, contentWidth, settings);
+            var blockMarginsChanged = margins.Length != verticalBlockMargins.Length ||
+                                      blockSpacingMargins.Length != verticalBlockSpacingMargins.Length;
             for (var index = 0; !blockMarginsChanged && index < margins.Length; ++index)
             {
-                blockMarginsChanged = !margins[index].Equals(verticalBlockMargins[index]);
+                blockMarginsChanged = !margins[index].Equals(verticalBlockMargins[index]) ||
+                                      !blockSpacingMargins[index].Equals(verticalBlockSpacingMargins[index]);
             }
             if (!force &&
                 hasVerticalLayoutMetrics &&
@@ -949,7 +959,7 @@ namespace Milestro.Components.Internal
                         UsesFiniteVerticalInlineExtent(settings)
                             ? virtualHeight
                             : float.PositiveInfinity,
-                        settings.ParagraphStyle.paragraphSpacing, margins).PhysicalSize;
+                        settings.ParagraphStyle.paragraphSpacing, margins, blockSpacingMargins).PhysicalSize;
                     return measured.x <= virtualWidth && measured.y <= virtualHeight;
                 },
                     bounds.fontSizeMin / settings.TextStyle.size,
@@ -959,9 +969,10 @@ namespace Milestro.Components.Internal
                 ? contentHeight / scale
                 : float.PositiveInfinity;
             var metrics = TextBoxVerticalBlockLayout.Layout(targetParagraphs, inlineExtent,
-                settings.ParagraphStyle.paragraphSpacing, margins);
+                settings.ParagraphStyle.paragraphSpacing, margins, blockSpacingMargins);
 
             verticalBlockMargins = margins;
+            verticalBlockSpacingMargins = blockSpacingMargins;
             verticalContentViewportWidth = contentWidth;
             verticalContentViewportHeight = contentHeight;
             verticalLayoutMetrics = metrics;
@@ -1338,7 +1349,9 @@ namespace Milestro.Components.Internal
             blockStartsUtf16.Clear();
             blockPlainTexts.Clear();
             blockMarginTopValues.Clear();
+            blockMarginRightValues.Clear();
             blockMarginBottomValues.Clear();
+            blockMarginLeftValues.Clear();
             blockPhysicalAligns.Clear();
             hasHeightDependentBlockMargins = false;
             foreach (var block in payload.Blocks)
@@ -1346,9 +1359,13 @@ namespace Milestro.Components.Internal
                 blockStartsUtf16.Add(block.StartUtf16);
                 blockPlainTexts.Add(payload.GetPlainText(block));
                 blockMarginTopValues.Add(block.Style.MarginTop);
+                blockMarginRightValues.Add(block.Style.MarginRight);
                 blockMarginBottomValues.Add(block.Style.MarginBottom);
+                blockMarginLeftValues.Add(block.Style.MarginLeft);
                 hasHeightDependentBlockMargins |= IsHeightDependent(block.Style.MarginTop) ||
-                                                  IsHeightDependent(block.Style.MarginBottom);
+                                                  IsHeightDependent(block.Style.MarginBottom) ||
+                                                  block.Style.MarginRight.Unit == MarginUnit.Vh ||
+                                                  block.Style.MarginLeft.Unit == MarginUnit.Vh;
 
                 var align = block.Style.TextAlign ??
                             payload.ParagraphStyle.TextAlign ??
@@ -1409,7 +1426,8 @@ namespace Milestro.Components.Internal
                         blockIndex < blockAlignmentOffsetsX.Count ? blockAlignmentOffsetsX[blockIndex] : 0f,
                         scrollOffset.x,
                         visualScrollOffsetX);
-                    var offsetX = paintOffsetX / fitScale;
+                    var blockLeft = blockIndex < blockMarginLefts.Count ? blockMarginLefts[blockIndex] : 0f;
+                    var offsetX = blockLeft + paintOffsetX / fitScale;
                     foreach (var rect in blockRects)
                     {
                         rects.Add(new Rect(rect.x + offsetX, rect.y + top, rect.width, rect.height));
@@ -1513,12 +1531,13 @@ namespace Milestro.Components.Internal
 
                 layoutWidth = viewportWidth;
                 layoutHeight = layoutSizePixels.y;
-                foreach (var targetParagraph in targetParagraphs)
+                ResolveBlockMargins(settings, layoutSizePixels);
+                ResolveBlockLayoutWidths(layoutWidth);
+                for (var index = 0; index < targetParagraphs.Count; ++index)
                 {
-                    targetParagraph.Layout(layoutWidth);
+                    targetParagraphs[index].Layout(blockLayoutWidths[index]);
                 }
                 paragraphContentWidth = layoutWidth;
-                ResolveBlockMargins(settings, layoutSizePixels);
                 var stackHeight = RestackBlocks(targetParagraphs, settings);
                 ResolveWrapVisualBounds(targetParagraphs, layoutWidth);
                 paragraphHeight = Mathf.Max(0f, stackHeight);
@@ -1555,12 +1574,13 @@ namespace Milestro.Components.Internal
             fitScale = scale;
             ClearBlockAlignmentOffsets();
             ResolveBlockMargins(settings, layoutSizePixels);
+            ResolveBlockLayoutWidths(nextLayoutWidth);
             blockHeights.Clear();
             paragraphContentWidth = 0f;
             for (var index = 0; index < targetParagraphs.Count; ++index)
             {
                 var paragraph = targetParagraphs[index];
-                paragraph.Layout(layoutWidth);
+                paragraph.Layout(blockLayoutWidths[index]);
                 blockHeights.Add(Mathf.Max(0f, paragraph.Height));
                 paragraphContentWidth = Mathf.Max(paragraphContentWidth,
                     wraps ? paragraph.LongestLine : paragraph.MaxIntrinsicWidth);
@@ -1589,7 +1609,9 @@ namespace Milestro.Components.Internal
         private void ResolveBlockMargins(TextBoxRenderTargetSettings settings, Vector2Int layoutSizePixels)
         {
             blockMarginTops.Clear();
+            blockMarginRights.Clear();
             blockMarginBottoms.Clear();
+            blockMarginLefts.Clear();
             var referenceSize = settings.Sizing.HasValue ? settings.MarginReferenceSize :
                 new Vector2(layoutSizePixels.x, layoutSizePixels.y);
             var scale = settings.Sizing.HasValue
@@ -1603,7 +1625,19 @@ namespace Milestro.Components.Internal
             for (var index = 0; index < blockMarginTopValues.Count; ++index)
             {
                 blockMarginTops.Add(blockMarginTopValues[index].Resolve(context, MarginAxis.Vertical) / scale);
+                blockMarginRights.Add(blockMarginRightValues[index].Resolve(context, MarginAxis.Horizontal) / scale);
                 blockMarginBottoms.Add(blockMarginBottomValues[index].Resolve(context, MarginAxis.Vertical) / scale);
+                blockMarginLefts.Add(blockMarginLeftValues[index].Resolve(context, MarginAxis.Horizontal) / scale);
+            }
+        }
+
+        private void ResolveBlockLayoutWidths(float containingWidth)
+        {
+            blockLayoutWidths.Clear();
+            for (var index = 0; index < blockMarginLefts.Count; ++index)
+            {
+                blockLayoutWidths.Add(Math.Max(1f,
+                    containingWidth - blockMarginLefts[index] - blockMarginRights[index]));
             }
         }
 
@@ -1629,8 +1663,11 @@ namespace Milestro.Components.Internal
             var right = float.MinValue;
             for (var index = 0; index < targetParagraphs.Count; ++index)
             {
-                var visualWidth = Mathf.Clamp(targetParagraphs[index].LongestLine, 0f, width);
-                var visualLeft = ResolveVisualLeft(blockPhysicalAligns[index], visualWidth, width);
+                var blockWidth = index < blockLayoutWidths.Count ? blockLayoutWidths[index] : width;
+                var blockLeft = index < blockMarginLefts.Count ? blockMarginLefts[index] : 0f;
+                var visualWidth = Mathf.Clamp(targetParagraphs[index].LongestLine, 0f, blockWidth);
+                var visualLeft = blockLeft +
+                                 ResolveVisualLeft(blockPhysicalAligns[index], visualWidth, blockWidth);
                 left = Math.Min(left, visualLeft);
                 right = Math.Max(right, visualLeft + visualWidth);
             }
@@ -1670,9 +1707,10 @@ namespace Milestro.Components.Internal
                 if (candidateWidth != probeWidth)
                 {
                     probeWidth = candidateWidth;
-                    foreach (var targetParagraph in targetParagraphs)
+                    ResolveBlockLayoutWidths(candidateWidth);
+                    for (var index = 0; index < targetParagraphs.Count; ++index)
                     {
-                        targetParagraph.Layout(candidateWidth);
+                        targetParagraphs[index].Layout(blockLayoutWidths[index]);
                     }
                     probeSize = MeasureStackedContent(targetParagraphs, settings);
                 }
@@ -1686,10 +1724,15 @@ namespace Milestro.Components.Internal
             finalVirtualWidth = CeilToPositiveInt(viewportWidth / scale);
             if (probeWidth != finalVirtualWidth)
             {
-                foreach (var targetParagraph in targetParagraphs)
+                ResolveBlockLayoutWidths(finalVirtualWidth);
+                for (var index = 0; index < targetParagraphs.Count; ++index)
                 {
-                    targetParagraph.Layout(finalVirtualWidth);
+                    targetParagraphs[index].Layout(blockLayoutWidths[index]);
                 }
+            }
+            else
+            {
+                ResolveBlockLayoutWidths(finalVirtualWidth);
             }
 
             var changed = alignmentChanged || force || finalVirtualWidth != layoutWidth;
@@ -1703,8 +1746,10 @@ namespace Milestro.Components.Internal
             var visualRight = float.MinValue;
             for (var index = 0; index < targetParagraphs.Count; ++index)
             {
-                var visualWidth = Mathf.Clamp(targetParagraphs[index].LongestLine * fitScale, 0f, viewportWidth);
-                var left = ResolveVisualLeft(blockPhysicalAligns[index], visualWidth, viewportWidth);
+                var blockWidth = blockLayoutWidths[index] * fitScale;
+                var visualWidth = Mathf.Clamp(targetParagraphs[index].LongestLine * fitScale, 0f, blockWidth);
+                var left = blockMarginLefts[index] * fitScale +
+                           ResolveVisualLeft(blockPhysicalAligns[index], visualWidth, blockWidth);
                 visualLeft = Math.Min(visualLeft, left);
                 visualRight = Math.Max(visualRight, left + visualWidth);
             }
@@ -1727,10 +1772,12 @@ namespace Milestro.Components.Internal
         {
             blockHeights.Clear();
             var width = 0f;
-            foreach (var targetParagraph in targetParagraphs)
+            for (var index = 0; index < targetParagraphs.Count; ++index)
             {
+                var targetParagraph = targetParagraphs[index];
                 blockHeights.Add(Mathf.Max(0f, targetParagraph.Height));
-                width = Math.Max(width, targetParagraph.LongestLine);
+                width = Math.Max(width, targetParagraph.LongestLine +
+                                        blockMarginLefts[index] + blockMarginRights[index]);
             }
 
             var total = TextBoxBlockStack.Layout(blockHeights,
@@ -1748,6 +1795,7 @@ namespace Milestro.Components.Internal
         {
             var viewportWidth = ContentViewportWidth(settings, layoutSizePixels);
             var profiling = TextBoxPipelineProfiler.Enabled;
+            ResolveBlockMargins(settings, layoutSizePixels);
             if (force)
             {
                 blockContentWidths.Clear();
@@ -1758,7 +1806,7 @@ namespace Milestro.Components.Internal
                     {
                         targetParagraphs[index].Layout(Paragraph.ResolveNoWrapProbeLayoutWidth(plainText,
                             settings.TextStyle.size,
-                            viewportWidth));
+                            Math.Max(1f, viewportWidth - blockMarginLefts[index] - blockMarginRights[index])));
                     }
                     using (profiling ? TextBoxPipelineProfiler.NoWrapMeasureMarker.Auto() : default)
                     {
@@ -1768,12 +1816,12 @@ namespace Milestro.Components.Internal
             }
 
             var contentWidth = 0f;
-            foreach (var width in blockContentWidths)
+            for (var index = 0; index < blockContentWidths.Count; ++index)
             {
-                contentWidth = Math.Max(contentWidth, width);
+                contentWidth = Math.Max(contentWidth, blockContentWidths[index] +
+                                                     blockMarginLefts[index] + blockMarginRights[index]);
             }
 
-            ResolveBlockMargins(settings, layoutSizePixels);
             var unscaledHeight = 0f;
             var needsHeightProbe = !settings.Sizing.HasValue && ShouldApplyAutoFontSize(settings);
             if (needsHeightProbe)
@@ -1799,14 +1847,15 @@ namespace Milestro.Components.Internal
             var virtualViewportWidth = settings.Sizing.HasValue ? viewportWidth / scale : viewportWidth;
             var newLayoutWidth = CeilToPositiveInt(Paragraph.ResolveNoWrapLayoutWidth(virtualViewportWidth, contentWidth));
             var widthChanged = newLayoutWidth != layoutWidth;
+            layoutWidth = newLayoutWidth;
+            ResolveBlockLayoutWidths(layoutWidth);
             if (widthChanged || force)
             {
-                layoutWidth = newLayoutWidth;
                 using (profiling ? TextBoxPipelineProfiler.NoWrapFinalLayoutMarker.Auto() : default)
                 {
-                    foreach (var targetParagraph in targetParagraphs)
+                    for (var index = 0; index < targetParagraphs.Count; ++index)
                     {
-                        targetParagraph.Layout(layoutWidth);
+                        targetParagraphs[index].Layout(blockLayoutWidths[index]);
                     }
                 }
             }
@@ -1827,9 +1876,10 @@ namespace Milestro.Components.Internal
                 var horizontalLayout = TextBoxNoWrapHorizontalLayout.Resolve(true,
                     blockPhysicalAligns[index],
                     settings.ParagraphStyle.textDirection,
-                    viewportWidth,
+                    Math.Max(0f, viewportWidth -
+                                      (blockMarginLefts[index] + blockMarginRights[index]) * fitScale),
                     blockWidth * fitScale,
-                    layoutWidth * fitScale);
+                    blockLayoutWidths[index] * fitScale);
                 while (blockAlignmentOffsetsX.Count <= index)
                 {
                     blockAlignmentOffsetsX.Add(0f);
@@ -1840,7 +1890,7 @@ namespace Milestro.Components.Internal
                     metricsChanged = true;
                 }
 
-                var left = horizontalLayout.LogicalVisualLeft;
+                var left = blockMarginLefts[index] * fitScale + horizontalLayout.LogicalVisualLeft;
                 var right = left + blockWidth * fitScale;
                 visualLeft = Math.Min(visualLeft, left);
                 visualRight = Math.Max(visualRight, right);
@@ -2092,9 +2142,10 @@ namespace Milestro.Components.Internal
                     if (boxes.Count == 0) break;
                     var offset = verticalLayoutActive
                         ? verticalLayoutMetrics.FrameOffsets[index]
-                        : new Vector2(TextBoxNoWrapHorizontalLayout.ResolvePaintOffsetX(
-                            index < blockAlignmentOffsetsX.Count ? blockAlignmentOffsetsX[index] : 0f,
-                            scrollOffset.x, visualScrollOffsetX) / fitScale,
+                        : new Vector2((index < blockMarginLefts.Count ? blockMarginLefts[index] : 0f) +
+                            TextBoxNoWrapHorizontalLayout.ResolvePaintOffsetX(
+                                index < blockAlignmentOffsetsX.Count ? blockAlignmentOffsetsX[index] : 0f,
+                                scrollOffset.x, visualScrollOffsetX) / fitScale,
                             index < blockTops.Count ? blockTops[index] : 0f);
                     rect = new Rect(boxes[0].position + offset, boxes[0].size);
                     var outputRect = new Rect(rect.position * fitScale + paintPosition, rect.size * fitScale);
@@ -2133,7 +2184,8 @@ namespace Milestro.Components.Internal
                     var offsetX = TextBoxNoWrapHorizontalLayout.ResolvePaintOffsetX(
                         index < blockAlignmentOffsetsX.Count ? blockAlignmentOffsetsX[index] : 0f,
                         scrollOffset.x,
-                        viewport.VisualScrollOffset.x);
+                        viewport.VisualScrollOffset.x) +
+                                   (index < blockMarginLefts.Count ? blockMarginLefts[index] : 0f) * fitScale;
                     var blockTop = index < blockTops.Count ? blockTops[index] : 0f;
                     var blockPaintPosition = new Vector2(basePaintX + offsetX,
                         basePaintY + blockTop * fitScale);

@@ -98,6 +98,34 @@ namespace Milestro.Tests
             Assert.That(second - first, Is.EqualTo(10f).Within(0.1f));
         }
 
+        [TestCase(TextBoxWrapMode.Wrap)]
+        [TestCase(TextBoxWrapMode.NoWrap)]
+        public void HorizontalBlockMarginsContributeToIntrinsicWidths(TextBoxWrapMode wrapMode)
+        {
+            const string text = "Short text";
+            var baselineSettings = new TextBoxRenderTargetSettings(text, new Margin(),
+                new ParagraphStyleSettings(), new TextStyleSettings { size = 20f },
+                XmlRichTextParser.Id, wrapMode, TextOverflow.Clip);
+            var marginedSettings = new TextBoxRenderTargetSettings(
+                "<p style=\"margin-left: 20px; margin-right: 30px\">Short text</p>",
+                new Margin(), new ParagraphStyleSettings(), new TextStyleSettings { size = 20f },
+                XmlRichTextParser.Id, wrapMode, TextOverflow.Clip);
+            using var baseline = new TextBoxIntrinsicMeasurement(baselineSettings);
+            using var margined = new TextBoxIntrinsicMeasurement(marginedSettings);
+            baseline.SetAvailableSize(new UnityEngine.Vector2(200f, 100f));
+            margined.SetAvailableSize(new UnityEngine.Vector2(200f, 100f));
+
+            var expected = baseline.Measure(20f, 200f);
+            var actual = margined.Measure(20f, 200f);
+
+            Assert.That(actual.MinContentWidth - expected.MinContentWidth,
+                Is.EqualTo(50f).Within(0.01f));
+            Assert.That(actual.MaxContentWidth - expected.MaxContentWidth,
+                Is.EqualTo(50f).Within(0.01f));
+            Assert.That(actual.ContentWidth - expected.ContentWidth,
+                Is.EqualTo(50f).Within(0.01f));
+        }
+
         [TestCase("vw", TextBoxWrapMode.Wrap)]
         [TestCase("vh", TextBoxWrapMode.Wrap)]
         [TestCase("vw", TextBoxWrapMode.NoWrap)]

@@ -5,8 +5,8 @@ namespace Milestro.RichTextParser
 {
     /// <summary>
     /// One block-level paragraph inside a <see cref="ParagraphPayload"/>. A block owns an
-    /// independent paragraph style (alignment, direction, text indent) and an optional
-    /// bottom margin. Blocks stack vertically when the payload is laid out.
+    /// independent paragraph style (alignment, direction, text indent) and four physical
+    /// margins. Blocks stack in the writing mode's block progression direction.
     /// </summary>
     public sealed class ParagraphBlock
     {

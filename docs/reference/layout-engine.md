@@ -331,11 +331,14 @@ per update; the configured size is retained.
 ## Rich-text block spacing
 
 `paragraphStyle.paragraphSpacing` is the default extra gap between adjacent
-paragraph blocks. Rich-text `<p>` blocks can add `margin-top` and
-`margin-bottom`; collapsed adjacent margins and the default spacing are applied
-together. It is included in intrinsic measurement, so it affects auto height.
-The component-level `TextBox` margin is separate and surrounds the whole
-viewport.
+paragraph blocks. Rich-text `<p>` blocks support `margin` shorthand and all four
+physical longhands. Horizontal `margin-left` and `margin-right` reduce each
+block's available line width and offset its content, links, and placeholders.
+Vertical-rl `margin-top` and `margin-bottom` similarly reduce the inline extent.
+Horizontal top/bottom and vertical-rl right/left are the block-start/end margins;
+adjacent pairs collapse and the default spacing is added. Margins are included in
+intrinsic measurement and content scrolling. The component-level `TextBox`
+margin is separate and surrounds the whole viewport.
 
 ## SlimText layout
 
