@@ -134,6 +134,12 @@ shipped id — register an alias instead. Display names only appear in the
 inspector and may change freely. The dropdown lists every registered parser,
 and the field also accepts ids typed by hand.
 
+The optional `Milestro.RichText.TMPro` module registers the `tmpro` parser for
+TextMesh Pro syntax. It maps common TMPro tags to the payload model described
+below; unsupported or unmatched tags log a warning and render literally. See
+the [TMPro module README](../../apps/unity-plugins/Milestro.RichText.TMPro/README.md)
+for its supported syntax.
+
 ### Supported tags
 
 | Tag | Effect |
@@ -179,6 +185,7 @@ empty elements such as `<p id="chapter"></p>`. Use
 | `voffset` | Absolute baseline shift |
 | `voffset-em` | Baseline shift in em units |
 | `fscale` | Absolute font-size multiplier; must be positive |
+| `lheight` | Positive line-height multiplier |
 | `lang` | Locale |
 | `face` | Font-family list |
 | `weight`, `width`, `slant` | Font style axes |
@@ -267,8 +274,8 @@ producer.textStyle.lineHeight = 1.25f;   // line-height multiplier
 ```
 
 `lineHeight` is a multiplier, not an absolute offset. Values at or below zero
-keep the font's natural metrics. Rich-text runs inherit these values; a local
-`cspace` style can still override letter spacing.
+keep the font's natural metrics. Rich-text runs inherit these values; local
+`cspace` and `lheight` styles can override letter spacing and line height.
 
 The producer also has a default gap between paragraph blocks:
 

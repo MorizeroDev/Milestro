@@ -150,14 +150,13 @@ namespace Milestro.Extensions
                 ret.SetFontFamilyTokens(baseTextStyle.GetFontFamilyTokens());
             }
 
-            if (t.Color.HasValue)
+            var color = t.Color ?? baseTextStyle.Color;
+            if (t.Alpha.HasValue)
             {
-                ret.Color = t.Color.Value;
+                color.a *= t.Alpha.Value;
             }
-            else
-            {
-                ret.Color = baseTextStyle.Color;
-            }
+
+            ret.Color = color;
 
             if (t.BackgroundColor.HasValue)
             {
@@ -194,8 +193,17 @@ namespace Milestro.Extensions
                 ret.BaselineShift = baseTextStyle.BaselineShift;
             }
 
-            ret.Height = baseTextStyle.Height;
-            ret.HeightOverride = baseTextStyle.HeightOverride;
+            if (t.LineHeight.HasValue)
+            {
+                ret.Height = t.LineHeight.Value;
+                ret.HeightOverride = true;
+            }
+            else
+            {
+                ret.Height = baseTextStyle.Height;
+                ret.HeightOverride = baseTextStyle.HeightOverride;
+            }
+
             ret.HalfLeading = baseTextStyle.HalfLeading;
             ret.LetterSpacing = t.LetterSpacing ?? baseTextStyle.LetterSpacing;
             ret.WordSpacing = baseTextStyle.WordSpacing;

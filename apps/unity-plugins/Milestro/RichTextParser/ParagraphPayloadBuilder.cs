@@ -1,4 +1,6 @@
 using System;
+using Milestro.Model;
+using Milestro.Unicode;
 
 namespace Milestro.RichTextParser
 {
@@ -10,11 +12,19 @@ namespace Milestro.RichTextParser
     public sealed class ParagraphPayloadBuilder
     {
         private readonly ParagraphPayload payload = new ParagraphPayload();
+        private readonly string locale;
         private ParagraphBlock? currentBlock;
         private int textLengthUtf16;
+        private int noWrapStartUtf16 = -1;
+        private int noWrapEndUtf16 = -1;
         private int linkStartUtf16 = -1;
         private string? linkHref;
         private string? linkId;
+
+        public ParagraphPayloadBuilder(string locale = "en")
+        {
+            this.locale = locale;
+        }
 
         /// <summary>
         /// Starts a new block-level paragraph. Content appended afterwards belongs to the
@@ -22,7 +32,35 @@ namespace Milestro.RichTextParser
         /// </summary>
         public ParagraphPayloadBuilder BeginBlock()
         {
+            CloseNoWrap();
             currentBlock = payload.AddBlock(true, textLengthUtf16);
+            return this;
+        }
+
+        public ParagraphPayloadBuilder BeginBlock(ParagraphStyleState style, TextStyleState textStyle)
+        {
+            if (style == null) throw new ArgumentNullException(nameof(style));
+            if (textStyle == null) throw new ArgumentNullException(nameof(textStyle));
+            BeginBlock();
+            var target = currentBlock!.Style;
+            target.TextAlign = style.TextAlign;
+            target.TextDirection = style.TextDirection;
+            target.TextIndent = style.TextIndent;
+            target.TextIndentEm = style.TextIndentEm;
+            target.TextIndentFontSize = textStyle.FontSize;
+            target.TextIndentFontSizeScale = textStyle.FontSizeScale ?? 1f;
+            target.Width = style.Width;
+            target.MarginTop = style.MarginTop;
+            target.MarginRight = style.MarginRight;
+            target.MarginBottom = style.MarginBottom;
+            target.MarginLeft = style.MarginLeft;
+            return this;
+        }
+
+        public ParagraphPayloadBuilder EndBlock()
+        {
+            CloseNoWrap();
+            currentBlock = null;
             return this;
         }
 
@@ -38,12 +76,10 @@ namespace Milestro.RichTextParser
                 return this;
             }
 
+            var startUtf16 = textLengthUtf16;
             var block = EnsureBlock();
-            block.Segments.Add(style == null
-                ? TextSegment.MakeText(text)
-                : TextSegment.MakeText(style, text));
-            block.LengthUtf16 += text.Length;
-            textLengthUtf16 += text.Length;
+            AppendTransformedText(block, text, style);
+            TrackNoWrap(style, startUtf16);
             return this;
         }
 
@@ -61,10 +97,12 @@ namespace Milestro.RichTextParser
             }
 
             var block = EnsureBlock();
+            var startUtf16 = textLengthUtf16;
             payload.AddPlaceholder(new PlaceholderAnnotation(textLengthUtf16, width, height,
                 key ?? "", style ?? new TextStyleState()));
             ++block.LengthUtf16;
             ++textLengthUtf16;
+            TrackNoWrap(style, startUtf16);
             return this;
         }
 
@@ -110,6 +148,7 @@ namespace Milestro.RichTextParser
         /// </summary>
         public ParagraphPayload Build()
         {
+            CloseNoWrap();
             if (linkHref != null)
             {
                 EndLink();
@@ -126,6 +165,81 @@ namespace Milestro.RichTextParser
             }
 
             return currentBlock;
+        }
+
+        private void AppendTransformedText(ParagraphBlock block, string text, TextStyleState? style)
+        {
+            if (style?.TextTransform == TextTransform.SmallCaps)
+            {
+                var runStart = 0;
+                while (runStart < text.Length)
+                {
+                    var isLowercase = char.IsLower(text[runStart]);
+                    var runEnd = runStart + 1;
+                    while (runEnd < text.Length && char.IsLower(text[runEnd]) == isLowercase)
+                    {
+                        runEnd++;
+                    }
+
+                    var runText = text.Substring(runStart, runEnd - runStart);
+                    var runStyle = style;
+                    if (isLowercase)
+                    {
+                        runText = runText.IcuToUpper(style.Locale ?? locale);
+                        runStyle = style.Clone();
+                        runStyle.IsSmallCapsLowercase = true;
+                    }
+
+                    AppendTextSegment(block, runStyle, runText);
+                    runStart = runEnd;
+                }
+                return;
+            }
+
+            if (style?.TextTransform == TextTransform.Lowercase)
+            {
+                text = text.IcuToLower(style.Locale ?? locale);
+            }
+            else if (style?.TextTransform == TextTransform.Uppercase)
+            {
+                text = text.IcuToUpper(style.Locale ?? locale);
+            }
+
+            AppendTextSegment(block, style, text);
+        }
+
+        private void AppendTextSegment(ParagraphBlock block, TextStyleState? style, string text)
+        {
+            block.Segments.Add(style == null
+                ? TextSegment.MakeText(text)
+                : TextSegment.MakeText(style, text));
+            block.LengthUtf16 += text.Length;
+            textLengthUtf16 += text.Length;
+        }
+
+        private void TrackNoWrap(TextStyleState? style, int startUtf16)
+        {
+            if (style?.NoWrap != true)
+            {
+                CloseNoWrap();
+                return;
+            }
+
+            if (noWrapStartUtf16 < 0)
+            {
+                noWrapStartUtf16 = startUtf16;
+            }
+            noWrapEndUtf16 = textLengthUtf16;
+        }
+
+        private void CloseNoWrap()
+        {
+            if (noWrapStartUtf16 >= 0 && noWrapEndUtf16 > noWrapStartUtf16)
+            {
+                payload.AddNoWrap(new NoWrapAnnotation(noWrapStartUtf16, noWrapEndUtf16));
+            }
+            noWrapStartUtf16 = -1;
+            noWrapEndUtf16 = -1;
         }
     }
 }

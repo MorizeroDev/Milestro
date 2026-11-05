@@ -138,6 +138,8 @@ namespace Milestro.RichTextParser
         /// </summary>
         public Color? Color { get; set; } = null;
 
+        public float? Alpha { get; set; } = null;
+
         /// <summary>
         /// Optional text-run background color override.
         /// </summary>
@@ -155,6 +157,11 @@ namespace Milestro.RichTextParser
         /// across nesting; the <c>fscale</c> span attribute sets it absolutely.
         /// </summary>
         public float? FontSizeScale { get; set; } = null;
+
+        /// <summary>
+        /// Optional line-height multiplier override for this text run.
+        /// </summary>
+        public float? LineHeight { get; set; } = null;
 
         /// <summary>
         /// Optional letter spacing override.
@@ -206,9 +213,11 @@ namespace Milestro.RichTextParser
             ret.FontFamilies = FontFamilies == null ? null : new List<string>(FontFamilies);
             ret.FontFamilyTokens = FontFamilyTokens == null ? null : new List<FontFamilyToken>(FontFamilyTokens);
             ret.Color = Color;
+            ret.Alpha = Alpha;
             ret.BackgroundColor = BackgroundColor;
             ret.FontSize = FontSize;
             ret.FontSizeScale = FontSizeScale;
+            ret.LineHeight = LineHeight;
             ret.LetterSpacing = LetterSpacing;
             ret.BaselineShift = BaselineShift;
             ret.BaselineShiftEm = BaselineShiftEm;
@@ -268,8 +277,9 @@ namespace Milestro.RichTextParser
                 sb.Append("<s>");
             }
 
-            if (LetterSpacing.HasValue || BaselineShift.HasValue || BaselineShiftEm.HasValue ||
+            if (LineHeight.HasValue || LetterSpacing.HasValue || BaselineShift.HasValue || BaselineShiftEm.HasValue ||
                 FontSizeScale.HasValue || Locale != null || FontWidth.HasValue ||
+                Alpha.HasValue ||
                 (FontSlant.HasValue && FontSlant.Value != Milestro.Model.FontSlant.Italic) ||
                 TextCombineUprightAll || TextOrientation != VerticalTextOrientation.Mixed || NoWrap ||
                 TextTransform != TextTransform.None || BackgroundColor.HasValue)
@@ -283,6 +293,16 @@ namespace Milestro.RichTextParser
                 if (LetterSpacing.HasValue)
                 {
                     AppendAttribute(sb, "cspace", LetterSpacing.Value.ToString(CultureInfo.InvariantCulture));
+                }
+
+                if (LineHeight.HasValue)
+                {
+                    AppendAttribute(sb, "lheight", LineHeight.Value.ToString(CultureInfo.InvariantCulture));
+                }
+
+                if (Alpha.HasValue)
+                {
+                    AppendAttribute(sb, "alpha", Alpha.Value.ToString(CultureInfo.InvariantCulture));
                 }
 
                 if (BaselineShift.HasValue)

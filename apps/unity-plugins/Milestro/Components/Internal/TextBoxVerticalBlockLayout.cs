@@ -57,6 +57,19 @@ namespace Milestro.Components.Internal
             return result;
         }
 
+        internal static float[] ResolveInlineWidths(IReadOnlyList<MarginValue?> widths,
+            float contentHeight, TextBoxRenderTargetSettings settings)
+        {
+            var result = new float[widths.Count];
+            for (var index = 0; index < result.Length; ++index)
+            {
+                result[index] = widths[index] is { } width
+                    ? ResolveMargin(width, contentHeight, settings)
+                    : float.PositiveInfinity;
+            }
+            return result;
+        }
+
         private static float ResolveMargin(MarginValue margin, float contentHeight,
             TextBoxRenderTargetSettings settings)
         {
@@ -108,12 +121,23 @@ namespace Milestro.Components.Internal
             float inlineExtent, float paragraphSpacing, IReadOnlyList<Vector2>? margins,
             IReadOnlyList<Vector2>? blockMargins)
         {
+            return Layout(paragraphs, inlineExtent, paragraphSpacing, margins, blockMargins, null);
+        }
+
+        internal static TextBoxVerticalBlockLayout Layout(IReadOnlyList<Paragraph> paragraphs,
+            float inlineExtent, float paragraphSpacing, IReadOnlyList<Vector2>? margins,
+            IReadOnlyList<Vector2>? blockMargins, IReadOnlyList<float>? inlineWidths)
+        {
             var metrics = new ParagraphLayoutMetrics[paragraphs.Count];
             for (var index = 0; index < paragraphs.Count; ++index)
             {
                 var margin = margins?[index] ?? Vector2.zero;
                 var extent = float.IsPositiveInfinity(inlineExtent) ? inlineExtent :
                     Finite(Math.Max(0.0, (double)inlineExtent - margin.x - margin.y));
+                if (inlineWidths != null)
+                {
+                    extent = Math.Min(extent, inlineWidths[index]);
+                }
                 paragraphs[index].LayoutWithInlineExtent(extent);
                 metrics[index] = paragraphs[index].LayoutMetrics;
             }

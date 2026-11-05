@@ -770,6 +770,13 @@ namespace Milestro.Components.Internal
                         "Vertical-rl Canvas TextBox requires finite nonnegative block margins.");
                 }
 
+                if (block.Style.Width is { } width &&
+                    (!TextBoxVerticalBlockLayout.IsValidMargin(width) || width.Value <= 0f))
+                {
+                    throw new NotSupportedException(
+                        "Vertical-rl Canvas TextBox requires a finite positive block width.");
+                }
+
                 foreach (var segment in block.Segments)
                 {
                     ValidateSegment(segment);

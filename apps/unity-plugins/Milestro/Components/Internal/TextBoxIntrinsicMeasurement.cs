@@ -18,6 +18,7 @@ namespace Milestro.Components.Internal
         private readonly List<float> marginRights = new List<float>();
         private readonly List<float> marginBottoms = new List<float>();
         private readonly List<float> marginLefts = new List<float>();
+        private readonly List<float> widths = new List<float>();
         private readonly List<float> tops = new List<float>();
         private readonly Dictionary<(float, float), TextIntrinsicMetrics> cache =
             new Dictionary<(float, float), TextIntrinsicMetrics>();
@@ -80,8 +81,8 @@ namespace Milestro.Components.Internal
             {
                 var paragraph = paragraphs[index];
                 var horizontalMargins = (marginLefts[index] + marginRights[index]) / scale;
-                var availableWidth = width - horizontalMargins;
-                var usesNaturalLayout = float.IsPositiveInfinity(width) ||
+                var availableWidth = Math.Min(width - horizontalMargins, widths[index] / scale);
+                var usesNaturalLayout = float.IsPositiveInfinity(availableWidth) ||
                                         availableWidth + 0.001f >= paragraph.MaxIntrinsicWidth;
                 paragraph.Layout(usesNaturalLayout
                     ? Paragraph.ResolveNoWrapLayoutWidth(0f, paragraph.MaxIntrinsicWidth)
@@ -117,6 +118,7 @@ namespace Milestro.Components.Internal
             marginRights.Clear();
             marginBottoms.Clear();
             marginLefts.Clear();
+            widths.Clear();
             var context = new MarginResolveContext(availableSize.x, availableSize.y, fontSize);
             foreach (var block in payload.Blocks)
             {
@@ -124,6 +126,8 @@ namespace Milestro.Components.Internal
                 marginRights.Add(block.Style.MarginRight.Resolve(context, MarginAxis.Horizontal));
                 marginBottoms.Add(block.Style.MarginBottom.Resolve(context, MarginAxis.Vertical));
                 marginLefts.Add(block.Style.MarginLeft.Resolve(context, MarginAxis.Horizontal));
+                widths.Add(block.Style.Width?.Resolve(context, MarginAxis.Horizontal) ??
+                           float.PositiveInfinity);
             }
         }
 

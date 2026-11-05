@@ -14,6 +14,8 @@ namespace Milestro.RichTextParser
 
         public float? TextIndentEm { get; set; } = null;
 
+        public MarginValue? Width { get; set; }
+
         internal float? TextIndentFontSize { get; set; }
 
         internal float TextIndentFontSizeScale { get; set; } = 1f;

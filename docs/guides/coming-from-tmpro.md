@@ -37,12 +37,20 @@ look for one monolithic `fontSize` property on `TextBox`.
 | `TMP_InputField` | `Milestro.Components.TextInput`, backed by the process-wide HybridInput dispatcher |
 | `characterLimit` | `TextInput.characterLimit` |
 | Content type and keyboard | `TextInput.contentType` and `keyboardType` |
-| Rich-text tags | A smaller XML-like subset parsed by `Milestro.RichTextParser` |
+| Rich-text tags | Built-in XML-like markup, or TMPro syntax through the optional `tmpro` parser |
 
 The biggest practical difference is fonts: Milestro does not bind a text
 component to a generated font atlas asset. It resolves font families through its
 native font registry and fallback chain, then rasterizes the paragraph into a
 render texture.
+
+To reuse TMPro markup directly, select **TMPro** in the rich-text parser
+dropdown or set `producer.richTextParserId = TMProRichTextParser.Id`. The
+optional `Milestro.RichText.TMPro` module supports common style, color, font,
+metrics, alignment, link, and `<noparse>` tags. Unsupported or unmatched tags
+log a warning and remain visible as literal text. See the
+[module README](../../apps/unity-plugins/Milestro.RichText.TMPro/README.md) for
+the exact subset.
 
 ## Migration examples
 
@@ -127,8 +135,9 @@ supported.
 - TMP material presets and per-character vertex animation do not have a direct
   `TextBox` equivalent. Color gradients and uGUI material tinting are separate
   presentation features.
-- TMP's rich-text tag set is larger than Milestro's. Unknown tags are parser
-  errors, not silently ignored styling.
+- TMP's rich-text tag set is larger than Milestro's. The built-in XML parser
+  rejects unknown tags. The optional TMPro parser logs warnings and preserves
+  unsupported tags as text instead of silently dropping them.
 - Paragraph spacing is block-based. Milestro builds one Skia paragraph per
   rich-text block, stacks them, and applies `paragraphStyle.paragraphSpacing`
   plus the supported `<p>` margins.

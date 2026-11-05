@@ -1,0 +1,17 @@
+{
+    "name": "Milestro.RichText.TMPro",
+    "rootNamespace": "Milestro.RichText.TMPro",
+    "references": [
+        "Milestro",
+        "party.para.util.colors"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

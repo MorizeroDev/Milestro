@@ -342,6 +342,20 @@ namespace Milestro.RichTextParser
                     state.FontSizeScale = fontSizeScale;
                 }
 
+                if (node.Attributes.TryGetValue("lheight", out var lineHeight)
+                    && TryParseFloat(lineHeight, out var lineHeightValue)
+                    && lineHeightValue > 0)
+                {
+                    state.LineHeight = lineHeightValue;
+                }
+
+                if (node.Attributes.TryGetValue("alpha", out var alpha)
+                    && TryParseFloat(alpha, out var alphaValue)
+                    && alphaValue >= 0 && alphaValue <= 1)
+                {
+                    state.Alpha = alphaValue;
+                }
+
                 if (node.Attributes.TryGetValue("voffset-em", out var voffsetEm)
                     && TryParseFloat(voffsetEm, out var baselineShiftEm))
                 {
