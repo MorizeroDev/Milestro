@@ -36,6 +36,38 @@ textBox.ScrollToPercentY(vertical, animated: false);
 `TryGetScrollState(out TextBoxScrollState state)` returns the current logical
 scroll offset, viewport size, and content size.
 
+## Jump to an element id
+
+The built-in rich-text parser records `id` attributes on rendered elements. A
+query returns both unscrolled content bounds and current TextBox-local canvas
+bounds:
+
+```csharp
+if (textBox.TryGetElementGeometryById("chapter", out var element) &&
+    textBox.TryGetScrollState(out var state))
+{
+    float maxScrollY = state.ContentHeight - state.ViewportHeight;
+    if (maxScrollY > 0f)
+    {
+        textBox.ScrollToPercentY(element.ContentRect.y / maxScrollY);
+    }
+}
+```
+
+For example, the target can be an empty paragraph:
+
+```xml
+<p id="chapter"></p>
+```
+
+`ContentRect` has a top-left origin with y pointing down and uses the same units
+as `TextBoxScrollState`. It remains stable as the viewport scrolls. In
+`vertical-rl`, use `ContentRect.x` as the horizontal content position.
+`CanvasRect` is in the TextBox `RectTransform`'s local coordinates with y
+pointing up; it includes the current scroll offset and is not clipped to the
+viewport. Empty elements return zero-size rects at their laid-out text position.
+If an id is repeated, the query returns the first element in document order.
+
 ## Scrollbar binding
 
 Add **Milestro** → **Text Box Scrollbar** to a GameObject and assign either:

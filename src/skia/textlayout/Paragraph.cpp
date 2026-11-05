@@ -39,6 +39,78 @@ bool Paragraph::hitTestRange(size_t startUtf16, size_t endUtf16, SkScalar x, SkS
     return false;
 }
 
+bool Paragraph::getPositionAtUtf16(size_t utf16, SkPoint& position) const {
+    if (paragraph == nullptr || utf16 > std::numeric_limits<unsigned>::max()) {
+        return false;
+    }
+
+    const auto offset = static_cast<unsigned>(utf16);
+    if (offset < std::numeric_limits<unsigned>::max()) {
+        const auto following = paragraph->getRectsForRange(offset,
+                                                           offset + 1,
+                                                           ::skia::textlayout::RectHeightStyle::kTight,
+                                                           ::skia::textlayout::RectWidthStyle::kTight);
+        for (const auto& box : following) {
+            if (box.rect.height() <= 0) {
+                continue;
+            }
+            const bool rtl = box.direction == ::skia::textlayout::TextDirection::kRtl;
+            const auto x = paragraph->isVertical()
+                                   ? box.rect.right()
+                                   : (rtl ? box.rect.right() : box.rect.left());
+            position = SkPoint::Make(x, box.rect.top());
+            return true;
+        }
+    }
+
+    if (offset > 0) {
+        const auto previous = paragraph->getRectsForRange(offset - 1,
+                                                          offset,
+                                                          ::skia::textlayout::RectHeightStyle::kTight,
+                                                          ::skia::textlayout::RectWidthStyle::kTight);
+        for (const auto& box : previous) {
+            if (box.rect.height() <= 0) {
+                continue;
+            }
+            const bool rtl = box.direction == ::skia::textlayout::TextDirection::kRtl;
+            const auto x = paragraph->isVertical()
+                                   ? box.rect.left()
+                                   : (rtl ? box.rect.left() : box.rect.right());
+            position = SkPoint::Make(x, box.rect.top());
+            return true;
+        }
+    }
+
+    if (paragraph->isVertical()) {
+        const auto& metrics = paragraph->getLayoutMetrics();
+        for (const auto& column : metrics.columns) {
+            if (utf16 < column.utf16Start || utf16 > column.utf16EndIncludingNewline) {
+                continue;
+            }
+            const auto& bounds = column.physicalBounds;
+            if (!std::isfinite(bounds.left()) || !std::isfinite(bounds.top()) ||
+                !std::isfinite(bounds.right())) {
+                continue;
+            }
+            const auto x = utf16 == column.utf16Start ? bounds.right() : bounds.left();
+            position = SkPoint::Make(x, bounds.top());
+            return true;
+        }
+        return false;
+    }
+
+    ::skia::textlayout::LineMetrics lineMetrics;
+    if (utf16 == 0 && paragraph->getLineMetricsAt(0, &lineMetrics) &&
+        std::isfinite(lineMetrics.fLeft) && std::isfinite(lineMetrics.fWidth) &&
+        std::isfinite(lineMetrics.fBaseline) && std::isfinite(lineMetrics.fAscent)) {
+        position = SkPoint::Make(static_cast<SkScalar>(lineMetrics.fLeft),
+                                 static_cast<SkScalar>(lineMetrics.fBaseline - lineMetrics.fAscent));
+        return true;
+    }
+
+    return false;
+}
+
 uint64_t Paragraph::forEachRectInRange(size_t startUtf16,
                                        size_t endUtf16,
                                        void* context,

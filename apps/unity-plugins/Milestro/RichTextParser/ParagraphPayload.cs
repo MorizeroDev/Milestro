@@ -49,7 +49,31 @@ namespace Milestro.RichTextParser
 
     public class ParagraphPayload
     {
+        internal readonly struct ElementAnnotation
+        {
+            internal ElementAnnotation(string id,
+                int startUtf16,
+                int endUtf16,
+                int occurrence,
+                int blockIndex)
+            {
+                Id = id;
+                StartUtf16 = startUtf16;
+                EndUtf16 = endUtf16;
+                Occurrence = occurrence;
+                BlockIndex = blockIndex;
+            }
+
+            internal string Id { get; }
+            internal int StartUtf16 { get; }
+            internal int EndUtf16 { get; }
+            internal int Occurrence { get; }
+            internal int BlockIndex { get; }
+        }
+
         private static readonly IReadOnlyList<LinkAnnotation> EmptyLinks = Array.Empty<LinkAnnotation>();
+        private static readonly IReadOnlyList<ElementAnnotation> EmptyElements =
+            Array.Empty<ElementAnnotation>();
         private static readonly IReadOnlyList<RubyAnnotation> EmptyRubyAnnotations = Array.Empty<RubyAnnotation>();
         private static readonly IReadOnlyList<TateChuYokoAnnotation> EmptyTateChuYokoAnnotations =
             Array.Empty<TateChuYokoAnnotation>();
@@ -58,6 +82,7 @@ namespace Milestro.RichTextParser
         private static readonly IReadOnlyList<NoWrapAnnotation> EmptyNoWrapAnnotations =
             Array.Empty<NoWrapAnnotation>();
         private List<LinkAnnotation>? links;
+        private List<ElementAnnotation>? elements;
         private List<RubyAnnotation>? rubyAnnotations;
         private List<TateChuYokoAnnotation>? tateChuYokoAnnotations;
         private List<OrientationAnnotation>? orientationAnnotations;
@@ -115,6 +140,8 @@ namespace Milestro.RichTextParser
 
         internal IReadOnlyList<LinkAnnotation> Links => links ?? EmptyLinks;
 
+        internal IReadOnlyList<ElementAnnotation> Elements => elements ?? EmptyElements;
+
         internal IReadOnlyList<RubyAnnotation> RubyAnnotations => rubyAnnotations ?? EmptyRubyAnnotations;
 
         internal IReadOnlyList<TateChuYokoAnnotation> TateChuYokoAnnotations =>
@@ -151,6 +178,29 @@ namespace Milestro.RichTextParser
         {
             links ??= new List<LinkAnnotation>();
             links.Add(link);
+        }
+
+        internal int BeginElement(string id, int startUtf16)
+        {
+            elements ??= new List<ElementAnnotation>();
+            var occurrence = elements.Count;
+            elements.Add(new ElementAnnotation(id, startUtf16, startUtf16, occurrence, -1));
+            return occurrence;
+        }
+
+        internal void EndElement(int occurrence, int endUtf16, int blockIndex)
+        {
+            if (elements == null || occurrence < 0 || occurrence >= elements.Count)
+            {
+                throw new ArgumentOutOfRangeException(nameof(occurrence));
+            }
+
+            var element = elements[occurrence];
+            elements[occurrence] = new ElementAnnotation(element.Id,
+                element.StartUtf16,
+                endUtf16,
+                occurrence,
+                blockIndex);
         }
 
         internal void AddRuby(RubyAnnotation annotation)

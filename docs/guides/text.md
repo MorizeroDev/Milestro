@@ -155,6 +155,11 @@ and the field also accepts ids typed by hand.
 Unknown tags are rejected. In the Unity editor the parser shows the error text;
 in a player build the fallback is `Render Error`.
 
+Rendered elements accept a non-empty, case-sensitive `id` attribute, including
+empty elements such as `<p id="chapter"></p>`. Use
+`TextBox.TryGetElementGeometryById` to query their laid-out bounds; see
+[Scrolling and scrollbars](scrolling.md#jump-to-an-element-id).
+
 ### Inline style
 
 `<font>` accepts inline values:

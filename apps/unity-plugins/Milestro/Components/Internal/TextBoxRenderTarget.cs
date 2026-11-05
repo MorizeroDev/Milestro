@@ -52,6 +52,8 @@ namespace Milestro.Components.Internal
         private Vector2Int outputVisibleSizePixels = Vector2Int.one;
         private IReadOnlyList<RichTextParser.LinkAnnotation> linkAnnotations =
             Array.Empty<RichTextParser.LinkAnnotation>();
+        private IReadOnlyList<RichTextParser.ParagraphPayload.ElementAnnotation> elementAnnotations =
+            Array.Empty<RichTextParser.ParagraphPayload.ElementAnnotation>();
         private IReadOnlyList<RichTextParser.PlaceholderAnnotation> placeholderAnnotations =
             Array.Empty<RichTextParser.PlaceholderAnnotation>();
         private TextBoxContentSnapshot contentSnapshot;
@@ -511,6 +513,7 @@ namespace Milestro.Components.Internal
             viewportSize = Vector2.zero;
             maxScrollOffset = Vector2.zero;
             linkAnnotations = Array.Empty<RichTextParser.LinkAnnotation>();
+            elementAnnotations = Array.Empty<RichTextParser.ParagraphPayload.ElementAnnotation>();
             hasContentSnapshot = false;
             contentSnapshot = default;
             linkGeometryPublication.Reset();
@@ -592,7 +595,7 @@ namespace Milestro.Components.Internal
                 paragraphsRebuilt = true;
                 needsDraw = true;
             }
-            if (linkAnnotations.Count > 0 || placeholderAnnotations.Count > 0)
+            if (linkAnnotations.Count > 0 || elementAnnotations.Count > 0 || placeholderAnnotations.Count > 0)
             {
                 linkGeometryPublication.RequireControlledSubmission();
             }
@@ -649,7 +652,8 @@ namespace Milestro.Components.Internal
                     out clipRect);
             }
             var hasHitGeometry = paragraphs.Count > 0 &&
-                                 (linkAnnotations.Count > 0 || placeholderAnnotations.Count > 0) &&
+                                 (linkAnnotations.Count > 0 || elementAnnotations.Count > 0 ||
+                                  placeholderAnnotations.Count > 0) &&
                                  clipRect.width > 0f &&
                                  clipRect.height > 0f;
             var hitGeometry = hasHitGeometry
@@ -661,7 +665,9 @@ namespace Milestro.Components.Internal
                     clipRect,
                     visibleOutputSizePixels,
                     fitScale,
-                    BuildPlaceholderGeometry(paintPosition, clipRect, viewport.VisualScrollOffset.x))
+                    BuildPlaceholderGeometry(paintPosition, clipRect, viewport.VisualScrollOffset.x),
+                    elementAnnotations,
+                    BuildElementGeometry(paragraphs, elementAnnotations, viewport.VisualScrollOffset.x))
                 : default;
             bool submitted;
             using (profiling ? TextBoxPipelineProfiler.SubmitMarker.Auto() : default)
@@ -717,6 +723,7 @@ namespace Milestro.Components.Internal
             maxScrollOffset = Vector2.zero;
             outputVisibleSizePixels = Vector2Int.one;
             linkAnnotations = Array.Empty<RichTextParser.LinkAnnotation>();
+            elementAnnotations = Array.Empty<RichTextParser.ParagraphPayload.ElementAnnotation>();
             linkGeometryPublication.Reset();
             pendingCompletionToken = 0;
             pendingViewport = default;
@@ -801,7 +808,7 @@ namespace Milestro.Components.Internal
                 needsDraw = true;
             }
 
-            if (linkAnnotations.Count > 0 || placeholderAnnotations.Count > 0)
+            if (linkAnnotations.Count > 0 || elementAnnotations.Count > 0 || placeholderAnnotations.Count > 0)
             {
                 linkGeometryPublication.RequireControlledSubmission();
             }
@@ -856,7 +863,8 @@ namespace Milestro.Components.Internal
                     out clipRect);
             }
             var hasHitGeometry = paragraphs.Count > 0 &&
-                                 (linkAnnotations.Count > 0 || placeholderAnnotations.Count > 0) &&
+                                 (linkAnnotations.Count > 0 || elementAnnotations.Count > 0 ||
+                                  placeholderAnnotations.Count > 0) &&
                                  clipRect.width > 0f &&
                                  clipRect.height > 0f;
             var hitGeometry = hasHitGeometry
@@ -868,7 +876,9 @@ namespace Milestro.Components.Internal
                     clipRect,
                     visibleOutputSizePixels,
                     fitScale,
-                    BuildPlaceholderGeometry(paintPosition, clipRect, viewport.VisualScrollOffset.x))
+                    BuildPlaceholderGeometry(paintPosition, clipRect, viewport.VisualScrollOffset.x),
+                    elementAnnotations,
+                    BuildElementGeometry(paragraphs, elementAnnotations, 0f))
                 : default;
             bool submitted;
             using (profiling ? TextBoxPipelineProfiler.SubmitMarker.Auto() : default)
@@ -1317,6 +1327,9 @@ namespace Milestro.Components.Internal
             linkAnnotations = payload.Links.Count == 0
                 ? Array.Empty<RichTextParser.LinkAnnotation>()
                 : new List<RichTextParser.LinkAnnotation>(payload.Links);
+            elementAnnotations = payload.Elements.Count == 0
+                ? Array.Empty<RichTextParser.ParagraphPayload.ElementAnnotation>()
+                : new List<RichTextParser.ParagraphPayload.ElementAnnotation>(payload.Elements);
             placeholderAnnotations = new List<RichTextParser.PlaceholderAnnotation>(payload.Placeholders);
             using (profiling ? TextBoxPipelineProfiler.BlockMetadataMarker.Auto() : default)
             {
@@ -1396,6 +1409,109 @@ namespace Milestro.Components.Internal
         {
             return !value.Auto &&
                    (value.Unit == MarginUnit.ContainerPercent || value.Unit == MarginUnit.Vh);
+        }
+
+        private IReadOnlyList<TextBoxElementGeometry> BuildElementGeometry(
+            IReadOnlyList<Paragraph> source,
+            IReadOnlyList<RichTextParser.ParagraphPayload.ElementAnnotation> elements,
+            float visualScrollOffsetX)
+        {
+            var result = new List<TextBoxElementGeometry>(elements.Count);
+            foreach (var element in elements)
+            {
+                var hasGeometry = false;
+                var outputRect = default(Rect);
+                for (var blockIndex = 0; blockIndex < source.Count; ++blockIndex)
+                {
+                    var blockStart = blockStartsUtf16[blockIndex];
+                    var blockEnd = blockStart + blockPlainTexts[blockIndex].Length;
+                    var localStart = Math.Max(element.StartUtf16, blockStart);
+                    var localEnd = Math.Min(element.EndUtf16, blockEnd);
+                    if (localStart >= localEnd)
+                    {
+                        continue;
+                    }
+
+                    var offset = ResolveElementFrameOffset(blockIndex, visualScrollOffsetX);
+                    foreach (var rect in source[blockIndex].GetRectsForRange(localStart - blockStart,
+                                 localEnd - blockStart))
+                    {
+                        var positioned = new Rect(rect.position + offset, rect.size);
+                        outputRect = hasGeometry ? UnionRect(outputRect, positioned) : positioned;
+                        hasGeometry = true;
+                    }
+                }
+
+                if (!hasGeometry)
+                {
+                    var blockIndex = ResolveElementPositionBlock(element);
+                    if (blockIndex >= 0 && blockIndex < source.Count &&
+                        source[blockIndex].TryGetPositionAtUtf16(element.StartUtf16 - blockStartsUtf16[blockIndex],
+                            out var position))
+                    {
+                        position += ResolveElementFrameOffset(blockIndex, visualScrollOffsetX);
+                        outputRect = new Rect(position, Vector2.zero);
+                        hasGeometry = true;
+                    }
+                }
+
+                var contentRect = outputRect;
+                if (hasGeometry && !verticalLayoutActive)
+                {
+                    var scale = fitScale > 0f && FloatUtil.IsFinite(fitScale) ? fitScale : 1f;
+                    contentRect.x += (scrollOffset.x + visualScrollOffsetX) / scale;
+                }
+
+                result.Add(new TextBoxElementGeometry(element.Occurrence,
+                    hasGeometry,
+                    contentRect,
+                    outputRect));
+            }
+
+            return result;
+        }
+
+        private int ResolveElementPositionBlock(RichTextParser.ParagraphPayload.ElementAnnotation element)
+        {
+            if (element.BlockIndex >= 0 && element.BlockIndex < blockStartsUtf16.Count)
+            {
+                return element.BlockIndex;
+            }
+
+            for (var index = 0; index < blockStartsUtf16.Count; ++index)
+            {
+                if (element.StartUtf16 >= blockStartsUtf16[index] &&
+                    element.StartUtf16 <= blockStartsUtf16[index] + blockPlainTexts[index].Length)
+                {
+                    return index;
+                }
+            }
+
+            return -1;
+        }
+
+        private Vector2 ResolveElementFrameOffset(int blockIndex, float visualScrollOffsetX)
+        {
+            if (verticalLayoutActive)
+            {
+                return verticalLayoutMetrics.FrameOffsets[blockIndex];
+            }
+
+            var paintOffsetX = TextBoxNoWrapHorizontalLayout.ResolvePaintOffsetX(
+                blockIndex < blockAlignmentOffsetsX.Count ? blockAlignmentOffsetsX[blockIndex] : 0f,
+                scrollOffset.x,
+                visualScrollOffsetX);
+            var blockLeft = blockIndex < blockMarginLefts.Count ? blockMarginLefts[blockIndex] : 0f;
+            var top = blockIndex < blockTops.Count ? blockTops[blockIndex] : 0f;
+            return new Vector2(blockLeft + paintOffsetX / fitScale, top);
+        }
+
+        private static Rect UnionRect(Rect left, Rect right)
+        {
+            return Rect.MinMaxRect(Mathf.Min(left.xMin, right.xMin),
+                Mathf.Min(left.yMin, right.yMin),
+                Mathf.Max(left.xMax, right.xMax),
+                Mathf.Max(left.yMax, right.yMax));
         }
 
         private IReadOnlyList<TextBoxLinkGeometry> BuildLinkGeometry(

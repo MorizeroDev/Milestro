@@ -154,6 +154,40 @@ TEST_F(SkiaParagraphHitTest, EllipsizedHiddenRangeHasNoHitBox) {
     EXPECT_FALSE(paragraph->hitTestRange(hiddenStart, hiddenEnd, visibleCenter.x(), visibleCenter.y()));
 }
 
+TEST_F(SkiaParagraphHitTest, ResolvesUtf16InsertionPositionsAndEmptyParagraphs) {
+    auto paragraph = BuildParagraph("ab", 200);
+    const auto first = BoxesForRange(paragraph.get(), 0, 1);
+    const auto second = BoxesForRange(paragraph.get(), 1, 2);
+    ASSERT_FALSE(first.empty());
+    ASSERT_FALSE(second.empty());
+
+    SkPoint position;
+    ASSERT_TRUE(paragraph->getPositionAtUtf16(0, position));
+    EXPECT_FLOAT_EQ(position.x(), first.front().rect.left());
+    EXPECT_FLOAT_EQ(position.y(), first.front().rect.top());
+    ASSERT_TRUE(paragraph->getPositionAtUtf16(1, position));
+    EXPECT_FLOAT_EQ(position.x(), second.front().rect.left());
+    ASSERT_TRUE(paragraph->getPositionAtUtf16(2, position));
+    EXPECT_FLOAT_EQ(position.x(), second.front().rect.right());
+
+    float x = -1;
+    float y = -1;
+    int32_t found = 0;
+    EXPECT_EQ(MilestroSkiaTextlayoutParagraphGetPositionAtUtf16(paragraph.get(), 1, x, y, found),
+              MILESTRO_API_RET_OK);
+    EXPECT_EQ(found, 1);
+    EXPECT_FLOAT_EQ(x, second.front().rect.left());
+    EXPECT_EQ(MilestroSkiaTextlayoutParagraphGetPositionAtUtf16(nullptr, 0, x, y, found),
+              MILESTRO_API_RET_FAILED);
+
+    auto empty = BuildParagraph("", 200, skia_text::TextAlign::kCenter);
+    const auto emptyBoxes = BoxesForRange(empty.get(), 0, 1);
+    ASSERT_FALSE(emptyBoxes.empty());
+    ASSERT_TRUE(empty->getPositionAtUtf16(0, position));
+    EXPECT_FLOAT_EQ(position.x(), emptyBoxes.front().rect.left());
+    EXPECT_FLOAT_EQ(position.y(), emptyBoxes.front().rect.top());
+}
+
 TEST_F(SkiaParagraphHitTest, RejectsInvalidRangesCoordinatesAndNullCAbiParagraph) {
     auto paragraph = BuildParagraph("link", 200);
     EXPECT_FALSE(paragraph->hitTestRange(1, 1, 10, 10));

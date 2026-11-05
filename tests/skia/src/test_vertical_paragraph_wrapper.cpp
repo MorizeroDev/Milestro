@@ -127,6 +127,28 @@ TEST(SkiaVerticalParagraphWrapper, P07_P08_P09_P12_CAbiPlaceholderQueriesAndVali
     ASSERT_EQ(MilestroSkiaTextlayoutParagraphForEachRectInRange(paragraph.get(), 0, 1, &range, CollectRect), 0);
     ExpectRectsNear(range.rects, placeholders.rects);
     const auto& rect = placeholders.rects[0];
+    SkPoint position;
+    ASSERT_TRUE(paragraph->getPositionAtUtf16(0, position));
+    EXPECT_FLOAT_EQ(position.x(), rect.right());
+    EXPECT_FLOAT_EQ(position.y(), rect.top());
+    auto empty = BuildVerticalParagraph("", textStyle);
+    ASSERT_EQ(MilestroSkiaTextlayoutParagraphLayoutWithInlineExtent(empty.get(), 100), 0);
+    SkPoint emptyPosition;
+    ASSERT_TRUE(empty->getPositionAtUtf16(0, emptyPosition));
+    const auto& emptyMetrics = empty->getLayoutMetrics();
+    ASSERT_EQ(emptyMetrics.columns.size(), 1u);
+    EXPECT_FLOAT_EQ(emptyPosition.x(), emptyMetrics.columns[0].physicalBounds.right());
+    EXPECT_FLOAT_EQ(emptyPosition.y(), emptyMetrics.columns[0].physicalBounds.top());
+    float anchorX = -1;
+    float anchorY = -1;
+    int32_t anchorFound = 0;
+    EXPECT_EQ(MilestroSkiaTextlayoutParagraphGetPositionAtUtf16(empty.get(),
+                                                                0,
+                                                                anchorX,
+                                                                anchorY,
+                                                                anchorFound),
+              MILESTRO_API_RET_OK);
+    EXPECT_EQ(anchorFound, 1);
     EXPECT_TRUE(paragraph->hitTestRange(0, 2, rect.centerX(), rect.centerY()));
     EXPECT_FALSE(paragraph->hitTestRange(0, 1, rect.left() - 1, rect.centerY()));
     EXPECT_EQ(MilestroSkiaTextlayoutParagraphGetRectsForPlaceholders(nullptr, &range, CollectRect),

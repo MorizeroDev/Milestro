@@ -71,6 +71,8 @@ public :
 
     bool hitTestRange(size_t startUtf16, size_t endUtf16, SkScalar x, SkScalar y) const;
 
+    bool getPositionAtUtf16(size_t utf16, SkPoint& position) const;
+
     uint64_t getRectsForPlaceholders(void* context,
                                     MilestroSkiaTextlayoutParagraphRectCallback callback) const;
 

@@ -92,6 +92,25 @@ namespace Milestro.Components.Internal
         internal Vector2 FrameOffset { get; }
     }
 
+    internal readonly struct TextBoxElementGeometry
+    {
+        internal TextBoxElementGeometry(int occurrence,
+            bool hasGeometry,
+            Rect contentRect,
+            Rect outputRect)
+        {
+            Occurrence = occurrence;
+            HasGeometry = hasGeometry;
+            ContentRect = contentRect;
+            OutputRect = outputRect;
+        }
+
+        internal int Occurrence { get; }
+        internal bool HasGeometry { get; }
+        internal Rect ContentRect { get; }
+        internal Rect OutputRect { get; }
+    }
+
     internal readonly struct TextBoxLinkGeometrySnapshot
     {
         internal TextBoxLinkGeometrySnapshot(long contentVersion,
@@ -102,7 +121,9 @@ namespace Milestro.Components.Internal
             Rect clipRect,
             Vector2Int visibleOutputSize,
             float fitScale = 1f,
-            IReadOnlyList<TextBoxPlaceholderGeometry>? placeholders = null)
+            IReadOnlyList<TextBoxPlaceholderGeometry>? placeholders = null,
+            IReadOnlyList<ParagraphPayload.ElementAnnotation>? elements = null,
+            IReadOnlyList<TextBoxElementGeometry>? elementGeometry = null)
         {
             ContentVersion = contentVersion;
             Paragraphs = paragraphs;
@@ -113,6 +134,8 @@ namespace Milestro.Components.Internal
             VisibleOutputSize = visibleOutputSize;
             FitScale = fitScale > 0f && float.IsFinite(fitScale) ? fitScale : 1f;
             Placeholders = placeholders ?? System.Array.Empty<TextBoxPlaceholderGeometry>();
+            Elements = elements ?? System.Array.Empty<ParagraphPayload.ElementAnnotation>();
+            ElementGeometry = elementGeometry ?? System.Array.Empty<TextBoxElementGeometry>();
         }
 
         internal long ContentVersion { get; }
@@ -124,10 +147,27 @@ namespace Milestro.Components.Internal
         internal Vector2Int VisibleOutputSize { get; }
         internal float FitScale { get; }
         internal IReadOnlyList<TextBoxPlaceholderGeometry> Placeholders { get; }
+        internal IReadOnlyList<ParagraphPayload.ElementAnnotation> Elements { get; }
+        internal IReadOnlyList<TextBoxElementGeometry> ElementGeometry { get; }
 
         internal bool TryGetGeometry(int occurrence, out TextBoxLinkGeometry geometry)
         {
             foreach (var candidate in Geometry)
+            {
+                if (candidate.Occurrence == occurrence)
+                {
+                    geometry = candidate;
+                    return true;
+                }
+            }
+
+            geometry = default;
+            return false;
+        }
+
+        internal bool TryGetElementGeometry(int occurrence, out TextBoxElementGeometry geometry)
+        {
+            foreach (var candidate in ElementGeometry)
             {
                 if (candidate.Occurrence == occurrence)
                 {

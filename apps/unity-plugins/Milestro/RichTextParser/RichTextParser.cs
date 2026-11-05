@@ -243,7 +243,8 @@ namespace Milestro.RichTextParser
                     throw new InvalidCastException("<img> must be an empty element");
                 foreach (var attribute in node.Attributes)
                 {
-                    if (attribute.Key != "width" && attribute.Key != "height" && attribute.Key != "key")
+                    if (attribute.Key != "width" && attribute.Key != "height" && attribute.Key != "key" &&
+                        attribute.Key != "id")
                         throw new InvalidCastException($"<img> does not accept the '{attribute.Key}' attribute");
                 }
                 var width = ReadPlaceholderDimension(node, "width");
@@ -832,12 +833,71 @@ namespace Milestro.RichTextParser
             if (child is XmlElementNode element)
             {
                 ctx.TextStyleState = state;
-                ConvertToSegments(ctx, element);
+                var elementOccurrence = BeginElement(ctx, element);
+                try
+                {
+                    ConvertToSegments(ctx, element);
+                }
+                finally
+                {
+                    if (elementOccurrence >= 0)
+                    {
+                        EndElement(ctx, elementOccurrence);
+                    }
+                }
             }
             else if (child is XmlTextNode textNode)
             {
                 AddText(ctx, state, textNode.Text);
             }
+        }
+
+        private static int BeginElement(Context ctx, XmlElementNode node)
+        {
+            if (!node.Attributes.TryGetValue("id", out var id))
+            {
+                return -1;
+            }
+
+            if (string.IsNullOrEmpty(id))
+            {
+                throw new InvalidCastException($"<{node.Tag}> id must be non-empty when provided");
+            }
+
+            return ctx.Result.BeginElement(id, ctx.TextLengthUtf16);
+        }
+
+        private static void EndElement(Context ctx, int occurrence)
+        {
+            var element = ctx.Result.Elements[occurrence];
+            var blockIndex = -1;
+            if (element.StartUtf16 == ctx.TextLengthUtf16)
+            {
+                if (ctx.CurrentBlock != null)
+                {
+                    for (var index = 0; index < ctx.Result.Blocks.Count; ++index)
+                    {
+                        if (ReferenceEquals(ctx.Result.Blocks[index], ctx.CurrentBlock))
+                        {
+                            blockIndex = index;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    for (var index = ctx.Result.Blocks.Count - 1; index >= 0; --index)
+                    {
+                        if (ctx.Result.Blocks[index].StartUtf16 == element.StartUtf16)
+                        {
+                            blockIndex = index;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            ctx.Result.EndElement(occurrence, ctx.TextLengthUtf16, blockIndex);
         }
 
         private static string ReadRubyAnnotation(XmlElementNode node)
@@ -870,7 +930,7 @@ namespace Milestro.RichTextParser
         {
             foreach (var attribute in node.Attributes)
             {
-                if (attribute.Key != "style")
+                if (attribute.Key != "style" && attribute.Key != "id")
                 {
                     throw new InvalidCastException($"<ruby> does not accept the '{attribute.Key}' attribute");
                 }

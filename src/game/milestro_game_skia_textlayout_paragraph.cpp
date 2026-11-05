@@ -252,6 +252,33 @@ int64_t MilestroSkiaTextlayoutParagraphHitTestRange(milestro::skia::textlayout::
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutParagraphGetPositionAtUtf16(milestro::skia::textlayout::Paragraph* p,
+                                                          uint64_t utf16,
+                                                          float& x,
+                                                          float& y,
+                                                          int32_t& found) try {
+    if (p == nullptr) {
+        return MILESTRO_API_RET_FAILED;
+    }
+
+    x = 0;
+    y = 0;
+    found = 0;
+    if (utf16 > std::numeric_limits<size_t>::max()) {
+        return MILESTRO_API_RET_OK;
+    }
+
+    SkPoint position;
+    if (p->getPositionAtUtf16(static_cast<size_t>(utf16), position)) {
+        x = position.x();
+        y = position.y();
+        found = 1;
+    }
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutParagraphForEachRectInRange(milestro::skia::textlayout::Paragraph* p,
                                                           uint64_t startUtf16,
                                                           uint64_t endUtf16,

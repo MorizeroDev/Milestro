@@ -352,6 +352,12 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphHitTestRange(milestro::skia:
                                                                  float x,
                                                                  float y,
                                                                  int32_t& hit);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetPositionAtUtf16(
+        milestro::skia::textlayout::Paragraph* p,
+        uint64_t utf16,
+        float& x,
+        float& y,
+        int32_t& found);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphForEachRectInRange(
         milestro::skia::textlayout::Paragraph* p,
         uint64_t startUtf16,

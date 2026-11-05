@@ -746,6 +746,15 @@ out int hit);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphGetPositionAtUtf16")]
+        internal static extern unsafe long SkiaTextlayoutParagraphGetPositionAtUtf16(IntPtr p,
+ulong utf16,
+out float x,
+out float y,
+out int found);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphForEachRectInRange")]
         internal static extern unsafe long SkiaTextlayoutParagraphForEachRectInRange(IntPtr p,
 ulong startUtf16,

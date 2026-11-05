@@ -466,6 +466,39 @@ namespace Milestro.Components
             return true;
         }
 
+        /// <summary>
+        /// Resolves the first rich-text element with the given non-empty, case-sensitive id.
+        /// Empty elements produce a zero-size rect at their text position.
+        /// </summary>
+        public bool TryGetElementGeometryById(string id, out TextBoxElementGeometry geometry)
+        {
+            geometry = default;
+            if (string.IsNullOrEmpty(id) ||
+                !TryGetLinkInteractionSnapshot(out _, out var snapshot, out _))
+            {
+                return false;
+            }
+
+            foreach (var element in snapshot.Elements)
+            {
+                if (!string.Equals(element.Id, id, StringComparison.Ordinal) ||
+                    !snapshot.TryGetElementGeometry(element.Occurrence, out var elementGeometry) ||
+                    !elementGeometry.HasGeometry)
+                {
+                    continue;
+                }
+
+                var contentRect = ScaleRect(elementGeometry.ContentRect, snapshot.FitScale);
+                var outputRect = OffsetRect(ScaleRect(elementGeometry.OutputRect, snapshot.FitScale),
+                    snapshot.PaintPosition);
+                geometry = new TextBoxElementGeometry(contentRect,
+                    OutputRectToLocal(outputRect, snapshot.VisibleOutputSize));
+                return true;
+            }
+
+            return false;
+        }
+
         internal bool TryGetContentSnapshot(out TextBoxContentSnapshot snapshot)
         {
             snapshot = default;

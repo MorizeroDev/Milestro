@@ -617,6 +617,15 @@ int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphHitTestRange (milestro::s
     return MilestroSkiaTextlayoutParagraphHitTestRange(p, startUtf16, endUtf16, x, y, hit);
 }
 
+    int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphGetPositionAtUtf16 (
+milestro::skia::textlayout::Paragraph* p,
+uint64_t utf16,
+float& x,
+float& y,
+int32_t& found) {
+        return MilestroSkiaTextlayoutParagraphGetPositionAtUtf16(p, utf16, x, y, found);
+    }
+
     int64_t FrameworkBindingMilestroSkiaTextlayoutParagraphForEachRectInRange (
 milestro::skia::textlayout::Paragraph* p,
 uint64_t startUtf16,

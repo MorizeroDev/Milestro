@@ -259,6 +259,29 @@ namespace Milestro.Skia.TextLayout
             return rects;
         }
 
+        internal bool TryGetPositionAtUtf16(int utf16, out Vector2 position)
+        {
+            position = default;
+            if (utf16 < 0)
+            {
+                return false;
+            }
+
+            ThrowIfDisposed();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphGetPositionAtUtf16(NativePtr,
+                (ulong)utf16,
+                out var x,
+                out var y,
+                out var found));
+            if (found == 0)
+            {
+                return false;
+            }
+
+            position = new Vector2(x, y);
+            return true;
+        }
+
         public IReadOnlyList<Rect> GetRectsForPlaceholders()
         {
             ThrowIfDisposed();
