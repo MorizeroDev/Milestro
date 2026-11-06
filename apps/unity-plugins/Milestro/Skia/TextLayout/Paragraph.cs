@@ -259,6 +259,28 @@ namespace Milestro.Skia.TextLayout
             return rects;
         }
 
+        internal List<Rect> GetInlineRectsForRange(int startUtf16, int endUtf16)
+        {
+            var rects = new List<Rect>();
+            if (startUtf16 < 0 || endUtf16 <= startUtf16)
+            {
+                return rects;
+            }
+
+            ThrowIfDisposed();
+            MilestroCTypes.SkiaTextlayoutParagraphRectCallback callback = (_, left, top, right, bottom) =>
+            {
+                rects.Add(new Rect(left, top, right - left, bottom - top));
+                return 0;
+            };
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphForEachInlineRectInRange(NativePtr,
+                (ulong)startUtf16,
+                (ulong)endUtf16,
+                IntPtr.Zero,
+                callback));
+            return rects;
+        }
+
         internal bool TryGetPositionAtUtf16(int utf16, out Vector2 position)
         {
             position = default;

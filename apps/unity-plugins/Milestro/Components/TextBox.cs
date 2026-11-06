@@ -571,6 +571,39 @@ namespace Milestro.Components
             return results.Count > 0;
         }
 
+        internal bool TryGetLinkLocalHoverRects(TextBoxLinkGeometrySnapshot snapshot,
+            int occurrence,
+            List<Rect> results)
+        {
+            if (!ProducerComponent().isVerticalLayout)
+            {
+                return TryGetLinkLocalRects(snapshot, occurrence, results);
+            }
+
+            results.Clear();
+            if (!snapshot.TryGetGeometry(occurrence, out var linkGeometry))
+            {
+                return false;
+            }
+
+            foreach (var blockRange in linkGeometry.BlockRanges)
+            {
+                var paragraph = snapshot.Paragraphs[blockRange.BlockIndex];
+                foreach (var rect in paragraph.GetInlineRectsForRange(blockRange.StartUtf16,
+                             blockRange.EndUtf16))
+                {
+                    var positioned = new Rect(rect.position + blockRange.FrameOffset, rect.size);
+                    var outputRect = OffsetRect(ScaleRect(positioned, snapshot.FitScale), snapshot.PaintPosition);
+                    if (TryClipRect(outputRect, snapshot.ClipRect, out var clippedRect))
+                    {
+                        results.Add(OutputRectToLocal(clippedRect, snapshot.VisibleOutputSize));
+                    }
+                }
+            }
+
+            return results.Count > 0;
+        }
+
         internal bool EnsureLinkVisible(long contentVersion, int occurrence)
         {
             if (!TryGetLinkInteractionSnapshot(out _, out var snapshot, out _) ||

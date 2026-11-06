@@ -354,7 +354,7 @@ public:
     std::vector<std::pair<const VerticalRubySpan*, SkPoint>> verticalRubyPlacements(size_t column) const;
     void breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent);
     void paintVertical(ParagraphPainter* painter, SkScalar x, SkScalar y);
-    std::vector<TextBox> getVerticalRectsForRange(unsigned start, unsigned end);
+    std::vector<TextBox> getVerticalRectsForRange(unsigned start, unsigned end, bool inlineBox = false);
     PositionWithAffinity getVerticalGlyphPositionAtCoordinate(SkScalar dx, SkScalar dy);
     bool getVerticalGlyphClusterAt(TextIndex codeUnitIndex, GlyphClusterInfo* glyphInfo);
     bool getVerticalClosestGlyphClusterAt(SkScalar dx, SkScalar dy, GlyphClusterInfo* glyphInfo);

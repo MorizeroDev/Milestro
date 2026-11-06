@@ -764,6 +764,15 @@ MilestroCTypes.SkiaTextlayoutParagraphRectCallback callback);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphForEachInlineRectInRange")]
+        internal static extern unsafe long SkiaTextlayoutParagraphForEachInlineRectInRange(IntPtr p,
+ulong startUtf16,
+ulong endUtf16,
+IntPtr context,
+MilestroCTypes.SkiaTextlayoutParagraphRectCallback callback);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphGetRectsForPlaceholders")]
         internal static extern unsafe long SkiaTextlayoutParagraphGetRectsForPlaceholders(IntPtr p,
 IntPtr context,

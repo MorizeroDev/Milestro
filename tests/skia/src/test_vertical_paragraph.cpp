@@ -1498,6 +1498,26 @@ TEST_F(SkiaVerticalParagraph, TC08_RangeVisitorPathAndHitTestShareCellGeometry) 
     EXPECT_LE(bounds.bottom(), groupCell[0].rect.bottom() + 1);
 }
 
+TEST_F(SkiaVerticalParagraph, TC08_InlineRectsUseHorizontalTightFontThickness) {
+    auto style = PrimaryStyle(40);
+    style.setHeightOverride(true);
+    style.setHeight(3);
+    auto horizontal = BuildCoreParagraph("天12地", style,
+            {.writingMode = skia_text::WritingMode::kHorizontalTb});
+    auto vertical = BuildVerticalTateChuYoko("天12地", {{3, 5}}, style);
+    horizontal->layout(400);
+    vertical->layoutWithInlineExtent(400);
+
+    const auto horizontalBoxes = horizontal->getRectsForRange(0, 4,
+            skia_text::RectHeightStyle::kTight, skia_text::RectWidthStyle::kTight);
+    const auto verticalBoxes = ImplOf(vertical.get())->getVerticalRectsForRange(0, 4, true);
+    ASSERT_EQ(horizontalBoxes.size(), 1u);
+    ASSERT_EQ(verticalBoxes.size(), 3u);
+    for (const auto& box : verticalBoxes) {
+        EXPECT_NEAR(box.rect.width(), horizontalBoxes[0].rect.height(), kTolerance);
+    }
+}
+
 TEST_F(SkiaVerticalParagraph, TC11_StrictValidationAndHorizontalNoOp) {
     auto expectRejected = [](const std::string& text,
                              std::vector<skia_text::TextRange> ranges,

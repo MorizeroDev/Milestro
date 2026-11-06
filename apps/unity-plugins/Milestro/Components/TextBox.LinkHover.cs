@@ -29,7 +29,7 @@ namespace Milestro.Components
         [NonSerialized] private long hoveredContentVersion;
         [NonSerialized] private ulong linkHoverRevision;
         [NonSerialized] private TextBoxLinkHoverIndicator? linkHoverIndicator;
-        [NonSerialized] private readonly List<Rect> linkHoverRects = new List<Rect>();
+        [NonSerialized] private readonly List<Rect> linkHoverFillRects = new List<Rect>();
         [NonSerialized] private Texture2D? defaultLinkHoverCursor;
         [NonSerialized] private Texture2D? appliedLinkHoverCursor;
         [NonSerialized] private Vector2 appliedLinkHoverCursorHotspot;
@@ -177,7 +177,7 @@ namespace Milestro.Components
 
             if (!ProducerComponent().TryHitLink(normalizedPoint, out var hit) ||
                 hit.Generation != generation ||
-                !TryGetLinkLocalRects(geometry, hit.Occurrence, linkHoverRects))
+                !TryGetLinkLocalHoverRects(geometry, hit.Occurrence, linkHoverFillRects))
             {
                 ClearHoveredLink(notify: true);
                 return;
@@ -196,7 +196,7 @@ namespace Milestro.Components
                 linkHoverPointer != pointer ||
                 !TryGetLinkInteractionSnapshot(out content, out geometry, out generation) ||
                 generation != hit.Generation ||
-                !TryGetLinkLocalRects(geometry, hit.Occurrence, linkHoverRects))
+                !TryGetLinkLocalHoverRects(geometry, hit.Occurrence, linkHoverFillRects))
             {
                 return;
             }
@@ -215,7 +215,7 @@ namespace Milestro.Components
             if (showIndicator)
             {
                 EnsureLinkHoverIndicator();
-                linkHoverIndicator!.SetPresentation(linkHoverRects,
+                linkHoverIndicator!.SetPresentation(linkHoverFillRects,
                     m_linkHoverColor,
                     m_linkHoverUnderlineColor,
                     m_linkHoverUnderlineThickness,
@@ -320,7 +320,7 @@ namespace Milestro.Components
             hasHoveredLink = false;
             hoveredLink = default;
             hoveredContentVersion = 0;
-            linkHoverRects.Clear();
+            linkHoverFillRects.Clear();
             HideLinkHoverFeedback();
             if (notify && wasHovered)
             {

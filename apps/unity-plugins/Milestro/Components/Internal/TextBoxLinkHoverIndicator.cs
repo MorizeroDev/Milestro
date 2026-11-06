@@ -52,7 +52,7 @@ namespace Milestro.Components.Internal
             {
                 if (fillColor.a > 0f)
                 {
-                    AddQuad(vh, vertical ? VerticalFillRect(rect) : rect, fillColor);
+                    AddQuad(vh, rect, fillColor);
                 }
             }
 
@@ -121,21 +121,6 @@ namespace Milestro.Components.Internal
             }
 
             FlushUnderline();
-        }
-
-        private Rect VerticalFillRect(Rect rect)
-        {
-            var left = rect.xMin;
-            var right = rect.xMax;
-            foreach (var candidate in rects)
-            {
-                if (rect.xMin < candidate.xMax && candidate.xMin < rect.xMax)
-                {
-                    left = Mathf.Min(left, candidate.xMin);
-                    right = Mathf.Max(right, candidate.xMax);
-                }
-            }
-            return Rect.MinMaxRect(left, rect.yMin, right, rect.yMax);
         }
 
         private static void AddQuad(VertexHelper vh, Rect rect, Color vertexColor)

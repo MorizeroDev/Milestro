@@ -3300,7 +3300,7 @@ int ParagraphImpl::getVerticalPath(int lineNumber, SkPath* dest) {
     return missing;
 }
 
-std::vector<TextBox> ParagraphImpl::getVerticalRectsForRange(unsigned start, unsigned end) {
+std::vector<TextBox> ParagraphImpl::getVerticalRectsForRange(unsigned start, unsigned end, bool inlineBox) {
     ensureVerticalLayoutReady();
     if (start >= end || fText.isEmpty()) {
         return {};
@@ -3337,13 +3337,26 @@ std::vector<TextBox> ParagraphImpl::getVerticalRectsForRange(unsigned start, uns
     for (size_t columnIndex = 0; columnIndex < fVerticalColumns.size(); ++columnIndex) {
         const auto& column = fVerticalColumns[columnIndex];
         const TextLine& line = fLines[columnIndex];
+        SkScalar columnInlineThickness = 0;
+        if (inlineBox) {
+            for (ClusterIndex index = column.clusters.start; index < column.clusters.end; ++index) {
+                const Cluster& cluster = fClusters[index];
+                const Run* run = cluster.runOrNull();
+                if (verticalTateChuYokoAtCluster(index) == nullptr && run != nullptr && !run->isPlaceholder()) {
+                    columnInlineThickness = std::max(columnInlineThickness, run->descent() - run->ascent());
+                }
+            }
+        }
         bool found = false;
+        SkScalar left = 0;
+        SkScalar right = 0;
         SkScalar top = 0;
         SkScalar bottom = 0;
         auto flush = [&]() {
             if (found && bottom > top) {
-                boxes.emplace_back(SkRect::MakeLTRB(line.offset().x(), top,
-                                                    line.offset().x() + line.width(), bottom),
+                const SkScalar blockLeft = inlineBox ? left : line.offset().x();
+                const SkScalar blockRight = inlineBox ? right : line.offset().x() + line.width();
+                boxes.emplace_back(SkRect::MakeLTRB(blockLeft, top, blockRight, bottom),
                                    TextDirection::kLtr);
             }
             found = false;
@@ -3356,6 +3369,19 @@ std::vector<TextBox> ParagraphImpl::getVerticalRectsForRange(unsigned start, uns
                     flush();
                     SkRect cell;
                     if (getVerticalClusterCell(index, &cell) && !cell.isEmpty()) {
+                        if (inlineBox) {
+                            const Run* run = cluster.runOrNull();
+                            if (run == nullptr) {
+                                continue;
+                            }
+                            const SkScalar fontThickness = columnInlineThickness > 0
+                                    ? columnInlineThickness
+                                    : run->descent() - run->ascent();
+                            const SkScalar thickness = std::max(cell.width(), fontThickness);
+                            const SkScalar centerX = cell.centerX();
+                            cell.fLeft = centerX - thickness * 0.5f;
+                            cell.fRight = centerX + thickness * 0.5f;
+                        }
                         boxes.emplace_back(cell, TextDirection::kLtr);
                     }
                 }
@@ -3388,7 +3414,20 @@ std::vector<TextBox> ParagraphImpl::getVerticalRectsForRange(unsigned start, uns
             const SkScalar clusterBottom = std::min(
                     line.offset().y() + line.height(),
                     clusterTop + std::max(SkScalar(0), cluster.width() + shiftAfter - shift));
+            const SkScalar thickness = std::max(SkScalar(0), run->descent() - run->ascent());
+            const SkScalar baselineX = line.offset().x() + column.blockDescent - run->baselineShift();
+            const SkScalar clusterLeft = inlineBox
+                    ? baselineX - thickness * 0.5f
+                    : line.offset().x();
+            const SkScalar clusterRight = inlineBox
+                    ? baselineX + thickness * 0.5f
+                    : line.offset().x() + line.width();
+            if (inlineBox && found && (left != clusterLeft || right != clusterRight)) {
+                flush();
+            }
             if (!found) {
+                left = clusterLeft;
+                right = clusterRight;
                 top = clusterTop;
                 bottom = clusterBottom;
                 found = true;

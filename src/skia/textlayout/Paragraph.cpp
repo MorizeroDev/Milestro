@@ -5,6 +5,7 @@
 #include "Milestro/skia/Font.h"
 #include "Milestro/skia/Path.h"
 #include "Milestro/skia/textlayout/NoWrapLayout.h"
+#include "modules/skparagraph/src/ParagraphImpl.h"
 
 #include <cmath>
 #include <limits>
@@ -126,6 +127,33 @@ uint64_t Paragraph::forEachRectInRange(size_t startUtf16,
                                                    static_cast<unsigned>(endUtf16),
                                                    ::skia::textlayout::RectHeightStyle::kTight,
                                                    ::skia::textlayout::RectWidthStyle::kTight);
+    for (const auto& box: boxes) {
+        if (box.rect.width() > 0 && box.rect.height() > 0) {
+            callback(context, box.rect.left(), box.rect.top(), box.rect.right(), box.rect.bottom());
+        }
+    }
+
+    return 0;
+}
+
+uint64_t Paragraph::forEachInlineRectInRange(size_t startUtf16,
+                                             size_t endUtf16,
+                                             void* context,
+                                             MilestroSkiaTextlayoutParagraphRectCallback callback) const {
+    if (callback == nullptr) {
+        return -1;
+    }
+    if (paragraph == nullptr || endUtf16 <= startUtf16 || endUtf16 > std::numeric_limits<unsigned>::max()) {
+        return 0;
+    }
+
+    const auto boxes = paragraph->isVertical()
+            ? static_cast<::skia::textlayout::ParagraphImpl*>(paragraph.get())->getVerticalRectsForRange(
+                    static_cast<unsigned>(startUtf16), static_cast<unsigned>(endUtf16), true)
+            : paragraph->getRectsForRange(static_cast<unsigned>(startUtf16),
+                                          static_cast<unsigned>(endUtf16),
+                                          ::skia::textlayout::RectHeightStyle::kTight,
+                                          ::skia::textlayout::RectWidthStyle::kTight);
     for (const auto& box: boxes) {
         if (box.rect.width() > 0 && box.rect.height() > 0) {
             callback(context, box.rect.left(), box.rect.top(), box.rect.right(), box.rect.bottom());

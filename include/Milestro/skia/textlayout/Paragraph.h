@@ -81,6 +81,11 @@ public :
                                 void* context,
                                 MilestroSkiaTextlayoutParagraphRectCallback callback) const;
 
+    uint64_t forEachInlineRectInRange(size_t startUtf16,
+                                      size_t endUtf16,
+                                      void* context,
+                                      MilestroSkiaTextlayoutParagraphRectCallback callback) const;
+
     uint64_t splitGlyph(SkScalar x, SkScalar y, void* context,
                                  MilestroSkiaTextlayoutParagraphSplitGlyphCallback callback = nullptr);
 

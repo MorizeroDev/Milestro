@@ -364,6 +364,12 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphForEachRectInRange(
         uint64_t endUtf16,
         [[milize::CSharpType("IntPtr")]] void* context,
         MilestroSkiaTextlayoutParagraphRectCallback callback);
+MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphForEachInlineRectInRange(
+        milestro::skia::textlayout::Paragraph* p,
+        uint64_t startUtf16,
+        uint64_t endUtf16,
+        [[milize::CSharpType("IntPtr")]] void* context,
+        MilestroSkiaTextlayoutParagraphRectCallback callback);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetRectsForPlaceholders(
         milestro::skia::textlayout::Paragraph* p,
         [[milize::CSharpType("IntPtr")]] void* context,

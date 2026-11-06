@@ -3179,15 +3179,16 @@ namespace Milestro.Tests
             var textBox = CreateTextBox(markup, out var producer, MarginAll(0));
             textBox.GetComponent<RectTransform>().sizeDelta = new Vector2(200, 200);
             producer.textStyle.size = 30;
+            producer.textStyle.lineHeight = 3f;
             textBox.linkHoverColor = Color.clear;
             textBox.linkHoverUnderlineColor = Color.red;
             textBox.linkHoverUnderlineThickness = 4f;
             yield return WaitForProducer(producer, true);
             var indicator = HoverFirstLink(textBox);
 
-            Assert.That(textBox.TryGetContentSnapshot(out var content), Is.True);
+            Assert.That(textBox.TryGetLinkInteractionSnapshot(out _, out var geometry, out _), Is.True);
             var rects = new List<Rect>();
-            Assert.That(textBox.TryGetLinkLocalRects(content.ContentVersion, 0, rects), Is.True);
+            Assert.That(textBox.TryGetLinkLocalHoverRects(geometry, 0, rects), Is.True);
             Assert.That(rects, Has.Count.GreaterThan(1));
             var helper = new VertexHelper();
             var populate = typeof(TextBoxLinkHoverIndicator).GetMethod("OnPopulateMesh", DeclaredInstance);
@@ -3227,15 +3228,12 @@ namespace Milestro.Tests
             var textBox = CreateTextBox(markup, out var producer, MarginAll(0));
             textBox.GetComponent<RectTransform>().sizeDelta = new Vector2(200, 200);
             producer.textStyle.size = 30;
+            producer.textStyle.lineHeight = 3f;
             textBox.linkHoverColor = new Color(0.2f, 0.49f, 1f, 0.08f);
             textBox.linkHoverUnderlineThickness = 0f;
             yield return WaitForProducer(producer, true);
             var indicator = HoverFirstLink(textBox);
 
-            Assert.That(textBox.TryGetContentSnapshot(out var content), Is.True);
-            var rects = new List<Rect>();
-            Assert.That(textBox.TryGetLinkLocalRects(content.ContentVersion, 0, rects), Is.True);
-            Assert.That(rects, Has.Count.EqualTo(3));
             var helper = new VertexHelper();
             var populate = typeof(TextBoxLinkHoverIndicator).GetMethod("OnPopulateMesh", DeclaredInstance);
             Assert.That(populate, Is.Not.Null);
@@ -3244,7 +3242,15 @@ namespace Milestro.Tests
             helper.GetUIVertexStream(vertices);
             Assert.That(vertices, Has.Count.EqualTo(18));
 
-            for (var quad = 0; quad < 3; ++quad)
+            var expectedMinimum = vertices[0].position;
+            var expectedMaximum = expectedMinimum;
+            for (var index = 1; index < 6; ++index)
+            {
+                expectedMinimum = Vector3.Min(expectedMinimum, vertices[index].position);
+                expectedMaximum = Vector3.Max(expectedMaximum, vertices[index].position);
+            }
+            Assert.That(expectedMaximum.x - expectedMinimum.x, Is.LessThan(producer.textStyle.size * 2f));
+            for (var quad = 1; quad < 3; ++quad)
             {
                 var minimum = vertices[quad * 6].position;
                 var maximum = minimum;
@@ -3254,8 +3260,8 @@ namespace Milestro.Tests
                     minimum = Vector3.Min(minimum, position);
                     maximum = Vector3.Max(maximum, position);
                 }
-                Assert.That(minimum.x, Is.EqualTo(rects[0].xMin).Within(0.01f));
-                Assert.That(maximum.x, Is.EqualTo(rects[0].xMax).Within(0.01f));
+                Assert.That(minimum.x, Is.EqualTo(expectedMinimum.x).Within(0.01f));
+                Assert.That(maximum.x, Is.EqualTo(expectedMaximum.x).Within(0.01f));
             }
         }
 
