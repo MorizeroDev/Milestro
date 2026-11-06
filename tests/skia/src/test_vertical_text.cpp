@@ -14,6 +14,9 @@
 #include "include/core/SkTypeface.h"
 #include "include/encode/SkPngEncoder.h"
 #include "include/ports/SkFontMgr_empty.h"
+#ifdef SK_BUILD_FOR_MAC
+#include "include/ports/SkFontMgr_mac_ct.h"
+#endif
 #include "modules/skunicode/include/SkUnicode.h"
 #include "skttbshaper/TtbShaper.h"
 
@@ -543,6 +546,32 @@ TEST_F(SkiaVerticalTextFeasibility, TtbShaperApiShapesSourceHanUprightWithGlobal
     EXPECT_GT(actual.advance.y(), 0.0f);
     EXPECT_EQ(actual.unresolvedGlyphs, 0u);
 }
+
+#ifdef SK_BUILD_FOR_MAC
+TEST_F(SkiaVerticalTextFeasibility, TtbShaperApiCentersAppleColorEmojiInUprightCell) {
+    auto typeface = SkFontMgr_New_CoreText(nullptr)->matchFamilyStyle("Apple Color Emoji", SkFontStyle());
+    ASSERT_NE(typeface, nullptr);
+    SkFont skFont(typeface, kFontSize);
+    constexpr std::string_view text = "\U0001F642";
+
+    TtbShapeRequest request;
+    request.utf8 = text;
+    request.runLength = text.size();
+    request.font = skFont;
+    request.script = SkSetFourByteTag('Z', 's', 'y', 'e');
+    request.orientation = TtbOrientation::kUpright;
+
+    TtbShapedRun actual;
+    ASSERT_TRUE(ShapeTtbRun(request, &actual));
+    ASSERT_EQ(actual.glyphs.size(), 1u);
+    const auto& glyph = actual.glyphs.front();
+    const SkRect bounds = skFont.getBounds(glyph.glyph, nullptr);
+    ASSERT_FALSE(bounds.isEmpty());
+    EXPECT_NEAR(glyph.position.x() + glyph.offset.x() + bounds.centerX(), 0.0f, 1.0f);
+    EXPECT_NEAR(glyph.position.y() + glyph.offset.y() + bounds.centerY(), kFontSize * 0.5f, 0.01f);
+    EXPECT_NEAR(glyph.advance.y(), kFontSize, 0.01f);
+}
+#endif
 
 TEST_F(SkiaVerticalTextFeasibility, TtbShaperApiMapsChwsToVchwForUprightRuns) {
     auto fontContext = LoadFont(MILESTRO_TEST_CHWS_FONT_PATH);

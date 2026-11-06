@@ -1291,6 +1291,7 @@ void ParagraphImpl::prepareVerticalTateChuYoko() {
 
         auto contentStyle = *firstStyle;
         contentStyle.setBaselineShift(0);
+        contentStyle.setDecoration(TextDecoration::kNoDecoration);
         contentStyle.setHeightOverride(false);
         contentStyle.setHeight(0);
         auto contentParagraphStyle = fParagraphStyle;
@@ -2507,6 +2508,8 @@ void ParagraphImpl::resolveVerticalDecorations() {
         const TextIndex trimmedEnd = line.trimmedText().end;
         PendingSegment underline;
         PendingSegment lineThrough;
+        SkScalar underlineCenter = 0;
+        bool hasUnderlineCenter = false;
 
         for (ClusterIndex index = column.clusters.start; index < column.clusters.end; ++index) {
             const Cluster& cluster = fClusters[index];
@@ -2517,9 +2520,8 @@ void ParagraphImpl::resolveVerticalDecorations() {
                 flush(&lineThrough);
                 continue;
             }
-            if (verticalTateChuYokoAtCluster(index) != nullptr) {
-                flush(&underline);
-                flush(&lineThrough);
+            const auto* tateChuYoko = verticalTateChuYokoAtCluster(index);
+            if (tateChuYoko != nullptr && index != tateChuYoko->clusters.start) {
                 continue;
             }
             // Directionality/soft-hyphen controls have no glyph or advance.
@@ -2541,12 +2543,13 @@ void ParagraphImpl::resolveVerticalDecorations() {
 
             const SkScalar shift = VerticalClusterShift(column, index);
             const SkScalar shiftAfter = VerticalClusterShiftAfter(column, index);
-            const SkScalar top = inlineOrigin +
-                                 run->offset().y() +
-                                 run->inlinePosition(cluster.startPos()) +
-                                 shift + verticalRubyShift(index);
-            const SkScalar bottom = top +
-                    std::max(SkScalar(0), cluster.width() + shiftAfter - shift);
+            const SkScalar top = tateChuYoko != nullptr
+                    ? inlineOrigin + tateChuYoko->inlineStart + shift + verticalRubyShift(index)
+                    : inlineOrigin + run->offset().y() + run->inlinePosition(cluster.startPos()) +
+                              shift + verticalRubyShift(index);
+            const SkScalar bottom = tateChuYoko != nullptr
+                    ? top + tateChuYoko->inlineExtent
+                    : top + std::max(SkScalar(0), cluster.width() + shiftAfter - shift);
             if (!SkIsFinite(top) || !SkIsFinite(bottom)) {
                 flush(&underline);
                 flush(&lineThrough);
@@ -2569,8 +2572,11 @@ void ParagraphImpl::resolveVerticalDecorations() {
                 const SkScalar thickness = ResolveVerticalDecorationThickness(
                         *run, TextDecoration::kUnderline, multiplier);
                 if (thickness > 0) {
-                    const SkScalar centerX = ResolveVerticalUnderlineCenter(
-                            *run, runBlockCenter, thickness);
+                    if (!hasUnderlineCenter) {
+                        underlineCenter = ResolveVerticalUnderlineCenter(*run, blockCenter, thickness);
+                        hasUnderlineCenter = true;
+                    }
+                    const SkScalar centerX = underlineCenter - run->baselineShift();
                     append(&underline,
                            columnIndex,
                            TextDecoration::kUnderline,

@@ -1,6 +1,7 @@
 #include "skttbshaper/TtbShaper.h"
 
 #include "include/core/SkData.h"
+#include "include/core/SkFontMetrics.h"
 #include "include/core/SkTypeface.h"
 #include "include/core/SkTextBlob.h"
 #include "src/core/SkUTF.h"
@@ -218,6 +219,8 @@ bool ShapeWithSkFont(const TtbShapeRequest& request, TtbShapedRun* result) {
     glyphs.resize(glyphCount);
     std::vector<SkScalar> widths(glyphCount);
     request.font.getWidths(glyphs, widths);
+    std::vector<SkRect> bounds(glyphCount);
+    request.font.getBounds(glyphs, bounds, nullptr);
 
     std::vector<size_t> boundaries;
     const char* current = request.utf8.data() + request.runStart;
@@ -233,6 +236,10 @@ bool ShapeWithSkFont(const TtbShapeRequest& request, TtbShapedRun* result) {
 
     result->glyphs.clear();
     result->glyphs.reserve(glyphCount);
+    SkFontMetrics metrics;
+    request.font.getMetrics(&metrics);
+    const SkScalar uprightBaseline =
+            SkIsFinite(metrics.fAscent) && metrics.fAscent <= 0 ? -metrics.fAscent : request.font.getSize();
     SkScalar cursor = 0;
     for (size_t index = 0; index < glyphCount; ++index) {
         // Upright vertical glyphs occupy one em-sized ideographic cell. Some
@@ -250,7 +257,12 @@ bool ShapeWithSkFont(const TtbShapeRequest& request, TtbShapedRun* result) {
         glyph.position = request.orientation == TtbOrientation::kUpright
                 ? SkPoint::Make(0, cursor)
                 : SkPoint::Make(cursor, 0);
-        glyph.offset = SkPoint::Make(0, 0);
+        const SkScalar uprightOffsetY = bounds[index].isEmpty() || !bounds[index].isFinite()
+                ? uprightBaseline
+                : advance * 0.5f - bounds[index].centerY();
+        glyph.offset = request.orientation == TtbOrientation::kUpright
+                ? SkPoint::Make(-measuredAdvance * 0.5f, uprightOffsetY)
+                : SkPoint::Make(0, 0);
         glyph.advance = request.orientation == TtbOrientation::kUpright
                 ? SkVector::Make(0, advance)
                 : SkVector::Make(advance, 0);

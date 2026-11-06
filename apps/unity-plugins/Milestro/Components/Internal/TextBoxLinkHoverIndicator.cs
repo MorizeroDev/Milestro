@@ -52,23 +52,90 @@ namespace Milestro.Components.Internal
             {
                 if (fillColor.a > 0f)
                 {
-                    AddQuad(vh, rect, fillColor);
-                }
-
-                if (underlineThickness > 0f)
-                {
-                    var underline = vertical
-                        ? Rect.MinMaxRect(rect.xMin,
-                            rect.yMin,
-                            Mathf.Min(rect.xMax, rect.xMin + underlineThickness),
-                            rect.yMax)
-                        : Rect.MinMaxRect(rect.xMin,
-                            rect.yMin,
-                            rect.xMax,
-                            Mathf.Min(rect.yMax, rect.yMin + underlineThickness));
-                    AddQuad(vh, underline, underlineColor);
+                    AddQuad(vh, vertical ? VerticalFillRect(rect) : rect, fillColor);
                 }
             }
+
+            if (underlineThickness <= 0f)
+            {
+                return;
+            }
+
+            if (!vertical)
+            {
+                foreach (var rect in rects)
+                {
+                    var underline = Rect.MinMaxRect(rect.xMin,
+                        rect.yMin,
+                        rect.xMax,
+                        Mathf.Min(rect.yMax, rect.yMin + underlineThickness));
+                    AddQuad(vh, underline, underlineColor);
+                }
+                return;
+            }
+
+            Rect? mergedCells = null;
+            Rect? mergedUnderline = null;
+
+            void FlushUnderline()
+            {
+                if (mergedUnderline.HasValue)
+                {
+                    AddQuad(vh, mergedUnderline.Value, underlineColor);
+                }
+                mergedCells = null;
+                mergedUnderline = null;
+            }
+
+            foreach (var rect in rects)
+            {
+                var underline = Rect.MinMaxRect(rect.xMin,
+                    rect.yMin,
+                    Mathf.Min(rect.xMax, rect.xMin + underlineThickness),
+                    rect.yMax);
+                if (mergedCells.HasValue)
+                {
+                    var cells = mergedCells.Value;
+                    var sameColumn = cells.xMin < rect.xMax && rect.xMin < cells.xMax;
+                    var adjacent = cells.yMin <= rect.yMax + 0.01f &&
+                                   rect.yMin <= cells.yMax + 0.01f;
+                    if (sameColumn && adjacent)
+                    {
+                        var previous = mergedUnderline!.Value;
+                        var left = Mathf.Min(previous.xMin, underline.xMin);
+                        mergedCells = Rect.MinMaxRect(Mathf.Min(cells.xMin, rect.xMin),
+                            Mathf.Min(cells.yMin, rect.yMin),
+                            Mathf.Max(cells.xMax, rect.xMax),
+                            Mathf.Max(cells.yMax, rect.yMax));
+                        mergedUnderline = Rect.MinMaxRect(left,
+                            Mathf.Min(previous.yMin, underline.yMin),
+                            Mathf.Min(mergedCells.Value.xMax, left + underlineThickness),
+                            Mathf.Max(previous.yMax, underline.yMax));
+                        continue;
+                    }
+                }
+
+                FlushUnderline();
+                mergedCells = rect;
+                mergedUnderline = underline;
+            }
+
+            FlushUnderline();
+        }
+
+        private Rect VerticalFillRect(Rect rect)
+        {
+            var left = rect.xMin;
+            var right = rect.xMax;
+            foreach (var candidate in rects)
+            {
+                if (rect.xMin < candidate.xMax && candidate.xMin < rect.xMax)
+                {
+                    left = Mathf.Min(left, candidate.xMin);
+                    right = Mathf.Max(right, candidate.xMax);
+                }
+            }
+            return Rect.MinMaxRect(left, rect.yMin, right, rect.yMax);
         }
 
         private static void AddQuad(VertexHelper vh, Rect rect, Color vertexColor)

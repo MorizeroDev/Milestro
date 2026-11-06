@@ -1451,6 +1451,21 @@ TEST_F(SkiaVerticalParagraph, TC07_AdjacentGroupsAndEffectsStayInsideCells) {
     EXPECT_GT(NonWhitePixels(bitmap), 80u);
 }
 
+TEST_F(SkiaVerticalParagraph, TC07_UnderlineRemainsContinuousThroughTateChuYoko) {
+    auto style = DecorationStyleFor(PrimaryStyle(40), skia_text::TextDecoration::kUnderline, SK_ColorRED);
+    auto paragraph = BuildVerticalTateChuYoko("天12地", {{3, 5}}, style);
+    paragraph->layoutWithInlineExtent(std::numeric_limits<SkScalar>::infinity());
+
+    const auto decorations = RecordDecorations(paragraph.get());
+    ASSERT_EQ(decorations.size(), 1u);
+    EXPECT_NEAR(decorations.front().rect.top(), 0, kTolerance);
+    EXPECT_NEAR(decorations.front().rect.bottom(),
+                paragraph->getLayoutMetrics().longestInlineExtent,
+                kTolerance);
+    EXPECT_LT(decorations.front().rect.centerX(),
+              paragraph->getLayoutMetrics().columns[0].physicalBaseline);
+}
+
 TEST_F(SkiaVerticalParagraph, TC08_RangeVisitorPathAndHitTestShareCellGeometry) {
     auto paragraph = BuildVerticalTateChuYoko("天12地", {{3, 5}});
     paragraph->layoutWithInlineExtent(400);
@@ -5685,7 +5700,7 @@ TEST_F(SkiaVerticalParagraph, V77_StylesFontSizesAndFallbackSplitDecorationSegme
     const SkScalar largeThickness = DecorationThickness(*largeRun, skia_text::TextDecoration::kUnderline, 1);
     const SkScalar smallThickness = DecorationThickness(*smallRun, skia_text::TextDecoration::kUnderline, 1);
     EXPECT_NEAR(decorations[0].rect.centerX(), UnderlineCenterX(*largeRun, largeThickness), kTolerance);
-    EXPECT_NEAR(decorations[1].rect.centerX(), UnderlineCenterX(*smallRun, smallThickness), kTolerance);
+    EXPECT_NEAR(decorations[1].rect.centerX(), decorations[0].rect.centerX(), kTolerance);
     EXPECT_NEAR(decorations[0].strokeWidth, largeThickness, kTolerance);
     EXPECT_NEAR(decorations[1].strokeWidth, smallThickness, kTolerance);
     EXPECT_EQ(decorations[0].color, SK_ColorRED);
