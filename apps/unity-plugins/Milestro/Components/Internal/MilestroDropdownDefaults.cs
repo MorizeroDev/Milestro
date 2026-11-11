@@ -10,7 +10,7 @@ namespace Milestro.Components.Internal
         private const float ControlHeight = 40f;
         private const float ItemHeight = 32f;
 
-        internal static MilestroDropdown Create(Transform? parent)
+        internal static MilestroDropdown Create(Transform? parent, bool activate = true)
         {
             var controlObject = CreateRect("Milestro Dropdown", parent);
             controlObject.gameObject.SetActive(false);
@@ -114,7 +114,7 @@ namespace Milestro.Components.Internal
             dropdown.placeholderText = placeholder;
             dropdown.template = template;
             template.gameObject.SetActive(false);
-            controlObject.gameObject.SetActive(true);
+            controlObject.gameObject.SetActive(activate);
             return dropdown;
         }
 

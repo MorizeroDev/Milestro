@@ -12,7 +12,7 @@ namespace Milestro.Components
     [DisallowMultipleComponent]
     [RequireComponent(typeof(RectTransform))]
     [AddComponentMenu("Milestro/Dropdown")]
-    public sealed class MilestroDropdown : Selectable,
+    public class MilestroDropdown : Selectable,
         IPointerClickHandler,
         ISubmitHandler,
         ICancelHandler
@@ -21,6 +21,7 @@ namespace Milestro.Components
             new Dictionary<Canvas, MilestroDropdown>();
 
         [SerializeField] private CanvasSlimText? m_CaptionText;
+        [SerializeField] private TextBox? m_CaptionTextBox;
         [SerializeField] private CanvasSlimText? m_PlaceholderText;
         [SerializeField] private RectTransform? m_Template;
         [SerializeField] private string m_Placeholder = string.Empty;
@@ -62,6 +63,16 @@ namespace Milestro.Components
             set
             {
                 m_CaptionText = value;
+                RefreshShownValue();
+            }
+        }
+
+        public TextBox? captionTextBox
+        {
+            get => m_CaptionTextBox;
+            set
+            {
+                m_CaptionTextBox = value;
                 RefreshShownValue();
             }
         }
@@ -229,6 +240,50 @@ namespace Milestro.Components
         public void ClearOptions()
         {
             SetOptions(null, -1);
+        }
+
+        public void AddOptions(IEnumerable<string> newOptions)
+        {
+            if (newOptions == null) throw new ArgumentNullException(nameof(newOptions));
+            var combined = new List<string>(m_Options);
+            combined.AddRange(newOptions);
+            SetOptions(combined, m_Value < 0 && combined.Count > 0 ? 0 : m_Value);
+        }
+
+        public void InsertOption(int index, string text)
+        {
+            if (index < 0 || index > m_Options.Count)
+                throw new ArgumentOutOfRangeException(nameof(index));
+            var updated = new List<string>(m_Options);
+            updated.Insert(index, text ?? string.Empty);
+            SetOptions(updated, m_Value < 0 ? 0 : m_Value >= index ? m_Value + 1 : m_Value);
+        }
+
+        public void RemoveOptionAt(int index)
+        {
+            if (index < 0 || index >= m_Options.Count)
+                throw new ArgumentOutOfRangeException(nameof(index));
+            var updated = new List<string>(m_Options);
+            updated.RemoveAt(index);
+            SetOptions(updated, m_Value > index ? m_Value - 1 : m_Value);
+        }
+
+        public int FindOption(string text, StringComparison comparison = StringComparison.Ordinal)
+        {
+            return m_Options.FindIndex(option => string.Equals(option, text, comparison));
+        }
+
+        public void CreateDefaultTemplate()
+        {
+            var defaults = MilestroDropdownDefaults.Create(transform, false);
+            var generatedTemplate = defaults.template;
+            if (generatedTemplate != null)
+            {
+                generatedTemplate.SetParent(transform, false);
+                template = generatedTemplate;
+            }
+            if (Application.isPlaying) Destroy(defaults.gameObject);
+            else DestroyImmediate(defaults.gameObject);
         }
 
         public string GetOptionText(int index)
@@ -533,9 +588,13 @@ namespace Milestro.Components
             m_Value = NormalizeIndex(m_Value);
         }
 
-        private void RefreshShownValue()
+        public void RefreshShownValue()
         {
             var hasValue = m_Value >= 0 && m_Value < m_Options.Count;
+            if (m_CaptionTextBox != null)
+            {
+                m_CaptionTextBox.Text = hasValue ? m_Options[m_Value] : m_Placeholder;
+            }
             if (m_CaptionText != null)
             {
                 m_CaptionText.gameObject.SetActive(hasValue);
