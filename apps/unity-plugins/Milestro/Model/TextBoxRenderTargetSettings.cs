@@ -78,7 +78,7 @@ namespace Milestro.Model
         internal ParagraphPayload ParseContent(bool allowViewportBlockMargins = false,
             ICollection<string>? issues = null)
         {
-            if (string.IsNullOrEmpty(ParserId))
+            if (ParserId == null || ParserId.Length == 0)
             {
                 return ParagraphPayload.MakeText(Content);
             }

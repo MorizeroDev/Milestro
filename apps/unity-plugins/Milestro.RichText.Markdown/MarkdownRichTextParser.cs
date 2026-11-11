@@ -248,13 +248,14 @@ namespace Milestro.RichText.Markdown
                     return;
                 }
 
-                if (string.IsNullOrEmpty(link.Url))
+                var url = link.Url;
+                if (url == null || url.Length == 0)
                 {
                     RenderInlines(link, style);
                     return;
                 }
 
-                builder.BeginLink(link.Url);
+                builder.BeginLink(url);
                 RenderInlines(link, style);
                 builder.EndLink();
             }

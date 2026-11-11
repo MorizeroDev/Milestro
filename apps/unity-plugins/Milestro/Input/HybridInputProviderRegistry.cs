@@ -73,7 +73,7 @@ namespace Milestro.Input
                 return new HybridInputProviderSelection(HybridInputSelectionStatus.Conflict, null);
             }
 
-            if (!string.IsNullOrEmpty(overrideProviderId))
+            if (overrideProviderId != null && overrideProviderId.Length > 0)
             {
                 return SelectOverride(environment, overrideProviderId);
             }
