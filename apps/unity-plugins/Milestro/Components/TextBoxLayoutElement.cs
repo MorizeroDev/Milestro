@@ -473,7 +473,20 @@ namespace Milestro.Components
                 return scrollRect.transform as RectTransform;
             }
 
-            return transform.parent as RectTransform;
+            var ancestor = transform.parent;
+            while (ancestor != null)
+            {
+                var rectMask = ancestor.GetComponent<RectMask2D>();
+                var mask = ancestor.GetComponent<Mask>();
+                if (rectMask != null && rectMask.isActiveAndEnabled ||
+                    mask != null && mask.isActiveAndEnabled && mask.graphic != null && mask.graphic.isActiveAndEnabled)
+                {
+                    return ancestor as RectTransform;
+                }
+                ancestor = ancestor.parent;
+            }
+
+            return null;
         }
 
         private ScrollRect? ScrollRectComponent()
