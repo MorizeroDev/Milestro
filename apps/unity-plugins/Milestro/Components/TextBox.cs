@@ -74,6 +74,8 @@ namespace Milestro.Components
         [NonSerialized] private float flowVisibleCapacityHeight;
         [NonSerialized]
         private readonly Dictionary<int, LinkPressState> linkPresses = new Dictionary<int, LinkPressState>();
+        private readonly Dictionary<int, GameObject> parentPresses = new Dictionary<int, GameObject>();
+        private readonly Dictionary<int, GameObject> parentClicks = new Dictionary<int, GameObject>();
         [NonSerialized] private ulong nextLinkPressToken;
 #if MILESTRO_FLOW_TEXTBOX_DEBUG
         [NonSerialized] private bool flowDiagnosticsEnabled;
@@ -103,6 +105,8 @@ namespace Milestro.Components
         protected override void OnDisable()
         {
             ClearLinkPresses();
+            parentPresses.Clear();
+            parentClicks.Clear();
             SettleElastic(producerCache, rebuild: false);
             base.OnDisable();
             CancelScrollTweens();
@@ -341,8 +345,24 @@ namespace Milestro.Components
             }
 
             linkPresses.Remove(eventData.pointerId);
+            parentPresses.Remove(eventData.pointerId);
+            parentClicks.Remove(eventData.pointerId);
             if (!AcceptsLinkPointer(eventData) || !TryResolveLinkHit(eventData, out var hit))
             {
+                foreach (var component in GetComponents<MonoBehaviour>())
+                {
+                    if (component != null && component != this && component.isActiveAndEnabled &&
+                        (component is IPointerDownHandler || component is IPointerClickHandler))
+                        return;
+                }
+                if (transform.parent != null)
+                {
+                    var parent = transform.parent.gameObject;
+                    var pressed = ExecuteEvents.ExecuteHierarchy(parent, eventData, ExecuteEvents.pointerDownHandler);
+                    var clicked = ExecuteEvents.GetEventHandler<IPointerClickHandler>(parent);
+                    if (pressed != null) parentPresses[eventData.pointerId] = pressed;
+                    if (clicked != null) parentClicks[eventData.pointerId] = clicked;
+                }
                 return;
             }
 
@@ -352,6 +372,11 @@ namespace Milestro.Components
 
         public void OnPointerUp(PointerEventData eventData)
         {
+            if (eventData != null && parentPresses.TryGetValue(eventData.pointerId, out var parent))
+            {
+                parentPresses.Remove(eventData.pointerId);
+                ExecuteEvents.Execute(parent, eventData, ExecuteEvents.pointerUpHandler);
+            }
             if (eventData == null || !linkPresses.TryGetValue(eventData.pointerId, out var press))
             {
                 return;
@@ -376,6 +401,14 @@ namespace Milestro.Components
 
         public void OnPointerClick(PointerEventData eventData)
         {
+            if (eventData != null && parentClicks.TryGetValue(eventData.pointerId, out var parent))
+            {
+                parentClicks.Remove(eventData.pointerId);
+                if (eventData.eligibleForClick && transform.parent != null &&
+                    ExecuteEvents.GetEventHandler<IPointerClickHandler>(transform.parent.gameObject) == parent)
+                    ExecuteEvents.Execute(parent, eventData, ExecuteEvents.pointerClickHandler);
+                return;
+            }
             if (eventData == null || !linkPresses.TryGetValue(eventData.pointerId, out var press))
             {
                 return;
@@ -400,6 +433,8 @@ namespace Milestro.Components
         public void OnCancel(BaseEventData eventData)
         {
             ClearLinkPresses();
+            parentPresses.Clear();
+            parentClicks.Clear();
         }
 
         private bool TryResolveLinkHit(PointerEventData eventData, out TextBoxLinkHit hit)
