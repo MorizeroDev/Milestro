@@ -280,6 +280,9 @@ namespace Milestro.Components
             if (generatedTemplate != null)
             {
                 generatedTemplate.SetParent(transform, false);
+                generatedTemplate.anchorMin = new Vector2(0f, 0.5f);
+                generatedTemplate.anchorMax = new Vector2(1f, 0.5f);
+                generatedTemplate.sizeDelta = new Vector2(0f, generatedTemplate.sizeDelta.y);
                 template = generatedTemplate;
             }
             if (Application.isPlaying) Destroy(defaults.gameObject);
@@ -716,14 +719,17 @@ namespace Milestro.Components
                 top = Mathf.Max(top, point.y);
             }
 
-            const float gap = 2f;
+            var templateToRoot = rootRect.worldToLocalMatrix * m_Template.localToWorldMatrix;
+            var scaleX = Mathf.Max(0.0001f, templateToRoot.MultiplyVector(Vector3.right).magnitude);
+            var scaleY = Mathf.Max(0.0001f, templateToRoot.MultiplyVector(Vector3.up).magnitude);
+            var gap = 2f * scaleY;
             const float verticalChrome = 4f;
             var contentHeight = popupItemHeight * items.Count;
-            var desiredWidth = m_Template.rect.width > 0f ? m_Template.rect.width : right - left;
+            var desiredWidth = m_Template.rect.width > 0f ? m_Template.rect.width * scaleX : right - left;
             var width = Mathf.Min(desiredWidth, displayRect.width);
             var maximumHeight = Mathf.Min(m_Template.rect.height,
-                m_MaxVisibleItems * popupItemHeight + verticalChrome);
-            var desiredHeight = Mathf.Min(contentHeight + verticalChrome, maximumHeight);
+                m_MaxVisibleItems * popupItemHeight + verticalChrome) * scaleY;
+            var desiredHeight = Mathf.Min((contentHeight + verticalChrome) * scaleY, maximumHeight);
             var downSpace = Mathf.Max(0f, bottom - displayRect.yMin - gap);
             var upSpace = Mathf.Max(0f, displayRect.yMax - top - gap);
             var openUp = downSpace < desiredHeight && upSpace > downSpace;
@@ -748,7 +754,8 @@ namespace Milestro.Components
             listRect.anchorMin = Vector2.zero;
             listRect.anchorMax = Vector2.zero;
             listRect.pivot = Vector2.zero;
-            listRect.sizeDelta = new Vector2(width, height);
+            listRect.localScale = new Vector3(scaleX, scaleY, 1f);
+            listRect.sizeDelta = new Vector2(width / scaleX, height / scaleY);
             listRect.anchoredPosition = new Vector2(xMin - rootRect.rect.xMin, yMin - rootRect.rect.yMin);
         }
 
