@@ -2104,9 +2104,11 @@ namespace Milestro.Components.Internal
             var nextHorizontalScrollState = viewport.ResolveHorizontalScroll(horizontalLayout);
             var nextScrollOffset = new Vector2(
                 nextHorizontalScrollState.ScrollX,
-                Mathf.Clamp(FloatUtil.IsFinite(viewport.RequestedScrollY) ? viewport.RequestedScrollY : 0f,
-                    0f,
-                    nextMaxScrollOffset.y));
+                viewport.SliceOutput
+                    ? Mathf.Max(0f, FloatUtil.IsFinite(viewport.RequestedScrollY) ? viewport.RequestedScrollY : 0f)
+                    : Mathf.Clamp(FloatUtil.IsFinite(viewport.RequestedScrollY) ? viewport.RequestedScrollY : 0f,
+                        0f,
+                        nextMaxScrollOffset.y));
 
             var changed = viewportSize != nextViewportSize ||
                           contentSize != nextContentSize ||
