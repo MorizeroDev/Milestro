@@ -33,6 +33,12 @@ namespace Milestro.Model
         private Color m_textColor = Color.white;
 
         [SerializeField]
+        private List<TextShadowDescription> m_shadows = new List<TextShadowDescription>();
+
+        [NonSerialized]
+        private ReadOnlyCollection<TextShadowDescription>? m_shadowsView;
+
+        [SerializeField]
         private float m_letterSpacing;
 
         [SerializeField]
@@ -83,6 +89,17 @@ namespace Milestro.Model
         {
             get => m_textColor;
             set => SetField(ref m_textColor, value);
+        }
+
+        public IReadOnlyList<TextShadowDescription> shadows
+        {
+            get => m_shadowsView ??= (m_shadows ??= new List<TextShadowDescription>()).AsReadOnly();
+            set
+            {
+                m_shadows = value == null ? new List<TextShadowDescription>() : new List<TextShadowDescription>(value);
+                m_shadowsView = null;
+                NotifyChanged();
+            }
         }
 
         public float letterSpacing

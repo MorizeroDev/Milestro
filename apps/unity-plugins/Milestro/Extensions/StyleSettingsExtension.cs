@@ -31,6 +31,10 @@ namespace Milestro.Extensions
             ret.FontSize = settings.size;
             ret.Locale = settings.locale;
             ret.Color = settings.textColor;
+            foreach (var shadow in settings.shadows)
+            {
+                ret.AddShadow(shadow.Color, shadow.Offset, shadow.BlurSigma);
+            }
             ret.LetterSpacing = settings.letterSpacing;
             ret.WordSpacing = settings.wordSpacing;
             if (settings.lineHeight > 0f)
