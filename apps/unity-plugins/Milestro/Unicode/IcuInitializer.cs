@@ -8,9 +8,22 @@ namespace Milestro.Unicode
     {
         private static bool initialized;
 
-        private static readonly Lazy<bool> InitDelegate = new Lazy<bool>(() =>
+        private static bool LoadData()
         {
             var db = Resources.Load<TextAsset>(MilestroConfiguration.Configuration.Icu.IcudtlResourcePath);
+#if UNITY_EDITOR
+            if (!db)
+            {
+                var resourcePath = "/Resources/" + MilestroConfiguration.Configuration.Icu.IcudtlResourcePath + ".bytes";
+                foreach (var guid in UnityEditor.AssetDatabase.FindAssets("icudtl t:TextAsset"))
+                {
+                    var path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                    if (!path.EndsWith(resourcePath, StringComparison.Ordinal)) continue;
+                    db = UnityEditor.AssetDatabase.LoadAssetAtPath<TextAsset>(path);
+                    break;
+                }
+            }
+#endif
             if (!db)
             {
                 Debug.LogError("Failed to load icudtl.dat from Resources.");
@@ -29,7 +42,7 @@ namespace Milestro.Unicode
             {
                 Resources.UnloadAsset(db);
             }
-        });
+        }
 
         private static bool PCLoad(TextAsset db)
         {
@@ -82,7 +95,7 @@ namespace Milestro.Unicode
                 return;
             }
 
-            var result = InitDelegate.Value;
+            var result = LoadData();
             if (result)
             {
                 initialized = true;
