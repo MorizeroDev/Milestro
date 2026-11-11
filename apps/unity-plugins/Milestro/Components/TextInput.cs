@@ -187,6 +187,18 @@ namespace Milestro.Components
 
         internal bool IsDispatcherFocused => inputRegistration?.IsFocused == true;
 
+        public bool isFocused => IsDispatcherFocused;
+
+        public string text
+        {
+            get => Text;
+            set => Text = value;
+        }
+
+        public bool Focus() => BeginEditingFromAccessibility();
+
+        public void Blur() => EndEditingFromAccessibility();
+
         internal InputBox? AccessibilityInputBox => inputBox;
 
         internal bool CompositionIsActive => compositionActive;
