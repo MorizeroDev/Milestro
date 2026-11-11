@@ -24,6 +24,7 @@ namespace Milestro.Components.Internal
         private ulong screenSpaceConfigurationFingerprint;
 
         internal event Action<UnitySkiaRenderTextureSurface.RenderSubmissionStatus>? RenderEventCompleted;
+        internal event Action? BeforeAtlasRelease;
 
         internal bool AllowAtlas { get; set; } = true;
         internal UnitySkiaGraphicsBackend Backend => atlasLease?.Backend ?? surface?.Backend ??
@@ -389,6 +390,7 @@ namespace Milestro.Components.Internal
             {
                 return;
             }
+            BeforeAtlasRelease?.Invoke();
             atlasLease.Completed -= HandleRenderEventCompleted;
             atlasLease.Dispose();
             atlasLease = null;

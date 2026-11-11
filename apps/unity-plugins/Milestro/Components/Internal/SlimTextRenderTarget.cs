@@ -634,6 +634,7 @@ namespace Milestro.Components.Internal
         {
             surface = nextSurface;
             surface.RenderEventCompleted += HandleRenderEventCompleted;
+            surface.BeforeAtlasRelease += DisposeFastSnapshot;
         }
 
         private void DisposeSurface()
@@ -645,6 +646,7 @@ namespace Milestro.Components.Internal
 
             surface.RenderEventCompleted -= HandleRenderEventCompleted;
             surface.Dispose();
+            surface.BeforeAtlasRelease -= DisposeFastSnapshot;
             surface = null;
         }
 
