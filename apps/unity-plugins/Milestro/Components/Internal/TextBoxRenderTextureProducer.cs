@@ -767,6 +767,14 @@ namespace Milestro.Components.Internal
                     viewport = CurrentViewportWithRasterization(currentSize);
                 }
 
+                if (m_screenSpaceRasterization && !rasterContextValid)
+                {
+#if UNITY_EDITOR
+                    QueueEditorRebuild();
+#endif
+                    return;
+                }
+
                 bool rebuilt;
                 var hadOutput = HasOutput;
                 using (profiling ? TextBoxPipelineProfiler.TargetRebuildMarker.Auto() : default)
