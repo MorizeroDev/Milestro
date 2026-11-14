@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Milestro.Components.Internal
 {
-    internal sealed class TextBoxRenderTarget : ITextBoxRenderTarget
+    internal sealed partial class TextBoxRenderTarget : ITextBoxRenderTarget
     {
         private static readonly Rect DefaultUvRect = new Rect(0f, 0f, 1f, 1f);
 
@@ -95,22 +95,21 @@ namespace Milestro.Components.Internal
         private TextBoxRenderViewport pendingViewport;
         private ColorSpace pendingColorSpace;
 
-        public Texture? OutputTexture => surface?.Texture;
-        public Rect OutputUvRect => surface != null
+        public Texture? OutputTexture => glyphMeshOutput?.Texture ?? surface?.Texture;
+        public Rect OutputUvRect => glyphMeshOutput != null ? DefaultUvRect : surface != null
             ? ResolveOutputUvRect(surface.DisplayUvRect,
                 ScreenSpaceRasterMetrics.RasterizeVisibleSize(outputVisibleSizePixels,
                     surface.EffectiveRasterScale,
                     new Vector2Int(surface.Width, surface.Height)),
                 new Vector2Int(surface.Width, surface.Height))
             : DefaultUvRect;
-        public int OutputWidth => surface?.Width ?? 0;
-        public int OutputHeight => surface?.Height ?? 0;
-        public bool HasOutput => surface?.HasCompletedOutput ?? false;
+        public int OutputWidth => glyphMeshOutput != null ? Mathf.CeilToInt(glyphMeshOutput.LogicalSize.x) : surface?.Width ?? 0;
+        public int OutputHeight => glyphMeshOutput != null ? Mathf.CeilToInt(glyphMeshOutput.LogicalSize.y) : surface?.Height ?? 0;
+        public bool HasOutput => (glyphMeshOutput?.IsValid ?? false) || (surface?.HasCompletedOutput ?? false);
         public bool HasPendingWork => layoutChanged ||
                                       paintChanged ||
                                       linkGeometryPublication.HasPending ||
-                                      surface == null ||
-                                      !surface.HasCompletedOutput;
+                                      !HasOutput || GlyphMeshConfigurationChanged;
         public long OutputVersion => outputVersion;
         public Vector2 ScrollOffset => scrollOffset;
         public Vector2 ContentSize => contentSize;
@@ -456,6 +455,7 @@ namespace Milestro.Components.Internal
 
         private void ResetForWritingModeChange()
         {
+            ClearGlyphMeshOutput();
             fitScale = 1f;
             DisposeSurface();
             RetireParagraphs();
@@ -488,6 +488,7 @@ namespace Milestro.Components.Internal
 
         public void InvalidateFailedOutput()
         {
+            ClearGlyphMeshOutput();
             fitScale = 1f;
             RetireParagraphs();
             DisposeSurface();
@@ -558,29 +559,7 @@ namespace Milestro.Components.Internal
                 outputSizePixels);
             outputVisibleSizePixels = visibleOutputSizePixels;
 
-            var needsDraw = false;
-            var surfaceReady = true;
-            if (viewport.DrawOutput)
-            {
-                surfaceReady = EnsureSurface(outputSizePixels,
-                        colorSpace,
-                        viewport.UseScreenSpaceRasterization,
-                        viewport.DesiredRasterScale,
-                        logContext,
-                        out var surfaceChanged);
-                if (!surfaceReady)
-                {
-                    needsDraw = true;
-                }
-                else
-                {
-                    needsDraw = surfaceChanged;
-                }
-            }
-            else
-            {
-                ClearSurfaceOutput();
-            }
+            var needsDraw = GlyphMeshConfigurationChanged || !HasOutput;
 
             var paragraphsRebuilt = false;
             if (forceText || paragraphs.Count == 0 || layoutChanged)
@@ -604,7 +583,12 @@ namespace Milestro.Components.Internal
 
             using (profiling ? TextBoxPipelineProfiler.ResizeParagraphsMarker.Auto() : default)
             {
-                needsDraw |= ResizeParagraphs(paragraphs, settings, layoutSizePixels, paragraphsRebuilt);
+                var resized = ResizeParagraphs(paragraphs, settings, layoutSizePixels, paragraphsRebuilt);
+                if (resized)
+                {
+                    InvalidateGlyphLayouts();
+                }
+                needsDraw |= resized;
             }
             needsDraw |= UpdateScrollMetrics(settings,
                 layoutSizePixels,
@@ -613,12 +597,29 @@ namespace Milestro.Components.Internal
             needsDraw |= paintChanged;
             if (!viewport.DrawOutput)
             {
+                ClearGlyphMeshOutput();
+                ClearSurfaceOutput();
                 linkGeometryPublication.InvalidatePublished();
                 layoutChanged = false;
                 paintChanged = false;
                 return true;
             }
 
+            needsDraw |= GlyphMeshViewportChanged(viewport);
+            if (TryRebuildGlyphMesh(settings, viewport, layoutSizePixels, visibleOutputSizePixels, needsDraw))
+            {
+                layoutChanged = false;
+                paintChanged = false;
+                return true;
+            }
+
+            var surfaceReady = EnsureSurface(outputSizePixels,
+                colorSpace,
+                viewport.UseScreenSpaceRasterization,
+                viewport.DesiredRasterScale,
+                logContext,
+                out var surfaceChanged);
+            needsDraw |= surfaceChanged;
             if (!surfaceReady || surface == null || !surface.HasSurface)
             {
                 layoutChanged = false;
@@ -691,6 +692,7 @@ namespace Milestro.Components.Internal
 
         public void Dispose()
         {
+            ClearGlyphMeshOutput();
             RetireParagraphs();
             DisposeSurface();
             cachedParagraphStyle?.Dispose();
@@ -1691,7 +1693,12 @@ namespace Milestro.Components.Internal
                 ? Mathf.Max(0.01f, (layoutSizePixels.x - sizing.Margin.FixedHorizontalSize) / Mathf.Max(0.001f, scale))
                 : Mathf.Max(0.01f, (sizing.UsedWidth - sizing.Margin.FixedHorizontalSize) / Mathf.Max(0.001f, scale));
             var nextLayoutWidth = CeilToPositiveInt(contentWidth);
-            var changed = force || layoutWidth != nextLayoutWidth || !Mathf.Approximately(fitScale, scale);
+            var changed = force || layoutWidth != nextLayoutWidth || !Mathf.Approximately(fitScale, scale) ||
+                          (hasHeightDependentBlockMargins && layoutSizePixels.y != layoutHeight);
+            if (!changed)
+            {
+                return false;
+            }
             layoutWidth = nextLayoutWidth;
             layoutHeight = layoutSizePixels.y;
             fitScale = scale;
@@ -2298,28 +2305,13 @@ namespace Milestro.Components.Internal
             clipRect = default;
             if (paragraphs.Count > 0)
             {
-                var margin = ResolveMargin(settings, layoutSizePixels);
-                var layoutViewportSize = new Vector2(ContentViewportWidth(settings, layoutSizePixels),
-                    ContentViewportHeight(settings, layoutSizePixels));
-                var autoOffset = AutoContentOffset(settings, layoutViewportSize);
-                var basePaintX = margin.Left + autoOffset.x;
-                var basePaintY = margin.Top + autoOffset.y - scrollOffset.y - viewport.VisualScrollOffset.y;
-                clipRect = ResolveClipRect(settings, viewport, margin, outputSizePixels);
-                paintPosition = new Vector2(basePaintX, basePaintY);
+                ResolveHorizontalPaintGeometry(settings, viewport, layoutSizePixels, outputSizePixels,
+                    out paintPosition, out clipRect);
 
                 for (var index = 0; index < paragraphs.Count; ++index)
                 {
-                    var offsetX = TextBoxNoWrapHorizontalLayout.ResolvePaintOffsetX(
-                        index < blockAlignmentOffsetsX.Count ? blockAlignmentOffsetsX[index] : 0f,
-                        scrollOffset.x,
-                        viewport.VisualScrollOffset.x) +
-                                   (index < blockMarginLefts.Count ? blockMarginLefts[index] : 0f) * fitScale;
-                    var blockTop = index < blockTops.Count ? blockTops[index] : 0f;
-                    var blockPaintPosition = new Vector2(basePaintX + offsetX,
-                        basePaintY + blockTop * fitScale);
-
                     commands.DrawParagraph(paragraphs[index],
-                        blockPaintPosition,
+                        ResolveHorizontalBlockPaintPosition(index, paintPosition, viewport.VisualScrollOffset.x),
                         clipRect,
                         fitScale);
                 }
@@ -2332,6 +2324,34 @@ namespace Milestro.Components.Internal
             }
 
             return commands;
+        }
+
+        private void ResolveHorizontalPaintGeometry(TextBoxRenderTargetSettings settings,
+            TextBoxRenderViewport viewport,
+            Vector2Int layoutSizePixels,
+            Vector2Int outputSizePixels,
+            out Vector2 paintPosition,
+            out Rect clipRect)
+        {
+            var margin = ResolveMargin(settings, layoutSizePixels);
+            var layoutViewportSize = new Vector2(ContentViewportWidth(settings, layoutSizePixels),
+                ContentViewportHeight(settings, layoutSizePixels));
+            var autoOffset = AutoContentOffset(settings, layoutViewportSize);
+            paintPosition = new Vector2(margin.Left + autoOffset.x,
+                margin.Top + autoOffset.y - scrollOffset.y - viewport.VisualScrollOffset.y);
+            clipRect = ResolveClipRect(settings, viewport, margin, outputSizePixels);
+        }
+
+        private Vector2 ResolveHorizontalBlockPaintPosition(int index, Vector2 paintPosition,
+            float visualScrollOffsetX)
+        {
+            var offsetX = TextBoxNoWrapHorizontalLayout.ResolvePaintOffsetX(
+                index < blockAlignmentOffsetsX.Count ? blockAlignmentOffsetsX[index] : 0f,
+                scrollOffset.x,
+                visualScrollOffsetX) +
+                (index < blockMarginLefts.Count ? blockMarginLefts[index] : 0f) * fitScale;
+            var blockTop = index < blockTops.Count ? blockTops[index] : 0f;
+            return paintPosition + new Vector2(offsetX, blockTop * fitScale);
         }
 
         private Rect ResolveClipRect(TextBoxRenderTargetSettings settings,
@@ -2413,6 +2433,7 @@ namespace Milestro.Components.Internal
 
         private void RetireParagraphs()
         {
+            InvalidateGlyphLayouts();
             foreach (var oldParagraph in paragraphs)
             {
                 DisposeParagraphAfterPendingDraws(oldParagraph);

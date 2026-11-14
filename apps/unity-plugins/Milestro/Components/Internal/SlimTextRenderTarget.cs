@@ -1,6 +1,7 @@
 using System;
 using System.Text;
 using Milestro.Model;
+using Milestro.Configuration;
 using Milestro.Skia;
 using Milestro.Util;
 using UnityEngine;
@@ -37,16 +38,33 @@ namespace Milestro.Components.Internal
         private Texture? visibleTexture;
         private Rect visibleUvRect = DefaultUvRect;
         private Vector2Int logicalSizePixels = Vector2Int.one;
+        private SlimTextGlyphMeshOutput? glyphMeshOutput;
+        private GlyphLayoutSnapshot? glyphLayout;
+        private ReusableTextDrawSnapshot? glyphTextSnapshot;
+        private string? glyphText;
+        private float glyphRasterScale;
+        private bool observedGlyphMeshEnabled;
+        private int observedGlyphAtlasSize;
+        private int observedGlyphLimit;
+        private int observedGlyphPages;
+        private Vector2Int glyphLogicalSize;
 
-        public Texture? OutputTexture => surface?.Texture;
-        public Rect OutputUvRect => surface?.DisplayUvRect ?? DefaultUvRect;
-        public int OutputWidth => surface?.Width ?? 0;
-        public int OutputHeight => surface?.Height ?? 0;
-        public bool HasOutput => surface?.HasCompletedOutput ?? false;
+        internal SlimTextGlyphMeshOutput? GlyphMeshOutput => glyphMeshOutput;
+        internal bool UsesManagedStringText => !noAllocMode;
+        private bool GlyphMeshConfigurationChanged =>
+            observedGlyphMeshEnabled != (MilestroConfiguration.Configuration?.RenderSurface?.EnableTextGlyphMesh ?? false) ||
+            observedGlyphAtlasSize != (MilestroConfiguration.Configuration?.RenderSurface?.GlyphAtlasPageSize ?? 0) ||
+            observedGlyphLimit != (MilestroConfiguration.Configuration?.RenderSurface?.MaxTextGlyphMeshGlyphs ?? 0) ||
+            observedGlyphPages != (MilestroConfiguration.Configuration?.RenderSurface?.MaxGlyphAtlasPages ?? 0);
+
+        public Texture? OutputTexture => glyphMeshOutput?.Output.Texture ?? surface?.Texture;
+        public Rect OutputUvRect => glyphMeshOutput != null ? DefaultUvRect : surface?.DisplayUvRect ?? DefaultUvRect;
+        public int OutputWidth => glyphMeshOutput != null ? logicalSizePixels.x : surface?.Width ?? 0;
+        public int OutputHeight => glyphMeshOutput != null ? logicalSizePixels.y : surface?.Height ?? 0;
+        public bool HasOutput => glyphMeshOutput?.IsValid == true || (surface?.HasCompletedOutput ?? false);
         public long OutputVersion => outputVersion;
         public long VisualVersion => visualVersion;
-        internal bool HasPendingWork => surface == null ||
-                                        !surface.HasCompletedOutput ||
+        internal bool HasPendingWork => !HasOutput || GlyphMeshConfigurationChanged ||
                                         styleChanged ||
                                         paintChanged ||
                                         noAllocMode && noAllocTextChanged;
@@ -85,6 +103,7 @@ namespace Milestro.Components.Internal
                 throw new ArgumentOutOfRangeException(nameof(capacity));
             }
 
+            ClearGlyphMesh();
             DisposeFastSnapshot();
             noAllocMode = true;
             noAllocCapacityConfigured = true;
@@ -113,6 +132,7 @@ namespace Milestro.Components.Internal
             int length)
         {
             ThrowIfNoAllocRangeInvalid(buffer, offset, length);
+            ClearGlyphMesh();
             noAllocMode = true;
             EnsureNoAllocCapacityForText(buffer, offset, length);
             noAllocTextLength = length;
@@ -151,7 +171,8 @@ namespace Milestro.Components.Internal
             SlimTextRenderTargetSettings settings,
             bool useScreenSpaceRasterization,
             float desiredRasterScale,
-            UnityEngine.Object? logContext)
+            UnityEngine.Object? logContext,
+            bool allowGlyphMesh = false)
         {
             var profiling = SlimTextPipelineProfiler.Enabled;
             long phaseStart = 0;
@@ -161,6 +182,23 @@ namespace Milestro.Components.Internal
             }
 
             logicalSizePixels = NormalizeSize(sizePixels);
+            settings = ResolveAutoFontSizeSettings(settings);
+            var fontChanged = EnsureFont(settings);
+            var configuration = MilestroConfiguration.Configuration?.RenderSurface;
+            var configurationChanged = GlyphMeshConfigurationChanged;
+            observedGlyphMeshEnabled = configuration?.EnableTextGlyphMesh ?? false;
+            observedGlyphAtlasSize = configuration?.GlyphAtlasPageSize ?? 0;
+            observedGlyphLimit = configuration?.MaxTextGlyphMeshGlyphs ?? 0;
+            observedGlyphPages = configuration?.MaxGlyphAtlasPages ?? 0;
+            if (allowGlyphMesh && !noAllocMode && observedGlyphMeshEnabled &&
+                TryRebuildGlyphMesh(settings, fontChanged, configurationChanged,
+                    useScreenSpaceRasterization ? desiredRasterScale : 1f))
+            {
+                return true;
+            }
+            var hadGlyphMesh = glyphMeshOutput != null;
+            ClearGlyphMesh();
+            paintChanged |= hadGlyphMesh;
             if (profiling)
             {
                 phaseStart = SlimTextPipelineProfiler.Timestamp;
@@ -178,10 +216,7 @@ namespace Milestro.Components.Internal
                 phaseStart = SlimTextPipelineProfiler.Timestamp;
             }
 
-            settings = ResolveAutoFontSizeSettings(settings);
-
             var needsDraw = surfaceChanged;
-            var fontChanged = EnsureFont(settings);
             needsDraw |= fontChanged;
             if (profiling)
             {
@@ -247,6 +282,7 @@ namespace Milestro.Components.Internal
 
         public void Dispose()
         {
+            ClearGlyphMesh();
             DisposeFastSnapshot();
             DisposeFont();
             DisposeNoAllocSubmission();
@@ -261,6 +297,82 @@ namespace Milestro.Components.Internal
             noAllocCapacityConfigured = false;
             logicalSizePixels = Vector2Int.one;
             MarkOutputChanged();
+        }
+
+        private bool TryRebuildGlyphMesh(SlimTextRenderTargetSettings settings, bool fontChanged,
+            bool configurationChanged, float rasterScale)
+        {
+            if (font == null || !FloatUtil.IsFinite(rasterScale) || rasterScale <= 0f ||
+                settings.Text.Length > observedGlyphLimit)
+            {
+                return false;
+            }
+            if (glyphMeshOutput?.IsValid == true && !styleChanged && !paintChanged &&
+                !configurationChanged && glyphLogicalSize == logicalSizePixels &&
+                glyphRasterScale.Equals(rasterScale))
+            {
+                return true;
+            }
+
+            if (glyphLayout == null || fontChanged || glyphText != settings.Text)
+            {
+                glyphLayout?.Dispose();
+                glyphLayout = null;
+                var byteCount = Encoding.UTF8.GetByteCount(settings.Text);
+                if (glyphTextSnapshot == null || fontChanged || glyphTextSnapshot.Capacity < byteCount)
+                {
+                    glyphTextSnapshot?.Dispose();
+                    glyphTextSnapshot = new ReusableTextDrawSnapshot(font, Math.Max(64, byteCount), Color.white);
+                }
+                if (byteCount <= 512)
+                {
+                    Span<byte> buffer = stackalloc byte[512];
+                    var written = Encoding.UTF8.GetBytes(settings.Text.AsSpan(), buffer);
+                    glyphTextSnapshot.UpdateText(buffer.Slice(0, written));
+                }
+                else
+                {
+                    var bytes = Encoding.UTF8.GetBytes(settings.Text);
+                    glyphTextSnapshot.UpdateText(bytes, 0, bytes.Length);
+                }
+                glyphLayout = GlyphLayoutSnapshot.TryCreate(glyphTextSnapshot);
+                glyphText = settings.Text;
+            }
+            if (glyphLayout == null || glyphTextSnapshot == null)
+            {
+                return false;
+            }
+
+            var baseline = ResolveBaseline(settings, glyphTextSnapshot.MeasureText());
+            var runs = new[] { new TextGlyphMeshRun(glyphLayout, baseline, 1f, settings.TextColor) };
+            if (!TextGlyphAtlas.TryBuild(runs, rasterScale, logicalSizePixels,
+                    new Rect(0, 0, logicalSizePixels.x, logicalSizePixels.y), out var next))
+            {
+                return false;
+            }
+
+            glyphMeshOutput?.Dispose();
+            glyphMeshOutput = new SlimTextGlyphMeshOutput(next!);
+            glyphRasterScale = rasterScale;
+            glyphLogicalSize = logicalSizePixels;
+            DisposeFastSnapshot();
+            DisposeSurface();
+            styleChanged = false;
+            paintChanged = false;
+            MarkOutputChanged();
+            RenderEventCompleted?.Invoke(UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn);
+            return true;
+        }
+
+        private void ClearGlyphMesh()
+        {
+            glyphMeshOutput?.Dispose();
+            glyphMeshOutput = null;
+            glyphLayout?.Dispose();
+            glyphLayout = null;
+            glyphTextSnapshot?.Dispose();
+            glyphTextSnapshot = null;
+            glyphText = null;
         }
 
         private bool EnsureSurface(Vector2Int sizePixels,

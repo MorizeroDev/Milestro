@@ -7,6 +7,7 @@ set(MILESTRO_TEST_SOURCE
         src/test_paragraph_no_wrap.cpp
         src/test_paragraph_spacing.cpp
         src/test_retcode.cpp
+        src/test_glyph_layout_snapshot.cpp
         src/test_unicode_fallback.cpp
 )
 
@@ -24,6 +25,7 @@ target_compile_definitions(${MILESTRO_TEST_NAME} PRIVATE
         MILESTRO_TEST_ICUDTL_PATH="${PROJECT_SOURCE_DIR}/ext/icu-cmake/common/icudtl.dat"
         MILESTRO_TEST_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/SourceHanSans-VF.otf.woff2.bytes"
         MILESTRO_TEST_CHWS_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/LXGWWenKai-Regular.ttf"
+        MILESTRO_TEST_FALLBACK_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/LiberationSans-Bold.ttf.bytes"
         MILESTRO_TEST_EMOJI_FONT_PATH="${PROJECT_SOURCE_DIR}/tests/data/font/NotoColorEmoji.ttf.bytes"
 )
 

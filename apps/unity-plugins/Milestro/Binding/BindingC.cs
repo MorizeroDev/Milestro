@@ -483,6 +483,56 @@ out float advanceX);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaGlyphLayoutSnapshotCreateFromText")]
+        internal static extern unsafe long SkiaGlyphLayoutSnapshotCreateFromText(IntPtr source,
+out IntPtr ret);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaGlyphLayoutSnapshotCreateFromParagraph")]
+        internal static extern unsafe long SkiaGlyphLayoutSnapshotCreateFromParagraph(IntPtr source,
+out IntPtr ret);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaGlyphLayoutSnapshotDestroy")]
+        internal static extern unsafe long SkiaGlyphLayoutSnapshotDestroy(ref IntPtr ret);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaGlyphLayoutSnapshotGetGlyphCount")]
+        internal static extern unsafe long SkiaGlyphLayoutSnapshotGetGlyphCount(IntPtr snapshot,
+out ulong count);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaGlyphLayoutSnapshotCopyGlyphs")]
+        internal static extern unsafe long SkiaGlyphLayoutSnapshotCopyGlyphs(IntPtr snapshot,
+byte* data,
+ulong capacityBytes);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaGlyphLayoutSnapshotGetRasterBounds")]
+        internal static extern unsafe long SkiaGlyphLayoutSnapshotGetRasterBounds(IntPtr snapshot,
+ulong index,
+float scale,
+out int left,
+out int top,
+out int width,
+out int height);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaGlyphLayoutSnapshotRasterize")]
+        internal static extern unsafe long SkiaGlyphLayoutSnapshotRasterize(IntPtr snapshot,
+ulong index,
+float scale,
+byte* pixels,
+ulong capacity);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaPathDestroy")]
         internal static extern unsafe long SkiaPathDestroy(out IntPtr ret);
 

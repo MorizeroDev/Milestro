@@ -325,6 +325,12 @@ namespace Milestro.Skia.TextLayout
             );
         }
 
+        internal GlyphLayoutSnapshot? CreateGlyphLayoutSnapshot()
+        {
+            ThrowIfDisposed();
+            return GlyphLayoutSnapshot.TryCreate(this);
+        }
+
         public void SplitGlypl(IntPtr context, Vector2 position,
             MilestroCTypes.SkiaTextlayoutParagraphSplitGlyphCallback callback)
         {

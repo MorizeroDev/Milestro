@@ -236,6 +236,26 @@ MILESTRO_API int64_t MilestroSkiaReusableTextDrawSnapshotMeasureText(milestro::s
 MILESTRO_API int64_t
 MilestroSkiaReusableTextDrawSnapshotDestroy([[milize::RefType("ref")]] milestro::skia::SlimTextDrawSnapshot*& ret);
 
+MILESTRO_API int64_t MilestroSkiaGlyphLayoutSnapshotCreateFromText(milestro::skia::SlimTextDrawSnapshot* source,
+                                                                   milestro::skia::GlyphLayoutSnapshot*& ret);
+MILESTRO_API int64_t MilestroSkiaGlyphLayoutSnapshotCreateFromParagraph(milestro::skia::textlayout::Paragraph* source,
+                                                                        milestro::skia::GlyphLayoutSnapshot*& ret);
+MILESTRO_API int64_t MilestroSkiaGlyphLayoutSnapshotDestroy(
+        [[milize::RefType("ref")]] milestro::skia::GlyphLayoutSnapshot*& ret);
+MILESTRO_API int64_t MilestroSkiaGlyphLayoutSnapshotGetGlyphCount(milestro::skia::GlyphLayoutSnapshot* snapshot,
+                                                                  uint64_t& count);
+MILESTRO_API int64_t MilestroSkiaGlyphLayoutSnapshotCopyGlyphs(milestro::skia::GlyphLayoutSnapshot* snapshot,
+                                                              [[milize::CSharpType("byte*")]] uint8_t* data,
+                                                              uint64_t capacityBytes);
+MILESTRO_API int64_t MilestroSkiaGlyphLayoutSnapshotGetRasterBounds(milestro::skia::GlyphLayoutSnapshot* snapshot,
+                                                                    uint64_t index, float scale,
+                                                                    int32_t& left, int32_t& top,
+                                                                    int32_t& width, int32_t& height);
+MILESTRO_API int64_t MilestroSkiaGlyphLayoutSnapshotRasterize(milestro::skia::GlyphLayoutSnapshot* snapshot,
+                                                             uint64_t index, float scale,
+                                                             [[milize::CSharpType("byte*")]] uint8_t* pixels,
+                                                             uint64_t capacity);
+
 MILESTRO_API int64_t MilestroSkiaPathDestroy(milestro::skia::Path*& ret);
 MILESTRO_API int64_t MilestroSkiaPathToAATriangles(milestro::skia::Path* p,
                                                    milestro::skia::VertexData*& vertexData,

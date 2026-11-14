@@ -2,6 +2,7 @@
 #define MILESTRO_SKIA_TEXT_DRAW_SNAPSHOT_H
 
 #include "Font.h"
+#include "GlyphLayoutSnapshot.h"
 #include "SlimTextDrawSnapshot.h"
 #include <include/core/SkColor.h>
 #include <include/core/SkFont.h>
@@ -16,28 +17,19 @@ public:
     TextDrawSnapshot(const Font& sourceFont, std::string text, SkColor color)
         : font(sourceFont.unwrap()), text(std::move(text)) {
         paint.setColor(color);
+        layout.updateSimpleText(font, this->text.data(), this->text.size(), color);
     }
 
     MILESTRO_DECLARE_NON_COPYABLE(TextDrawSnapshot)
 
     void paintText(SkCanvas* canvas, SkScalar x, SkScalar baselineY) const override {
-        if (canvas == nullptr || text.empty()) {
-            return;
-        }
-
-        canvas->drawSimpleText(text.data(), text.size(), SkTextEncoding::kUTF8, x, baselineY, font, paint);
+        layout.paint(canvas, x, baselineY);
     }
 
+    const GlyphLayoutSnapshot* glyphLayout() const override { return &layout; }
+
     SkScalar measureText(SkRect* bounds) const override {
-        if (text.empty()) {
-            if (bounds != nullptr) {
-                bounds->setEmpty();
-            }
-
-            return 0.0f;
-        }
-
-        return font.measureText(text.data(), text.size(), SkTextEncoding::kUTF8, bounds);
+        return layout.measure(bounds);
     }
 
     const char* textData() const override {
@@ -49,6 +41,7 @@ public:
     }
 
 private:
+    GlyphLayoutSnapshot layout;
     SkFont font;
     SkPaint paint;
     std::string text;

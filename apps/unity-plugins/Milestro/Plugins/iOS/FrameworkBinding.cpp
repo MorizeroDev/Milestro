@@ -465,6 +465,51 @@ int64_t FrameworkBindingMilestroSkiaReusableTextDrawSnapshotDestroy(
     return MilestroSkiaReusableTextDrawSnapshotDestroy(ret);
 }
 
+int64_t FrameworkBindingMilestroSkiaGlyphLayoutSnapshotCreateFromText(milestro::skia::SlimTextDrawSnapshot* source,
+                                                                      milestro::skia::GlyphLayoutSnapshot*& ret) {
+    return MilestroSkiaGlyphLayoutSnapshotCreateFromText(source, ret);
+}
+
+int64_t
+FrameworkBindingMilestroSkiaGlyphLayoutSnapshotCreateFromParagraph(milestro::skia::textlayout::Paragraph* source,
+                                                                   milestro::skia::GlyphLayoutSnapshot*& ret) {
+    return MilestroSkiaGlyphLayoutSnapshotCreateFromParagraph(source, ret);
+}
+
+int64_t FrameworkBindingMilestroSkiaGlyphLayoutSnapshotDestroy(
+        [[milize::RefType("ref")]] milestro::skia::GlyphLayoutSnapshot*& ret) {
+    return MilestroSkiaGlyphLayoutSnapshotDestroy(ret);
+}
+
+int64_t FrameworkBindingMilestroSkiaGlyphLayoutSnapshotGetGlyphCount(milestro::skia::GlyphLayoutSnapshot* snapshot,
+                                                                     uint64_t& count) {
+    return MilestroSkiaGlyphLayoutSnapshotGetGlyphCount(snapshot, count);
+}
+
+int64_t FrameworkBindingMilestroSkiaGlyphLayoutSnapshotCopyGlyphs(milestro::skia::GlyphLayoutSnapshot* snapshot,
+                                                                  [[milize::CSharpType("byte*")]] uint8_t* data,
+                                                                  uint64_t capacityBytes) {
+    return MilestroSkiaGlyphLayoutSnapshotCopyGlyphs(snapshot, data, capacityBytes);
+}
+
+int64_t FrameworkBindingMilestroSkiaGlyphLayoutSnapshotGetRasterBounds(milestro::skia::GlyphLayoutSnapshot* snapshot,
+                                                                       uint64_t index,
+                                                                       float scale,
+                                                                       int32_t& left,
+                                                                       int32_t& top,
+                                                                       int32_t& width,
+                                                                       int32_t& height) {
+    return MilestroSkiaGlyphLayoutSnapshotGetRasterBounds(snapshot, index, scale, left, top, width, height);
+}
+
+int64_t FrameworkBindingMilestroSkiaGlyphLayoutSnapshotRasterize(milestro::skia::GlyphLayoutSnapshot* snapshot,
+                                                                 uint64_t index,
+                                                                 float scale,
+                                                                 [[milize::CSharpType("byte*")]] uint8_t* pixels,
+                                                                 uint64_t capacity) {
+    return MilestroSkiaGlyphLayoutSnapshotRasterize(snapshot, index, scale, pixels, capacity);
+}
+
 int64_t FrameworkBindingMilestroSkiaPathDestroy(milestro::skia::Path*& ret) {
     return MilestroSkiaPathDestroy(ret);
 }

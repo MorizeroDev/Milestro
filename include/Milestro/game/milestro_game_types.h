@@ -42,6 +42,8 @@ class TextDrawSnapshot;
 
 class ReusableTextDrawSnapshot;
 
+class GlyphLayoutSnapshot;
+
 class Path;
 
 class Svg;

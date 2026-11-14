@@ -13,7 +13,8 @@ namespace Milestro.Components.Internal
 {
     [DisallowMultipleComponent]
     [AddComponentMenu("Milestro/Internal/Slim Text Render Texture Producer")]
-    public class SlimTextRenderTextureProducer : RenderTextureProducer, ILayoutElement
+    public class SlimTextRenderTextureProducer : RenderTextureProducer, ILayoutElement,
+        ITextPreparationParticipant
     {
 #if UNITY_EDITOR_WIN
         internal const string DefaultFontFamily = "Microsoft YaHei UI";
@@ -52,6 +53,9 @@ namespace Milestro.Components.Internal
         [NonSerialized] private TextSizingResult fixedSizingCache;
         [NonSerialized] private bool fixedSizingValid;
         [NonSerialized] private bool rebuildRequested = true;
+        [NonSerialized] private bool worldSpaceConsumer;
+        [NonSerialized] private Milestro.Components.CanvasSlimText? canvasPresenter;
+        [NonSerialized] private bool observedGlyphMeshAllowed;
         [NonSerialized] private Canvas? canvasCache;
         [NonSerialized] private bool canvasLookupAttempted;
         [NonSerialized] private int canvasLookupRetryFrame;
@@ -72,6 +76,8 @@ namespace Milestro.Components.Internal
         public override bool HasOutput => renderTarget?.HasOutput ?? false;
         public override long OutputVersion => renderTarget?.OutputVersion ?? 0;
         public override long VisualVersion => renderTarget?.VisualVersion ?? 0;
+        internal SlimTextGlyphMeshOutput? GlyphMeshOutput => renderTarget?.GlyphMeshOutput;
+        internal bool UsesManagedStringText => renderTarget?.UsesManagedStringText ?? true;
 
         public float effectiveFontSize => ResolveSizing().EffectiveFontSize;
 
@@ -134,12 +140,14 @@ namespace Milestro.Components.Internal
         public void CalculateLayoutInputHorizontal()
         {
             rebuildRequested = true;
+            RequestPreparation();
             ResolveSizing();
         }
 
         public void CalculateLayoutInputVertical()
         {
             rebuildRequested = true;
+            RequestPreparation();
             ResolveSizing();
         }
 
@@ -429,7 +437,9 @@ namespace Milestro.Components.Internal
             canvasCache = null;
             canvasLookupAttempted = false;
             rectTransformCache = GetComponent<RectTransform>();
-            if (GetComponent<Milestro.Components.WorldSpaceSlimText>() != null)
+            canvasPresenter = GetComponent<Milestro.Components.CanvasSlimText>();
+            worldSpaceConsumer = GetComponent<Milestro.Components.WorldSpaceSlimText>() != null;
+            if (worldSpaceConsumer)
             {
                 m_screenSpaceRasterization = false;
             }
@@ -438,6 +448,7 @@ namespace Milestro.Components.Internal
 
         protected virtual void OnDisable()
         {
+            TextPreparationScheduler.Cancel(this);
             // Keep the render target alive across disable/enable cycles; OnDestroy owns final release.
         }
 
@@ -448,6 +459,8 @@ namespace Milestro.Components.Internal
 
         private void Update()
         {
+            var allowGlyphMesh = canvasPresenter != null && canvasPresenter.SupportsGlyphMesh;
+            rebuildRequested |= observedGlyphMeshAllowed != allowGlyphMesh;
             if (!rebuildRequested &&
                 !RenderTarget.HasPendingWork &&
                 !RasterizationContextChanged())
@@ -455,7 +468,31 @@ namespace Milestro.Components.Internal
                 return;
             }
 
-            RebuildResources();
+            if (worldSpaceConsumer || canvasPresenter == null)
+            {
+                TextPreparationScheduler.Cancel(this);
+                RebuildResources();
+            }
+            else
+            {
+                RequestPreparation();
+            }
+        }
+
+        bool ITextPreparationParticipant.IsPreparationActive => this && isActiveAndEnabled;
+
+        void ITextPreparationParticipant.PrepareText() => RebuildResources();
+
+        internal void RequestPreparation()
+        {
+            if (canvasPresenter == null)
+            {
+                canvasPresenter = GetComponent<Milestro.Components.CanvasSlimText>();
+            }
+            if (!worldSpaceConsumer)
+            {
+                TextPreparationScheduler.Request(this);
+            }
         }
 
         private void OnTransformParentChanged()
@@ -465,6 +502,7 @@ namespace Milestro.Components.Internal
             rasterContextValid = false;
             canvasCache = null;
             canvasLookupAttempted = false;
+            RequestPreparation();
 #if UNITY_EDITOR
             if (isActiveAndEnabled)
             {
@@ -500,6 +538,7 @@ namespace Milestro.Components.Internal
             // preferred size. Invalidate rendering, but do not dirty layout from the
             // resulting RectTransform change or the fitter can request another pass.
             renderTarget?.MarkPropertiesChanged();
+            RequestPreparation();
 #if UNITY_EDITOR
             QueueEditorRebuild();
 #endif
@@ -512,6 +551,7 @@ namespace Milestro.Components.Internal
                 MarkPropertiesChanged();
             }
 
+            TextPreparationScheduler.Cancel(this);
             RebuildResources();
         }
 
@@ -612,6 +652,10 @@ namespace Milestro.Components.Internal
 
         private void RebuildResources()
         {
+            observedGlyphMeshAllowed = canvasPresenter != null && canvasPresenter.SupportsGlyphMesh;
+            var previousOutputVersion = OutputVersion;
+            var previousTexture = OutputTexture;
+            var previousHasOutput = HasOutput;
             rebuildRequested = false;
             var profiling = SlimTextPipelineProfiler.Enabled;
             using var profilerScope = profiling
@@ -632,7 +676,8 @@ namespace Milestro.Components.Internal
                 CurrentSettings(),
                 useScreenSpaceRasterization,
                 desiredRasterScale,
-                this);
+                this,
+                observedGlyphMeshAllowed);
             if (!rebuilt || useScreenSpaceRasterization && !rasterizationResolved)
             {
                 rebuildRequested = true;
@@ -644,6 +689,12 @@ namespace Milestro.Components.Internal
             if (profiling)
             {
                 SlimTextPipelineProfiler.ProducerRebuildMs += SlimTextPipelineProfiler.ElapsedMs(phaseStart);
+            }
+
+            if (previousOutputVersion != OutputVersion || previousTexture != OutputTexture ||
+                previousHasOutput != HasOutput)
+            {
+                NotifyOutputChanged();
             }
         }
 
@@ -887,6 +938,7 @@ namespace Milestro.Components.Internal
             intrinsicMeasurement = null;
             SetLayoutDirty();
             RenderTarget.MarkPropertiesChanged();
+            RequestPreparation();
 #if UNITY_EDITOR
             if (isActiveAndEnabled)
             {
@@ -910,6 +962,7 @@ namespace Milestro.Components.Internal
                 SetLayoutDirty();
             }
             RenderTarget.MarkPropertiesChanged();
+            RequestPreparation();
 #if UNITY_EDITOR
             if (isActiveAndEnabled)
             {
@@ -925,6 +978,7 @@ namespace Milestro.Components.Internal
             m_editorSkippedRenderRetries = 0;
 #endif
             RenderTarget.MarkPaintChanged();
+            RequestPreparation();
 #if UNITY_EDITOR
             if (isActiveAndEnabled)
             {
