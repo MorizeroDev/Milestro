@@ -1,5 +1,6 @@
 using System;
 using Milestro.Model;
+using Milestro.Skia;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -12,6 +13,29 @@ namespace Milestro.Components.Internal
         [NonSerialized] private Texture? texture;
         [NonSerialized] private Rect uvRect = new Rect(0, 0, 1, 1);
         [NonSerialized] private bool warnedSiblingGraphic;
+        [NonSerialized] private TextGlyphMeshOutput? glyphMeshOutput;
+        [NonSerialized] private bool observedGlyphMeshCapability;
+
+        internal bool SupportsGlyphMeshPresentation => !m_enableColorGradient && base.material == defaultMaterial &&
+            color.a >= 1f && canvasRenderer.GetAlpha() >= 1f && canvasRenderer.GetInheritedAlpha() >= 1f &&
+            !TextGlyphPresentationSupport.HasSoftRectMask(this);
+
+        internal void SetGlyphMeshOutput(TextGlyphMeshOutput? output)
+        {
+            if (ReferenceEquals(glyphMeshOutput, output))
+            {
+                return;
+            }
+            glyphMeshOutput = output;
+            SetVerticesDirty();
+            SetMaterialDirty();
+        }
+
+        public override Material material
+        {
+            get => glyphMeshOutput?.IsValid == true ? TextGlyphAtlas.Material! : base.material;
+            set => base.material = value;
+        }
 
         [SerializeField]
         private bool m_enableColorGradient;
@@ -130,6 +154,25 @@ namespace Milestro.Components.Internal
             EnsureInitializedGraphicColor();
             WarnSiblingGraphics();
             base.OnEnable();
+            observedGlyphMeshCapability = SupportsGlyphMeshPresentation;
+            UnityEngine.Canvas.preWillRenderCanvases += RefreshGlyphMeshCapability;
+        }
+
+        protected override void OnDisable()
+        {
+            UnityEngine.Canvas.preWillRenderCanvases -= RefreshGlyphMeshCapability;
+            base.OnDisable();
+        }
+
+        private void RefreshGlyphMeshCapability()
+        {
+            var capability = SupportsGlyphMeshPresentation;
+            if (observedGlyphMeshCapability == capability)
+            {
+                return;
+            }
+            observedGlyphMeshCapability = capability;
+            GetComponent<TextBoxRenderTextureProducer>()?.RequestPreparation();
         }
 
         protected override void OnPopulateMesh(VertexHelper vh)
@@ -140,6 +183,10 @@ namespace Milestro.Components.Internal
 
         protected void PopulateDisplayMesh(VertexHelper vh, Rect displayRect, Rect gradientRect)
         {
+            if (TryPopulateGlyphMesh(vh, displayRect))
+            {
+                return;
+            }
             vh.Clear();
 
             var targetTexture = Texture;
@@ -174,6 +221,16 @@ namespace Milestro.Components.Internal
             }
 
             PopulateGradientGrid(vh, bounds, color, gradient, gradientBounds, scaleX, scaleY);
+        }
+
+        protected bool TryPopulateGlyphMesh(VertexHelper vertices, Rect displayRect)
+        {
+            if (glyphMeshOutput == null)
+            {
+                return false;
+            }
+            glyphMeshOutput.Populate(vertices, displayRect, color);
+            return true;
         }
 
         private void PopulateUniformQuad(VertexHelper vh, Vector4 bounds, Color baseColor, float scaleX,
@@ -320,6 +377,12 @@ namespace Milestro.Components.Internal
 
         public override void SetNativeSize()
         {
+            if (glyphMeshOutput?.IsValid == true)
+            {
+                rectTransform.anchorMax = rectTransform.anchorMin;
+                rectTransform.sizeDelta = glyphMeshOutput.LogicalSize;
+                return;
+            }
             var targetTexture = mainTexture;
             if (targetTexture == null)
             {

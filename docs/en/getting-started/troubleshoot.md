@@ -81,7 +81,7 @@ disables Milestro's automatic initialization. See
 
 A `StandaloneInputModule` may still provide ordinary UI navigation, but it does
 not provide the strict focus session required by `TextInput`. See
-[Hybrid input](../reference/hybrid-input.md).
+[Hybrid input](../development/hybrid-input.md).
 
 ## Input focus works, but the IME behaves differently
 

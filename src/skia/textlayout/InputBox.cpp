@@ -1802,7 +1802,8 @@ SkScalar InputBox::caretXForDisplayOffset(size_t displayUtf8,
     }
 
     const auto lineStartUtf8 = LineMetricStartUtf8(lineMetrics, displayMap);
-    const auto lineEndUtf8 = LineMetricEndUtf8(lineMetrics, displayMap);
+    const auto lineEndUtf8 = lineMetrics.fHardBreak ? LineMetricEndUtf8(lineMetrics, displayMap)
+                                                    : LineMetricEndIncludingNewlineUtf8(lineMetrics, displayMap);
     if (displayUtf8 <= lineStartUtf8) {
         return ToFloat(lineMetrics.fLeft);
     }

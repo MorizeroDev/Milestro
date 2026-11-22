@@ -13,6 +13,18 @@ int64_t MilestroSkiaTextlayoutTextStyleCreate(milestro::skia::textlayout::TextSt
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaTextlayoutTextStyleCreateRichTextBase(milestro::skia::textlayout::TextStyle *source,
+                                                       milestro::skia::textlayout::TextStyle *&ret) try {
+    ret = nullptr;
+    if (source == nullptr) {
+        return MILESTRO_API_RET_FAILED;
+    }
+    ret = new milestro::skia::textlayout::TextStyle(source->richTextBase());
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaTextlayoutTextStyleDestroy(milestro::skia::textlayout::TextStyle *&ret) try {
     delete ret;
     ret = nullptr;

@@ -6,6 +6,18 @@
 `TextBox` 与自动创建的 `TextBoxRenderTextureProducer`；短单行标签使用
 [SlimText](slim-text.md)，可编辑输入使用 [TextInput](input.md)。
 
+## 更新文字
+
+直接修改内容和样式即可。Canvas 组件会收集连续修改，并在 UI 布局结束后统一处理，
+因此普通更新不需要手动刷新。
+
+如果代码需要立即刷新布局，可以调用 `producer.RebuildOutput(forceText: false)`。
+不过，纹理绘制可能稍后才完成，所以这不表示新文字已经显示在屏幕上。
+
+默认使用纹理渲染。部分 Canvas 文字还可以尝试实验性字形网格（Mesh Glyph）。
+使用阴影、彩色 emoji 或整体淡出等不支持的效果时，整个文本框会自动回到纹理渲染，
+但通常仍能共享纹理图集。完整条件和配置见[渲染参考](../reference/rendering.md#experimental-glyph-meshes)。
+
 ## 样式层次
 
 | 层次 | 属性 | 控制内容 |
@@ -234,7 +246,7 @@ ID 不自动触发跳转；滚动示例见[按元素 ID 定位](scrolling.md#jum
 `Milestro.RichText.Markdown` 模块在 Editor 和 Player 场景加载前自动注册
 **Markdown**（`markdown`）。预编译包已包含模块与 `Markdig.dll`，Unity 项目必须使用
 **.NET Standard 2.1** API Compatibility Level。源码使用者先按
-[构建说明](../reference/build.md#markdig) 编译 Markdig。
+[构建说明](../development/build.md#markdig) 编译 Markdig。
 
 ```csharp
 producer.richTextParserId = "markdown";
@@ -293,29 +305,7 @@ producer.content = "<margin=1em><width=75%><line-indent=2em>" +
 [模块 README](../../../apps/unity-plugins/Milestro.RichText.TMPro/README.md)，
 底层能力差异见[迁移指南](coming-from-tmpro.md)。
 
-## 自定义解析器与载荷
-
-在 `Milestro.RichTextParser` 命名空间中，实现
-`IRichTextParser.Parse(string source, RichTextParseContext context)`，返回 `ParagraphPayload`。
-通过 `IRichTextParserProvider` 提供稳定的 `Id`、Inspector 的 `DisplayName` 与 `CreateParser()`，
-在文本框使用前调用 `RichTextParserService.Register(provider)`；需要 Editor 预览时也应在 Editor 注册。
-Inspector 列出已注册解析器，也接受手动输入 id。
-
-id 区分大小写，必须匹配 `[A-Za-z_][A-Za-z0-9_-]*`，会存入序列化数据；已发布的 id 应保持稳定，
-需要新名称时可另注册别名。显示名称可自由修改。同 id 注册会替换 provider 并清除缓存实例，
-`Unregister(id)` 移除注册。每次注册只创建并共享一个解析器实例，解析器必须在调用之间保持无状态。
-
-每次解析新建 `ParagraphPayloadBuilder`。`AppendText` 不传 `TextStyleState` 时继承组件样式；
-`BeginBlock` 开始新的堆叠段落，不插入分隔字符，块内换行用 `\n`。
-`BeginLink`/`EndLink` 定义不可嵌套的链接，`AppendPlaceholder` 添加尺寸为正且有限的占位框。
-builder 自动跟踪 UTF-16 偏移，每个占位符占一个字符，`Build()` 自动关闭未结束的链接。
-`RichTextParseContext` 提供 `AllowViewportBlockMargins`、`Locale` 和可选的非致命诊断集合 `Issues`。
-
-需要按组件 locale 转换大小写时，使用 `new ParagraphPayloadBuilder(context.Locale)`。
-builder 应用 `TextStyleState.TextTransform`，跟踪跨样式片段及占位符的 `NoWrap` 范围，
-UTF-16 偏移按转换后的文本计算。
-`BeginBlock(ParagraphStyleState, TextStyleState)` 复制段落设置，并记录用于解析缩进的文字样式；
-`EndBlock()` 结束当前块。块边界和 `Build()` 会提交待完成的禁止换行范围。
+如果要接入自己的标记格式，请查阅[自定义富文本解析器](../development/rich-text-parsers.md)。
 
 <a id="vertical-writing"></a>
 ## 竖排

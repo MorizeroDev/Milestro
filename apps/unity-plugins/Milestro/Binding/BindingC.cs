@@ -203,6 +203,16 @@ int fallbackToSystem);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontRegistryReplaceFontFamilyKeywordMappings")]
+        internal static extern unsafe long SkiaFontRegistryReplaceFontFamilyKeywordMappings(void** keywords,
+ulong* keywordSizes,
+void** families,
+int* familyKinds,
+uint* familyCounts,
+uint mappingCount);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaFontRegistrySetFontFamilyKeywordMapping")]
         internal static extern unsafe long SkiaFontRegistrySetFontFamilyKeywordMapping(byte* keyword,
 ulong keywordSize,
@@ -483,6 +493,93 @@ out float advanceX);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaGlyphLayoutSnapshotCreateFromText")]
+        internal static extern unsafe long SkiaGlyphLayoutSnapshotCreateFromText(IntPtr source,
+out IntPtr ret);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaReusableTextDrawSnapshotCopyGlyphs")]
+        internal static extern unsafe long SkiaReusableTextDrawSnapshotCopyGlyphs(IntPtr source,
+byte* fontData,
+byte* glyphData,
+ulong capacityBytes,
+out ulong count);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaReusableTextDrawSnapshotGetRasterBounds")]
+        internal static extern unsafe long SkiaReusableTextDrawSnapshotGetRasterBounds(IntPtr source,
+ulong index,
+float scale,
+float phaseX,
+float phaseY,
+out int left,
+out int top,
+out int width,
+out int height);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaReusableTextDrawSnapshotRasterize")]
+        internal static extern unsafe long SkiaReusableTextDrawSnapshotRasterize(IntPtr source,
+ulong index,
+float scale,
+float phaseX,
+float phaseY,
+byte* pixels,
+ulong capacity);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaGlyphLayoutSnapshotCreateFromParagraph")]
+        internal static extern unsafe long SkiaGlyphLayoutSnapshotCreateFromParagraph(IntPtr source,
+out IntPtr ret);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaGlyphLayoutSnapshotDestroy")]
+        internal static extern unsafe long SkiaGlyphLayoutSnapshotDestroy(ref IntPtr ret);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaGlyphLayoutSnapshotGetGlyphCount")]
+        internal static extern unsafe long SkiaGlyphLayoutSnapshotGetGlyphCount(IntPtr snapshot,
+out ulong count);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaGlyphLayoutSnapshotCopyGlyphs")]
+        internal static extern unsafe long SkiaGlyphLayoutSnapshotCopyGlyphs(IntPtr snapshot,
+byte* data,
+ulong capacityBytes);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaGlyphLayoutSnapshotGetRasterBounds")]
+        internal static extern unsafe long SkiaGlyphLayoutSnapshotGetRasterBounds(IntPtr snapshot,
+ulong index,
+float scale,
+float phaseX,
+float phaseY,
+out int left,
+out int top,
+out int width,
+out int height);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaGlyphLayoutSnapshotRasterize")]
+        internal static extern unsafe long SkiaGlyphLayoutSnapshotRasterize(IntPtr snapshot,
+ulong index,
+float scale,
+float phaseX,
+float phaseY,
+byte* pixels,
+ulong capacity);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaPathDestroy")]
         internal static extern unsafe long SkiaPathDestroy(out IntPtr ret);
 
@@ -730,8 +827,7 @@ out float maxIntrinsicWidth);
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutParagraphResolveNoWrapContentWidth")]
         internal static extern unsafe long SkiaTextlayoutParagraphResolveNoWrapContentWidth(IntPtr p,
-void* text,
-ulong size,
+ulong utf16Length,
 out float width);
 
 
@@ -1680,6 +1776,12 @@ out int halfLeading);
 
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleCreate")]
         internal static extern unsafe long SkiaTextlayoutTextStyleCreate(out IntPtr ret);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaTextlayoutTextStyleCreateRichTextBase")]
+        internal static extern unsafe long SkiaTextlayoutTextStyleCreateRichTextBase(IntPtr source,
+out IntPtr ret);
 
 
 

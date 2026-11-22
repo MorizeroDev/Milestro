@@ -2,9 +2,57 @@
 
 [English](rendering.md) | [简体中文](../../zh/reference/rendering.md)
 
-Milestro text components render into a `RenderTexture` through a native Skia
-surface, then present that texture in uGUI or a world-space mesh. This page
-documents the render-surface controls that are separate from paragraph layout.
+By default, Milestro renders text into a `RenderTexture` and displays it in uGUI
+or a world-space mesh. Some Canvas text can also use the glyph mesh option below.
+This page covers rendering modes, batching, and their configuration.
+
+## Experimental glyph meshes
+
+Texture rendering remains the default. To try shared glyph meshes for Canvas
+`TextBox` and string-based `CanvasSlimText`, set this before creating text:
+
+```csharp
+Milestro.Configuration.MilestroConfiguration.Configuration.RenderSurface
+    .EnableTextGlyphMesh = true;
+```
+
+The current path requires Gamma color space and white source text. You can
+color that output with a Graphic RGB tint, but setting a nonwhite source text
+color uses texture rendering instead.
+
+### When does it use textures instead?
+
+Fallback applies to the whole component, including when only one text run
+needs an unsupported feature.
+
+| Condition | Result |
+| --- | --- |
+| The option is off, or the component is world-space text, `TextInput`, or uses SlimText's UTF-8 update path | Keeps texture rendering |
+| Linear color space, nonwhite source text, or a color font such as color emoji | Uses texture rendering |
+| Vertical text, inline placeholders, backgrounds, shadows, underline, or strikethrough | Uses texture rendering |
+| A vertex gradient or custom presentation material | Uses texture rendering |
+| Graphic alpha, CanvasRenderer alpha, or inherited CanvasGroup alpha is below one | Uses texture rendering |
+| An ancestor `RectMask2D` masks the text and has nonzero softness | Uses texture rendering |
+| `CanvasSlimText` has Raycast Target enabled, or has a `Mask` or `RectMask2D` on its own object | Uses texture rendering |
+| The output exceeds the glyph limit, cannot fit one glyph atlas page, or the device lacks the required shader or Alpha8 support | Uses texture rendering |
+
+A hard-edged ancestor `RectMask2D` does not itself force fallback. Source text
+opacity and Graphic opacity are different: white source text can have alpha,
+while fading the whole Graphic or CanvasGroup selects texture rendering.
+
+An output must fit one page. By default, the atlas allows two 2048 × 2048 pages
+and up to 2048 glyphs per component. Capacity limits also select texture rendering.
+See [configuration](configuration.md#render-surface) for the settings. Keep this
+option experimental and check appearance and performance on your target platform.
+Implementation and test details are in the [developer documentation](../development/text-pipeline.md).
+
+### Does fallback create a separate texture?
+
+Usually, compatible components still share the render-texture atlas when
+`EnableAtlas` is enabled. They use separate textures when that atlas is disabled,
+the requested region is too large, or atlas allocation is rejected. Falling
+back from glyph meshes therefore does not by itself mean a separate texture
+or Canvas for each label.
 
 ## Draw call batching
 
@@ -25,40 +73,20 @@ surfaces.AtlasPageSize = 2048;
 Each RGBA page costs approximately `AtlasPageSize * AtlasPageSize * 4` bytes
 (16 MiB at the default size, 4 MiB at 1024). Smaller pages reduce the minimum
 allocation for sparse interfaces; larger pages fit more labels into a shared
-texture. Padding and fragmentation consume additional space, and live regions
-are never repacked. Empty pages are released after pending draws.
+texture. Padding and fragmentation consume additional space.
 
 Oversized regions, invalid page sizes, or rejected allocations fall back to
 standalone textures under the existing raster policy. Set `EnableAtlas = false`
-to disable sharing. Color spaces, device epochs, and configuration changes never
-share a page.
+to disable sharing.
 
-There are two separate reductions:
+Compatible uGUI graphics can batch because they sample the same texture.
+Canvas boundaries, materials, masks, clipping, and transparent ordering can
+still split batches. The atlas also combines page updates and skips unchanged
+regions to reduce submission overhead. Sharing a texture does not guarantee one
+draw call for an arbitrary scene. World-space mesh presenters are not GPU-instanced.
 
-- Compatible uGUI graphics can batch because they sample the same texture.
-  Canvas boundaries, materials, masks, clipping, and transparent ordering can
-  still split batches. Sharing a texture does not guarantee one draw call for an
-  arbitrary scene, and world-space mesh presenters are not GPU-instanced.
-- Dirty regions are collected and sent as one native submission per dirty page
-  per flush, with one submission in flight per page. Unchanged regions retain
-  their pixels; a static page produces no new native submissions. This reduces
-  render-target switches and submission overhead, not necessarily every Skia
-  glyph draw.
-
-Native submission dispatch uses a bounded backlog per render route (currently
-256 submissions). This limit is backpressure against a stalled render drain,
-not a guarantee that every independent target can enter the queue in one frame.
-When a frame submits more targets than a route can accept, excess enqueues
-return a deferred, retryable status instead of growing the backlog or dropping
-the update. The managed layer leaves the producer dirty and retries after the
-route drains, so a large standalone burst can spread across frames. Atlas
-batching reduces the number of submissions by sharing one submission per dirty
-page; it does not change the per-route limit.
-
-Region updates clear one pixel of transparent padding, clip to the content, and
-apply that target's raster scale. Draw snapshots and retired regions remain alive
-until their pending submission completes. The atlas uses the existing surface
-budget and device-epoch recovery rather than a separate texture budget.
+When many standalone textures update in one frame, some updates can take later
+frames to complete.
 
 ## Render texture backends
 
@@ -69,44 +97,32 @@ when a native backend is unavailable.
 
 ### Direct3D 11
 
-The Direct3D 11 backend rasterizes on the CPU into a persistent per-target Skia
-surface and uploads pixels with `UpdateSubresource`. The cached surface preserves
-incremental atlas updates and is released with its Unity target or on a device
-reset. It performs full-surface CPU uploads; it is not GPU text rasterization.
+The Direct3D 11 backend rasterizes text on the CPU, then uploads the full texture
+to the GPU.
 
 ### Vulkan
 
 Vulkan has two per-target implementations:
 
 - `UnitySkiaVulkanBackend.Direct` (default): Skia Vulkan draws directly into the
-  Unity target using paired prepare/submit events. Queue and shutdown lifetime
-  risks still require device validation.
-- `UnitySkiaVulkanBackend.StagingCopy`: Skia rasterizes on the CPU and records a
-  buffer-to-image upload. A bounded three-slot ring retires storage using Unity
-  safe-frame progress. This path performs full-surface CPU copies/uploads.
+  Unity target.
+- `UnitySkiaVulkanBackend.StagingCopy`: Skia rasterizes on the CPU, then copies
+  and uploads the full texture to the GPU.
 
 Set `RenderSurface.VulkanBackend` before creating component render surfaces, or
 set `VulkanBackend` on an explicit `UnitySkiaRenderTextureDescriptor`. The
 selection is fixed for each target's lifetime; changing the configuration is not
 a live switch for existing surfaces.
 
-Android Vulkan requires `MILESTRO_ENABLE_ANDROID_VULKAN_RENDER=ON` (the default),
-an API 24+ target, and the NDK Vulkan library. An API 23 GLES-only build
-explicitly disables that option. Desktop Vulkan and desktop OpenGL remain behind
-`MILESTRO_ENABLE_DESKTOP_VULKAN_RENDER` and
-`MILESTRO_ENABLE_DESKTOP_OPENGL_RENDER`.
+Android Vulkan requires API 24 or newer. Desktop Vulkan and desktop OpenGL are
+experimental build options; see the [build guide](../development/build.md).
 
 ## Compatibility checks
 
-- MSAA render targets are rejected by descriptor normalization.
+- MSAA render textures are not supported.
 - The GLES backend rejects BGRA32; use Auto/RGBA32.
-- Deploy managed bindings and the native plugin from the same build. Atlas
-  region commands require render payload ABI 4. Native binaries with a
-  different payload ABI are rejected even when atlas sharing is disabled.
-- Rebuild every shipping platform's native plugin when updating managed
-  bindings.
-- Enable `MILESTRO_RENDER_DEBUG_LOG` at configure time for verbose native and
-  managed render-flow logging.
+- Update managed code and the native plugin together from the same revision.
+  See the [build guide](../development/build.md) for source builds.
 
 ## Surface budgets
 

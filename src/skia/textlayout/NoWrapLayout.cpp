@@ -1,6 +1,6 @@
 #include "Milestro/skia/textlayout/NoWrapLayout.h"
 
-#include "Milestro/skia/textlayout/InputBox.h"
+#include "modules/skunicode/include/SkUnicode.h"
 
 #include <algorithm>
 #include <cmath>
@@ -17,21 +17,30 @@ bool IsFinitePositive(SkScalar value) {
     return std::isfinite(value) && value > 0.0f;
 }
 
-std::string SafeTextCopy(const char* text, size_t length) {
+size_t Utf16Length(const char* text, size_t length) {
     if (text == nullptr || length == 0) {
-        return std::string();
+        return 0;
     }
 
-    return std::string(text, length);
+    size_t count = 0;
+    const bool mapped = SkUnicode::extractUtfConversionMapping(
+            SkSpan<const char>(text, length),
+            [&count](size_t) { ++count; },
+            [](size_t) {});
+    return mapped && count > 0 ? count - 1 : length;
 }
 
 } // namespace
 
 SkScalar ResolveNoWrapContentWidth(::skia::textlayout::Paragraph* paragraph, const char* text, size_t length) {
-    return ResolveNoWrapContentWidth(paragraph, SafeTextCopy(text, length));
+    return ResolveNoWrapContentWidth(paragraph, Utf16Length(text, length));
 }
 
 SkScalar ResolveNoWrapContentWidth(::skia::textlayout::Paragraph* paragraph, const std::string& text) {
+    return ResolveNoWrapContentWidth(paragraph, text.data(), text.size());
+}
+
+SkScalar ResolveNoWrapContentWidth(::skia::textlayout::Paragraph* paragraph, size_t utf16Length) {
     if (paragraph == nullptr) {
         return 0.0f;
     }
@@ -49,8 +58,6 @@ SkScalar ResolveNoWrapContentWidth(::skia::textlayout::Paragraph* paragraph, con
         width = std::max(width, static_cast<double>(lineMetrics.fWidth));
     }
 
-    const auto displayMap = TextBoundaryMap(text);
-    const auto utf16Length = displayMap.utf16Length();
     if (utf16Length > 0) {
         auto boxes = paragraph->getRectsForRange(0,
                                                  static_cast<unsigned>(utf16Length),

@@ -55,4 +55,4 @@ input.gameObject.AddComponent<TextInputAccessibility>();
 ```
 
 公告模板和回声长度可序列化以便本地化，设计与平台缺口见
-[TextInput 无障碍设计](../reference/accessibility-design.md)。
+[TextInput 无障碍设计](../development/accessibility-design.md)。

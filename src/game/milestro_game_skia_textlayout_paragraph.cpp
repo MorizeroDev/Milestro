@@ -222,10 +222,9 @@ int64_t MilestroSkiaTextlayoutParagraphGetMaxIntrinsicWidth(milestro::skia::text
 }
 
 int64_t MilestroSkiaTextlayoutParagraphResolveNoWrapContentWidth(milestro::skia::textlayout::Paragraph *p,
-                                                                 void *text,
-                                                                 uint64_t size,
+                                                                 uint64_t utf16Length,
                                                                  float &width) try {
-    width = p->resolveNoWrapContentWidth(static_cast<const char *>(text), static_cast<size_t>(size));
+    width = p->resolveNoWrapContentWidth(static_cast<size_t>(utf16Length));
     return MILESTRO_API_RET_OK;
 } catch (...) {
     return MILESTRO_API_RET_FAILED;

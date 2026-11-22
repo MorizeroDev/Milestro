@@ -39,6 +39,7 @@ public:
 
     void ClearFontFamilyKeywordMappings();
     void SetFontFamilyKeywordMapping(std::string keyword, std::vector<FontFamilyToken> mapping);
+    void ReplaceFontFamilyKeywordMappings(FontFamilyKeywordMap mappings);
 
     std::vector<FontFamilyCandidate> ResolveFontFamilyCandidates(
             const std::vector<FontFamilyToken> &tokens) const;

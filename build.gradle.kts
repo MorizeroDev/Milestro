@@ -313,6 +313,7 @@ tasks {
             listOf("milestro::skia::Font") to "IntPtr",
             listOf("milestro::skia::SlimTextDrawSnapshot") to "IntPtr",
             listOf("milestro::skia::TextDrawSnapshot") to "IntPtr",
+            listOf("milestro::skia::GlyphLayoutSnapshot") to "IntPtr",
             listOf("milestro::skia::Path") to "IntPtr",
             listOf("milestro::skia::Svg") to "IntPtr",
             listOf("milestro::skia::VertexData") to "IntPtr",

@@ -14,14 +14,45 @@ namespace Milestro.Skia.TextLayout
     /// </summary>
     public class TextStyle : DisposableNativeObject
     {
+        private readonly bool importedNativeStyle;
+
         internal TextStyle(IntPtr ptr)
             : base(ptr)
         {
+            importedNativeStyle = true;
+        }
+
+        private TextStyle(IntPtr ptr, TextStyle source) : base(ptr)
+        {
+            _cachedFontFamilyTokens = source._cachedFontFamilyTokens;
+            _cachedFontFamily = FontFamilyParser.ToSourceFamilyList(source._cachedFontFamilyTokens);
+            _cachedLocale = source._cachedLocale;
+            if (source._cachedTextShadow.Count != 0)
+            {
+                _cachedTextShadow.AddRange(source._cachedTextShadow);
+            }
         }
 
         public TextStyle()
         {
             ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleCreate(out ptr));
+        }
+
+        internal TextStyle CreateRichTextBase()
+        {
+            ThrowIfDisposed();
+            FontRegistry.SyncFontFamilyConfiguration();
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutTextStyleCreateRichTextBase(NativePtr,
+                out var nativePtr));
+            var result = new TextStyle(nativePtr, this);
+            if (importedNativeStyle)
+            {
+                result.SetFontFamilyTokens(_cachedFontFamilyTokens);
+                result.Locale = _cachedLocale;
+                result.ResetShadow();
+                result.AddShadows(_cachedTextShadow);
+            }
+            return result;
         }
 
         protected override void DisposeUnmanaged()

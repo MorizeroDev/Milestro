@@ -40,5 +40,13 @@ namespace Milestro.Configuration
         public bool EnableAtlas { get; set; } = true;
 
         public int AtlasPageSize { get; set; } = 2048;
+
+        public bool EnableTextGlyphMesh { get; set; }
+
+        public int GlyphAtlasPageSize { get; set; } = 2048;
+
+        public int MaxGlyphAtlasPages { get; set; } = 2;
+
+        public int MaxTextGlyphMeshGlyphs { get; set; } = 2048;
     }
 }

@@ -241,10 +241,15 @@ namespace Milestro.Tests
             ExpectWarning("i");
             ExpectWarning("size");
             ExpectWarning("size");
-            var mismatched = Parse("<b>x</i>y</b>");
+            var mismatched = Parse("<b>x</i>y</b>z");
             var invalid = Parse("<size=huge>x</size>");
-            Assert.That(PlainText(mismatched), Is.EqualTo("x</i>y"));
-            Assert.That(Segment(mismatched, "x</i>y").TextStyle.FontWeight, Is.EqualTo(700));
+            Assert.That(PlainText(mismatched), Is.EqualTo("x</i>yz"));
+            foreach (var segment in mismatched.Blocks.SelectMany(block => block.Segments)
+                         .Where(segment => segment.Content != "z"))
+            {
+                Assert.That(segment.TextStyle.FontWeight, Is.EqualTo(700), segment.Content);
+            }
+            Assert.That(Segment(mismatched, "z").TextStyle.FontWeight, Is.Null);
             Assert.That(PlainText(invalid), Is.EqualTo("<size=huge>x</size>"));
         }
 

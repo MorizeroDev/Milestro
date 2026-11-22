@@ -109,34 +109,18 @@ namespace Milestro.Extensions
 
         public static TextStyle ToTextStyle(this TextStyleState t, TextStyle baseTextStyle)
         {
-            var ret = new TextStyle();
-            ret.DecorationMode = baseTextStyle.DecorationMode;
-            ret.DecorationColor = baseTextStyle.DecorationColor;
-            ret.DecorationStyle = baseTextStyle.DecorationStyle;
-            ret.DecorationThicknessMultiplier = baseTextStyle.DecorationThicknessMultiplier;
-
-            ret.Decoration =
-                baseTextStyle.Decoration |
-                (t.Underline ? TextDecoration.Underline : TextDecoration.NoDecoration) |
-                (t.Strikethrough ? TextDecoration.LineThrough : TextDecoration.NoDecoration);
-
-            baseTextStyle.GetFontStyle(out int weight, out var width, out var slant);
-            if (t.FontWeight.HasValue)
+            var ret = baseTextStyle.CreateRichTextBase();
+            if (t.Underline || t.Strikethrough)
             {
-                weight = t.FontWeight.Value;
+                ret.Decoration = baseTextStyle.Decoration |
+                    (t.Underline ? TextDecoration.Underline : TextDecoration.NoDecoration) |
+                    (t.Strikethrough ? TextDecoration.LineThrough : TextDecoration.NoDecoration);
             }
-
-            if (t.FontWidth.HasValue)
+            if (t.FontWeight.HasValue || t.FontWidth.HasValue || t.FontSlant.HasValue)
             {
-                width = t.FontWidth.Value;
+                baseTextStyle.GetFontStyle(out var weight, out var width, out var slant);
+                ret.SetFontStyle(t.FontWeight ?? weight, t.FontWidth ?? width, t.FontSlant ?? slant);
             }
-
-            if (t.FontSlant.HasValue)
-            {
-                slant = t.FontSlant.Value;
-            }
-
-            ret.SetFontStyle(weight, width, slant);
             if (t.FontFamilyTokens != null)
             {
                 ret.SetFontFamilyTokens(t.FontFamilyTokens);
@@ -145,38 +129,36 @@ namespace Milestro.Extensions
             {
                 ret.SetFontFamilies(new List<string>(t.FontFamilies));
             }
-            else
+            if (t.Color.HasValue || t.Alpha.HasValue)
             {
-                ret.SetFontFamilyTokens(baseTextStyle.GetFontFamilyTokens());
+                var color = t.Color ?? baseTextStyle.Color;
+                if (t.Alpha.HasValue)
+                {
+                    color.a *= t.Alpha.Value;
+                }
+                ret.Color = color;
             }
-
-            var color = t.Color ?? baseTextStyle.Color;
-            if (t.Alpha.HasValue)
-            {
-                color.a *= t.Alpha.Value;
-            }
-
-            ret.Color = color;
 
             if (t.BackgroundColor.HasValue)
             {
                 ret.BackgroundColor = t.BackgroundColor.Value;
             }
-            else if (baseTextStyle.HasBackground)
+            var needsFontSize = t.FontSize.HasValue || t.FontSizeScale.HasValue ||
+                                t.IsSmallCapsLowercase || t.BaselineShiftEm.HasValue;
+            var unscaledFontSize = needsFontSize ? t.FontSize ?? baseTextStyle.FontSize : 0f;
+            if (t.FontSize.HasValue || t.FontSizeScale.HasValue || t.IsSmallCapsLowercase)
             {
-                ret.BackgroundColor = baseTextStyle.BackgroundColor;
+                var fontSizeScale = t.FontSizeScale ?? 1f;
+                if (t.IsSmallCapsLowercase)
+                {
+                    fontSizeScale *= global::Milestro.RichTextParser.RichTextParser.SmallCapsFontSizeScale;
+                }
+                ret.FontSize = unscaledFontSize * fontSizeScale;
             }
-
-            var unscaledFontSize = t.FontSize ?? baseTextStyle.FontSize;
-            var fontSizeScale = t.FontSizeScale ?? 1f;
-            if (t.IsSmallCapsLowercase)
+            if (t.Locale != null)
             {
-                fontSizeScale *= global::Milestro.RichTextParser.RichTextParser.SmallCapsFontSizeScale;
+                ret.Locale = t.Locale;
             }
-
-            ret.FontSize = unscaledFontSize * fontSizeScale;
-
-            ret.Locale = t.Locale ?? baseTextStyle.Locale;
             if (t.BaselineShift.HasValue)
             {
                 // Rich text state follows the TMPro convention (positive raises the
@@ -188,28 +170,15 @@ namespace Milestro.Extensions
             {
                 ret.BaselineShift = baseTextStyle.BaselineShift - t.BaselineShiftEm.Value * unscaledFontSize;
             }
-            else
-            {
-                ret.BaselineShift = baseTextStyle.BaselineShift;
-            }
-
             if (t.LineHeight.HasValue)
             {
                 ret.Height = t.LineHeight.Value;
                 ret.HeightOverride = true;
             }
-            else
+            if (t.LetterSpacing.HasValue)
             {
-                ret.Height = baseTextStyle.Height;
-                ret.HeightOverride = baseTextStyle.HeightOverride;
+                ret.LetterSpacing = t.LetterSpacing.Value;
             }
-
-            ret.HalfLeading = baseTextStyle.HalfLeading;
-            ret.LetterSpacing = t.LetterSpacing ?? baseTextStyle.LetterSpacing;
-            ret.WordSpacing = baseTextStyle.WordSpacing;
-            ret.TextBaseline = baseTextStyle.TextBaseline;
-
-            ret.CopyFontFeaturesFrom(baseTextStyle);
             foreach (var operation in t.FontFeatureOperations)
             {
                 switch (operation.Type)
@@ -227,14 +196,6 @@ namespace Milestro.Extensions
                         throw new ArgumentOutOfRangeException();
                 }
             }
-
-
-            var shadowList = baseTextStyle.GetShadows();
-            if (shadowList.Count > 0)
-            {
-                ret.AddShadows(shadowList);
-            }
-
             return ret;
         }
 

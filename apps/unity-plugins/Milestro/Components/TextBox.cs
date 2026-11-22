@@ -66,6 +66,7 @@ namespace Milestro.Components
         private readonly ScrollElasticReleasePolicy scrollElasticReleaseY =
             new ScrollElasticReleasePolicy();
         [NonSerialized] private long observedOutputVersion = long.MinValue;
+        internal long ObservedOutputVersion => observedOutputVersion;
         [NonSerialized] private TextBoxRenderTextureProducer? observedProducer;
         [NonSerialized] private bool flowModeActive;
         [NonSerialized] private bool flowVisible;
@@ -94,6 +95,8 @@ namespace Milestro.Components
             set => ProducerComponent().content = value;
         }
 
+        public override Material defaultMaterial => TextTextureMaterial.Material ?? base.defaultMaterial;
+
         protected override void OnEnable()
         {
             base.OnEnable();
@@ -113,6 +116,7 @@ namespace Milestro.Components
             scrollAxisLock.Reset();
             SetObservedProducer(null);
             Texture = null;
+            SetGlyphMeshOutput(null);
             observedOutputVersion = long.MinValue;
             LayoutChanged?.Invoke();
             ResetLinkHover(notify: true);
@@ -132,21 +136,10 @@ namespace Milestro.Components
                 ? TextBoxPipelineProfiler.UpdateMarker.Auto()
                 : default;
             var producer = ProducerComponent();
-            try
+            if (!flowModeActive)
             {
-                producer.RebuildOutput(forceText: false);
-                if (!flowModeActive)
-                {
-                    TickScrollTweens(producer);
-                    TickElastic(producer);
-                }
-            }
-            finally
-            {
-                // A failed rebuild already invalidates the producer output.
-                // Applying in finally guarantees the old Texture/UvRect is
-                // never left visible while the exception propagates.
-                ApplyProducerOutput(producer, force: false);
+                TickScrollTweens(producer);
+                TickElastic(producer);
             }
             RefreshLinkHover();
         }
@@ -229,7 +222,7 @@ namespace Milestro.Components
         {
             var producer = ProducerComponent();
             producer.screenSpaceRasterization = true;
-            producer.RebuildOutput(forceText);
+            producer.RequestPreparation(forceText);
             ApplyProducerOutput(producer, forceApply);
         }
 
@@ -1339,7 +1332,7 @@ namespace Milestro.Components
 
             if (changed)
             {
-                producer.RebuildOutput(forceText: false);
+                producer.RequestPreparation();
             }
         }
 
@@ -1468,7 +1461,7 @@ namespace Milestro.Components
             }
 
             producer.visualScrollOffset = nextVisualOffset;
-            producer.RebuildOutput(forceText: false);
+            producer.RequestPreparation();
         }
 
         private ScrollElasticSettings ElasticSettings()
@@ -1573,10 +1566,13 @@ namespace Milestro.Components
 
         private void OnProducerOutputChanged()
         {
-            if (observedProducer != null && !observedProducer.HasOutput)
+            if (observedProducer != null)
             {
                 ApplyProducerOutput(observedProducer, force: false);
-                InvalidateLinkInteractionOnLayoutFailure();
+                if (!observedProducer.HasOutput)
+                {
+                    InvalidateLinkInteractionOnLayoutFailure();
+                }
             }
 #if UNITY_EDITOR
             if (!Application.isPlaying && this && isActiveAndEnabled)
@@ -1595,6 +1591,7 @@ namespace Milestro.Components
 
         private void ApplyProducerOutput(TextBoxRenderTextureProducer producer, bool force)
         {
+            SetGlyphMeshOutput(producer.HasOutput ? producer.GlyphMeshOutput : null);
             var profiling = TextBoxPipelineProfiler.Enabled;
             using var applyScope = profiling
                 ? TextBoxPipelineProfiler.ApplyOutputMarker.Auto()

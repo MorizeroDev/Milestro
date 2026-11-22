@@ -15,9 +15,24 @@ This page is the feature guide for paragraph text. It covers `TextBox`,
 | Editable field | `TextInput` |
 | Low-level paragraph construction | `ParagraphBuilder` + `Paragraph` |
 
-`TextBox` is a uGUI `Graphic` that presents a render texture. The producer
+`TextBox` is a uGUI `Graphic` that normally presents a render texture. The producer
 owns the text and its style. `CanvasSlimText` and `WorldSpaceSlimText` are
 different components, not modes of `TextBox`. See [SlimText](slim-text.md).
+
+## Updating text
+
+Set content and styles as needed. Canvas components collect consecutive changes
+and prepare them after UI layout, so ordinary updates need no manual refresh.
+
+If your code needs to refresh layout immediately, call
+`producer.RebuildOutput(forceText: false)`. Texture presentation may complete
+later, so this call does not guarantee that the new text is already on screen.
+
+Texture rendering is the default. Some Canvas text can use experimental glyph
+meshes. Unsupported effects such as shadows, color emoji, or fading the whole
+Graphic switch the entire text box to textures, usually still sharing a texture
+atlas. See the [rendering reference](../reference/rendering.md#experimental-glyph-meshes)
+for the full conditions and configuration.
 
 ## The three text style layers
 
@@ -32,6 +47,11 @@ Paragraph rendering reads three groups of settings from the producer:
 This separation is intentional. For example, changing `wrapMode` changes line
 breaking, while changing `paragraphStyle.textAlign` changes how the resulting
 lines are aligned inside the paragraph.
+
+`TextBox.color` sets the source text color, matching CSS `color` and TMPro.
+The preferred producer property is `producer.textStyle.textColor`. To multiply
+the rendered output by a uGUI tint, set `((Graphic)textBox).color` instead;
+vertex gradients multiply that tint independently of the source text color.
 
 ## Set text and basic style
 
@@ -402,7 +422,7 @@ The `Milestro.RichText.Markdown` module registers **Markdown** (`markdown`)
 automatically in the Editor and before scene load in Player builds. The
 prebuilt package includes the module and `Markdig.dll`. The Unity project must
 use the **.NET Standard 2.1** API compatibility level. When working from source,
-first [build Markdig](../reference/build.md#quick-local-build).
+first [build Markdig](../development/build.md#quick-local-build).
 
 ```csharp
 producer.richTextParserId = "markdown";
@@ -473,33 +493,7 @@ subset of TMP syntax; see the [module README](../../../apps/unity-plugins/Milest
 for supported units and limitations, and the [migration guide](coming-from-tmpro.md)
 for differences in underlying capabilities.
 
-## Custom parsers and payloads
-
-Implement `IRichTextParser.Parse(string source, RichTextParseContext context)`
-to return a `ParagraphPayload`, and expose it through an
-`IRichTextParserProvider`. Register the provider before a text box needs its
-id; register in the Editor as well if Inspector previews are needed.
-The registry shares one parser instance per registration, so parsers must be
-stateless across calls. Registering the same id replaces the provider and
-discards its cached instance. `Unregister(id)` removes it.
-
-Create a fresh `ParagraphPayloadBuilder` per parse. `AppendText` inherits
-component styling when no `TextStyleState` is supplied; `BeginBlock` starts
-a stacked paragraph without inserting a separator character. Use `\n` for
-line breaks within a block, `BeginLink`/`EndLink` for non-nested clickable
-ranges, and `AppendPlaceholder` for a positive, finite inline box. The builder
-tracks UTF-16 offsets, counts each placeholder as one character, and closes
-an open link on `Build()`. `RichTextParseContext` provides
-`AllowViewportBlockMargins`, `Locale`, and an optional `Issues` collection for
-non-fatal diagnostics.
-
-Pass `context.Locale` to `new ParagraphPayloadBuilder(context.Locale)` when
-case conversion should use the component locale. The builder applies
-`TextStyleState.TextTransform`, tracks `NoWrap` ranges across styled text and
-placeholders, and measures UTF-16 offsets after transformation.
-`BeginBlock(ParagraphStyleState, TextStyleState)` copies paragraph settings and
-captures the text style used to resolve indentation; `EndBlock()` ends the
-current block. Block boundaries and `Build()` finalize pending no-wrap ranges.
+For your own markup format, see [custom rich-text parsers](../development/rich-text-parsers.md).
 
 ## Vertical writing
 

@@ -14,11 +14,11 @@
 using namespace milestro::skia::textlayout;
 using namespace milestro::skia;
 
-SkScalar Paragraph::resolveNoWrapContentWidth(const char* text, size_t length) const {
+SkScalar Paragraph::resolveNoWrapContentWidth(size_t utf16Length) const {
     if (paragraph != nullptr && paragraph->isVertical()) {
         throw std::logic_error("vertical-rl does not support no-wrap width probing; use getLayoutMetrics()");
     }
-    return ResolveNoWrapContentWidth(paragraph.get(), text, length);
+    return ResolveNoWrapContentWidth(paragraph.get(), utf16Length);
 }
 
 bool Paragraph::hitTestRange(size_t startUtf16, size_t endUtf16, SkScalar x, SkScalar y) const {

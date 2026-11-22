@@ -62,4 +62,4 @@ MSAA 目标不支持，GLES 不接受 BGRA32；桌面 OpenGL/Vulkan 为实验选
 
 TextInput 和下拉框的专用手柄适配尚未实现或设备验证，不能以其他 uGUI 控件的导航推断支持。
 下拉框不支持 World Space Canvas，移动 safe area、触摸与性能待真机验证。
-屏幕阅读器结构化光标、选区和辅助技术直接修改文字受 Unity 模块限制，见 [无障碍设计](accessibility-design.md)。
+屏幕阅读器结构化光标、选区和辅助技术直接修改文字受 Unity 模块限制，见[无障碍设计](../development/accessibility-design.md)。

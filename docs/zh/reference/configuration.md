@@ -74,9 +74,16 @@ ResetKeywordMapping("heading") 删除覆盖并恢复该关键字内置行为。
 | VulkanBackend | Direct | Direct / StagingCopy |
 | EnableAtlas | true | 共享兼容区域 |
 | AtlasPageSize | 2048 | 图集页边长 |
+| EnableTextGlyphMesh | false | 启用实验性 Canvas 字形网格 |
+| GlyphAtlasPageSize | 2048 | 字形图集页边长 |
+| MaxGlyphAtlasPages | 2 | 共享字形图集的最大页数 |
+| MaxTextGlyphMeshGlyphs | 2048 | 每组件网格输出的最大字形数 |
 
 RGBA 页约占 `AtlasPageSize * AtlasPageSize * 4` 字节，2048 页约 16 MiB。
 EnableAtlas=false 请求独立纹理；详见 [渲染](rendering.md)。
+
+字形图集与渲染纹理图集是两套独立配置。开启字形网格后，不支持的内容仍使用纹理渲染，
+适用范围见[实验性字形网格](rendering.md#experimental-glyph-meshes)。
 
 ## 世界空间材质
 

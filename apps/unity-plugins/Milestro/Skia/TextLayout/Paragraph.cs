@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Milestro.Binding;
+using Milestro.Components.Internal;
 using Milestro.Model;
 using Paraparty.UnityNative.Base;
 using UnityEngine;
@@ -38,11 +39,15 @@ namespace Milestro.Skia.TextLayout
         public void Layout(float width)
         {
             ThrowIfDisposed();
+            using var measurement = TextPipelineDiagnostics.Measure(TextPipelineStage.ParagraphLayout);
+            TextPipelineDiagnostics.Record(TextPipelineCounter.ParagraphLayouts);
             ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphLayout(NativePtr, width));
         }
 
         public void LayoutWithInlineExtent(float inlineExtent)
         {
+            using var measurement = TextPipelineDiagnostics.Measure(TextPipelineStage.ParagraphLayout);
+            TextPipelineDiagnostics.Record(TextPipelineCounter.ParagraphLayouts);
             ExitCodeUtil.ThrowIfFailed(
                 BindingC.SkiaTextlayoutParagraphLayoutWithInlineExtent(NativePtr, inlineExtent));
         }
@@ -177,19 +182,14 @@ namespace Milestro.Skia.TextLayout
             }
         }
 
-        public unsafe float ResolveNoWrapContentWidth(string text)
+        public float ResolveNoWrapContentWidth(string text)
         {
             ThrowIfVerticalLegacyEntryPoint("ResolveNoWrapContentWidth");
-            var payload = Encoding.UTF8.GetBytes(text ?? "");
-            fixed (byte* textPtr = payload)
-            {
-                ExitCodeUtil.ThrowIfFailed(
-                    BindingC.SkiaTextlayoutParagraphResolveNoWrapContentWidth(NativePtr,
-                        textPtr,
-                        (ulong)payload.Length,
-                        out var ret));
-                return ret;
-            }
+            ExitCodeUtil.ThrowIfFailed(
+                BindingC.SkiaTextlayoutParagraphResolveNoWrapContentWidth(NativePtr,
+                    (ulong)(text?.Length ?? 0),
+                    out var ret));
+            return ret;
         }
 
         public static float ResolveNoWrapProbeLayoutWidth(string text, float fontSize, float viewportWidth)
@@ -323,6 +323,12 @@ namespace Milestro.Skia.TextLayout
             ExitCodeUtil.ThrowIfFailed(
                 BindingC.SkiaTextlayoutParagraphPaint(NativePtr, canvas.NativePtr, position.x, position.y)
             );
+        }
+
+        internal GlyphLayoutSnapshot? CreateGlyphLayoutSnapshot()
+        {
+            ThrowIfDisposed();
+            return GlyphLayoutSnapshot.TryCreate(this);
         }
 
         public void SplitGlypl(IntPtr context, Vector2 position,

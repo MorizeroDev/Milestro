@@ -116,6 +116,13 @@ MILESTRO_API int64_t MilestroSkiaFontRegistryResolveTypefaceFromFamilyTokens(
         float size,
         int32_t fallbackToSystem);
 MILESTRO_API int64_t MilestroSkiaFontRegistryResetFontFamilyKeywordMappings();
+MILESTRO_API int64_t MilestroSkiaFontRegistryReplaceFontFamilyKeywordMappings(
+        [[milize::CSharpType("void**")]] uint8_t** keywords,
+        [[milize::CSharpType("ulong*")]] uint64_t* keywordSizes,
+        [[milize::CSharpType("void**")]] uint8_t** families,
+        [[milize::CSharpType("int*")]] int32_t* familyKinds,
+        [[milize::CSharpType("uint*")]] uint32_t* familyCounts,
+        uint32_t mappingCount);
 MILESTRO_API int64_t MilestroSkiaFontRegistrySetFontFamilyKeywordMapping(
         [[milize::CSharpType("byte*")]] uint8_t* keyword,
         uint64_t keywordSize,
@@ -236,6 +243,35 @@ MILESTRO_API int64_t MilestroSkiaReusableTextDrawSnapshotMeasureText(milestro::s
 MILESTRO_API int64_t
 MilestroSkiaReusableTextDrawSnapshotDestroy([[milize::RefType("ref")]] milestro::skia::SlimTextDrawSnapshot*& ret);
 
+MILESTRO_API int64_t MilestroSkiaGlyphLayoutSnapshotCreateFromText(milestro::skia::SlimTextDrawSnapshot* source,
+                                                                   milestro::skia::GlyphLayoutSnapshot*& ret);
+MILESTRO_API int64_t MilestroSkiaReusableTextDrawSnapshotCopyGlyphs(milestro::skia::SlimTextDrawSnapshot* source,
+    [[milize::CSharpType("byte*")]] uint8_t* fontData,
+    [[milize::CSharpType("byte*")]] uint8_t* glyphData, uint64_t capacityBytes, uint64_t& count);
+MILESTRO_API int64_t MilestroSkiaReusableTextDrawSnapshotGetRasterBounds(milestro::skia::SlimTextDrawSnapshot* source,
+    uint64_t index, float scale, float phaseX, float phaseY,
+    int32_t& left, int32_t& top, int32_t& width, int32_t& height);
+MILESTRO_API int64_t MilestroSkiaReusableTextDrawSnapshotRasterize(milestro::skia::SlimTextDrawSnapshot* source,
+    uint64_t index, float scale, float phaseX, float phaseY,
+    [[milize::CSharpType("byte*")]] uint8_t* pixels, uint64_t capacity);
+MILESTRO_API int64_t MilestroSkiaGlyphLayoutSnapshotCreateFromParagraph(milestro::skia::textlayout::Paragraph* source,
+                                                                        milestro::skia::GlyphLayoutSnapshot*& ret);
+MILESTRO_API int64_t MilestroSkiaGlyphLayoutSnapshotDestroy(
+        [[milize::RefType("ref")]] milestro::skia::GlyphLayoutSnapshot*& ret);
+MILESTRO_API int64_t MilestroSkiaGlyphLayoutSnapshotGetGlyphCount(milestro::skia::GlyphLayoutSnapshot* snapshot,
+                                                                  uint64_t& count);
+MILESTRO_API int64_t MilestroSkiaGlyphLayoutSnapshotCopyGlyphs(milestro::skia::GlyphLayoutSnapshot* snapshot,
+                                                              [[milize::CSharpType("byte*")]] uint8_t* data,
+                                                              uint64_t capacityBytes);
+MILESTRO_API int64_t MilestroSkiaGlyphLayoutSnapshotGetRasterBounds(milestro::skia::GlyphLayoutSnapshot* snapshot,
+                                                                    uint64_t index, float scale, float phaseX, float phaseY,
+                                                                    int32_t& left, int32_t& top,
+                                                                    int32_t& width, int32_t& height);
+MILESTRO_API int64_t MilestroSkiaGlyphLayoutSnapshotRasterize(milestro::skia::GlyphLayoutSnapshot* snapshot,
+                                                             uint64_t index, float scale, float phaseX, float phaseY,
+                                                             [[milize::CSharpType("byte*")]] uint8_t* pixels,
+                                                             uint64_t capacity);
+
 MILESTRO_API int64_t MilestroSkiaPathDestroy(milestro::skia::Path*& ret);
 MILESTRO_API int64_t MilestroSkiaPathToAATriangles(milestro::skia::Path* p,
                                                    milestro::skia::VertexData*& vertexData,
@@ -343,8 +379,7 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphGetMaxIntrinsicWidth(milestr
                                                                          float& maxIntrinsicWidth);
 MILESTRO_API int64_t
 MilestroSkiaTextlayoutParagraphResolveNoWrapContentWidth(milestro::skia::textlayout::Paragraph* p,
-                                                         [[milize::CSharpType("void*")]] void* text,
-                                                         uint64_t size,
+                                                         uint64_t utf16Length,
                                                          float& width);
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphHitTestRange(milestro::skia::textlayout::Paragraph* p,
                                                                  uint64_t startUtf16,
@@ -768,6 +803,9 @@ MILESTRO_API int64_t MilestroSkiaTextlayoutStrutStyleGetHalfLeading(milestro::sk
                                                                     int32_t& halfLeading);
 
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleCreate(milestro::skia::textlayout::TextStyle*& ret);
+MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleCreateRichTextBase(
+        milestro::skia::textlayout::TextStyle* source,
+        milestro::skia::textlayout::TextStyle*& ret);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleDestroy(milestro::skia::textlayout::TextStyle*& ret);
 MILESTRO_API int64_t MilestroSkiaTextlayoutTextStyleSetColor(milestro::skia::textlayout::TextStyle* s,
                                                              int32_t r,

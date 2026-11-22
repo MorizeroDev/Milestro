@@ -35,7 +35,7 @@ Unity 通过 `.bytes` 将其作为 `TextAsset` 导入，加载键是 `Milestro/i
 版本在 `[1.16.0,2.0.0-0)`；Active Input Handling 为 New 或 Both。
 检查 `HybridInputRuntime.Diagnostics` 的 `SelectionStatus`、`ProviderId`、`LastDiagnostic`。
 旧 `StandaloneInputModule` 可做普通 UI 导航，但无法让 `TextInput` 获得严格焦点会话。
-详见 [HybridInput](../reference/hybrid-input.md)。
+详见 [HybridInput 开发文档](../development/hybrid-input.md)。
 
 ## 聚焦正常，但 IME 行为不同
 

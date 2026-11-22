@@ -13,8 +13,12 @@ namespace Milestro.Components.Internal
 {
     [DisallowMultipleComponent]
     [AddComponentMenu("Milestro/Internal/Text Box Render Texture Producer")]
-    public class TextBoxRenderTextureProducer : RenderTextureProducer, ITextIntrinsicMeasurement
+    public partial class TextBoxRenderTextureProducer : RenderTextureProducer, ITextIntrinsicMeasurement,
+        ITextPreparationParticipant
     {
+        [NonSerialized] private bool worldSpaceConsumer;
+        [NonSerialized] private Milestro.Components.TextBox? canvasPresenter;
+        [NonSerialized] private bool preparationForceText;
         [TextArea(3, 10)]
         [SerializeField]
         private string m_content = "";
@@ -611,9 +615,11 @@ namespace Milestro.Components.Internal
 
         protected virtual void OnEnable()
         {
+            canvasPresenter = GetComponent<Milestro.Components.TextBox>();
             rectTransformCache = GetComponent<RectTransform>();
             CaptureObservedRectSize();
-            if (GetComponent<Milestro.Components.WorldSpaceTextBox>() != null)
+            worldSpaceConsumer = GetComponent<Milestro.Components.WorldSpaceTextBox>() != null;
+            if (worldSpaceConsumer)
             {
                 m_screenSpaceRasterization = false;
             }
@@ -624,6 +630,8 @@ namespace Milestro.Components.Internal
 
         protected virtual void OnDisable()
         {
+            TextPreparationScheduler.Cancel(this);
+            preparationForceText = false;
             m_visualScrollOffset = Vector2.zero;
             DisposeRenderTarget();
             intrinsicMeasurement?.Dispose();
@@ -642,11 +650,51 @@ namespace Milestro.Components.Internal
             canvasCache = null;
             canvasLookupAttempted = false;
             rasterContextValid = false;
+            RequestPreparation();
         }
 
         private void Update()
         {
-            RebuildResources(forceText: false);
+            UpdateGlyphMeshPresentationCapability();
+            ObserveMarginChanges();
+            ObserveVerticalLayoutChanges();
+            if (preparationForceText || renderTarget == null || renderTarget.HasPendingWork ||
+                RasterizationContextChanged())
+            {
+                if (worldSpaceConsumer || canvasPresenter == null)
+                {
+                    TextPreparationScheduler.Cancel(this);
+                    var forceText = preparationForceText;
+                    preparationForceText = false;
+                    RebuildResources(forceText);
+                }
+                else
+                {
+                    RequestPreparation();
+                }
+            }
+        }
+
+        bool ITextPreparationParticipant.IsPreparationActive => this && isActiveAndEnabled;
+
+        void ITextPreparationParticipant.PrepareText()
+        {
+            var forceText = preparationForceText;
+            preparationForceText = false;
+            RebuildResources(forceText);
+        }
+
+        internal void RequestPreparation(bool forceText = false)
+        {
+            preparationForceText |= forceText;
+            if (canvasPresenter == null)
+            {
+                canvasPresenter = GetComponent<Milestro.Components.TextBox>();
+            }
+            if (!worldSpaceConsumer)
+            {
+                TextPreparationScheduler.Request(this);
+            }
         }
 
 #if UNITY_EDITOR
@@ -695,6 +743,7 @@ namespace Milestro.Components.Internal
                 renderTarget != null && renderTarget.IsVertical)
             {
                 RenderTarget.MarkPaintChanged();
+                RequestPreparation();
             }
             else
             {
@@ -731,6 +780,10 @@ namespace Milestro.Components.Internal
 
         private void RebuildResources(bool forceText)
         {
+            UpdateGlyphMeshPresentationCapability();
+            var previousOutputVersion = OutputVersion;
+            var previousTexture = OutputTexture;
+            var previousHasOutput = HasOutput;
             ObserveMarginChanges();
             ObserveVerticalLayoutChanges();
             if (!forceText &&
@@ -765,6 +818,14 @@ namespace Milestro.Components.Internal
                 using (profiling ? TextBoxPipelineProfiler.ViewportMarker.Auto() : default)
                 {
                     viewport = CurrentViewportWithRasterization(currentSize);
+                }
+
+                if (m_screenSpaceRasterization && !rasterContextValid)
+                {
+#if UNITY_EDITOR
+                    QueueEditorRebuild();
+#endif
+                    return;
                 }
 
                 bool rebuilt;
@@ -832,10 +893,21 @@ namespace Milestro.Components.Internal
                 Debug.LogException(error, this);
 #endif
             }
+            finally
+            {
+                if (HasOutput && (previousOutputVersion != OutputVersion || previousTexture != OutputTexture ||
+                    previousHasOutput != HasOutput))
+                {
+                    NotifyOutputChanged();
+                }
+            }
         }
 
         public void RebuildOutput(bool forceText)
         {
+            forceText |= preparationForceText;
+            preparationForceText = false;
+            TextPreparationScheduler.Cancel(this);
             RebuildResources(forceText);
         }
 
@@ -970,7 +1042,13 @@ namespace Milestro.Components.Internal
             {
                 if (renderTarget == null)
                 {
-                    renderTarget = renderTargetFactory?.Invoke() ?? new TextBoxRenderTarget();
+                    renderTarget = renderTargetFactory?.Invoke() ??
+                        new TextBoxRenderTarget(allowGlyphMesh: GetComponent<Milestro.Components.TextBox>() != null);
+                    if (TextPipelineDiagnostics.FreshnessEnabled && renderTarget is TextBoxRenderTarget target)
+                    {
+                        target.Freshness = retiredFreshness;
+                    }
+                    UpdateGlyphMeshPresentationCapability();
                     renderTarget.RenderEventCompleted += OnRenderEventCompleted;
                 }
 
@@ -987,6 +1065,10 @@ namespace Milestro.Components.Internal
 
             renderTarget.RenderEventCompleted -= OnRenderEventCompleted;
             renderTarget.Dispose();
+            if (TextPipelineDiagnostics.FreshnessEnabled && renderTarget is TextBoxRenderTarget target)
+            {
+                retiredFreshness = target.Freshness;
+            }
             renderTarget = null;
         }
 
@@ -1042,6 +1124,7 @@ namespace Milestro.Components.Internal
             lastSizing = null;
             m_hasObservedVerticalMarginContext = false;
             RenderTarget.MarkPropertiesChanged();
+            RequestPreparation();
             NotifyLayoutChanged();
             GetComponent<TextBoxLayoutElement>()?.NotifyProducerConfigurationChanged();
             CaptureObservedMargin();
@@ -1145,6 +1228,13 @@ namespace Milestro.Components.Internal
 
         private void MarkContentChanged()
         {
+            if (TextPipelineDiagnostics.FreshnessEnabled)
+            {
+                if (RenderTarget is TextBoxRenderTarget target)
+                {
+                    target.Freshness.Request(Time.frameCount);
+                }
+            }
 #if UNITY_EDITOR
             m_editorSkippedRenderRetries = 0;
 #endif
@@ -1157,6 +1247,7 @@ namespace Milestro.Components.Internal
             lastSizing = null;
             m_hasObservedVerticalMarginContext = false;
             RenderTarget.MarkContentChanged();
+            RequestPreparation();
             NotifyLayoutChanged();
         }
 
@@ -1174,6 +1265,7 @@ namespace Milestro.Components.Internal
             m_editorSkippedRenderRetries = 0;
 #endif
             RenderTarget.MarkPaintChanged();
+            RequestPreparation();
         }
 
         internal TextBoxHorizontalScrollState horizontalScrollState => m_horizontalScrollState;
@@ -1197,6 +1289,7 @@ namespace Milestro.Components.Internal
             m_editorSkippedRenderRetries = 0;
 #endif
             RenderTarget.MarkPaintChanged();
+            RequestPreparation();
         }
 
         private void NotifyLayoutChanged()
@@ -1348,6 +1441,7 @@ namespace Milestro.Components.Internal
             m_editorSkippedRenderRetries = 0;
 #endif
             RenderTarget.MarkPaintChanged();
+            RequestPreparation();
         }
 
         [System.Diagnostics.Conditional("MILESTRO_FLOW_TEXTBOX_DEBUG")]

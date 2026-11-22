@@ -24,6 +24,9 @@ label.TextColor = Color.white;
 ```
 
 其中 `label` 为 `Milestro.Components.CanvasSlimText`。
+连续修改文字和颜色后，组件会在 UI 布局结束后统一处理，不需要手动刷新。
+可选的字形网格功能见[渲染参考](../reference/rendering.md#experimental-glyph-meshes)。
+
 更多设置通过 producer：
 
 ```csharp

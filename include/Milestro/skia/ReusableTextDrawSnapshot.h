@@ -2,6 +2,7 @@
 #define MILESTRO_SKIA_REUSABLE_TEXT_DRAW_SNAPSHOT_H
 
 #include "Font.h"
+#include "GlyphLayoutSnapshot.h"
 #include "SlimTextDrawSnapshot.h"
 #include <include/core/SkColor.h>
 #include <include/core/SkFont.h>
@@ -30,27 +31,32 @@ public:
             std::memcpy(text.get(), source, size);
         }
         textLength = size;
+        layout.updateSimpleText(font, text.get(), textLength, paint.getColor());
+        return true;
+    }
+
+    bool copyTextFrom(const SlimTextDrawSnapshot& source) override {
+        if (&source == this) { return true; }
+        const size_t size = source.textSize();
+        if (size > capacity || (source.textData() == nullptr && size > 0)) { return false; }
+        const auto* sourceLayout = source.glyphLayout();
+        if (sourceLayout == nullptr || !layout.copySimpleText(*sourceLayout, font, paint.getColor())) {
+            return updateText(source.textData(), size);
+        }
+        if (size > 0) { std::memcpy(text.get(), source.textData(), size); }
+        textLength = size;
         return true;
     }
 
     SkScalar measureText(SkRect* bounds) const override {
-        if (textLength == 0 || text == nullptr) {
-            if (bounds != nullptr) {
-                bounds->setEmpty();
-            }
-            return 0.0f;
-        }
-
-        return font.measureText(text.get(), textLength, SkTextEncoding::kUTF8, bounds);
+        return layout.measure(bounds);
     }
 
     void paintText(SkCanvas* canvas, SkScalar x, SkScalar baselineY) const override {
-        if (canvas == nullptr || textLength == 0 || text == nullptr) {
-            return;
-        }
-
-        canvas->drawSimpleText(text.get(), textLength, SkTextEncoding::kUTF8, x, baselineY, font, paint);
+        layout.paint(canvas, x, baselineY);
     }
+
+    const GlyphLayoutSnapshot* glyphLayout() const override { return &layout; }
 
     const char* textData() const override {
         return text.get();
@@ -61,6 +67,7 @@ public:
     }
 
 private:
+    GlyphLayoutSnapshot layout;
     SkFont font;
     SkPaint paint;
     size_t capacity = 0;

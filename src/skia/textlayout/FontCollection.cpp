@@ -229,8 +229,15 @@ void FontCollection::setFontFallbackEnabled(bool enabled) {
 }
 
 void FontCollection::ClearFontFamilyKeywordMappings() {
-    fontFamilyKeywordMap.ClearUserMappings();
-    fontCollection->clearCaches();
+    if (fontFamilyKeywordMap.ClearUserMappings()) {
+        fontCollection->clearCaches();
+    }
+}
+
+void FontCollection::ReplaceFontFamilyKeywordMappings(FontFamilyKeywordMap mappings) {
+    if (fontFamilyKeywordMap.ReplaceUserMappings(std::move(mappings))) {
+        fontCollection->clearCaches();
+    }
 }
 
 void FontCollection::SetFontFamilyKeywordMapping(std::string keyword,

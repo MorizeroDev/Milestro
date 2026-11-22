@@ -13,6 +13,9 @@
 namespace milestro::skia::textlayout {
 
 MILESTRO_API SkScalar ResolveNoWrapContentWidth(::skia::textlayout::Paragraph* paragraph,
+                                                size_t utf16Length);
+
+MILESTRO_API SkScalar ResolveNoWrapContentWidth(::skia::textlayout::Paragraph* paragraph,
                                                 const char* text,
                                                 size_t length);
 

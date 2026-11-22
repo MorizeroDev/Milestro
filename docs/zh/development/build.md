@@ -1,6 +1,6 @@
 # 源码构建、测试与打包
 
-[English](../../en/reference/build.md) | [简体中文](build.md)
+[English](../../en/development/build.md) | [简体中文](build.md)
 
 只使用 Unity 插件时优先 [安装预编译包](../getting-started/install.md)。本页面向修改原生库、绑定或打包流程的贡献者。
 
@@ -119,4 +119,4 @@ Android 默认启用 GLES 和 Vulkan，Vulkan 要求 API 24+ 和 NDK Vulkan 库�
 API 23 GLES-only 构建需显式 `-DMILESTRO_ENABLE_ANDROID_VULKAN_RENDER=OFF`。
 桌面 OpenGL 和 Vulkan 分别由 MILESTRO_ENABLE_DESKTOP_OPENGL_RENDER、
 MILESTRO_ENABLE_DESKTOP_VULKAN_RENDER 控制，默认关闭。
-编译存在不等于已完成设备认证，运行边界见 [渲染](rendering.md)。
+编译存在不等于已完成设备认证，运行边界见[渲染参考](../reference/rendering.md)。

@@ -99,41 +99,55 @@ namespace Milestro.Skia
             }
         }
 
-        private static void SyncFontFamilyConfiguration()
+        internal static void SyncFontFamilyConfiguration()
         {
             lock (FontFamilyConfigurationSyncLock)
             {
-                unsafe
-                {
-                    ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontRegistryResetFontFamilyKeywordMappings());
-                }
-
                 var configuration = MilestroConfiguration.Configuration?.FontFamily;
-                if (configuration == null)
+                if (configuration == null || !configuration.HasKeywordMappings)
                 {
+                    unsafe
+                    {
+                        ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontRegistryResetFontFamilyKeywordMappings());
+                    }
                     return;
                 }
-
+                var keywords = new List<string>();
+                var keywordSizes = new List<ulong>();
+                var names = new List<string>();
+                var kinds = new List<int>();
+                var counts = new List<uint>();
                 foreach (var mapping in configuration.GetKeywordMappings())
                 {
-                    SyncFontFamilyKeywordMapping(mapping.Key, mapping.Value);
+                    keywords.Add(mapping.Key);
+                    keywordSizes.Add((ulong)Encoding.UTF8.GetByteCount(mapping.Key));
+                    var start = names.Count;
+                    foreach (var token in mapping.Value)
+                    {
+                        if (token.Value.Length == 0)
+                        {
+                            continue;
+                        }
+                        names.Add(token.Value);
+                        kinds.Add((int)token.Kind);
+                    }
+                    counts.Add(checked((uint)(names.Count - start)));
                 }
-            }
-        }
-
-        private static unsafe void SyncFontFamilyKeywordMapping(string keyword, IEnumerable<FontFamilyToken> familyTokens)
-        {
-            var keywordBytes = Encoding.UTF8.GetBytes(keyword ?? "");
-            var payload = BuildFontFamilyPayload(familyTokens);
-            using var families = new UnmanagedStringArray(payload.Names);
-            fixed (byte* keywordPtr = keywordBytes)
-            fixed (int* kinds = payload.Kinds)
-            {
-                ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontRegistrySetFontFamilyKeywordMapping(keywordPtr,
-                    (ulong)keywordBytes.Length,
-                    families.Ptr,
-                    kinds,
-                    families.Length));
+                unsafe
+                {
+                    using var keywordArray = new UnmanagedStringArray(keywords);
+                    using var familyArray = new UnmanagedStringArray(names);
+                    var kindArray = kinds.ToArray();
+                    var keywordSizeArray = keywordSizes.ToArray();
+                    var countArray = counts.ToArray();
+                    fixed (int* kindPtr = kindArray)
+                    fixed (ulong* keywordSizePtr = keywordSizeArray)
+                    fixed (uint* countPtr = countArray)
+                    {
+                        ExitCodeUtil.ThrowIfFailed(BindingC.SkiaFontRegistryReplaceFontFamilyKeywordMappings(
+                            keywordArray.Ptr, keywordSizePtr, familyArray.Ptr, kindPtr, countPtr, keywordArray.Length));
+                    }
+                }
             }
         }
 

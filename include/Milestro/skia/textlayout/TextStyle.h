@@ -22,6 +22,8 @@ public:
     TextStyle &operator=(TextStyle &&other);
     ~TextStyle();
 
+    TextStyle richTextBase() const;
+
     SkColor getColor() const { return textStyle.getColor(); }
     void setColor(SkColor color) { textStyle.setColor(color); }
 

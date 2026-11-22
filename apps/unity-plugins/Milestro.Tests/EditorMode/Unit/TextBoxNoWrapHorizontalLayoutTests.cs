@@ -192,7 +192,7 @@ namespace Milestro.Tests
         }
 
         [Test]
-        public void ProducerKeepsOnePixelUserMoveAtTenMillionAcrossFixedRebuilds()
+        public void ProducerKeepsOnePixelUserMoveAtTenMillionWhileSkippingUnchangedRebuilds()
         {
             var layout = TextBoxNoWrapHorizontalLayout.Resolve(true,
                 TextAlign.Right,
@@ -204,6 +204,7 @@ namespace Milestro.Tests
             gameObject.SetActive(false);
             var producer = gameObject.AddComponent<TextBoxRenderTextureProducer>();
             var target = new TrackingRenderTarget(layout);
+            producer.screenSpaceRasterization = false;
             producer.DisposeRenderTarget();
             producer.renderTargetFactory = () => target;
             try
@@ -215,9 +216,14 @@ namespace Milestro.Tests
                 producer.RebuildOutput(forceText: true);
                 producer.RebuildOutput(forceText: false);
 
-                Assert.That(target.RebuildCalls, Is.EqualTo(2));
+                Assert.That(target.RebuildCalls, Is.EqualTo(1));
                 Assert.That(target.LastViewport.HasHorizontalScrollRequest, Is.True);
                 Assert.That(producer.scrollX, Is.EqualTo(9999999f));
+                AssertHorizontalState(producer.horizontalScrollState, 9999999f, 10000000f, false);
+                Assert.That(target.HasPendingWork, Is.False);
+
+                producer.RebuildOutput(forceText: true);
+                Assert.That(target.RebuildCalls, Is.EqualTo(2));
                 AssertHorizontalState(producer.horizontalScrollState, 9999999f, 10000000f, false);
             }
             finally
@@ -241,6 +247,7 @@ namespace Milestro.Tests
             var textBox = gameObject.AddComponent<TextBox>();
             var producer = gameObject.GetComponent<TextBoxRenderTextureProducer>();
             var target = new TrackingRenderTarget(layout);
+            producer.screenSpaceRasterization = false;
             producer.DisposeRenderTarget();
             producer.renderTargetFactory = () => target;
             try
@@ -264,7 +271,7 @@ namespace Milestro.Tests
                 AssertHorizontalState(producer.horizontalScrollState, 9999999f, 10000000f, false);
 
                 producer.RebuildOutput(forceText: false);
-                Assert.That(target.RebuildCalls, Is.EqualTo(3));
+                Assert.That(target.RebuildCalls, Is.EqualTo(2));
                 AssertHorizontalState(producer.horizontalScrollState, 9999999f, 10000000f, false);
             }
             finally
@@ -577,6 +584,7 @@ namespace Milestro.Tests
             var initialTarget = new TrackingRenderTarget(initialLayout);
             var recreatedTarget = new TrackingRenderTarget(expandedLayout);
             var createCount = 0;
+            producer.screenSpaceRasterization = false;
             producer.DisposeRenderTarget();
             producer.renderTargetFactory = () => ++createCount == 1 ? initialTarget : recreatedTarget;
             try
@@ -636,7 +644,7 @@ namespace Milestro.Tests
             public int OutputWidth => 0;
             public int OutputHeight => 0;
             public bool HasOutput => false;
-            public bool HasPendingWork => true;
+            public bool HasPendingWork { get; private set; } = true;
             public long OutputVersion => 0;
             public Vector2 ScrollOffset { get; private set; }
             public Vector2 ContentSize => new Vector2(layout.ContentWidth, 0f);
@@ -654,18 +662,22 @@ namespace Milestro.Tests
 
             public void MarkPropertiesChanged()
             {
+                HasPendingWork = true;
             }
 
             public void MarkContentChanged()
             {
+                HasPendingWork = true;
             }
 
             public void MarkPaintChanged()
             {
+                HasPendingWork = true;
             }
 
             public void InvalidateFailedOutput()
             {
+                HasPendingWork = true;
             }
 
             public bool TryHitLink(Vector2 normalizedViewportPoint, out TextBoxLinkHit hit)
@@ -695,6 +707,7 @@ namespace Milestro.Tests
             {
                 LastViewport = viewport;
                 RebuildCalls++;
+                HasPendingWork = false;
                 HorizontalScrollState = viewport.ResolveHorizontalScroll(layout);
                 ScrollOffset = new Vector2(HorizontalScrollState.ScrollX, viewport.RequestedScrollY);
                 return true;

@@ -2,16 +2,10 @@
 
 [English](README.md) | [简体中文](../zh/README.md)
 
-Milestro renders text in Unity through a native Skia text pipeline. This
-documentation is organized around what you want to do, starting with a runnable
-project:
-
-1. install a prebuilt Unity package;
-2. render a first string;
-3. add an editable text field;
-4. look up the feature you need next.
-
-You do not need to build Milestro from source to try it.
+Milestro renders text in Unity using Skia. Start with the prebuilt package;
+you do not need to build from source. This manual explains how to use the
+components. Build instructions and implementation details are in the separate
+[developer documentation](development/README.md).
 
 ## First success
 
@@ -92,11 +86,13 @@ Reference pages describe exact behavior and advanced configuration:
 - [Runtime configuration](reference/configuration.md)
 - [Layout engine parameters](reference/layout-engine.md)
 - [Rendering, batching, and backends](reference/rendering.md)
-- [Hybrid input provider contract](reference/hybrid-input.md)
 - [Known limitations](reference/limitations.md)
 - [Ruby layout](reference/ruby-layout.md)
-- [TextInput accessibility design](reference/accessibility-design.md)
-- [Build from source and CI reference](reference/build.md)
+
+## Development
+
+For source builds, custom parsers, input-provider integration, and profiling,
+see the [developer documentation](development/README.md).
 
 ## Requirements at a glance
 
@@ -111,7 +107,6 @@ Reference pages describe exact behavior and advanced configuration:
 
 ## Other entry points
 
-- [Project README](../../readme.md) for the architecture overview.
-- [Repository layout](../../readme.md#repository-layout) for where source lives.
+- [Project README](../../readme.md) for an overview of Milestro.
 - [Android Unity test notes](../../tests/android_unity/README.md) for device-level
   validation.

@@ -237,7 +237,7 @@ TEST(SkiaVerticalParagraphWrapper, MatchesCoreMetricsRangesHitTestingAndPaths) {
     size_t splitCallbacks = 0;
     EXPECT_EQ(paragraph->splitGlyph(0, 0, &splitCallbacks, RecordSplitGlyph), static_cast<uint64_t>(-1));
     EXPECT_EQ(splitCallbacks, 0u);
-    EXPECT_THROW(paragraph->resolveNoWrapContentWidth(text.c_str(), text.size()), std::logic_error);
+    EXPECT_THROW(paragraph->resolveNoWrapContentWidth(Utf16Length(text)), std::logic_error);
 }
 
 TEST(SkiaVerticalParagraphWrapper, TextIndentUsesTheSameWrapperMetricsRangesAndPaths) {

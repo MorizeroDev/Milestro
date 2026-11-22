@@ -1167,15 +1167,36 @@ TEST_F(InputBoxTest, SoftWrappedTrailingSpaceAdvancesCaretOnItsResolvedLine) {
     milestro_text::InputBoxLineMetrics firstLine;
     ASSERT_TRUE(inputBox->getLineMetrics(0, firstLine));
     ASSERT_GT(firstLine.endUtf8, firstLine.startUtf8);
-    ASSERT_EQ(text[firstLine.endUtf8 - 1], ' ');
+    const auto trailingSpaceStart = text.find("  ");
+    ASSERT_NE(trailingSpaceStart, std::string::npos);
+    milestro_text::InputBoxLineMetrics secondLine;
+    ASSERT_TRUE(inputBox->getLineMetrics(1, secondLine));
+    ASSERT_EQ(firstLine.endUtf8, trailingSpaceStart);
+    ASSERT_GT(secondLine.startUtf8, trailingSpaceStart + 1);
 
-    inputBox->setCursorUtf8(firstLine.endUtf8 - 1, skia::textlayout::Affinity::kUpstream);
+    inputBox->setCursorUtf8(trailingSpaceStart, skia::textlayout::Affinity::kUpstream);
     const auto beforeTrailingSpace = inputBox->getCaretRect();
-    inputBox->setCursorUtf8(firstLine.endUtf8, skia::textlayout::Affinity::kUpstream);
+    inputBox->setCursorUtf8(trailingSpaceStart + 1, skia::textlayout::Affinity::kUpstream);
     const auto afterTrailingSpace = inputBox->getCaretRect();
     EXPECT_NEAR(afterTrailingSpace.top, beforeTrailingSpace.top, 0.001f);
     EXPECT_GT(afterTrailingSpace.left, beforeTrailingSpace.left);
     EXPECT_FLOAT_EQ(inputBox->getMetrics().scrollX, 0.0f);
+
+    auto unwrappedInputBox = MakeInputBox(::skia::textlayout::TextAlign::kLeft, true, true);
+    unwrappedInputBox->setSoftWrap(false);
+    unwrappedInputBox->setText(text.c_str(), text.size());
+    unwrappedInputBox->setCursorUtf8(trailingSpaceStart, skia::textlayout::Affinity::kUpstream);
+    const auto unwrappedBeforeSpace = unwrappedInputBox->getCaretRect();
+    unwrappedInputBox->setCursorUtf8(trailingSpaceStart + 1, skia::textlayout::Affinity::kUpstream);
+    const auto unwrappedAfterSpace = unwrappedInputBox->getCaretRect();
+    EXPECT_NEAR(afterTrailingSpace.left - beforeTrailingSpace.left,
+                unwrappedAfterSpace.left - unwrappedBeforeSpace.left,
+                0.001f);
+
+    inputBox->setCursorUtf8(secondLine.startUtf8, skia::textlayout::Affinity::kDownstream);
+    const auto nextLineCaret = inputBox->getCaretRect();
+    EXPECT_GT(nextLineCaret.top, afterTrailingSpace.top);
+    EXPECT_NEAR(nextLineCaret.left, secondLine.left, 0.001f);
 }
 
 TEST_F(InputBoxTest, NbspRemainsVisibleWhileAsciiTrailingSpacesUseCaretGeometry) {

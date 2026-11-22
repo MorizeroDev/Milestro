@@ -71,8 +71,12 @@ std::string NormalizeFontFamilyKeyword(const std::string &keyword) {
     return LowerAscii(Trim(keyword));
 }
 
-void FontFamilyKeywordMap::ClearUserMappings() {
+bool FontFamilyKeywordMap::ClearUserMappings() {
+    if (userMappings.empty()) {
+        return false;
+    }
     userMappings.clear();
+    return true;
 }
 
 void FontFamilyKeywordMap::SetUserMapping(std::string keyword, std::vector<FontFamilyToken> mapping) {
@@ -94,6 +98,34 @@ std::vector<FontFamilyCandidate> FontFamilyKeywordMap::Resolve(const std::vector
     }
 
     return candidates;
+}
+
+bool FontFamilyKeywordMap::ReplaceUserMappings(FontFamilyKeywordMap mappings) {
+    bool equal = userMappings.size() == mappings.userMappings.size();
+    if (equal) {
+        for (const auto &[keyword, tokens]: userMappings) {
+            auto found = mappings.userMappings.find(keyword);
+            if (found == mappings.userMappings.end() || tokens.size() != found->second.size()) {
+                equal = false;
+                break;
+            }
+            for (size_t index = 0; index < tokens.size(); ++index) {
+                if (tokens[index].kind != found->second[index].kind ||
+                    tokens[index].value != found->second[index].value) {
+                    equal = false;
+                    break;
+                }
+            }
+            if (!equal) {
+                break;
+            }
+        }
+    }
+    if (equal) {
+        return false;
+    }
+    userMappings.swap(mappings.userMappings);
+    return true;
 }
 
 bool FontFamilyKeywordMap::TryGetKeywordMapping(const std::string &keyword, std::vector<FontFamilyToken> &mapping) const {

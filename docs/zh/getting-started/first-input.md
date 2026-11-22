@@ -13,7 +13,7 @@
 **Input System Package (New)** 或 **Both**。
 
 `StandaloneInputModule` 无法提供可编辑 `TextInput` 所需的严格焦点会话。
-提供者选择和迁移见 [HybridInput](../reference/hybrid-input.md)。
+提供者选择和迁移见 [HybridInput 开发文档](../development/hybrid-input.md)。
 
 ## 2. 创建组件
 

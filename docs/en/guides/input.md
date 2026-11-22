@@ -2,11 +2,8 @@
 
 [English](input.md) | [简体中文](../../zh/guides/input.md)
 
-`Milestro.Components.TextInput` is the editable text component. It is not a
-TextMesh Pro input field assembled from child graphics: the component owns an
-internal native editable text box, draws it into a render texture, and routes
-keyboard, composition, and IME ownership through Milestro's HybridInput
-dispatcher.
+`Milestro.Components.TextInput` is the editable text component. It handles
+text entry, selection, and IME input for you.
 
 Read [Add your first input field](../getting-started/first-input.md) for the
 minimal scene setup. This page covers the parameters and behavior.
@@ -18,10 +15,8 @@ minimal scene setup. This page covers the parameters and behavior.
 - `com.unity.inputsystem` in `[1.16.0,2.0.0-0)`.
 - Active Input Handling set to **Input System Package (New)** or **Both**.
 
-`StandaloneInputModule` can still provide normal uGUI navigation, but the legacy
-polled provider cannot prove capture-time ownership and therefore cannot
-acquire a strict `TextInput` focus session. See
-[Hybrid input](../reference/hybrid-input.md) for the contract.
+Use `InputSystemUIInputModule` for editing. `StandaloneInputModule` can provide
+ordinary uGUI navigation, but it cannot focus a Milestro input field for editing.
 
 ## Component parameters
 
@@ -228,45 +223,10 @@ For `TextInputLineMode.MultiLine`:
 - `submitOnEnter = true` makes Enter submit; Shift+Enter inserts a newline.
 - Enter used to confirm an IME composition does not submit.
 
-## Gamepad selection and editing: future work
+## Gamepad support
 
-**Status: no gamepad is available for verification. Dedicated adaptation is not
-implemented and has not been tested on a device. Existing uGUI navigation or
-controller support in other controls does not mean this input flow is
-supported.**
-
-The expected future interaction is recorded here without introducing a current
-API or changing ordinary pointer/programmatic selection:
-
-1. Directional navigation selects and highlights a field without starting text
-   editing or opening the soft keyboard.
-2. Confirm on the selected field starts editing; that same Confirm must not also
-   submit the new session.
-3. While editing, text navigation does not also move UI focus to another field.
-   Gamepad caret behavior still needs design.
-4. Confirm submits and exits editing; Cancel exits without submitting.
-5. Exiting editing returns to UI navigation with the field still selected.
-6. Future implementation must validate key repeat, input-method switches, field
-   switches, focus loss, and session reentrancy.
-
-A possible Windows keyboard mapping for this future model is:
-
-- While a field is selected but not editing, arrow keys move the active UI
-  navigation selection.
-- Enter starts editing; that same Enter must not also submit the new session.
-- While editing, arrow keys move the text caret, or extend its selection with
-  the appropriate modifiers, and must not also invoke `Selectable` navigation.
-- Enter while editing follows the future Confirm behavior above; Escape exits
-  without submitting and returns to the selected, non-editing state.
-
-`TextInputAccessibility` inherits `Selectable`, so this combination needs
-explicit move-event arbitration before it can claim to support the model. That
-arbitration is not currently implemented or validated with a real
-`InputSystemUIInputModule`, and ordinary `Button` navigation must remain
-unaffected when it is implemented.
-
-No gamepad bridge, two-stage activation property, key-release barrier, or form
-navigation router is currently provided by this flow.
+Dedicated gamepad editing is not implemented or device-tested. Support for
+other uGUI controls does not establish support for editing a `TextInput`.
 
 ## `TextInput` versus low-level `InputBox`
 
@@ -284,9 +244,5 @@ The component manages the `InputBox` lifecycle, viewport, styling, input focus,
 pointer handling, validation, and the Unity events for you. Start with
 `TextInput` unless you are implementing a custom text field.
 
-The low-level surface includes `Text`, `Cursor`, `Selection`, `SetViewport`,
-`SetSoftWrap`, `SetTextOverflow`, `InsertText`, `SetComposition`,
-`CommitComposition`, `Undo`, `Redo`, selection movement, `HitTest`,
-`EnsureCaretVisible`, `GetCaretRect`, `GetMetrics`, `GetLineCount`, and
-`GetLineMetrics`. See [Unity components and events](../reference/components.md)
-for the type-level reference.
+For the API and caret geometry rules, see the [component reference](../reference/components.md)
+and [InputBox geometry](../reference/layout-engine.md#inputbox-geometry).

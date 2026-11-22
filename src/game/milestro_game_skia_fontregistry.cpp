@@ -85,6 +85,33 @@ int64_t MilestroSkiaFontRegistryResetFontFamilyKeywordMappings() try {
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaFontRegistryReplaceFontFamilyKeywordMappings(uint8_t **keywords,
+                                                               uint64_t *keywordSizes,
+                                                               uint8_t **families,
+                                                               int32_t *familyKinds,
+                                                               uint32_t *familyCounts,
+                                                               uint32_t mappingCount) try {
+    if (mappingCount > 0 && (keywords == nullptr || keywordSizes == nullptr || familyCounts == nullptr)) {
+        return MILESTRO_API_RET_FAILED;
+    }
+    milestro::skia::FontFamilyKeywordMap mappings;
+    size_t offset = 0;
+    for (uint32_t index = 0; index < mappingCount; ++index) {
+        auto count = familyCounts[index];
+        if (keywords[index] == nullptr || (count > 0 && (families == nullptr || familyKinds == nullptr))) {
+            return MILESTRO_API_RET_FAILED;
+        }
+        mappings.SetUserMapping(std::string(reinterpret_cast<const char *>(keywords[index]), keywordSizes[index]),
+                               ReadFamilyTokens(count == 0 ? nullptr : families + offset,
+                                                count == 0 ? nullptr : familyKinds + offset, count));
+        offset += count;
+    }
+    milestro::skia::textlayout::GetFontCollection()->ReplaceFontFamilyKeywordMappings(std::move(mappings));
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 int64_t MilestroSkiaFontRegistrySetFontFamilyKeywordMapping(uint8_t *keyword,
                                                             uint64_t keywordSize,
                                                             uint8_t **families,

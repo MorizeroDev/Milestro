@@ -2,10 +2,11 @@
 
 [English](../../en/guides/input.md) | [简体中文](input.md)
 
-`TextInput` 拥有原生 `InputBox`，将值、光标和选区绘制到纹理，并通过 HybridInput 管理键盘、
-组合文本和 IME 所有权。最小场景见 [第一个输入框](../getting-started/first-input.md)。
+`TextInput` 是可编辑文字组件，负责文字输入、光标、选区和 IME。
+最小场景见[第一个输入框](../getting-started/first-input.md)。
 需要唯一活动 EventSystem、`InputSystemUIInputModule`、`[1.16.0,2.0.0-0)` Input System，
-以及 New/Both 的 Active Input Handling。旧轮询提供者无法证明事件采集时的所有者，不能取得严格焦点。
+以及 New/Both 的 Active Input Handling。`StandaloneInputModule` 可以用于普通 uGUI 导航，
+但不能让 Milestro 输入框进入编辑状态。
 
 ## 外观与表单参数
 
@@ -107,19 +108,13 @@ false 显示平台输入框，其快照仍经过同一验证管线。Android 硬
 MultiLine + NoWrap 可水平滚动，Wrap 按视口宽度软换行。默认 Enter 换行；submitOnEnter 开启后
 Enter 提交、Shift+Enter 换行。用于确认 IME 组合的 Enter 不提交。
 
-## 手柄与两阶段编辑：待实现
+## 手柄支持
 
 专用手柄适配尚未实现，也未在设备验证。其他控件的 uGUI 导航不代表 TextInput 已支持手柄编辑。
-未来模型是：导航选中但不编辑 → Confirm 进入编辑且不重复提交 → 编辑时文本移动不转移表单焦点 →
-Confirm 提交退出、Cancel 不提交退出 → 返回仍选中该框的 UI 导航。
-需验证重复按键、输入方式切换、输入框切换、失焦与重入。
-
-潜在键盘映射是未编辑时方向键导航、Enter 进入，编辑时方向键移动光标、Enter 确认、Escape 退出。
-`TextInputAccessibility` 继承 Selectable，需额外移动事件仲裁；当前未实现或验证。
-没有手柄桥接、两阶段激活属性、释放屏障或表单导航路由。
 
 ## 底层 InputBox
 
 `Milestro.Skia.TextLayout.InputBox` 用于自定义渲染器，拥有值、光标、选区、命中测试、撤销/重做、
 组合、换行、溢出、遮罩、视口和度量。组件为你管理其生命周期与 UI 事件。
 底层接口见 [组件参考](../reference/components.md)，自建封装对象需 Dispose。
+光标与行范围的规则见 [InputBox 几何](../reference/layout-engine.md#inputbox-geometry)。

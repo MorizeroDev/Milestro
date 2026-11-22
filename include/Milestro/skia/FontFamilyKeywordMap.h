@@ -12,8 +12,9 @@ namespace milestro::skia {
 
 class MILESTRO_API FontFamilyKeywordMap {
 public:
-    void ClearUserMappings();
+    bool ClearUserMappings();
     void SetUserMapping(std::string keyword, std::vector<FontFamilyToken> mapping);
+    bool ReplaceUserMappings(FontFamilyKeywordMap mappings);
 
     std::vector<FontFamilyCandidate> Resolve(const std::vector<FontFamilyToken> &tokens) const;
 

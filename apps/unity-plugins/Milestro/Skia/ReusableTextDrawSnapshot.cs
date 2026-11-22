@@ -36,10 +36,13 @@ namespace Milestro.Skia
 
         internal int Capacity { get; }
         internal int TextLength => textLength;
+        internal ulong LayoutVersion { get; private set; }
+        internal bool IsAlive => ptr != IntPtr.Zero;
 
         internal unsafe void UpdateText(byte[] buffer, int offset, int length)
         {
             ThrowIfRangeInvalid(buffer, offset, length);
+            ++LayoutVersion;
 
             fixed (byte* bufferPtr = buffer)
             {
@@ -61,6 +64,7 @@ namespace Milestro.Skia
 
             fixed (byte* textPtr = text)
             {
+                ++LayoutVersion;
                 var payload = text.Length == 0 ? null : textPtr;
                 ExitCodeUtil.ThrowIfFailed(BindingC.SkiaReusableTextDrawSnapshotUpdateText(NativePtr,
                     payload,
@@ -83,6 +87,7 @@ namespace Milestro.Skia
                     nameof(source));
             }
 
+            ++LayoutVersion;
             ExitCodeUtil.ThrowIfFailed(BindingC.SkiaReusableTextDrawSnapshotCopyTextFrom(NativePtr,
                 source.NativePtr));
             textLength = source.TextLength;
@@ -125,6 +130,7 @@ namespace Milestro.Skia
 
         protected override void DisposeUnmanaged()
         {
+            ++LayoutVersion;
             if (ptr != IntPtr.Zero)
             {
                 ExitCodeUtil.ThrowIfFailed(BindingC.SkiaReusableTextDrawSnapshotDestroy(ref ptr));

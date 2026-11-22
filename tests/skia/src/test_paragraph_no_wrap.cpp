@@ -1,5 +1,8 @@
 #include "Milestro/skia/FontRegistry.h"
+#include "Milestro/game/milestro_game_interface.h"
 #include "Milestro/skia/textlayout/FontCollection.h"
+#include "Milestro/skia/textlayout/InputBox.h"
+#include "Milestro/skia/textlayout/NoWrapLayout.h"
 #include "Milestro/skia/textlayout/Paragraph.h"
 #include "Milestro/skia/textlayout/ParagraphBuilder.h"
 #include "Milestro/skia/textlayout/ParagraphStyle.h"
@@ -10,6 +13,8 @@
 #include "modules/skparagraph/include/Paragraph.h"
 
 #include <gtest/gtest.h>
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
@@ -77,6 +82,43 @@ std::vector<skia_text::LineMetrics> GetLines(milestro_text::Paragraph* paragraph
     std::vector<skia_text::LineMetrics> lines;
     paragraph->unwrap()->getLineMetrics(lines);
     return lines;
+}
+
+SkScalar LegacyNoWrapContentWidth(skia_text::Paragraph* paragraph, const std::string& text) {
+    auto width = static_cast<double>(std::max(paragraph->getLongestLine(), paragraph->getMaxIntrinsicWidth()));
+    for (int line = 0; line < static_cast<int>(paragraph->lineNumber()); ++line) {
+        skia_text::LineMetrics metrics;
+        if (paragraph->getLineMetricsAt(line, &metrics)) {
+            width = std::max(width, static_cast<double>(metrics.fWidth));
+        }
+    }
+    const auto utf16Length = milestro_text::TextBoundaryMap(text).utf16Length();
+    if (utf16Length > 0) {
+        const auto boxes = paragraph->getRectsForRange(0, static_cast<unsigned>(utf16Length),
+                                                       skia_text::RectHeightStyle::kTight,
+                                                       skia_text::RectWidthStyle::kTight);
+        for (const auto& box : boxes) {
+            width = std::max(width, static_cast<double>(box.rect.width()));
+        }
+        skia_text::Paragraph::GlyphInfo info;
+        if (paragraph->getGlyphInfoAtUTF16Offset(utf16Length - 1, &info)) {
+            width = std::max(width, static_cast<double>(info.fGraphemeLayoutBounds.width()));
+        }
+    }
+    return std::isfinite(width) && width > 0 ? static_cast<SkScalar>(width) : 0;
+}
+
+void ExpectNoWrapMeasurementMatchesLegacy(milestro_text::Paragraph* paragraph, const std::string& text) {
+    auto* core = paragraph->unwrap();
+    const auto expected = LegacyNoWrapContentWidth(core, text);
+    const auto utf16Length = milestro_text::TextBoundaryMap(text).utf16Length();
+    EXPECT_FLOAT_EQ(milestro_text::ResolveNoWrapContentWidth(core, text), expected);
+    EXPECT_FLOAT_EQ(milestro_text::ResolveNoWrapContentWidth(core, text.data(), text.size()), expected);
+    EXPECT_FLOAT_EQ(milestro_text::ResolveNoWrapContentWidth(core, utf16Length), expected);
+    EXPECT_FLOAT_EQ(paragraph->resolveNoWrapContentWidth(utf16Length), expected);
+    float width = -1;
+    EXPECT_EQ(MilestroSkiaTextlayoutParagraphResolveNoWrapContentWidth(paragraph, utf16Length, width), 0);
+    EXPECT_FLOAT_EQ(width, expected);
 }
 
 }  // namespace
@@ -150,4 +192,53 @@ TEST_F(SkiaParagraphNoWrapTest, DefaultLayoutStillUsesSoftBreaks) {
     auto paragraph = BuildParagraph("aa bb cc dd", 65);
 
     EXPECT_GT(paragraph->unwrap()->lineNumber(), 1u);
+}
+
+TEST_F(SkiaParagraphNoWrapTest, ContentWidthPreservesUtf16RangesAndFinalClusters) {
+    const std::vector<std::string> texts = {
+            "", " ", "AB12CD34", "ab  ", "ab\ncd", std::string("a\0b", 3),
+            "\xe4\xb8\xad\xe6\x96\x87", "a\xf0\x9f\x98\x80", "ae\xcc\x81",
+            "a\xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x92\xbb",
+            "abc \xd7\x90\xd7\x91\xd7\x92", "a\xef\xbf\xbc"};
+    for (size_t index = 0; index < texts.size(); ++index) {
+        SCOPED_TRACE(index);
+        auto paragraph = BuildParagraph(texts[index], 1048576);
+        ExpectNoWrapMeasurementMatchesLegacy(paragraph.get(), texts[index]);
+    }
+}
+
+TEST_F(SkiaParagraphNoWrapTest, ContentWidthPreservesMalformedUtf8MeasurementContract) {
+    auto paragraph = BuildParagraph("abcdef", 1048576);
+    const std::vector<std::string> texts = {
+            std::string("\x80" "ab", 3), std::string("a\x80" "b", 3), std::string("ab\x80", 3),
+            std::string("a\xf0\x9f", 3), std::string("a\xed\xa0\x80" "b", 5),
+            std::string("a\xc0\xaf" "b", 4), std::string("a\xf4\x90\x80\x80" "b", 6)};
+    for (size_t index = 0; index < texts.size(); ++index) {
+        SCOPED_TRACE(index);
+        ExpectNoWrapMeasurementMatchesLegacy(paragraph.get(), texts[index]);
+    }
+}
+
+TEST_F(SkiaParagraphNoWrapTest, ContentWidthPreservesTrailingPlaceholder) {
+    milestro_text::TextStyle textStyle;
+    textStyle.setFontFamilies({SkString("Source Han Sans VF")});
+    textStyle.setFontSize(36);
+    milestro_text::ParagraphStyle paragraphStyle;
+    paragraphStyle.setTextStyle(&textStyle);
+    milestro_text::ParagraphBuilder builder(&paragraphStyle);
+    builder.pushStyle(&textStyle);
+    builder.addText("a", 1);
+    builder.addPlaceholder(120, 24);
+    std::unique_ptr<milestro_text::Paragraph> paragraph(builder.build());
+    paragraph->layout(1048576);
+    ExpectNoWrapMeasurementMatchesLegacy(paragraph.get(), "a\xef\xbf\xbc");
+}
+
+TEST_F(SkiaParagraphNoWrapTest, ContentWidthTreatsNullOrZeroLengthTextAsEmpty) {
+    auto paragraph = BuildParagraph("abcdef", 1048576);
+    const auto expected = LegacyNoWrapContentWidth(paragraph->unwrap(), "");
+    EXPECT_FLOAT_EQ(milestro_text::ResolveNoWrapContentWidth(paragraph->unwrap(), nullptr, 12), expected);
+    EXPECT_FLOAT_EQ(milestro_text::ResolveNoWrapContentWidth(paragraph->unwrap(), "abcdef", 0), expected);
+    EXPECT_FLOAT_EQ(milestro_text::ResolveNoWrapContentWidth(nullptr, "abcdef", 6), 0);
+    EXPECT_FLOAT_EQ(milestro_text::ResolveNoWrapContentWidth(nullptr, size_t{6}), 0);
 }

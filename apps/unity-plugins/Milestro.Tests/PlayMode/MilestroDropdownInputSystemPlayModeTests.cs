@@ -28,6 +28,9 @@ namespace Milestro.Tests
         private Mouse? mouse;
         private Touchscreen? touchscreen;
         private RenderSurfaceConfiguration? previousConfiguration;
+        private InputSettings? previousInputSettings;
+        private InputSettings.BackgroundBehavior previousBackgroundBehavior;
+        private InputSettings.EditorInputBehaviorInPlayMode previousEditorInputBehavior;
 
         [SetUp]
         public void SetUp()
@@ -36,6 +39,13 @@ namespace Milestro.Tests
             {
                 Assert.Ignore("Real InputSystem UI integration requires a graphics device; run without -nographics.");
             }
+
+            previousInputSettings = InputSystem.settings;
+            previousBackgroundBehavior = previousInputSettings.backgroundBehavior;
+            previousEditorInputBehavior = previousInputSettings.editorInputBehaviorInPlayMode;
+            previousInputSettings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+            previousInputSettings.editorInputBehaviorInPlayMode =
+                InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
 
             previousConfiguration = MilestroConfiguration.Configuration.RenderSurface;
             MilestroConfiguration.Configuration.RenderSurface = new RenderSurfaceConfiguration
@@ -95,6 +105,12 @@ namespace Milestro.Tests
             RemoveDevice(touchscreen);
             RemoveDevice(mouse);
             RemoveDevice(keyboard);
+            if (previousInputSettings != null)
+            {
+                previousInputSettings.backgroundBehavior = previousBackgroundBehavior;
+                previousInputSettings.editorInputBehaviorInPlayMode = previousEditorInputBehavior;
+                previousInputSettings = null;
+            }
             if (previousConfiguration != null)
             {
                 MilestroConfiguration.Configuration.RenderSurface = previousConfiguration;

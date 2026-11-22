@@ -1,6 +1,6 @@
 # Build and package from source
 
-[English](build.md) | [简体中文](../../zh/reference/build.md)
+[English](build.md) | [简体中文](../../zh/development/build.md)
 
 Most Unity users should install the prebuilt package described in
 [Install into a Unity project](../getting-started/install.md). This page is for

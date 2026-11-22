@@ -9,6 +9,8 @@
 
 namespace milestro::skia {
 
+class GlyphLayoutSnapshot;
+
 class MILESTRO_API SlimTextDrawSnapshot {
 public:
     virtual ~SlimTextDrawSnapshot() = default;
@@ -16,6 +18,8 @@ public:
     MILESTRO_DECLARE_NON_COPYABLE(SlimTextDrawSnapshot)
 
     virtual void paintText(SkCanvas* canvas, SkScalar x, SkScalar baselineY) const = 0;
+
+    virtual const GlyphLayoutSnapshot* glyphLayout() const { return nullptr; }
 
     virtual bool updateText(const char* source, size_t size) {
         (void) source;

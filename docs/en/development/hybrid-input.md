@@ -1,6 +1,6 @@
 # Hybrid Input provider contract
 
-[English](hybrid-input.md) | [简体中文](../../zh/reference/hybrid-input.md)
+[English](hybrid-input.md) | [简体中文](../../zh/development/hybrid-input.md)
 
 Milestro routes keyboard, committed text, IME composition, and IME ownership
 through one process-wide dispatcher. `TextInput` instances register private
@@ -105,7 +105,7 @@ delivery. Code must inspect `HybridInputCapabilities` and
 `HybridScrollCapability` instead of inferring richer behavior from the provider
 kind.
 
-See [limitations.md](limitations.md#hybridinput-scroll-deltaonly) for the
+See [known limitations](../reference/limitations.md#hybridinput-scroll-deltaonly) for the
 user-visible release-timing and axis-lock limitations of delta-only scroll.
 
 Scroll owners continue to receive one uGUI `PointerEventData`. An optional
@@ -165,7 +165,7 @@ request is visible through diagnostics and boundary completion remains
 fail-closed until a real empty-composition acknowledgement arrives.
 
 Windows supports native cancellation of the focused composition during
-handoff. See [limitations.md](limitations.md#hybridinput-ime-composition-and-session-control)
+handoff. See [known limitations](../reference/limitations.md#hybridinput-ime-composition-and-session-control)
 for platform-specific IME composition and session-control limitations.
 
 ## Breaking Migration

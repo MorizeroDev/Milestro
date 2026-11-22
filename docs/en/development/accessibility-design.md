@@ -1,6 +1,6 @@
 # TextInput accessibility design
 
-[English](accessibility-design.md) | [简体中文](../../zh/reference/accessibility-design.md)
+[English](accessibility-design.md) | [简体中文](../../zh/development/accessibility-design.md)
 
 Status: implemented by `Milestro.Components.TextInputAccessibility`
 (`apps/unity-plugins/Milestro/Components/TextInputAccessibility.cs`). Tracks

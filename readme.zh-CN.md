@@ -60,4 +60,4 @@ producer.textStyle.textColor = Color.white;
 - [标记展示示例](docs/zh/examples/README.md)，包含横排与竖排 XML。
 - [从 TextMesh Pro 迁移](docs/zh/guides/coming-from-tmpro.md)。
 - [简体中文手册](docs/zh/README.md) / [English manual](docs/en/README.md)。
-- 贡献者可查阅[源码构建](docs/zh/reference/build.md)与[渲染后端](docs/zh/reference/rendering.md)。
+- 贡献者可查阅[源码构建](docs/zh/development/build.md)与[渲染后端](docs/zh/reference/rendering.md)。

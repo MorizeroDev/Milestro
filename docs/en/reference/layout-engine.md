@@ -8,7 +8,7 @@ see [Layout and sizing](../guides/layout.md).
 
 ## Pipeline
 
-A `TextBox` frame goes through these stages:
+A `TextBox` using the default texture output goes through these stages:
 
 ```text
 content
@@ -20,6 +20,10 @@ content
   -> Skia rasterization into a render texture
   -> uGUI mesh presentation (with optional color gradient)
 ```
+
+For optional glyph mesh output and its fallback conditions, see the
+[rendering reference](rendering.md#experimental-glyph-meshes). Update scheduling
+and layout reuse are covered in the [developer documentation](../development/text-pipeline.md).
 
 The parser produces one or more paragraph blocks. Each block becomes a Skia
 paragraph, and the blocks are stacked along the block axis (downward for
@@ -420,3 +424,11 @@ paragraph.Layout(600f);
 
 The wrapper objects own native memory. Dispose them with `using` or an explicit
 `Dispose()` unless a component owns them.
+
+## InputBox geometry
+
+When writing a custom editor with `Milestro.Skia.TextLayout.InputBox`, use
+`GetCaretRect` for a cursor position rather than deriving it from visible line
+width. After soft wrapping, trailing spaces can lie between one line's
+`EndUtf8` and the next line's `StartUtf8`. The caret still advances through those
+spaces even when they do not contribute to visible line width.

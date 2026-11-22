@@ -23,7 +23,7 @@ this module gives `TextInput` the strict focus session it needs. A legacy
 `StandaloneInputModule` is not enough for editable `TextInput` focus.
 
 For provider details and migration from the old input components, see
-[Hybrid input](../reference/hybrid-input.md).
+[Hybrid input](../development/hybrid-input.md).
 
 ## 2. Create the input field
 

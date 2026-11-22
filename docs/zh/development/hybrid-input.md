@@ -1,6 +1,6 @@
 # HybridInput 提供者契约
 
-[English](../../en/reference/hybrid-input.md) | [简体中文](hybrid-input.md)
+[English](../../en/development/hybrid-input.md) | [简体中文](hybrid-input.md)
 
 进程级分发器统一处理按键、已提交文字、IME 组合和所有权。
 TextInput 注册私有帧接收端，只有焦点所有者接收文本。提供者、设备、应用焦点或组件生命周期重置时清除挂起状态。
@@ -54,7 +54,7 @@ Input System 额外报告 ScrollDelta 与 DeltaOnly，不保证设备分类、�
 滚动仍使用同一份 uGUI PointerEventData。可选 IHybridScrollInputProvider 只能为该事件补元数据，
 不是第二个 delta 来源。不匹配的 delta/无效 phase 被拒绝，不合并猜测。
 DeltaOnly Elastic 用对象本地非缩放时间释放延迟；phased 提供者等待真实 gesture 和 momentum 全结束。
-Unsupported 会关闭并收敛视觉 Elastic，不影响普通受限滚动。见 [限制](limitations.md#hybridinput-scroll-deltaonly)。
+Unsupported 会关闭并收敛视觉 Elastic，不影响普通受限滚动。见[限制](../reference/limitations.md#hybridinput-scroll-deltaonly)。
 
 ## 可选 Input System 程序集
 
@@ -77,7 +77,7 @@ commit 和 composition 是独立有序事件。commit 结束此前 preedit，同
 
 失焦先使旧托管所有权失效，再请求必要的原生取消，旧回调不能进入任何新旧所有者。
 严格取消失败时诊断可见，边界保持关闭直到真正空组合确认。
-Windows 支持原生取消；其他平台见 [IME 限制](limitations.md#hybridinput-ime-composition-and-session-control)。
+Windows 支持原生取消；其他平台见 [IME 限制](../reference/limitations.md#hybridinput-ime-composition-and-session-control)。
 
 ## 破坏性迁移
 

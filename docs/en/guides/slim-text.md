@@ -75,6 +75,10 @@ producer.rectOffset = new RectOffset(8, 8, 2, 2);
 producer.fallbackToSystemFont = true;
 ```
 
+Consecutive text and color changes are processed together after UI layout.
+Ordinary updates need no manual refresh. For the optional glyph mesh path, see
+the [rendering reference](../reference/rendering.md#experimental-glyph-meshes).
+
 `SlimTextRenderTextureProducer.fallbackToSystemFont` controls system fallback
 for a missing family. `fontFamily` is a single family declaration, not the
 ordered list used by `TextStyleSettings.fontFamilies`.

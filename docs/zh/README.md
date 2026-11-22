@@ -3,7 +3,7 @@
 [English](../en/README.md) | [简体中文](README.md)
 
 Milestro 通过原生 Skia 管线在 Unity 中渲染文本。无需从源码构建即可尝试预编译包。
-这份手册按“先运行，再选择功能，最后查阅参数”的顺序组织。
+这份手册介绍组件的使用方法。源码构建和实现细节请查阅独立的[开发文档](development/README.md)。
 
 ## 开始使用
 
@@ -51,11 +51,12 @@ Milestro 通过原生 Skia 管线在 Unity 中渲染文本。无需从源码构�
 - [运行时配置](reference/configuration.md)
 - [排版引擎参数](reference/layout-engine.md)
 - [渲染、合批与后端](reference/rendering.md)
-- [HybridInput 提供者契约](reference/hybrid-input.md)
 - [已知限制](reference/limitations.md)
 - [Ruby 排版](reference/ruby-layout.md)
-- [TextInput 无障碍设计](reference/accessibility-design.md)
-- [源码构建与 CI](reference/build.md)
+
+## 开发文档
+
+源码构建、自定义解析器、输入提供者集成和性能分析，见[开发文档](development/README.md)。
 
 ## 基本要求
 
@@ -64,5 +65,5 @@ Milestro 通过原生 Skia 管线在 Unity 中渲染文本。无需从源码构�
 可编辑 `TextInput` 需要 `[1.16.0,2.0.0-0)` 的 `com.unity.inputsystem` 与
 `InputSystemUIInputModule`。运行平台和架构必须有配套原生插件；托管与原生文件必须来自同一修订。
 
-其他入口：[项目 README](../../readme.zh-CN.md)、[仓库目录](../../readme.zh-CN.md#仓库目录)、
+其他入口：[项目 README](../../readme.zh-CN.md)、
 [Android Unity 设备验证](../../tests/android_unity/README.md)。

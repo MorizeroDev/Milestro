@@ -74,5 +74,5 @@ producer.textStyle.textColor = Color.white;
 - [Markup showcases](docs/en/examples/README.md) with horizontal and vertical XML examples.
 - [Coming from TextMesh Pro](docs/en/guides/coming-from-tmpro.md).
 - [English manual](docs/en/README.md) / [简体中文手册](docs/zh/README.md).
-- [Build from source](docs/en/reference/build.md) and
+- [Build from source](docs/en/development/build.md) and
   [rendering backends](docs/en/reference/rendering.md) for contributors.

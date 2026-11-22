@@ -108,5 +108,5 @@ input.gameObject.AddComponent<TextInputAccessibility>();
 
 The announcement strings and echo limit are serialized fields so projects can
 localize or retune them. See
-[TextInput accessibility design](../reference/accessibility-design.md) for the
+[TextInput accessibility design](../development/accessibility-design.md) for the
 design rationale and current platform gaps.

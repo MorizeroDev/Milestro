@@ -67,7 +67,7 @@ public :
         return paragraph->getMaxIntrinsicWidth();
     }
 
-    SkScalar resolveNoWrapContentWidth(const char* text, size_t length) const;
+    SkScalar resolveNoWrapContentWidth(size_t utf16Length) const;
 
     bool hitTestRange(size_t startUtf16, size_t endUtf16, SkScalar x, SkScalar y) const;
 

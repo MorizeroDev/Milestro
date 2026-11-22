@@ -9,6 +9,8 @@ namespace Milestro.Configuration
         private readonly Dictionary<string, List<FontFamilyToken>> keywordMappings =
             new Dictionary<string, List<FontFamilyToken>>(System.StringComparer.OrdinalIgnoreCase);
 
+        internal bool HasKeywordMappings => keywordMappings.Count != 0;
+
         public void SetKeywordMapping(string keyword, params string[] families)
         {
             SetKeywordMapping(keyword, (IEnumerable<string>)families);

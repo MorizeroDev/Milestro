@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.ExceptionServices;
+using Milestro.Components.Internal;
 using Milestro.Configuration;
 using UnityEngine;
 #if UNITY_EDITOR
@@ -418,8 +419,10 @@ namespace Milestro.Skia
                 {
                     return;
                 }
+                using var measurement = TextPipelineDiagnostics.Measure(TextPipelineStage.TexturePageSubmission);
                 inFlight.AddRange(pending);
                 pending.Clear();
+                var regionCount = inFlight.Count;
                 var commands = new UnitySkiaRenderCommandList();
                 try
                 {
@@ -435,6 +438,8 @@ namespace Milestro.Skia
                         return;
                     }
                     ++SubmissionCount;
+                    TextPipelineDiagnostics.Record(TextPipelineCounter.TexturePageSubmissions);
+                    TextPipelineDiagnostics.Record(TextPipelineCounter.TextureRegionsSubmitted, regionCount);
                 }
                 catch (Exception exception)
                 {

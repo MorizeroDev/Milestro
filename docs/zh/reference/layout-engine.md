@@ -6,6 +6,9 @@
 
 ## 管线
 
+默认纹理输出的流程如下。可选的字形网格及回退条件见[渲染参考](rendering.md#experimental-glyph-meshes)，
+文字更新的调度和布局复用见[开发文档](../development/text-pipeline.md)。
+
 ```text
 内容 → 纯文本或可选富文本解析 → 段落构建/样式 → 固有尺寸测量 → 尺寸求解
      → 行布局 → Skia 光栅化 → 可选渐变的 uGUI 网格呈现
@@ -13,6 +16,13 @@
 
 解析器可生成多个段落块，每块构造 Skia paragraph。水平文本按向下的块轴堆叠，竖排按从右向左的块轴堆叠，
 并应用边距和 `paragraphStyle.paragraphSpacing`。`<p>` 改变块结构但不创建额外 Unity 对象。
+
+<a id="inputbox-geometry"></a>
+## InputBox 几何
+
+使用底层 `Milestro.Skia.TextLayout.InputBox` 构建编辑器时，应通过 `GetCaretRect`
+查询光标位置，不要从可见行宽推算。软换行后，行尾空格可能位于当前行的 `EndUtf8`
+与下一行的 `StartUtf8` 之间。即使这些空格不计入可见行宽，光标仍会逐个前进。
 
 ## TextBoxRenderTextureProducer
 

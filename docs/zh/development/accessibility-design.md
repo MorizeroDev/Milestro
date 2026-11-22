@@ -1,6 +1,6 @@
 # TextInput 无障碍设计
 
-[English](../../en/reference/accessibility-design.md) | [简体中文](accessibility-design.md)
+[English](../../en/development/accessibility-design.md) | [简体中文](accessibility-design.md)
 
 `Milestro.Components.TextInputAccessibility` 已实现，用于补足 TextBoxAccessibility 能发布静态文本/链接、
 但 TextInput 过去没有值、选区、光标或编辑状态节点的缺口。

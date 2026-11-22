@@ -47,10 +47,32 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void TextBoxColorChangesSourceTextIndependentlyOfGraphicTint()
+        {
+            var textBox = CreateTextBox();
+            var sourceColor = new Color(0.2f, 0.4f, 0.6f, 0.8f);
+            var tint = new Color(0.5f, 0.25f, 1f, 0.75f);
+            textBox.color = sourceColor;
+            ((Graphic)textBox).color = tint;
+
+            Assert.That(textBox.GetComponent<Milestro.Components.Internal.TextBoxRenderTextureProducer>()
+                .textStyle.textColor, Is.EqualTo(sourceColor));
+            Assert.That(textBox.color, Is.EqualTo(sourceColor));
+            var (_, colors) = RebuildMesh(textBox);
+            foreach (var vertexColor in colors)
+            {
+                AssertColorClose(vertexColor, tint);
+            }
+
+            textBox.color = Color.red;
+            Assert.That(((Graphic)textBox).color, Is.EqualTo(tint));
+        }
+
+        [Test]
         public void DisabledColorGradientKeepsUniformVertexColors()
         {
             var textBox = CreateTextBox();
-            textBox.color = Color.white;
+            ((Graphic)textBox).color = Color.white;
 
             var (vertices, colors) = RebuildMesh(textBox);
 
@@ -65,7 +87,7 @@ namespace Milestro.Tests
         public void FourCornersGradientAppliesPerCornerColors()
         {
             var textBox = CreateTextBox();
-            textBox.color = Color.white;
+            ((Graphic)textBox).color = Color.white;
             textBox.enableColorGradient = true;
             textBox.colorGradient = TextGradient.ForCorners(new TextColorGradient(
                 Color.red,
@@ -86,7 +108,7 @@ namespace Milestro.Tests
         public void FourCornersGradientMultipliesGraphicColor()
         {
             var textBox = CreateTextBox();
-            textBox.color = new Color(0.5f, 0.25f, 1f, 1f);
+            ((Graphic)textBox).color = new Color(0.5f, 0.25f, 1f, 1f);
             textBox.enableColorGradient = true;
             textBox.colorGradient = TextGradient.ForCorners(new TextColorGradient(
                 Color.white,
@@ -106,7 +128,7 @@ namespace Milestro.Tests
         public void GradientPresetAssetOverridesInlineGradient()
         {
             var textBox = CreateTextBox();
-            textBox.color = Color.white;
+            ((Graphic)textBox).color = Color.white;
             textBox.enableColorGradient = true;
             textBox.colorGradient = TextGradient.ForCorners(new TextColorGradient(
                 Color.red,
@@ -133,7 +155,7 @@ namespace Milestro.Tests
         public void LinearGradientZeroAngleFillsLeftToRight()
         {
             var textBox = CreateTextBox();
-            textBox.color = Color.white;
+            ((Graphic)textBox).color = Color.white;
             textBox.enableColorGradient = true;
             textBox.colorGradient = TextGradient.Linear(CreateTwoStopGradient(Color.red, Color.blue), 0f);
 
@@ -147,7 +169,7 @@ namespace Milestro.Tests
         public void LinearGradientNinetyDegreesFillsTopToBottom()
         {
             var textBox = CreateTextBox();
-            textBox.color = Color.white;
+            ((Graphic)textBox).color = Color.white;
             textBox.enableColorGradient = true;
             textBox.colorGradient = TextGradient.Linear(CreateTwoStopGradient(Color.red, Color.blue), 90f);
 
@@ -161,7 +183,7 @@ namespace Milestro.Tests
         public void RadialGradientReachesLastStopAtCorners()
         {
             var textBox = CreateTextBox();
-            textBox.color = Color.white;
+            ((Graphic)textBox).color = Color.white;
             textBox.enableColorGradient = true;
             textBox.colorGradient = TextGradient.Radial(CreateTwoStopGradient(Color.white, Color.black));
 
@@ -176,7 +198,7 @@ namespace Milestro.Tests
         public void GradientMeshResolutionControlsVertexCount()
         {
             var textBox = CreateTextBox();
-            textBox.color = Color.white;
+            ((Graphic)textBox).color = Color.white;
             textBox.enableColorGradient = true;
             var gradient = TextGradient.Linear(CreateTwoStopGradient(Color.red, Color.blue), 0f);
             gradient.MeshResolution = 4;
@@ -207,7 +229,7 @@ namespace Milestro.Tests
             textBox.SetFlowVisibleRange(true, 0f, 100f);
             textBox.Texture = texture;
             textBox.UvRect = new Rect(0.2f, 0.3f, 0.4f, 0.5f);
-            textBox.color = new Color(0.8f, 0.6f, 0.4f, 0.5f);
+            ((Graphic)textBox).color = new Color(0.8f, 0.6f, 0.4f, 0.5f);
             textBox.enableColorGradient = true;
             textBox.colorGradient = CreateGradient(gradientMode);
 
@@ -266,7 +288,7 @@ namespace Milestro.Tests
                     textBox.colorGradient,
                     (position.x - rect.xMin) / rect.width,
                     (position.y - rect.yMin) / rect.height);
-                AssertColorClose(colors[index], textBox.color * expected);
+                AssertColorClose(colors[index], ((Graphic)textBox).color * expected);
             }
         }
 

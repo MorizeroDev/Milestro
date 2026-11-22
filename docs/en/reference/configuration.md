@@ -103,6 +103,10 @@ The built-in keywords are `serif`, `sans-serif`, `monospace`, and `system-ui`.
 | `VulkanBackend` | `Direct` | `Direct` or `StagingCopy` |
 | `EnableAtlas` | `true` | Share compatible render-texture regions |
 | `AtlasPageSize` | `2048` | Atlas page edge in pixels |
+| `EnableTextGlyphMesh` | `false` | Enable experimental Canvas glyph mesh rendering |
+| `GlyphAtlasPageSize` | `2048` | Glyph atlas page edge in pixels |
+| `MaxGlyphAtlasPages` | `2` | Maximum shared glyph atlas pages |
+| `MaxTextGlyphMeshGlyphs` | `2048` | Maximum glyphs per component mesh output |
 
 Atlas examples:
 
@@ -115,6 +119,10 @@ surfaces.AtlasPageSize = 2048;
 Each RGBA atlas page costs approximately
 `AtlasPageSize * AtlasPageSize * 4` bytes. Set `EnableAtlas = false` to request
 standalone textures. See [Rendering, batching, and backends](rendering.md).
+
+The glyph mesh atlas is separate from the render-texture atlas. Enabling it
+does not cover every text feature; unsupported content uses texture rendering.
+See [experimental glyph meshes](rendering.md#experimental-glyph-meshes).
 
 ## World-space material
 

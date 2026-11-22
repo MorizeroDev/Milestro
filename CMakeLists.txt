@@ -373,6 +373,7 @@ set(
         src/skia/Canvas.cpp
         src/skia/Typeface.cpp
         src/skia/Font.cpp
+        src/skia/GlyphLayoutSnapshot.cpp
         src/skia/Image.cpp
         src/skia/Path.cpp
         src/skia/Svg.cpp
@@ -414,6 +415,7 @@ set(
         src/game/milestro_game_skia_typeface.cpp
         src/game/milestro_game_skia_font.cpp
         src/game/milestro_game_skia_slim_text.cpp
+        src/game/milestro_game_skia_glyph_layout.cpp
         src/game/milestro_game_skia_path.cpp
         src/game/milestro_game_skia_svg.cpp
         src/game/milestro_game_skia_vertexdata.cpp
