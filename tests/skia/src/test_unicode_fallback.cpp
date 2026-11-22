@@ -19,6 +19,22 @@ TEST(SkiaUnicodeFallbackTest, ProviderExistsWhenIcuDataWasNotLoaded) {
                                          0x0600, 0x4E00, 0x1F600, 0x110000}) {
             EXPECT_FALSE(unicode->isDefaultIgnorable(codepoint)) << codepoint;
         }
+        char utf8[] = "A\xC2\xAD\xE2\x80\x8B\xF3\xA0\x84\x80" "B";
+        skia_private::TArray<SkUnicode::CodeUnitFlags, true> utf8Flags;
+        ASSERT_TRUE(unicode->computeCodeUnitFlags(utf8, sizeof(utf8) - 1, false, &utf8Flags));
+        ASSERT_EQ(utf8Flags.size(), sizeof(utf8));
+        for (size_t index = 0; index < sizeof(utf8) - 1; ++index) {
+            EXPECT_EQ((utf8Flags[index] & SkUnicode::kDefaultIgnorable) != 0,
+                      index > 0 && index < sizeof(utf8) - 2) << index;
+        }
+        char16_t utf16[] = u"A\u00AD\u200B\U000E0100B";
+        skia_private::TArray<SkUnicode::CodeUnitFlags, true> utf16Flags;
+        ASSERT_TRUE(unicode->computeCodeUnitFlags(utf16, 6, false, &utf16Flags));
+        ASSERT_EQ(utf16Flags.size(), 7);
+        for (size_t index = 0; index < 6; ++index) {
+            EXPECT_EQ((utf16Flags[index] & SkUnicode::kDefaultIgnorable) != 0,
+                      index > 0 && index < 5) << index;
+        }
     };
 
     auto provider = milestro::skia::GetUnicodeProvider();

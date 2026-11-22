@@ -8,7 +8,7 @@ the text modules against Milestro's ICU target instead.
 ## Source and version contract
 
 The current upstream revision is
-`443876974ffca0982aa10ab21d6e7f4b9f5fd66e`.
+`4802f18c7cd248700dd6f813d5299e9b8759f1e9`.
 
 `vendor-meta` records two revisions:
 
@@ -52,6 +52,12 @@ not. Milestro explicitly allocates vertical run data. Ruby detaches shared glyph
 data and materializes writable offsets before changing padding, so cached runs
 and other paragraphs retain their original geometry. Unresolved codepoint sets
 are shared with paragraph cache entries and remain immutable after shaping.
+
+Clusters do not retain a paragraph pointer; layout callers supply the owning
+paragraph when accessing runs or break properties. Default-ignorable clusters
+retain zero width under letter spacing, and shaped ellipses are cached within
+each paragraph. Upstream paragraph tests are split by feature; the decoration
+and shaping test overlays retain Milestro's painter and visitor extensions.
 
 See [Ruby layout](../../docs/en/reference/ruby-layout.md) and
 [the layout engine](../../docs/en/reference/layout-engine.md) for public behavior.

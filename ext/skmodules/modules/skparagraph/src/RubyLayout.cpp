@@ -127,14 +127,14 @@ void ParagraphImpl::prepareRuby() {
         if (fClusters[first].textRange().start != range.start ||
             fClusters[last - 1].textRange().end != range.end)
             throw std::invalid_argument("ruby shaped-cluster boundary rejected");
-        auto level = fClusters[first].run().fBidiLevel;
+        auto level = fClusters[first].run(this).fBidiLevel;
         bool ideographic = false;
         for (size_t index = first; index < last; ++index) {
             if (fClusters[index].isHardBreak())
                 throw std::invalid_argument("ruby range crosses hard line break");
-            if (fClusters[index].run().isPlaceholder())
+            if (fClusters[index].run(this).isPlaceholder())
                 throw std::invalid_argument("ruby range contains placeholder");
-            if (fClusters[index].run().fBidiLevel != level)
+            if (fClusters[index].run(this).fBidiLevel != level)
                 throw std::invalid_argument("ruby range crosses bidi levels");
             ideographic |= fClusters[index].isIdeographic();
         }
@@ -184,7 +184,7 @@ void ParagraphImpl::prepareRuby() {
         for (size_t visual = 0; visual < last - first; ++visual) {
             auto index = level % 2 == 0 ? first + visual : last - visual - 1;
             const auto& cluster = fClusters[index];
-            const auto& run = cluster.run();
+            const auto& run = cluster.run(this);
             baseTop = std::min(baseTop, run.ascent());
             baseBottom = std::max(baseBottom, run.descent());
             std::vector<SkRect> bounds(cluster.size());
@@ -370,10 +370,10 @@ std::vector<RubyPlacement> ParagraphImpl::rubyPlacements(const TextLine& line) c
             }
             return true;
         });
-        auto visualFirst = fClusters[span.clusters.start].run().leftToRight()
+        auto visualFirst = fClusters[span.clusters.start].run(this).leftToRight()
             ? span.clusters.start : span.clusters.end - 1;
         const auto& firstCluster = fClusters[visualFirst];
-        const auto& firstRun = firstCluster.run();
+        const auto& firstRun = firstCluster.run(this);
         if (!firstRun.fJustificationShifts.empty()) {
             auto shift = firstRun.fJustificationShifts[firstCluster.startPos()];
             cell.fLeft += shift.fX - shift.fY;
@@ -403,7 +403,7 @@ void ParagraphImpl::positionRuby() {
             span.overflowShift = anchor - cellLeft - span.baseLeft;
             for (size_t index = span.clusters.start; index < span.clusters.end; ++index) {
                 const auto& cluster = fClusters[index];
-                auto& run = cluster.run();
+                auto& run = cluster.run(this);
                 for (size_t glyph = cluster.startPos(); glyph < cluster.endPos(); ++glyph)
                     run.fGlyphData->offsets()[glyph].fX += span.overflowShift;
             }
@@ -452,7 +452,7 @@ void TextWrapper::breakRubyTextIntoLines(ParagraphImpl* parent, SkScalar maxWidt
         for (size_t index = clusterStart; index < clusterEnd; ++index) {
             const auto& cluster = parent->cluster(index);
             widthWithSpaces += cluster.width();
-            if (!cluster.isHardBreak() && !cluster.run().isPlaceholder()) metrics.add(&cluster.run());
+            if (!cluster.isHardBreak() && !cluster.run(parent).isPlaceholder()) metrics.add(&cluster.run(parent));
         }
         auto trimmedUnitEnd = last;
         while (trimmedUnitEnd > first && units[trimmedUnitEnd - 1].whitespace) --trimmedUnitEnd;
@@ -461,7 +461,7 @@ void TextWrapper::breakRubyTextIntoLines(ParagraphImpl* parent, SkScalar maxWidt
         if (metrics.isClean()) metrics = parent->getEmptyMetrics();
         parent->addRubyMetrics({clusterStart, clusterEnd}, metrics);
         for (size_t index = clusterStart; index < clusterEnd; ++index) {
-            auto& run = parent->cluster(index).run();
+            auto& run = parent->cluster(index).run(parent);
             if (run.isPlaceholder()) run.updateMetrics(&metrics);
         }
         auto maxRunMetrics = metrics;

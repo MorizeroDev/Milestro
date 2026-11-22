@@ -11,12 +11,12 @@ namespace textlayout {
 namespace {
 // The width of the hyphen drawn when the line breaks after cluster, or 0 if none is drawn.
 // A soft hyphen that ends the text never breaks a line
-SkScalar softHyphenWidth(const SkString* softHyphen, const Cluster* cluster) {
+SkScalar softHyphenWidth(ParagraphImpl* owner, const SkString* softHyphen, const Cluster* cluster) {
     if (softHyphen == nullptr || !cluster->isSoftHyphen() ||
-        cluster->textRange().end >= cluster->owner()->text().size()) {
+        cluster->textRange().end >= owner->text().size()) {
         return 0;
     }
-    const SkFont& font = cluster->run().font();
+    const SkFont& font = cluster->run(owner).font();
     skia_private::AutoSTArray<8, SkGlyphID> glyphs(softHyphen->size());
     size_t glyphCount = font.textToGlyphs(
             softHyphen->c_str(), softHyphen->size(), SkTextEncoding::kUTF8, glyphs);
@@ -32,7 +32,6 @@ SkScalar softHyphenWidth(const SkString* softHyphen, const Cluster* cluster) {
     }
     // When the cluster's font lacks a glyph for the hyphen string, shape with font fallback
     // matching TextLine::createSoftHyphen so reserved and intrinsic widths match the drawn hyphen
-    ParagraphImpl* owner = cluster->owner();
     auto hyphenRun = TextLine::ShapeString(
             owner, owner->findAllBlocks(cluster->textRange()), *softHyphen, cluster);
     return hyphenRun ? hyphenRun->advance().fX : 0;
@@ -89,9 +88,9 @@ void TextWrapper::lookAhead(SkScalar maxWidth,
 
     reset();
     fEndLine.metrics().clean();
-    fWords.startFrom(fEndLine.startCluster(), fEndLine.startPos());
-    fClusters.startFrom(fEndLine.startCluster(), fEndLine.startPos());
-    fClip.startFrom(fEndLine.startCluster(), fEndLine.startPos());
+    fWords.startFrom(fParent, fEndLine.startCluster(), fEndLine.startPos());
+    fClusters.startFrom(fParent, fEndLine.startCluster(), fEndLine.startPos());
+    fClip.startFrom(fParent, fEndLine.startCluster(), fEndLine.startPos());
 
     LineBreakerWithLittleRounding breaker(maxWidth, applyRoundingHack);
     Cluster* nextNonBreakingSpace = nullptr;
@@ -106,18 +105,18 @@ void TextWrapper::lookAhead(SkScalar maxWidth,
         if (cluster->isHardBreak()) {
         } else if (
                 // TODO: Trying to deal with flutter rounding problem. Must be removed...
-                SkScalar width = fWords.width() + fClusters.width() + cluster->width();
+                SkScalar width = fWords.width() + (fClusters.width() + cluster->width());
                 breaker.breakLine(width) &&
-                !cluster->owner()->isNoWrapBoundary(cluster->textRange().start,
+                !fParent->isNoWrapBoundary(cluster->textRange().start,
                                                     fWords.empty() && fClusters.empty())) {
-            if (cluster->isWhitespaceBreak() && cluster->isSoftBreak()) {
+            if (cluster->isWhitespaceBreak() && cluster->isSoftBreak(fParent)) {
                 // It's the end of the word
-                fClusters.extend(cluster);
+                fClusters.extend(fParent, cluster);
                 this->updateMinIntrinsicWidth(this->getClustersTrimmedWidth());
                 fWords.extend(fClusters);
                 softHyphenBreakTooWide = false;
                 continue;
-            } else if (cluster->run().isPlaceholder() && cluster->canBreakBefore()) {
+            } else if (cluster->run(fParent).isPlaceholder() && cluster->canBreakBefore(fParent)) {
                 if (!fClusters.empty()) {
                     // Placeholder ends the previous word
                     this->updateMinIntrinsicWidth(this->getClustersTrimmedWidth());
@@ -128,7 +127,7 @@ void TextWrapper::lookAhead(SkScalar maxWidth,
                 if (cluster->width() > maxWidth && fWords.empty()) {
                     // Placeholder is the only text and it's longer than the line;
                     // it does not count in fMinIntrinsicWidth
-                    fClusters.extend(cluster);
+                    fClusters.extend(fParent, cluster);
                     fTooLongCluster = true;
                     fTooLongWord = true;
                 } else {
@@ -171,15 +170,15 @@ void TextWrapper::lookAhead(SkScalar maxWidth,
             auto further = sameWord ? endOfClusters : cluster;
             for (; further != endOfClusters; ++further) {
                 if (further->isHardBreak() ||
-                    (further->isWhitespaceBreak() && further->isSoftBreak())) {
+                    (further->isWhitespaceBreak() && further->isSoftBreak(fParent))) {
                     break;
                 }
-                if (further->isSoftBreak() && !further->isSoftHyphen()) {
+                if (further->isSoftBreak(fParent) && !further->isSoftHyphen()) {
                     // Other soft breaks, such as the end of the text, end the word before this
                     // cluster; only a soft hyphen's own (letter-spaced) width counts here
                     break;
                 }
-                if (further->run().isPlaceholder() && further->canBreakBefore()) {
+                if (further->run(fParent).isPlaceholder() && further->canBreakBefore(fParent)) {
                   // Placeholder ends the word
                   break;
                 }
@@ -192,9 +191,9 @@ void TextWrapper::lookAhead(SkScalar maxWidth,
                 }
 
                 nextWordLength = addWidth(nextWordLength, further);
-                if (maxWidth > 0 && further->isSoftBreak()) {
+                if (maxWidth > 0 && further->isSoftBreak(fParent)) {
                     // Include further->width() before stopping so letter-spaced soft hyphens count
-                    nextWordHyphenWidth = softHyphenWidth(softHyphen, further);
+                    nextWordHyphenWidth = softHyphenWidth(fParent, softHyphen, further);
                     break;
                 }
             }
@@ -209,7 +208,7 @@ void TextWrapper::lookAhead(SkScalar maxWidth,
                     if (SkScalar shortLength = fWords.width() + nextShortWordLength;
                         !breaker.breakLine(shortLength)) {
                         // We can add the short word to the existing line
-                        fClusters = TextStretch(fClusters.startCluster(), nextNonBreakingSpace, fClusters.metrics().getForceStrut());
+                        fClusters = TextStretch(fParent, fClusters.startCluster(), nextNonBreakingSpace, fClusters.metrics().getForceStrut());
                         this->updateMinIntrinsicWidth(nextShortWordLength);
                         fWords.extend(fClusters);
                         softHyphenBreakTooWide = false;
@@ -238,8 +237,10 @@ void TextWrapper::lookAhead(SkScalar maxWidth,
                 this->updateMinIntrinsicWidth(nextWordLength + nextWordHyphenWidth);
             }
 
-            if (cluster->width() > maxWidth) {
-                fClusters.extend(cluster);
+            // A cluster too wide for any line goes alone on an empty line; after other text it
+            // waits for the next line, as a too long word and a placeholder do
+            if (cluster->width() > maxWidth && fWords.empty() && fClusters.empty()) {
+                fClusters.extend(fParent, cluster);
                 fTooLongCluster = true;
                 fTooLongWord = true;
             }
@@ -247,7 +248,7 @@ void TextWrapper::lookAhead(SkScalar maxWidth,
             break;
         }
 
-        if (cluster->run().isPlaceholder() && cluster->isSoftBreak()) {
+        if (cluster->run(fParent).isPlaceholder() && cluster->isSoftBreak(fParent)) {
             if (!fClusters.empty()) {
                 // Placeholder ends the previous word (placeholders are ignored in trimming)
                 this->updateMinIntrinsicWidth(getClustersTrimmedWidth());
@@ -256,16 +257,16 @@ void TextWrapper::lookAhead(SkScalar maxWidth,
 
             // Placeholder is separate word and its width now is counted in minIntrinsicWidth
             this->updateMinIntrinsicWidth(cluster->width());
-            fWords.extend(cluster);
+            fWords.extend(fParent, cluster);
             softHyphenBreakTooWide = false;
         } else {
-            fClusters.extend(cluster);
+            fClusters.extend(fParent, cluster);
 
             // Keep adding clusters/words
-            if (fClusters.endOfWord()) {
+            if (fClusters.endOfWord(fParent)) {
                 // A word that ends at a soft hyphen is drawn with a hyphen when the line breaks
                 // there, so the hyphen counts in its width (as in CSS min-content)
-                SkScalar hyphenWidth = softHyphenWidth(softHyphen, cluster);
+                SkScalar hyphenWidth = softHyphenWidth(fParent, softHyphen, cluster);
                 this->updateMinIntrinsicWidth(getClustersTrimmedWidth() + hyphenWidth);
                 bool tooWide = hyphenWidth > 0 && !lineMayEllipsize && !fWords.empty() &&
                                breaker.breakLine(fWords.width() + fClusters.width() + hyphenWidth);
@@ -329,7 +330,7 @@ void TextWrapper::trimEndSpaces(TextAlign align) {
          --cluster) {
         fEndLine.trim(cluster);
     }
-    fEndLine.trim();
+    fEndLine.trim(fParent);
 }
 
 SkScalar TextWrapper::getClustersTrimmedWidth() {
@@ -337,12 +338,12 @@ SkScalar TextWrapper::getClustersTrimmedWidth() {
     SkScalar width = 0;
     bool trailingSpaces = true;
     for (auto cluster = fClusters.endCluster(); cluster >= fClusters.startCluster(); --cluster) {
-        if (cluster->run().isPlaceholder()) {
+        if (cluster->run(fParent).isPlaceholder()) {
             continue;
         }
         if (trailingSpaces) {
             if (!cluster->isWhitespaceBreak()) {
-                width += cluster->trimmedWidth(cluster->endPos());
+                width += cluster->trimmedWidth(fParent, cluster->endPos());
                 trailingSpaces = false;
             }
             continue;
@@ -397,6 +398,7 @@ void TextWrapper::updateMinIntrinsicWidth(SkScalar width) {
 void TextWrapper::breakTextIntoLines(ParagraphImpl* parent,
                                      SkScalar maxWidth,
                                      const AddLineToParagraph& addLine) {
+    fParent = parent;
     fTextIndent = parent->textIndent();
     fTextIndentPending = true;
     if (parent->hasRuby()) {
@@ -427,7 +429,7 @@ void TextWrapper::breakTextIntoLines(ParagraphImpl* parent,
     bool firstLine = true; // We only interested in fist line if we have to disable the first ascent
 
     SkScalar softLineMaxIntrinsicWidth = fTextIndent;
-    fEndLine = TextStretch(span.data(), span.data(), parent->strutForceHeight());
+    fEndLine = TextStretch(parent, span.data(), span.data(), parent->strutForceHeight());
     auto start = span.data();
     auto end = start + span.size() - 1;
     InternalLineMetrics maxRunMetrics;
@@ -436,7 +438,13 @@ void TextWrapper::breakTextIntoLines(ParagraphImpl* parent,
 
         auto lineWidth = fLineNumber == 1 ? parent->firstLineWidth(maxWidth) : maxWidth;
         auto lastLine = (hasEllipsis && unlimitedLines) || fLineNumber >= maxLines;
+#ifdef SK_IGNORE_ELLIPSIZE_TRUNCATED_LINES
         needEllipsis = hasEllipsis && !endlessLine && lastLine;
+#else
+        // Infinite width never soft-wraps, so only a finite maxLines limit can truncate after \n
+        needEllipsis = hasEllipsis && (!endlessLine || (maxWidth > 0 && !unlimitedLines)) &&
+                       lastLine;
+#endif
 
         this->lookAhead(lineWidth, end, parent->getApplyRoundingHack(), softHyphen, needEllipsis);
 
@@ -466,7 +474,7 @@ void TextWrapper::breakTextIntoLines(ParagraphImpl* parent,
         // Deal with placeholder clusters == runs[@size==1]
         Run* lastRun = nullptr;
         for (auto cluster = fEndLine.startCluster(); cluster <= fEndLine.endCluster(); ++cluster) {
-            auto r = cluster->runOrNull();
+            auto r = cluster->runOrNull(parent);
             if (r == lastRun) {
                 continue;
             }
@@ -519,6 +527,14 @@ void TextWrapper::breakTextIntoLines(ParagraphImpl* parent,
         // In case of a force wrapping we don't have a break cluster and have to use the end cluster
         text.end = std::max(text.end, textExcludingSpaces.end);
 
+#ifdef SK_IGNORE_ELLIPSIZE_TRUNCATED_LINES
+        bool addEllipsis = needEllipsis && !fHardLineBreak;
+#else
+        // needEllipsis is already false when no text follows the line; without a line limit a
+        // hard-broken line hides nothing
+        bool addEllipsis = needEllipsis && (!fHardLineBreak || !unlimitedLines);
+#endif
+
         addLine(textExcludingSpaces,
                 text,
                 textIncludingNewlines, clusters, clustersWithGhosts, widthWithSpaces,
@@ -527,7 +543,7 @@ void TextWrapper::breakTextIntoLines(ParagraphImpl* parent,
                 SkVector::Make(0, fHeight),
                 SkVector::Make(fEndLine.width(), lineHeight),
                 fEndLine.metrics(),
-                needEllipsis && !fHardLineBreak);
+                addEllipsis);
 
         softLineMaxIntrinsicWidth += widthWithSpaces;
 
@@ -540,7 +556,7 @@ void TextWrapper::breakTextIntoLines(ParagraphImpl* parent,
         if (!fHardLineBreak || startLine != end) {
             fEndLine.clean();
         }
-        fEndLine.startFrom(startLine, pos);
+        fEndLine.startFrom(parent, startLine, pos);
         parent->fMaxWidthWithTrailingSpaces = std::max(parent->fMaxWidthWithTrailingSpaces, widthWithSpaces);
 
         if (hasEllipsis && unlimitedLines) {
@@ -571,19 +587,19 @@ void TextWrapper::breakTextIntoLines(ParagraphImpl* parent,
                 softLineMaxIntrinsicWidth = 0;
                 this->updateMinIntrinsicWidth(lastWordLength);
                 lastWordLength = 0;
-            } else if (cluster->isWhitespaceBreak() && cluster->isSoftBreak()) {
+            } else if (cluster->isWhitespaceBreak() && cluster->isSoftBreak(fParent)) {
                 // Whitespaces end the word
                 softLineMaxIntrinsicWidth += cluster->width();
                 this->updateMinIntrinsicWidth(lastWordLength);
                 lastWordLength = 0;
-            } else if (cluster->run().isPlaceholder()) {
-                if (cluster->canBreakBefore()) {
+            } else if (cluster->run(fParent).isPlaceholder()) {
+                if (cluster->canBreakBefore(fParent)) {
                     this->updateMinIntrinsicWidth(lastWordLength);
                     lastWordLength = 0;
                 }
                 softLineMaxIntrinsicWidth += cluster->width();
                 lastWordLength += cluster->width();
-                if (cluster->isSoftBreak()) {
+                if (cluster->isSoftBreak(fParent)) {
                     this->updateMinIntrinsicWidth(lastWordLength);
                     lastWordLength = 0;
                 }
@@ -591,10 +607,10 @@ void TextWrapper::breakTextIntoLines(ParagraphImpl* parent,
                 // Nothing out of ordinary - just add this cluster to the word and to the line
                 softLineMaxIntrinsicWidth += cluster->width();
                 lastWordLength += cluster->width();
-                if (cluster->isSoftBreak()) {
+                if (cluster->isSoftBreak(parent)) {
                     // Words after maxLines also split at soft breaks and include any drawn hyphen
                     this->updateMinIntrinsicWidth(
-                            lastWordLength + softHyphenWidth(softHyphen, cluster));
+                            lastWordLength + softHyphenWidth(fParent, softHyphen, cluster));
                     lastWordLength = 0;
                 }
             }

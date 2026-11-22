@@ -21,6 +21,21 @@
 namespace fs = std::filesystem;
 using namespace milestro::skia::textlayout;
 
+TEST(SkiaPathTest, EmptyPathProducesNoTriangles) {
+    milestro::skia::Path path(SkPath{});
+    std::unique_ptr<milestro::skia::VertexData> triangles(path.ToAATriangles(0.1f));
+    EXPECT_EQ(triangles, nullptr);
+}
+
+TEST(SkiaPathTest, RectangleProducesTriangleVerticesWithCoverage) {
+    milestro::skia::Path path(SkPath::Rect(SkRect::MakeWH(20, 30)));
+    std::unique_ptr<milestro::skia::VertexData> triangles(path.ToAATriangles(0.1f));
+    ASSERT_NE(triangles, nullptr);
+    EXPECT_GT(triangles->GetVertexCount(), 0u);
+    EXPECT_EQ(triangles->GetVertexCount() % 3, 0u);
+    EXPECT_EQ(triangles->GetVertexSize(), sizeof(SkPoint) + sizeof(float));
+}
+
 int registerFontsInDirectory(milestro::skia::FontRegistry *fontRegistry, const std::string &dirPath) {
     int successCount = 0;
     fs::path fontDir(dirPath);
@@ -94,8 +109,13 @@ public:
                   << ", " << clipBounds.bottom() << ")" << std::endl;
 
         GrCpuVertexAllocator alloc;
-        auto trianglesResult = GrAATriangulator::PathToAATriangles(glyphPath, 0.1, clipBounds, &alloc);
-        std::cout << "trianglesResult: " << trianglesResult << std::endl;
+        int vertexCount = 0;
+        const bool success = GrAATriangulator::PathToAATriangles(
+                glyphPath, 0.1, clipBounds, &alloc, &vertexCount);
+        if (!success) {
+            return -1;
+        }
+        std::cout << "trianglesResult: " << vertexCount << std::endl;
 
         auto vertexData = alloc.detachVertexData();
 //        printVertexData(vertexData);

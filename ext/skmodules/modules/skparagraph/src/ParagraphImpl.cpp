@@ -81,7 +81,8 @@ ParagraphImpl::ParagraphImpl(const SkString& text,
     : Paragraph(std::move(style), std::move(fonts)), fTextStyles(std::move(blocks)),
       fPlaceholders(std::move(placeholders)), fText(text), fState(kUnknown), fUnresolvedGlyphs(0), fPicture(nullptr),
       fStrutMetrics(false), fOldWidth(0), fOldHeight(0), fOldInlineExtent(0), fTextIndent(0),
-      fUnicode(std::move(unicode)), fHasLineBreaks(false), fHasWhitespacesInside(false), fTrailingSpaces(0) {
+      fUnicode(std::move(unicode)), fHasLineBreaks(false), fHasWhitespacesInside(false),
+      fHasDefaultIgnorables(false), fTrailingSpaces(0) {
     SkASSERT(fUnicode);
 }
 
@@ -161,6 +162,7 @@ void ParagraphImpl::layout(SkScalar rawWidth) {
     }
 
     if (fState < kShaped) {
+        this->fShapedEllipses.clear();
         // Check if we have the text in the cache and don't need to shape it again
         fRubyPrepared = false;
         if (!fFontCollection->getParagraphCache()->findParagraph(this)) {
@@ -327,6 +329,9 @@ bool ParagraphImpl::computeCodeUnitProperties() {
         if (SkUnicode::hasHardLineBreakFlag(flags)) {
             fHasLineBreaks = true;
         }
+        if (flags & SkUnicode::kDefaultIgnorable) {
+            fHasDefaultIgnorables = true;
+        }
     }
 
     if (firstWhitespace < fTrailingSpaces) {
@@ -371,14 +376,17 @@ Cluster::Cluster(ParagraphImpl* owner,
                  size_t end,
                  SkSpan<const char> text,
                  SkScalar width)
-        : fOwner(owner)
-        , fRunIndex(runIndex)
-        , fTextRange(text.begin() - fOwner->text().begin(), text.end() - fOwner->text().begin())
+        : fRunIndex(runIndex)
+        , fTextRange(text.begin() - owner->text().begin(), text.end() - owner->text().begin())
         , fStart(start)
         , fEnd(end)
         , fWidth(width)
         , fHalfLetterSpacing(0.0)
-        , fIsIdeographic(false) {
+        , fIsIdeographic(false)
+        // U+00AD has one valid UTF-8 form, so there is no need to decode the text
+        , fIsSoftHyphen(text.size() == 2 && static_cast<uint8_t>(text[0]) == 0xC2 &&
+                        static_cast<uint8_t>(text[1]) == 0xAD)
+        , fIsZeroWidthDefaultIgnorable(false) {
     size_t whiteSpacesBreakLen = 0;
     size_t intraWordBreakLen = 0;
 
@@ -391,13 +399,13 @@ Cluster::Cluster(ParagraphImpl* owner,
         }
     } else {
         for (auto i = fTextRange.start; i < fTextRange.end; ++i) {
-            if (fOwner->codeUnitHasProperty(i, SkUnicode::CodeUnitFlags::kPartOfWhiteSpaceBreak)) {
+            if (owner->codeUnitHasProperty(i, SkUnicode::CodeUnitFlags::kPartOfWhiteSpaceBreak)) {
                 ++whiteSpacesBreakLen;
             }
-            if (fOwner->codeUnitHasProperty(i, SkUnicode::CodeUnitFlags::kPartOfIntraWordBreak)) {
+            if (owner->codeUnitHasProperty(i, SkUnicode::CodeUnitFlags::kPartOfIntraWordBreak)) {
                 ++intraWordBreakLen;
             }
-            if (fOwner->codeUnitHasProperty(i, SkUnicode::CodeUnitFlags::kIdeographic)) {
+            if (owner->codeUnitHasProperty(i, SkUnicode::CodeUnitFlags::kIdeographic)) {
                 fIsIdeographic = true;
             }
         }
@@ -405,8 +413,8 @@ Cluster::Cluster(ParagraphImpl* owner,
 
     fIsWhiteSpaceBreak = whiteSpacesBreakLen == fTextRange.width();
     fIsIntraWordBreak = intraWordBreakLen == fTextRange.width();
-    fIsHardBreak = fOwner->codeUnitHasProperty(fTextRange.end,
-                                               SkUnicode::CodeUnitFlags::kHardLineBreakBefore);
+    fIsHardBreak = owner->codeUnitHasProperty(fTextRange.end,
+                                              SkUnicode::CodeUnitFlags::kHardLineBreakBefore);
 }
 
 SkScalar Run::calculateWidth(size_t start, size_t end, bool clip) const {
@@ -452,8 +460,9 @@ void ParagraphImpl::applySpacingAndBuildClusterTable() {
     // which is treated as a common case down below
     if (letterSpacingStyles == 1 && !hasWordSpacing && fTextStyles.size() == 1 &&
         fTextStyles[0].fRange.width() == fText.size() && fRuns.size() == 1 &&
-        !(this->fHasWhitespacesInside && this->fParagraphStyle.getLetterSpacingByCSSSpec())
-        ) {
+        !(this->fHasWhitespacesInside && this->fParagraphStyle.getLetterSpacingByCSSSpec()) &&
+        // Spacing every glyph would also widen invisible default-ignorables
+        !fHasDefaultIgnorables) {
         auto& run = fRuns[0];
         auto& style = fTextStyles[0].fStyle;
         if (!run.isCursiveScript()) {
@@ -503,7 +512,7 @@ void ParagraphImpl::applySpacingAndBuildClusterTable() {
 
             // Process word spacing
             if (currentStyle->fStyle.getWordSpacing() != 0) {
-                if (cluster->isWhitespaceBreak() && cluster->isSoftBreak()) {
+                if (cluster->isWhitespaceBreak() && cluster->isSoftBreak(this)) {
                     if (!soFarWhitespacesOnly) {
                         lastSpaceCluster = cluster;
                         wordSpacingPending = true;
@@ -513,10 +522,15 @@ void ParagraphImpl::applySpacingAndBuildClusterTable() {
                     if (cluster->fRunIndex != lastSpaceCluster->fRunIndex) {
                         // If the last space cluster belongs to the previous run
                         // we have to extend that cluster and that run
-                        lastSpaceCluster->run().addSpacesAtTheEnd(spacing, lastSpaceCluster);
-                        lastSpaceCluster->run().extend(lastSpaceCluster, spacing);
+                        lastSpaceCluster->run(this).addSpacesAtTheEnd(spacing, lastSpaceCluster);
+                        lastSpaceCluster->run(this).extend(lastSpaceCluster, spacing);
                     } else {
                         run.addSpacesAtTheEnd(spacing, lastSpaceCluster);
+                        // A trailing empty cluster has no glyphs for shift() to move the run end
+                        if (cluster->size() == 0 && cluster->endPos() == run.size() &&
+                            run.size() > 0) {
+                            run.extend(lastSpaceCluster, spacing);
+                        }
                     }
 
                     run.shift(cluster, spacing);
@@ -526,7 +540,9 @@ void ParagraphImpl::applySpacingAndBuildClusterTable() {
             }
             // We do not apply letter spacing for script languages
             // except for one case (cluster is whitespace, and we have to follow CSS spec)
-            if ((currentStyle->fStyle.getLetterSpacing() != 0)) {
+            // Invisible default-ignorable clusters must not widen the text
+            if (!SkScalarNearlyZero(currentStyle->fStyle.getLetterSpacing()) &&
+                !cluster->isZeroWidthDefaultIgnorable()) {
                 if (!run.isCursiveScript() ||
                     (cluster->isWhitespaceBreak() &&
                      this->fParagraphStyle.getLetterSpacingByCSSSpec())) {
@@ -610,6 +626,9 @@ void ParagraphImpl::buildClusterTable() {
                     }
                     SkSpan<const char> text(fText.c_str() + charStart, charEnd - charStart);
                     fClusters.emplace_back(this, runIndex, glyphStart, glyphEnd, text, width);
+                    // Hangul fillers and GSUB-substituted ignorables advance the pen and must space
+                    fClusters.back().fIsZeroWidthDefaultIgnorable =
+                            hasZeroWidth && !hasVisible && SkScalarNearlyZero(width);
                     fCodeUnitProperties[charStart] |= SkUnicode::CodeUnitFlags::kGlyphClusterStart;
                     return;
                 }
@@ -680,6 +699,8 @@ void ParagraphImpl::buildClusterTable() {
                     }
                     SkSpan<const char> subText(fText.c_str() + sub.range.start, sub.range.width());
                     fClusters.emplace_back(this, runIndex, gStart, gEnd, subText, subWidth);
+                    // Zero-width split sub-clusters own no glyphs and zero advance, so skip spacing
+                    fClusters.back().fIsZeroWidthDefaultIgnorable = sub.isZeroWidth;
                     fCodeUnitProperties[sub.range.start] |=
                             SkUnicode::CodeUnitFlags::kGlyphClusterStart;
                 }
@@ -734,8 +755,8 @@ bool IsCjkPunctuation(SkUnichar ch) {
     }
 }
 
-SkUnichar FirstCodePoint(const Cluster& cluster) {
-    const auto text = cluster.owner()->text(cluster.textRange());
+SkUnichar FirstCodePoint(ParagraphImpl* owner, const Cluster& cluster) {
+    const auto text = owner->text(cluster.textRange());
     const char* ptr = text.begin();
     const char* end = text.end();
     return ptr < end ? SkUTF::NextUTF8(&ptr, end) : -1;
@@ -763,8 +784,8 @@ void ParagraphImpl::applyCjkPunctuationCompression() {
         auto& current = fClusters[index];
         auto& next = fClusters[index + 1];
         if (current.textRange().empty() || next.textRange().empty() ||
-            !IsCjkPunctuation(FirstCodePoint(current)) ||
-            !IsCjkPunctuation(FirstCodePoint(next)) ||
+            !IsCjkPunctuation(FirstCodePoint(this, current)) ||
+            !IsCjkPunctuation(FirstCodePoint(this, next)) ||
             current.runIndex() == EMPTY_RUN || next.runIndex() == EMPTY_RUN) {
             continue;
         }
@@ -781,7 +802,7 @@ void ParagraphImpl::applyCjkPunctuationCompression() {
         if (amount <= 0) {
             continue;
         }
-        Run& run = current.run();
+        Run& run = current.run(this);
         if (run.isVertical() && run.vchwEnabled()) {
             continue;
         }
@@ -1112,7 +1133,7 @@ std::vector<TextBox> ParagraphImpl::getRectsForPlaceholders() {
   if (this->isVertical()) {
       ensureVerticalLayoutReady();
       for (size_t index = 0; index < fClusters.size(); ++index) {
-          const Run* run = fClusters[index].runOrNull();
+          const Run* run = fClusters[index].runOrNull(this);
           SkRect cell;
           if (run != nullptr && run->isPlaceholder() && run->textRange().width() > 0 &&
               getVerticalClusterCell(index, &cell) && !cell.isEmpty()) {
@@ -1690,7 +1711,7 @@ bool ParagraphImpl::getGlyphInfoAtUTF16Offset(size_t codeUnitIndex, GlyphInfo* g
             boxes[0].rect,
             { fUTF16IndexForUTF8Index[startIndex], fUTF16IndexForUTF8Index[endIndex] },
             boxes[0].direction,
-            glyphCluster.run().isEllipsis(),
+            glyphCluster.run(this).isEllipsis(),
         };
     }
     return true;

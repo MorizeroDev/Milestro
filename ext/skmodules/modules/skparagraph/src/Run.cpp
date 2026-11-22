@@ -326,7 +326,7 @@ void Run::shift(const Cluster* cluster, SkScalar offset) {
             fGlyphData->positions()[i].fX += offset;
         }
     }
-    if (this->size() == cluster->endPos()) {
+    if (this->size() == cluster->endPos() && (cluster->size() > 0 || this->size() == 0)) {
         // To make calculations easier
         if (fVertical) {
             fGlyphData->positions()[cluster->endPos()].fY += offset;
@@ -419,21 +419,21 @@ void Run::updateMetrics(InternalLineMetrics* endlineMetrics) {
     endlineMetrics->add(this);
 }
 
-SkScalar Cluster::sizeToChar(TextIndex ch) const {
+SkScalar Cluster::sizeToChar(ParagraphImpl* owner, TextIndex ch) const {
     if (ch <= fTextRange.start || ch >= fTextRange.end) {
         return 0;
     }
-    if (fOwner != nullptr && fRunIndex != EMPTY_RUN && fOwner->run(fRunIndex).isVertical()) {
+    if (owner != nullptr && fRunIndex != EMPTY_RUN && owner->run(fRunIndex).isVertical()) {
         const auto ratio = (ch - fTextRange.start) * 1.0 / fTextRange.width();
         return SkDoubleToScalar(fWidth * ratio);
     }
-    if (fOwner != nullptr && fRunIndex != EMPTY_RUN && fWidth > 0) {
+    if (owner != nullptr && fRunIndex != EMPTY_RUN && fWidth > 0) {
         // Scale cluster width by standalone glyph advances so multi-character
         // ligatures (such as "ffi") split proportionally to their component characters.
         // Combining marks lack kGraphemeStart and contribute zero horizontal advance
-        const Run& run = fOwner->run(fRunIndex);
+        const Run& run = owner->run(fRunIndex);
         const SkFont& font = run.font();
-        const char* text = fOwner->text().data();
+        const char* text = owner->text().data();
         const char* ptr = text + fTextRange.start;
         const char* end = text + fTextRange.end;
         const char* split = text + ch;
@@ -446,8 +446,8 @@ SkScalar Cluster::sizeToChar(TextIndex ch) const {
             if (u < 0) {
                 break;
             }
-            if (!fOwner->codeUnitHasProperty(charStart - text,
-                                             SkUnicode::CodeUnitFlags::kGraphemeStart)) {
+            if (!owner->codeUnitHasProperty(charStart - text,
+                                            SkUnicode::CodeUnitFlags::kGraphemeStart)) {
                 continue;
             }
             SkScalar w = font.measureText(charStart, ptr - charStart, SkTextEncoding::kUTF8);
@@ -469,11 +469,11 @@ SkScalar Cluster::sizeToChar(TextIndex ch) const {
     return SkDoubleToScalar(fWidth * ratio);
 }
 
-SkScalar Cluster::sizeFromChar(TextIndex ch) const {
+SkScalar Cluster::sizeFromChar(ParagraphImpl* owner, TextIndex ch) const {
     if (ch < fTextRange.start || ch + 1 >= fTextRange.end) {
         return 0;
     }
-    return fWidth - sizeToChar(ch + 1);
+    return fWidth - sizeToChar(owner, ch + 1);
 }
 
 size_t Cluster::roundPos(SkScalar s) const {
@@ -481,10 +481,10 @@ size_t Cluster::roundPos(SkScalar s) const {
     return sk_double_floor2int(ratio * size());
 }
 
-SkScalar Cluster::trimmedWidth(size_t pos) const {
+SkScalar Cluster::trimmedWidth(ParagraphImpl* owner, size_t pos) const {
     // Find the width until the pos and return the min between trimmedWidth and the width(pos)
     // We don't have to take in account cluster shift since it's the same for 0 and for pos
-    auto& run = fOwner->run(fRunIndex);
+    auto& run = owner->run(fRunIndex);
     if (run.isVertical()) {
         return std::min(run.inlinePosition(pos) - run.inlinePosition(fStart), fWidth);
     }
@@ -512,46 +512,39 @@ bool Run::isResolved() const {
     return true;
 }
 
-Run* Cluster::runOrNull() const {
-    if (fRunIndex >= fOwner->runs().size()) {
+Run* Cluster::runOrNull(ParagraphImpl* owner) const {
+    if (fRunIndex >= owner->runs().size()) {
         return nullptr;
     }
-    return &fOwner->run(fRunIndex);
+    return &owner->run(fRunIndex);
 }
 
-Run& Cluster::run() const {
-    SkASSERT(fRunIndex < fOwner->runs().size());
-    return fOwner->run(fRunIndex);
+Run& Cluster::run(ParagraphImpl* owner) const {
+    SkASSERT(fRunIndex < owner->runs().size());
+    return owner->run(fRunIndex);
 }
 
-SkFont Cluster::font() const {
-    SkASSERT(fRunIndex < fOwner->runs().size());
-    return fOwner->run(fRunIndex).font();
-}
-
-bool Cluster::isSoftBreak() const {
-    return fOwner->codeUnitHasProperty(fTextRange.end,
-                                       SkUnicode::CodeUnitFlags::kSoftLineBreakBefore);
-}
-
-bool Cluster::canBreakBefore() const {
-    return fOwner->codeUnitHasProperty(fTextRange.start,
-                                       SkUnicode::CodeUnitFlags::kSoftLineBreakBefore);
-}
-
-bool Cluster::isSoftHyphen() const {
-    auto text = fOwner->text();
-    const char* p = text.begin() + fTextRange.start;
-    const char* end = text.begin() + fTextRange.end;
-    if (p >= end) {
-        return false;
+const Run* Cluster::runOrNull(const ParagraphImpl* owner) const {
+    if (fRunIndex >= owner->runs().size()) {
+        return nullptr;
     }
-    SkUnichar cp = SkUTF::NextUTF8(&p, end);
-    return cp == 0x00AD && p == end;
+    return &owner->run(fRunIndex);
 }
 
-bool Cluster::isGraphemeBreak() const {
-    return fOwner->codeUnitHasProperty(fTextRange.end, SkUnicode::CodeUnitFlags::kGraphemeStart);
+const Run& Cluster::run(const ParagraphImpl* owner) const {
+    SkASSERT(fRunIndex < owner->runs().size());
+    return owner->run(fRunIndex);
 }
+
+bool Cluster::isSoftBreak(const ParagraphImpl* owner) const {
+    return owner->codeUnitHasProperty(fTextRange.end,
+                                      SkUnicode::CodeUnitFlags::kSoftLineBreakBefore);
+}
+
+bool Cluster::canBreakBefore(const ParagraphImpl* owner) const {
+    return owner->codeUnitHasProperty(fTextRange.start,
+                                       SkUnicode::CodeUnitFlags::kSoftLineBreakBefore);
+}
+
 }  // namespace textlayout
 }  // namespace skia

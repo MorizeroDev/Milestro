@@ -215,6 +215,8 @@ public:
     SkSpan<const char> text() const { return SkSpan<const char>(fText.c_str(), fText.size()); }
     InternalState state() const { return fState; }
     SkSpan<Run> runs() { return SkSpan<Run>(fRuns.data(), fRuns.size()); }
+    SkSpan<const Run> runs() const { return SkSpan<const Run>(fRuns.data(), fRuns.size()); }
+    int shapedEllipsisCount() const { return fShapedEllipses.size(); }
     SkSpan<Block> styles() {
         return SkSpan<Block>(fTextStyles.data(), fTextStyles.size());
     }
@@ -306,6 +308,10 @@ public:
         return clusterIndex;
     }
     Run& run(RunIndex runIndex) {
+        SkASSERT(runIndex < SkToSizeT(fRuns.size()));
+        return fRuns[runIndex];
+    }
+    const Run& run(RunIndex runIndex) const {
         SkASSERT(runIndex < SkToSizeT(fRuns.size()));
         return fRuns[runIndex];
     }
@@ -436,6 +442,7 @@ private:
 
     friend class TextWrapper;
     friend class OneLineShaper;
+    friend class TextLine;
 
     void computeEmptyMetrics();
 
@@ -478,6 +485,15 @@ private:
     std::shared_ptr<std::unordered_set<SkUnichar>> fUnresolvedCodepoints;
 
     skia_private::TArray<TextLine, false> fLines;   // kFormatted   (cached: width, max lines, ellipsis, text align)
+
+    // The shaped ellipsis for each run and style block where an ellipsis was placed. It depends
+    // only on fRuns and the blocks, so layouts at other widths reuse it.
+    struct ShapedEllipsis {
+        RunIndex fRun;
+        BlockIndex fBlock;
+        Run fShaped;
+    };
+    skia_private::TArray<ShapedEllipsis> fShapedEllipses;  // kShaped
     sk_sp<SkPicture> fPicture;          // kRecorded    (cached: text styles)
     ParagraphLayoutMetrics fLayoutMetrics;
     std::vector<VerticalColumnGeometry> fVerticalColumns;
@@ -500,6 +516,7 @@ private:
     sk_sp<SkUnicode> fUnicode;
     bool fHasLineBreaks;
     bool fHasWhitespacesInside;
+    bool fHasDefaultIgnorables;
     TextIndex fTrailingSpaces;
 };
 }  // namespace textlayout

@@ -475,6 +475,9 @@ private:
             if (isIdeographic(unichar)) {
                 (*results)[i] |= CodeUnitFlags::kIdeographic;
             }
+            if (isDefaultIgnorable(unichar)) {
+                (*results)[i] |= CodeUnitFlags::kDefaultIgnorable;
+            }
         }
     }
 };

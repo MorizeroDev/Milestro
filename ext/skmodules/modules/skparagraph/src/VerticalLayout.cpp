@@ -1044,14 +1044,14 @@ void ParagraphImpl::prepareVerticalRuby() {
         SkScalar baseAdvance = 0;
         SkRect baseInk = SkRect::MakeEmpty();
         const auto& firstCluster = fClusters[first];
-        const SkScalar sourceStart = firstCluster.run().offset().y() +
-                                    firstCluster.run().inlinePosition(firstCluster.startPos());
+        const SkScalar sourceStart = firstCluster.run(this).offset().y() +
+                                    firstCluster.run(this).inlinePosition(firstCluster.startPos());
         for (size_t index = first; index < last; ++index) {
-            if (fClusters[index].isHardBreak() || fClusters[index].run().isPlaceholder()) {
+            if (fClusters[index].isHardBreak() || fClusters[index].run(this).isPlaceholder()) {
                 throw std::invalid_argument("ruby range contains placeholder or hard line break");
             }
             const auto& cluster = fClusters[index];
-            const auto& run = cluster.run();
+            const auto& run = cluster.run(this);
             for (size_t glyph = cluster.startPos(); glyph < cluster.endPos(); ++glyph) {
                 SkRect bounds = run.font().getBounds(run.fGlyphData->glyphs()[glyph], nullptr);
                 if (run.isSideways()) {
@@ -1170,8 +1170,8 @@ void ParagraphImpl::prepareVerticalRuby() {
     }
     for (auto& span : fVerticalRuby) {
         const auto& cluster = fClusters[span.clusters.start];
-        span.inlineStart = cluster.run().offset().y() +
-                           cluster.run().inlinePosition(cluster.startPos());
+        span.inlineStart = cluster.run(this).offset().y() +
+                           cluster.run(this).inlinePosition(cluster.startPos());
     }
     fRubyPrepared = true;
 }
@@ -1250,7 +1250,7 @@ void ParagraphImpl::prepareVerticalTateChuYoko() {
             if (cluster.isHardBreak()) {
                 throw std::invalid_argument("tate-chu-yoko range contains a hard line break");
             }
-            const Run* run = cluster.runOrNull();
+            const Run* run = cluster.runOrNull(this);
             if (run == nullptr || run->isPlaceholder()) {
                 throw std::invalid_argument("tate-chu-yoko range contains a placeholder");
             }
@@ -1349,7 +1349,7 @@ void ParagraphImpl::prepareVerticalTateChuYoko() {
             span.cellWidth = std::min(naturalWidth, fontSize);
             span.squeeze = naturalWidth > fontSize ? fontSize / naturalWidth : 1.0f;
         }
-        span.blockOffset = -fClusters[first].run().baselineShift();
+        span.blockOffset = -fClusters[first].run(this).baselineShift();
         span.styleIsDefault = firstStyle->equals(fParagraphStyle.getTextStyle());
         fVerticalTateChuYoko.push_back(std::move(span));
     }
@@ -1358,7 +1358,7 @@ void ParagraphImpl::prepareVerticalTateChuYoko() {
         if (index < fClusters.size()) {
             const Cluster& cluster = fClusters[index];
             if (cluster.textRange().width() > 0) {
-                if (const Run* run = cluster.runOrNull()) {
+                if (const Run* run = cluster.runOrNull(this)) {
                     return run->offset().y() + run->inlinePosition(cluster.startPos());
                 }
             }
@@ -1366,7 +1366,7 @@ void ParagraphImpl::prepareVerticalTateChuYoko() {
         if (index > 0 && index <= fClusters.size()) {
             const Cluster& previous = fClusters[index - 1];
             if (previous.textRange().width() > 0) {
-                if (const Run* run = previous.runOrNull()) {
+                if (const Run* run = previous.runOrNull(this)) {
                     return run->offset().y() + run->inlinePosition(previous.endPos());
                 }
             }
@@ -1656,7 +1656,7 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
     if (fClusters.size() > 1) {
         for (size_t index = 0; index + 1 < fClusters.size(); ++index) {
             Cluster& cluster = fClusters[index];
-            Run* run = cluster.runOrNull();
+            Run* run = cluster.runOrNull(this);
             if (run == nullptr || cluster.textRange().empty()) {
                 continue;
             }
@@ -1685,7 +1685,7 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
                     break;
                 }
             }
-            if (run->isPlaceholder() && cluster.canBreakBefore() && !units.empty()) {
+            if (run->isPlaceholder() && cluster.canBreakBefore(this) && !units.empty()) {
                 units.back().softBreak = true;
             }
             units.push_back({index,
@@ -1693,7 +1693,7 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
                              inlineStart,
                              inlineEnd,
                              cluster.isHardBreak(),
-                             fClusters[endCluster - 1].isSoftBreak(),
+                             fClusters[endCluster - 1].isSoftBreak(this),
                              cluster.isWhitespaceBreak()});
             index = endCluster - 1;
         }
@@ -1735,7 +1735,7 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
         bool hardBreak = false;
 
         while (end < units.size()) {
-            const bool placeholder = fClusters[units[end].cluster].runOrNull()->isPlaceholder();
+            const bool placeholder = fClusters[units[end].cluster].runOrNull(this)->isPlaceholder();
             if (placeholder && end > start) {
                 lastSoft = end - 1;
             }
@@ -1797,7 +1797,7 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
             if (fClusters[index].isHardBreak()) {
                 continue;
             }
-            Run* run = fClusters[index].runOrNull();
+            Run* run = fClusters[index].runOrNull(this);
             if (run == nullptr || run->isPlaceholder() || run->size() == 0) {
                 continue;
             }
@@ -1823,7 +1823,7 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
         if (!hasBlockMetrics) {
             SkScalar width = 0;
             for (size_t index = clusterRange.start; index < clusterRange.end; ++index) {
-                const Run* run = fClusters[index].runOrNull();
+                const Run* run = fClusters[index].runOrNull(this);
                 if (run != nullptr && run->isPlaceholder()) {
                     width = std::max(width, run->placeholderStyle()->fWidth);
                 }
@@ -1945,7 +1945,7 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
                     return column.inlineExtent;
                 }
                 const Cluster& cluster = fClusters[firstExcluded];
-                const Run* run = cluster.runOrNull();
+                const Run* run = cluster.runOrNull(this);
                 if (run == nullptr) {
                     return column.inlineExtent;
                 }
@@ -1972,7 +1972,7 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
                     const ClusterIndex styledCluster = styleCluster < column.clusters.end
                             ? styleCluster
                             : column.clusters.end - 1;
-                    const Run* styledRun = fClusters[styledCluster].runOrNull();
+                    const Run* styledRun = fClusters[styledCluster].runOrNull(this);
                     if (styledRun != nullptr) {
                         typeface = styledRun->font().refTypeface();
                     }
@@ -2189,7 +2189,7 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
         const Run* previousRun = nullptr;
         for (ClusterIndex index = column.clusters.start; index < column.clusters.end; ++index) {
             const Cluster& cluster = fClusters[index];
-            const Run* run = cluster.runOrNull();
+            const Run* run = cluster.runOrNull(this);
             if (cluster.isHardBreak() || cluster.textRange().empty() ||
                 run == nullptr || run->isPlaceholder() || run->size() == 0 || run == previousRun) {
                 continue;
@@ -2232,7 +2232,7 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
         }
         SkScalar placeholderWidth = 0;
         for (ClusterIndex index = column.clusters.start; index < column.clusters.end; ++index) {
-            const Run* run = fClusters[index].runOrNull();
+            const Run* run = fClusters[index].runOrNull(this);
             if (run != nullptr && run->isPlaceholder()) {
                 placeholderWidth = std::max(placeholderWidth, run->placeholderStyle()->fWidth);
             }
@@ -2513,7 +2513,7 @@ void ParagraphImpl::resolveVerticalDecorations() {
 
         for (ClusterIndex index = column.clusters.start; index < column.clusters.end; ++index) {
             const Cluster& cluster = fClusters[index];
-            const Run* run = cluster.runOrNull();
+            const Run* run = cluster.runOrNull(this);
             if (cluster.isHardBreak() || (run != nullptr && run->isPlaceholder()) ||
                 cluster.textRange().start >= trimmedEnd) {
                 flush(&underline);
@@ -2633,7 +2633,7 @@ void ParagraphImpl::resolveVerticalBackgrounds() {
                 adjacent = false;
                 continue;
             }
-            const Run* run = cluster.runOrNull();
+            const Run* run = cluster.runOrNull(this);
             if (run != nullptr && run->isPlaceholder()) {
                 adjacent = false;
                 continue;
@@ -2835,7 +2835,7 @@ bool ParagraphImpl::getVerticalClusterCell(ClusterIndex clusterIndex, SkRect* ce
         return false;
     }
     const Cluster& cluster = fClusters[clusterIndex];
-    const Run* run = cluster.runOrNull();
+    const Run* run = cluster.runOrNull(this);
     if (run == nullptr) {
         return false;
     }
@@ -3341,7 +3341,7 @@ std::vector<TextBox> ParagraphImpl::getVerticalRectsForRange(unsigned start, uns
         if (inlineBox) {
             for (ClusterIndex index = column.clusters.start; index < column.clusters.end; ++index) {
                 const Cluster& cluster = fClusters[index];
-                const Run* run = cluster.runOrNull();
+                const Run* run = cluster.runOrNull(this);
                 if (verticalTateChuYokoAtCluster(index) == nullptr && run != nullptr && !run->isPlaceholder()) {
                     columnInlineThickness = std::max(columnInlineThickness, run->descent() - run->ascent());
                 }
@@ -3370,7 +3370,7 @@ std::vector<TextBox> ParagraphImpl::getVerticalRectsForRange(unsigned start, uns
                     SkRect cell;
                     if (getVerticalClusterCell(index, &cell) && !cell.isEmpty()) {
                         if (inlineBox) {
-                            const Run* run = cluster.runOrNull();
+                            const Run* run = cluster.runOrNull(this);
                             if (run == nullptr) {
                                 continue;
                             }
@@ -3394,7 +3394,7 @@ std::vector<TextBox> ParagraphImpl::getVerticalRectsForRange(unsigned start, uns
             if (cluster.isHardBreak() || cluster.width() <= 0) {
                 continue;
             }
-            const Run* run = cluster.runOrNull();
+            const Run* run = cluster.runOrNull(this);
             if (run == nullptr) {
                 continue;
             }
@@ -3508,7 +3508,7 @@ PositionWithAffinity ParagraphImpl::getVerticalGlyphPositionAtCoordinate(SkScala
             index = span->clusters.end - 1;
             continue;
         }
-        const Run* run = cluster.runOrNull();
+        const Run* run = cluster.runOrNull(this);
         if (run == nullptr || cluster.textRange().empty()) {
             continue;
         }

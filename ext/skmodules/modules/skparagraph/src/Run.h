@@ -345,8 +345,8 @@ public:
     Cluster(const Cluster&) = default;
     ~Cluster() = default;
 
-    SkScalar sizeToChar(TextIndex ch) const;
-    SkScalar sizeFromChar(TextIndex ch) const;
+    SkScalar sizeToChar(ParagraphImpl* owner, TextIndex ch) const;
+    SkScalar sizeFromChar(ParagraphImpl* owner, TextIndex ch) const;
 
     size_t roundPos(SkScalar s) const;
 
@@ -354,19 +354,18 @@ public:
         fWidth += shift;
     }
 
-    ParagraphImpl* getOwner() const { return fOwner; }
-    void setOwner(ParagraphImpl* owner) { fOwner = owner; }
-
     bool isWhitespaceBreak() const { return fIsWhiteSpaceBreak; }
     bool isIntraWordBreak() const { return fIsIntraWordBreak; }
     bool isHardBreak() const { return fIsHardBreak; }
     bool isIdeographic() const { return fIsIdeographic; }
+    // Cached in the constructor for performance: TextLine::justify asks this up to 3 times per
+    // cluster, and an out-of-line call that reads the text on every ask made justify layout
+    // noticeably slower in builds without LTO
+    bool isSoftHyphen() const { return fIsSoftHyphen; }
+    bool isZeroWidthDefaultIgnorable() const { return fIsZeroWidthDefaultIgnorable; }
 
-    bool isSoftBreak() const;
-    bool canBreakBefore() const;
-    bool isSoftHyphen() const;
-    bool isGraphemeBreak() const;
-    bool canBreakLineAfter() const { return isHardBreak() || isSoftBreak(); }
+    bool isSoftBreak(const ParagraphImpl* owner) const;
+    bool canBreakBefore(const ParagraphImpl* owner) const;
     size_t startPos() const { return fStart; }
     size_t endPos() const { return fEnd; }
     SkScalar width() const { return fWidth; }
@@ -378,13 +377,15 @@ public:
     TextRange textRange() const { return fTextRange; }
 
     RunIndex runIndex() const { return fRunIndex; }
-    ParagraphImpl* owner() const { return fOwner; }
 
-    Run* runOrNull() const;
-    Run& run() const;
-    SkFont font() const;
+    // A cluster does not keep its paragraph (it is copied between paragraphs by ParagraphCache),
+    // so the caller gives the paragraph that keeps the cluster.
+    Run* runOrNull(ParagraphImpl* owner) const;
+    const Run* runOrNull(const ParagraphImpl* owner) const;
+    Run& run(ParagraphImpl* owner) const;
+    const Run& run(const ParagraphImpl* owner) const;
 
-    SkScalar trimmedWidth(size_t pos) const;
+    SkScalar trimmedWidth(ParagraphImpl* owner, size_t pos) const;
 
     bool contains(TextIndex ch) const { return ch >= fTextRange.start && ch < fTextRange.end; }
 
@@ -400,7 +401,6 @@ private:
 
     friend ParagraphImpl;
 
-    ParagraphImpl* fOwner;
     RunIndex fRunIndex;
     TextRange fTextRange;
 
@@ -413,6 +413,9 @@ private:
     bool fIsIntraWordBreak;
     bool fIsHardBreak;
     bool fIsIdeographic;
+    bool fIsSoftHyphen;
+    // Zero-advance cluster made only of Default_Ignorable_Code_Point codepoints (U+200B, U+FEFF...)
+    bool fIsZeroWidthDefaultIgnorable;
 };
 
 class InternalLineMetrics {

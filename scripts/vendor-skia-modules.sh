@@ -143,7 +143,8 @@ overlay_paths=(
     modules/skparagraph/src/TextLine.cpp
     modules/skparagraph/src/TextWrapper.cpp
     modules/skparagraph/src/TextWrapper.h
-    modules/skparagraph/tests/SkParagraphTest.cpp
+    modules/skparagraph/tests/SkParagraphDecorationTest.cpp
+    modules/skparagraph/tests/SkParagraphShapingTest.cpp
 )
 if [[ -n "${previous_source}" && "${previous_source}" != "${skia_commit}" && "${merged_overlays}" != true ]]; then
     if ! git -C "${skia_source}" diff --quiet "${previous_source}" "${skia_commit}" -- "${overlay_paths[@]}"; then

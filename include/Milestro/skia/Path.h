@@ -29,8 +29,10 @@ public:
     milestro::skia::VertexData* ToAATriangles(SkScalar tolerance) {
         GrCpuVertexAllocator alloc;
         SkRect clipBounds = path.getBounds();
-        auto trianglesResult = GrAATriangulator::PathToAATriangles(path, tolerance, clipBounds, &alloc);
-        if (trianglesResult == 0) {
+        int vertexCount = 0;
+        const bool success = GrAATriangulator::PathToAATriangles(
+                path, tolerance, clipBounds, &alloc, &vertexCount);
+        if (!success || vertexCount == 0) {
             return nullptr;
         }
         return new VertexData(alloc.detachVertexData());

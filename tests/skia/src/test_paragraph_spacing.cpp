@@ -91,6 +91,16 @@ TEST_F(SkiaParagraphSpacingTest, WordSpacingOnlyWidensAtWordBoundaries) {
     EXPECT_NEAR(spacedOneWord - baseOneWord, 0.0f, 1.0f);
 }
 
+TEST_F(SkiaParagraphSpacingTest, DefaultIgnorablesDoNotGainLetterSpacing) {
+    auto style = MakeBaseStyle();
+    style.setLetterSpacing(10.0f);
+    const float expected = MeasureLongestLine(style, "AB", 2);
+    for (const char* text : {"A\xC2\xAD" "B", "A\xE2\x80\x8B" "B",
+                             "A\xEF\xBB\xBF" "B", "AB\xE2\x80\x8B"}) {
+        EXPECT_NEAR(MeasureLongestLine(style, text, std::strlen(text)), expected, 0.01f);
+    }
+}
+
 TEST_F(SkiaParagraphSpacingTest, CjkPunctuationCompressionKeepsTrailingMarkFullWidth) {
     auto compressedStyle = MakeBaseStyle();
 

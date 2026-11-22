@@ -289,6 +289,22 @@ TEST_F(RubyLayoutTest, ShapingCacheCannotLeakRubyPaddingIntoOtherParents) {
     EXPECT_EQ(firstHash, raster(*first));
 }
 
+TEST_F(RubyLayoutTest, CachedClustersSurviveOriginalParagraphDestruction) {
+    const std::string text = "漢字後 A\xE2\x80\x8B" "B";
+    const std::vector<RubyAnnotation> annotations = {{{0, 6}, "かんじ"}};
+    auto original = build(text, annotations, 100);
+    const auto expected = raster(*original);
+    original.reset();
+    ASSERT_GT(fonts->getParagraphCache()->count(), 0);
+    auto cached = build(text, annotations, 300);
+    cached->layout(100);
+    EXPECT_EQ(raster(*cached), expected);
+    EXPECT_FALSE(box(*cached, 0, 2).isEmpty());
+    cached->markDirty();
+    cached->layout(100);
+    EXPECT_EQ(raster(*cached), expected);
+}
+
 TEST_F(RubyLayoutTest, RawGraphemesSurrogatesAndShapedLigaturesRemainIntact) {
     EXPECT_THROW(build("a\xCC\x81X", {{{1, 3}, "read"}}, 30, 1), std::invalid_argument);
     auto crossStyle = build("a\xCC\x81X", {{{0, 3}, "accent"}}, 0, 1);
