@@ -13,17 +13,17 @@ env:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 240
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
 
       - name: Set up Python
-        uses: actions/setup-python@v6.3.0
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.x"
 
@@ -32,6 +32,14 @@ jobs:
 
       - name: Install build dependencies
         run: brew install cmake ninja
+
+      - name: Print tool versions
+        run: |
+          cmake --version
+          ninja --version
+          xcrun clang --version
+          swift --version
+          xcodebuild -version
 
       - name: Configure Milestro
         run: |
@@ -72,14 +80,14 @@ jobs:
         run: tar -czf "milestro-symbols-${MILESTRO_TARGET_OS}-${MILESTRO_TARGET_ARCH}.tar.gz" milestro-symbols
 
       - name: Upload native artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: milestro-native-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}
           path: milestro-native-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}.tar.gz
           retention-days: 1
 
       - name: Upload symbols artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: milestro-symbols-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}
           path: milestro-symbols-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}.tar.gz

@@ -51,20 +51,20 @@ jobs:
       - build-macos-arm64
       - build-ios-arm64
       - build-markdig
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 60
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
 
       - name: Set up Java
-        uses: actions/setup-java@v5.5.0
+        uses: actions/setup-java@v6.3.0
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
           cache: gradle
 
       - name: Package Unity C# assets
@@ -79,7 +79,7 @@ jobs:
             -PmilestroH2csCppFrameworkBindingOutputPath="$GITHUB_WORKSPACE/build/unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp"
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           path: downloaded-artifacts
 
@@ -128,14 +128,14 @@ jobs:
         run: tar -czf milestro-unity-plugins.tar.gz -C build unity-plugins
 
       - name: Upload complete Unity plugins artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: milestro-unity-plugins
           path: milestro-unity-plugins.tar.gz
           retention-days: 30
 
       - name: Upload release symbols artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: milestro-symbols-all
           path: milestro-symbols-all.tar.gz
@@ -144,26 +144,26 @@ jobs:
   deploy:
     name: GitHub Release
     needs: unity-plugins
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
 
     steps:
       - name: Download complete Unity plugins artifact
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           name: milestro-unity-plugins
           path: release-artifacts
 
       - name: Download release symbols artifact
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           name: milestro-symbols-all
           path: release-artifacts
 
       - name: Upload artifacts to GitHub Release
-        uses: softprops/action-gh-release@v3.0.1
+        uses: softprops/action-gh-release@v3.0.4
         with:
           files: |
             release-artifacts/milestro-unity-plugins.tar.gz

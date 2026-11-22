@@ -22,7 +22,7 @@
 ## 本地构建
 
 准备 CMake 3.26+、C++20 编译器、Ninja、Python 3、Git，以及生成绑定/打包所需的 Java 和 Gradle wrapper。
-发布 CI 使用 Java 21。Apple 目标还需 Swift 5.9+。先初始化 submodule：
+发布 CI 使用 Java 25。Apple 目标还需 Swift 5.9+。先初始化 submodule：
 
 ```sh
 git submodule update --init --recursive
@@ -35,6 +35,11 @@ cmake --build cmake-build-debug --target Milestro
 CMake 正常流程准备所需原生依赖，无需单独先构建 Skia。
 Windows 使用已加载 Visual Studio x64 开发环境的终端，准备 clang-cl、lld-link、Windows SDK、CMake、Ninja；
 精确编译配置见 Windows 工作流。不要设置全局 BUILD_SHARED_LIBS，项目显式控制动态/静态库。
+
+Linux 发布产物直接在 Ubuntu 24.04 上使用 LLVM 23 构建。
+构建环境提供 glibc 2.39，不保证兼容 glibc 2.35。
+CI 会检查最终动态库的 ELF 版本依赖，高于 glibc 2.35 兼容目标时输出 error 注解，
+但不让构建失败，也不阻止产物上传。这项检查只覆盖 glibc，不代表插件的所有运行时依赖都已验证。
 
 | 目标/选项 | 作用 |
 | --- | --- |

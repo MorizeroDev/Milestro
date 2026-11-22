@@ -12,17 +12,25 @@ permissions:
 
 jobs:
   clang-format:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version: "3.x"
+
+      - name: Install clang-format
+        run: python -m pip install clang-format==23.1.5
+
+      - name: Test Linux runtime compatibility check
+        run: python -m unittest discover -s tests -p test_linux_glibc.py
 
       - name: Check clang-format
-        uses: DoozyX/clang-format-lint-action@v0.20
-        with:
-          source: "."
-          exclude: "./ext"
-          extensions: "h,hh,hpp,c,cc,cpp,cxx,mm"
-          clangFormatVersion: 20
-          inplace: false
+        run: |
+          git ls-files -z -- '*.h' '*.hh' '*.hpp' '*.c' '*.cc' '*.cpp' '*.cxx' '*.mm' \
+            ':!:ext/**' ':!:apps/unity-plugins/Milestro/Plugins/iOS/FrameworkBinding.cpp' \
+            | xargs -0 -r clang-format --dry-run --Werror

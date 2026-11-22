@@ -7,20 +7,20 @@ permissions:
   contents: read
 
 env:
-  ANDROID_NDK_VERSION: r29
+  ANDROID_NDK_VERSION: r30
   MILESTRO_TARGET_OS: android
   MILESTRO_TARGET_ARCH: arm64
   MILESTRO_INSTALL_DIR: milestro-native-android-arm64
 
 jobs:
   # Unity 6000.3.7f1 embeds r27c. Keep its older libc++ compatibility covered
-  # without rebuilding Skia or changing the r29 release-artifact toolchain.
+  # without rebuilding Skia or changing the release-artifact toolchain.
   unity-ndk-contracts:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - name: Checkout contract sources
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Unity-compatible Android NDK
         id: unity-ndk
@@ -39,12 +39,12 @@ jobs:
 
   build:
     needs: unity-ndk-contracts
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 240
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
 
@@ -66,7 +66,7 @@ jobs:
           test -x "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
 
       - name: Set up Python
-        uses: actions/setup-python@v6.3.0
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.x"
 
@@ -74,6 +74,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build nasm
+
+      - name: Print tool versions
+        run: |
+          cmake --version
+          ninja --version
+          "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --version
+          cat "${ANDROID_NDK_HOME}/source.properties"
 
       - name: Check Android backend configuration contracts
         run: python3 tests/android_build/test_android_graphics_config.py --ndk "$ANDROID_NDK_HOME"
@@ -124,14 +131,14 @@ jobs:
         run: tar -czf "milestro-symbols-${MILESTRO_TARGET_OS}-${MILESTRO_TARGET_ARCH}.tar.gz" milestro-symbols
 
       - name: Upload native artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: milestro-native-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}
           path: milestro-native-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}.tar.gz
           retention-days: 1
 
       - name: Upload symbols artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: milestro-symbols-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}
           path: milestro-symbols-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}.tar.gz

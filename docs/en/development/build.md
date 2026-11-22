@@ -27,8 +27,8 @@ differs from CI.
 ## Quick local build
 
 Requirements are CMake 3.26 or newer, a C++20 compiler, Ninja, Python 3, Git,
-and a Java/Gradle toolchain for binding generation and Unity packaging. Apple
-targets also need Swift 5.9 or newer.
+and a Java/Gradle toolchain for binding generation and Unity packaging. Release
+CI uses Java 25. Apple targets also need Swift 5.9 or newer.
 
 Initialize submodules before configuring:
 
@@ -66,6 +66,13 @@ On Windows, run this from a Visual Studio x64 developer environment with
 `clang-cl`, `lld-link`, CMake, Ninja, and the Windows SDK available. The
 [Windows workflow](../../../.github/workflows/build-windows.yml) is the reference
 configuration.
+
+Linux release binaries are built directly on Ubuntu 24.04 with LLVM 23.
+The build environment provides glibc 2.39; compatibility with glibc 2.35 is
+not guaranteed. CI checks the resulting shared library's ELF version requirements
+and emits an error annotation if they exceed the glibc 2.35 compatibility target,
+without failing the build or preventing artifact uploads. This check covers glibc,
+not every runtime library required by the plugin.
 
 Useful targets:
 

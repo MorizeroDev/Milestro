@@ -7,6 +7,8 @@ permissions:
   contents: read
 
 env:
+  LLVM_VERSION: "23"
+  MILESTRO_MAX_GLIBC: "2.35"
   MILESTRO_TARGET_OS: linux
   MILESTRO_TARGET_ARCH: amd64
   MILESTRO_INSTALL_DIR: milestro-native-linux-amd64
@@ -17,26 +19,46 @@ jobs:
     timeout-minutes: 240
 
     steps:
+      - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates curl gnupg git build-essential ninja-build nasm \
+            xorg-dev libasound2-dev libfontconfig1-dev
+          curl --fail --location --retry 3 https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo gpg --dearmor -o /usr/share/keyrings/llvm.gpg
+          echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update
+          sudo apt-get install -y "clang-${LLVM_VERSION}" "lld-${LLVM_VERSION}"
+
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
 
       - name: Set up Python
-        uses: actions/setup-python@v6.3.0
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.x"
 
-      - name: Install build dependencies
+      - name: Install CMake
+        run: python -m pip install --upgrade cmake
+
+      - name: Print tool versions
         run: |
-          sudo apt-get update
-          sudo apt-get install -y clang lld ninja-build nasm xorg-dev libasound2-dev libfontconfig1-dev
+          cmake --version
+          ninja --version
+          "clang-${LLVM_VERSION}" --version
+          ldd --version
 
       - name: Configure Milestro
         run: |
           cmake -S . -B build_native -G Ninja \
-            -DCMAKE_C_COMPILER=clang \
-            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER="clang-${LLVM_VERSION}" \
+            -DCMAKE_CXX_COMPILER="clang++-${LLVM_VERSION}" \
             -DCMAKE_BUILD_TYPE=Release \
             -DMILESTRO_ENABLE_CLI=OFF \
             -DMILESTRO_ENABLE_TESTS=OFF \
@@ -45,6 +67,9 @@ jobs:
 
       - name: Build and install Milestro
         run: cmake --build build_native --target install --config Release
+
+      - name: Check Linux runtime compatibility
+        run: python scripts/check_linux_glibc.py "${MILESTRO_INSTALL_DIR}/lib/libMilestro.so" --max-glibc "$MILESTRO_MAX_GLIBC"
 
       - name: Prepare release symbols
         run: |
@@ -67,14 +92,14 @@ jobs:
         run: tar -czf "milestro-symbols-${MILESTRO_TARGET_OS}-${MILESTRO_TARGET_ARCH}.tar.gz" milestro-symbols
 
       - name: Upload native artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: milestro-native-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}
           path: milestro-native-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}.tar.gz
           retention-days: 1
 
       - name: Upload symbols artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: milestro-symbols-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}
           path: milestro-symbols-${{ env.MILESTRO_TARGET_OS }}-${{ env.MILESTRO_TARGET_ARCH }}.tar.gz
