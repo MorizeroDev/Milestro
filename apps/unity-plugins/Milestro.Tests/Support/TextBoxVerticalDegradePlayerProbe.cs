@@ -134,7 +134,7 @@ namespace Milestro.Tests.TextBoxVertical
                     "<p><font color=\"#7777ff\">寒來暑往秋收冬藏</font></p></a>";
                 placeholder = CreateJustifyCase(root);
                 placeholder.producer.paragraphStyle.textAlign = TextAlign.Start;
-                placeholder.producer.content = "<a href=\"placeholder-link\">天<img width=\"50\" height=\"20\" key=\"player-object\"/>地</a>";
+                placeholder.producer.content = "<a href=\"placeholder-link\">天<placeholder width=\"50\" height=\"20\" key=\"player-object\"/>地</a>";
                 ruby = CreateJustifyCase(root);
                 ruby.rect.anchoredPosition = new Vector2(610f, -280f);
                 ruby.rect.sizeDelta = new Vector2(180f, 160f);

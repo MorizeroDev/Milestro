@@ -31,6 +31,7 @@ namespace Milestro.Components.Internal
         bool TryHitLink(Vector2 normalizedViewportPoint, out TextBoxLinkHit hit);
         bool TryGetContentSnapshot(out TextBoxContentSnapshot snapshot);
         bool TryGetLinkGeometrySnapshot(out TextBoxLinkGeometrySnapshot snapshot, out long generation);
+        bool TryGetInlineImageGeometrySnapshot(out TextBoxLinkGeometrySnapshot snapshot);
         bool Rebuild(TextBoxRenderViewport viewport,
             ColorSpace colorSpace,
             TextBoxRenderTargetSettings settings,

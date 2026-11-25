@@ -127,7 +127,8 @@ namespace Milestro.Components.Internal
                         paintPosition, clipRect, outputSizePixels, fitScale,
                         BuildPlaceholderGeometry(paintPosition, clipRect, viewport.VisualScrollOffset.x),
                         elementAnnotations,
-                        BuildElementGeometry(paragraphs, elementAnnotations, viewport.VisualScrollOffset.x));
+                        BuildElementGeometry(paragraphs, elementAnnotations, viewport.VisualScrollOffset.x),
+                        viewport.SliceOutput ? scrollOffset.y : float.NaN);
                     linkGeometryPublication.TryBegin(true, hitGeometry, out var token);
                     linkGeometryPublication.Complete(token,
                         UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn, out _);

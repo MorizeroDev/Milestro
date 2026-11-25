@@ -19,6 +19,13 @@ namespace Milestro.Components.Internal
         [NonSerialized] private bool worldSpaceConsumer;
         [NonSerialized] private Milestro.Components.TextBox? canvasPresenter;
         [NonSerialized] private bool preparationForceText;
+        internal readonly Milestro.ResourceManagement.InlineImageSession InlineImages = new Milestro.ResourceManagement.InlineImageSession();
+
+        public void RefreshInlineImages()
+        {
+            InlineImages.Dispose();
+            MarkContentChanged();
+        }
         [TextArea(3, 10)]
         [SerializeField]
         private string m_content = "";
@@ -348,6 +355,7 @@ namespace Milestro.Components.Internal
                 }
 
                 m_content = nextValue;
+                InlineImages.Dispose();
                 MarkContentChanged();
             }
         }
@@ -364,6 +372,7 @@ namespace Milestro.Components.Internal
                 }
 
                 m_richTextParserId = nextValue;
+                InlineImages.Dispose();
                 MarkContentChanged();
             }
         }
@@ -630,6 +639,7 @@ namespace Milestro.Components.Internal
 
         protected virtual void OnDisable()
         {
+            InlineImages.Dispose();
             TextPreparationScheduler.Cancel(this);
             preparationForceText = false;
             m_visualScrollOffset = Vector2.zero;
@@ -655,6 +665,11 @@ namespace Milestro.Components.Internal
 
         private void Update()
         {
+            if (InlineImages.Changed)
+            {
+                InlineImages.Changed = false;
+                MarkContentChanged();
+            }
             UpdateGlyphMeshPresentationCapability();
             ObserveMarginChanges();
             ObserveVerticalLayoutChanges();
@@ -943,6 +958,12 @@ namespace Milestro.Components.Internal
             }
 
             return renderTarget.TryGetLinkGeometrySnapshot(out snapshot, out generation);
+        }
+
+        internal bool TryGetInlineImageGeometrySnapshot(out TextBoxLinkGeometrySnapshot snapshot)
+        {
+            snapshot = default;
+            return renderTarget != null && renderTarget.TryGetInlineImageGeometrySnapshot(out snapshot);
         }
 
         private Vector2Int CurrentSize()

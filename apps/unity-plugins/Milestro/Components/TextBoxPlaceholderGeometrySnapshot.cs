@@ -5,12 +5,16 @@ namespace Milestro.Components
 {
     public readonly struct TextBoxPlaceholderGeometry
     {
-        internal TextBoxPlaceholderGeometry(string key, int startUtf16, Rect rect, bool visible)
+        internal TextBoxPlaceholderGeometry(string key, int startUtf16, Rect rect, bool visible,
+            string? source = null, RichTextParser.InlineObjectStyle? presentation = null, Rect outerRect = default)
         {
             Key = key;
             StartUtf16 = startUtf16;
             Rect = rect;
             Visible = visible;
+            Source = source;
+            Presentation = presentation;
+            OuterRect = outerRect;
         }
 
         public string Key { get; }
@@ -18,6 +22,9 @@ namespace Milestro.Components
         public int EndUtf16 => StartUtf16 + 1;
         public Rect Rect { get; }
         public bool Visible { get; }
+        public string? Source { get; }
+        public Rect OuterRect { get; }
+        internal RichTextParser.InlineObjectStyle? Presentation { get; }
     }
 
     public readonly struct TextBoxPlaceholderGeometrySnapshot

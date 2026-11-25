@@ -111,10 +111,12 @@
     <p style="margin-bottom: 12px">特殊字元：&lt;tag&gt;・A &amp; B・&quot;引文&quot;・&apos;引文&apos;。數值參照：&#9733; &#x2605;。不換行空白：A&#160;B</p>
     <p style="text-indent: 32px; font-kerning: normal; margin-bottom: 16px"><font color="#38bdf8" weight="600">繼承色彩與字重，<i>子層斜體，<u>再加上底線</u></i>。回到父層樣式。<font color="#f59e0b" size="40"><span cspace="2">新的色彩、字級與字距</span></font>。回到字級３２。</font>此處恢復一般文字。</p>
 
-    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">18 · 行內佔位框</font></p>
-    <p style="margin-bottom: 12px">分數：［<img width="24" height="24" key="coin-icon" />］１２００・狀態：［<img width="32" height="32" key="status-icon" />］準備完成</p>
-    <p style="margin-bottom: 12px">寬框：［<img width="64" height="24" />］・高框：［<img width="24" height="64" key="tall-icon" />］・<a href="milestro://action/reward" id="reward-link"><font color="#34d399"><u>獎勵［<img width="32" height="32" key="reward-icon" />］領取</u></font></a></p>
-    <p style="margin-bottom: 12px">括號之間的空白為預期效果。圖片標籤只保留幾何區域，不繪製圖片。寬度與高度須為正數，識別鍵可省略。請透過 TextBox.TryGetPlaceholderGeometrySnapshot 取得位置，再由應用程式繪製圖像。</p>
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">18 · 行內圖片與佔位框</font></p>
+    <p style="margin-bottom: 12px">分數：［<placeholder width="24" height="24" key="coin-icon" />］１２００・狀態：［<placeholder width="32" height="32" key="status-icon" />］準備完成</p>
+    <p style="margin-bottom: 12px">寬框：［<placeholder width="64" height="24" />］・高框：［<placeholder width="24" height="64" key="tall-icon" />］・<a href="milestro://action/reward" id="reward-link"><font color="#34d399"><u>獎勵［<placeholder width="32" height="32" key="reward-icon" />］領取</u></font></a></p>
+    <p style="margin-bottom: 12px">括號之間的空白為預期效果。placeholder 標籤只保留幾何區域，不繪製圖片。寬度與高度須為正數，識別鍵可省略。請透過 TextBox.TryGetPlaceholderGeometrySnapshot 取得位置，再由應用程式繪製圖像。</p>
+    <p style="margin-bottom: 12px">SVG Data URI 劍形圖示：<img src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M22%202L22%206L10%2018L6%2014L18%202Z%22%20fill%3D%22%23e2e8f0%22%2F%3E%3Cpath%20d%3D%22M19%205L8%2016%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M4%2013L11%2020%22%20stroke%3D%22%23f59e0b%22%20stroke-width%3D%223%22%2F%3E%3Cpath%20d%3D%22M3%2020L7%2016%22%20stroke%3D%22%2378350f%22%20stroke-width%3D%224%22%2F%3E%3Ccircle%20cx%3D%222.5%22%20cy%3D%2221%22%20r%3D%222%22%20fill%3D%22%23fbbf24%22%2F%3E%3C%2Fsvg%3E" width="32" height="32"/>（32 × 32）</p>
+    <p align="center" style="margin-top: 16px; margin-bottom: 16px"><img src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20160%2096%22%3E%3Crect%20width%3D%22160%22%20height%3D%2296%22%20rx%3D%2212%22%20fill%3D%22%230f172a%22%2F%3E%3Ccircle%20cx%3D%22120%22%20cy%3D%2227%22%20r%3D%2215%22%20fill%3D%22%23fbbf24%22%2F%3E%3Cpath%20d%3D%22M8%2088L52%2034L88%2078L108%2054L152%2088Z%22%20fill%3D%22%2338bdf8%22%2F%3E%3Cpath%20d%3D%22M8%2088L52%2034L67%2056L45%2062L30%2088Z%22%20fill%3D%22%2314b8a6%22%2F%3E%3C%2Fsvg%3E" width="160" height="96"/></p>
 
     <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">19 · 範圍內換欄控制</font></p>
     <p>一般換欄：春夏秋冬花鳥風月。不換欄：<span style="white-space: nowrap">春夏秋冬花鳥風月</span>。調整視口高度比較兩者。</p>
@@ -136,5 +138,5 @@
     <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">23 · 元素位置與空錨點</font></p>
     <p id="chapter-anchor"></p>
     <p id="geometry-paragraph">可依識別碼查詢<span id="geometry-span"><b>這段文字</b></span>、整個段落，或前面的空段落。</p>
-    <p>圖片位置：［<img id="geometry-image" width="32" height="32" key="geometry-icon"/>］。直排使用 ContentRect.x 取得水平內容位置；跳轉由應用程式處理。</p>
+    <p>圖片位置：［<placeholder id="geometry-image" width="32" height="32" key="geometry-icon"/>］。直排使用 ContentRect.x 取得水平內容位置；跳轉由應用程式處理。</p>
 </span></font>

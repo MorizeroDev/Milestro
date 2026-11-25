@@ -32,6 +32,11 @@ namespace Milestro.RichTextParser.Css
             while (parser.TryRead(out var declaration))
             {
                 if (!declaration.IsValid) continue;
+                if (declaration.Property.Equals("visibility", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (declaration.Value.Equals("visible", StringComparison.OrdinalIgnoreCase)) textStyle.InlineVisible = true;
+                    else if (declaration.Value.Equals("hidden", StringComparison.OrdinalIgnoreCase)) textStyle.InlineVisible = false;
+                }
                 if (declaration.Property.Equals("font-kerning", StringComparison.OrdinalIgnoreCase))
                 {
                     if (TryParseKerning(declaration.Value, out var operation)) kerningOperation = operation;

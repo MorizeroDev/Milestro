@@ -257,6 +257,108 @@ namespace Milestro.Tests
             Assert.That(baseline.Matches(TextBoxRenderViewport.Invisible(new Vector2Int(100, 50), default)), Is.False);
         }
 
+        [Test]
+        public void PendingSubmissionKeepsPreviousPublicationUntilDrawnReplacesIt()
+        {
+            var publication = new TextBoxLinkGeometryPublication();
+            var oldSnapshot = Snapshot(new Rect(1f, 2f, 3f, 4f), Vector2.one, new Vector2Int(10, 20));
+            var newSnapshot = Snapshot(new Rect(5f, 6f, 7f, 8f), Vector2.zero, new Vector2Int(30, 40));
+
+            Assert.That(publication.TryBegin(true, oldSnapshot, out var oldToken), Is.True);
+            Assert.That(publication.Complete(oldToken,
+                    UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn,
+                    out _),
+                Is.True);
+            Assert.That(publication.TryGetPublished(out var published, out _), Is.True);
+            Assert.That(published.ClipRect, Is.EqualTo(oldSnapshot.ClipRect));
+
+            Assert.That(publication.TryBegin(true, newSnapshot, out var newToken), Is.True);
+            Assert.That(publication.HasPending, Is.True);
+            Assert.That(publication.TryGetPublished(out published, out _), Is.True,
+                "A pending repaint must not hide the geometry that matches the still-displayed output.");
+            Assert.That(published.ClipRect, Is.EqualTo(oldSnapshot.ClipRect));
+
+            Assert.That(publication.Complete(newToken,
+                    UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn,
+                    out _),
+                Is.True);
+            Assert.That(publication.TryGetPublished(out published, out _), Is.True);
+            Assert.That(published.ClipRect, Is.EqualTo(newSnapshot.ClipRect));
+        }
+
+        [Test]
+        public void NonDrawnCompletionKeepsPreviousPublication()
+        {
+            var publication = new TextBoxLinkGeometryPublication();
+            var oldSnapshot = Snapshot(new Rect(1f, 2f, 3f, 4f), Vector2.one, new Vector2Int(10, 20));
+            Assert.That(publication.TryBegin(true, oldSnapshot, out var oldToken), Is.True);
+            Assert.That(publication.Complete(oldToken,
+                    UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn,
+                    out _),
+                Is.True);
+
+            Assert.That(publication.TryBegin(true, oldSnapshot, out var failedToken), Is.True);
+            Assert.That(publication.Complete(failedToken,
+                    UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Failed,
+                    out _),
+                Is.True);
+            Assert.That(publication.TryGetPublished(out var published, out _), Is.True,
+                "A failed repaint leaves the previous output on screen; its geometry must survive.");
+            Assert.That(published.ClipRect, Is.EqualTo(oldSnapshot.ClipRect));
+        }
+
+        [Test]
+        public void DrawnCompletionWithoutGeometryClearsPreviousPublication()
+        {
+            var publication = new TextBoxLinkGeometryPublication();
+            publication.RequireControlledSubmission();
+            var oldSnapshot = Snapshot(new Rect(1f, 2f, 3f, 4f), Vector2.one, new Vector2Int(10, 20));
+            Assert.That(publication.TryBegin(true, oldSnapshot, out var oldToken), Is.True);
+            Assert.That(publication.Complete(oldToken,
+                    UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn,
+                    out _),
+                Is.True);
+            Assert.That(publication.TryGetPublished(out _, out _), Is.True);
+
+            Assert.That(publication.TryBegin(false, default, out var emptyToken), Is.True);
+            Assert.That(publication.Complete(emptyToken,
+                    UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn,
+                    out _),
+                Is.True);
+            Assert.That(publication.TryGetPublished(out _, out _), Is.False,
+                "A drawn frame without hit geometry must not leave stale geometry published.");
+            Assert.That(publication.RequiresControlledSubmission, Is.False);
+        }
+
+        [Test]
+        public void PresentationUsesSubmittedGeometryBeforeCompletionWhileHitTestingKeepsPublishedGeometry()
+        {
+            var publication = new TextBoxLinkGeometryPublication();
+            var original = Snapshot(new Rect(0f, 0f, 100f, 100f), Vector2.zero, new Vector2Int(100, 100));
+            var scrolled = Snapshot(original.ClipRect, new Vector2(0f, -12f), original.VisibleOutputSize);
+            Assert.That(publication.TryGetPresentation(out _), Is.False);
+            Assert.That(publication.TryBegin(true, original, out var originalToken), Is.True);
+            Assert.That(publication.Complete(originalToken,
+                UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn, out _), Is.True);
+            Assert.That(publication.TryBegin(true, scrolled, out var token), Is.True);
+            Assert.That(publication.TryGetPresentation(out var presented), Is.True);
+            Assert.That(presented.PaintPosition, Is.EqualTo(scrolled.PaintPosition));
+            Assert.That(publication.TryGetPublished(out var published, out _), Is.True);
+            Assert.That(published.PaintPosition, Is.EqualTo(original.PaintPosition));
+            Assert.That(publication.Cancel(token, out _), Is.True);
+            Assert.That(publication.TryGetPresentation(out presented), Is.True);
+            Assert.That(presented.PaintPosition, Is.EqualTo(original.PaintPosition));
+            Assert.That(publication.TryBegin(true, scrolled, out token), Is.True);
+            Assert.That(publication.Complete(token,
+                UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Failed, out _), Is.True);
+            Assert.That(publication.TryGetPresentation(out presented), Is.True);
+            Assert.That(presented.PaintPosition, Is.EqualTo(original.PaintPosition));
+            Assert.That(publication.TryBegin(false, default, out token), Is.True);
+            Assert.That(publication.TryGetPresentation(out _), Is.False);
+            publication.Reset();
+            Assert.That(publication.TryGetPresentation(out _), Is.False);
+        }
+
         private static TextBoxLinkGeometrySnapshot Snapshot(Rect clip,
             Vector2 paint,
             Vector2Int visibleOutput)

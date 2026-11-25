@@ -282,6 +282,7 @@ MILESTRO_API int64_t MilestroSkiaSvgCreate(milestro::skia::Svg*& ret,
                                            uint64_t size);
 MILESTRO_API int64_t MilestroSkiaSvgDestroy(milestro::skia::Svg*& ret);
 MILESTRO_API int64_t MilestroSkiaSvgRender(milestro::skia::Svg* svg, milestro::skia::Canvas* canvas);
+MILESTRO_API int64_t MilestroSkiaSvgRasterize(milestro::skia::Svg* svg, milestro::skia::Image*& image);
 
 MILESTRO_API int64_t MilestroSkiaVertexDataDestroy(milestro::skia::VertexData*& ret);
 MILESTRO_API int64_t MilestroSkiaVertexDataGetVertexCount(milestro::skia::VertexData* d, uint64_t& numVertices);
@@ -324,6 +325,7 @@ MILESTRO_API int64_t MilestroSkiaImageCreate(milestro::skia::Image*& ret,
 MILESTRO_API int64_t MilestroSkiaImageSetColorType(milestro::skia::Image* img, int32_t targetColorType);
 MILESTRO_API int64_t MilestroSkiaImageGetWidth(milestro::skia::Image* img, int32_t& width);
 MILESTRO_API int64_t MilestroSkiaImageGetHeight(milestro::skia::Image* img, int32_t& height);
+MILESTRO_API int64_t MilestroSkiaImageReadRgba(milestro::skia::Image* img, uint8_t* pixels, uint64_t size);
 MILESTRO_API int64_t MilestroSkiaImageDestroy(milestro::skia::Image*& ret);
 
 MILESTRO_API int64_t MilestroSkiaTextlayoutParagraphDestroy(milestro::skia::textlayout::Paragraph*& ret);

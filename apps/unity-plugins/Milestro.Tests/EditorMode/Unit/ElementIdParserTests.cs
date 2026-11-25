@@ -27,7 +27,7 @@ namespace Milestro.Tests
         public void SupportsIdsOnLinksAndPlaceholders()
         {
             var payload = Parse("<a href=\"target\" id=\"link\">A</a>" +
-                                "<img id=\"image\" width=\"20\" height=\"10\" key=\"icon\"/>");
+                                "<placeholder id=\"image\" width=\"20\" height=\"10\" key=\"icon\"/>");
 
             Assert.That(payload.Links, Has.Count.EqualTo(1));
             Assert.That(payload.Elements.Select(element => element.Id),
@@ -38,7 +38,7 @@ namespace Milestro.Tests
 
         [TestCase("<span id=\"\">empty</span>")]
         [TestCase("<p id=\"\">empty</p>")]
-        [TestCase("<img id=\"\" width=\"20\" height=\"10\"/>")]
+        [TestCase("<placeholder id=\"\" width=\"20\" height=\"10\"/>")]
         public void RejectsEmptyIds(string markup)
         {
             var parser = new RichTextParser.RichTextParser();

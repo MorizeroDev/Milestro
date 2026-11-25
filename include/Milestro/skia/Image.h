@@ -15,6 +15,10 @@ namespace milestro::skia {
 
 class MILESTRO_API Image {
 public:
+    explicit Image(sk_sp<SkImage> image) : imageSize(0), skImage(std::move(image)) {
+        if (!skImage) throw std::invalid_argument("empty raster image");
+    }
+
     Image(void *data, size_t size) {
         if (data == nullptr || size == 0) {
             MILESTROLOG_ERROR("fail to create SkImage: empty image data");

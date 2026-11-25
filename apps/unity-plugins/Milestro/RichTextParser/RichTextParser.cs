@@ -232,27 +232,39 @@ namespace Milestro.RichTextParser
             var anchorHref = "";
             var anchorId = "";
             var anchorStartUtf16 = 0;
-            if (node.Tag == "img")
+            if (node.Tag == "img" || node.Tag == "placeholder")
             {
                 if (ctx.HasActiveRuby)
                 {
-                    Debug.LogError("<img> inside <ruby> is ignored");
+                    Debug.LogError($"<{node.Tag}> inside <ruby> is ignored");
                     return;
                 }
                 if (!node.IsEmptyElement || node.Children.Count != 0)
-                    throw new InvalidCastException("<img> must be an empty element");
+                    throw new InvalidCastException($"<{node.Tag}> must be an empty element");
                 foreach (var attribute in node.Attributes)
                 {
                     if (attribute.Key != "width" && attribute.Key != "height" && attribute.Key != "key" &&
-                        attribute.Key != "id")
-                        throw new InvalidCastException($"<img> does not accept the '{attribute.Key}' attribute");
+                        attribute.Key != "id" && attribute.Key != "style" && !(node.Tag == "img" && attribute.Key == "src"))
+                        throw new InvalidCastException($"<{node.Tag}> does not accept the '{attribute.Key}' attribute");
                 }
-                var width = ReadPlaceholderDimension(node, "width");
-                var height = ReadPlaceholderDimension(node, "height");
+                var presentation = new InlineObjectStyle { Visible = state.InlineVisible };
+                if (node.Attributes.TryGetValue("width", out var widthText)) presentation.Width = InlineLength.Parse(widthText, true);
+                if (node.Attributes.TryGetValue("height", out var heightText)) presentation.Height = InlineLength.Parse(heightText, true);
+                if (node.Attributes.TryGetValue("style", out var objectDeclarations)) presentation.Apply(objectDeclarations);
+                string? source = null;
+                if (node.Tag == "img")
+                {
+                    if (!node.Attributes.TryGetValue("src", out source) || string.IsNullOrEmpty(source))
+                        throw new InvalidCastException("<img> requires src; use <placeholder> for application-owned content.");
+                }
+                else if (!presentation.Width.HasValue || !presentation.Height.HasValue)
+                    throw new InvalidCastException("<placeholder> requires explicit positive width and height.");
+                var width = presentation.Width?.Value ?? 1f;
+                var height = presentation.Height?.Value ?? 1f;
                 var block = ctx.CurrentBlock ?? ctx.Result.AddBlock(false, ctx.TextLengthUtf16);
                 ctx.CurrentBlock = block;
                 ctx.Result.AddPlaceholder(new PlaceholderAnnotation(ctx.TextLengthUtf16, width, height,
-                    node.Attributes.TryGetValue("key", out var key) ? key : "", state));
+                    node.Attributes.TryGetValue("key", out var key) ? key : "", state, source, presentation));
                 ++block.LengthUtf16;
                 ++ctx.TextLengthUtf16;
                 return;

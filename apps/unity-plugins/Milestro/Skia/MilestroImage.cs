@@ -7,6 +7,7 @@ namespace Milestro.Skia
 {
     public class MilestroImage : DisposableNativeObject
     {
+        internal MilestroImage(IntPtr pointer) : base(pointer) { }
         /// <summary>
         /// 
         /// </summary>
@@ -75,6 +76,13 @@ namespace Milestro.Skia
                 );
                 return ret;
             }
+        }
+
+        public byte[] ReadRgbaPixels()
+        {
+            var pixels = new byte[checked(Width * Height * 4)];
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaImageReadRgba(NativePtr, pixels, (ulong)pixels.Length));
+            return pixels;
         }
 
         protected override void DisposeUnmanaged()

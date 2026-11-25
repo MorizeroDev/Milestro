@@ -630,9 +630,15 @@ bool ParagraphImpl::validateVerticalConfiguration(SkScalar inlineExtent) {
         const auto& value = placeholder.fStyle;
         if (!SkIsFinite(value.fWidth) || value.fWidth <= 0 ||
             !SkIsFinite(value.fHeight) || value.fHeight <= 0 ||
-            value.fAlignment != PlaceholderAlignment::kMiddle ||
-            value.fBaseline != TextBaseline::kAlphabetic || value.fBaselineOffset != 0) {
-            throw std::invalid_argument("vertical-rl placeholders require positive finite dimensions and Middle/Alphabetic/0 alignment");
+            (value.fAlignment != PlaceholderAlignment::kMiddle &&
+             value.fAlignment != PlaceholderAlignment::kTop &&
+             value.fAlignment != PlaceholderAlignment::kBottom &&
+             value.fAlignment != PlaceholderAlignment::kBaseline) ||
+            value.fBaseline != TextBaseline::kAlphabetic ||
+            (value.fAlignment == PlaceholderAlignment::kBaseline
+                 ? value.fBaselineOffset != value.fHeight
+                 : value.fBaselineOffset != 0)) {
+            throw std::invalid_argument("vertical-rl placeholders require positive finite dimensions and Middle, Top, Bottom, or bottom-edge Baseline alignment");
         }
     }
     for (const auto& ruby : fRubyAnnotations) {
@@ -2235,6 +2241,10 @@ void ParagraphImpl::breakShapedTextIntoVerticalColumns(SkScalar maxInlineExtent)
             const Run* run = fClusters[index].runOrNull(this);
             if (run != nullptr && run->isPlaceholder()) {
                 placeholderWidth = std::max(placeholderWidth, run->placeholderStyle()->fWidth);
+                if (run->placeholderStyle()->fAlignment == PlaceholderAlignment::kBaseline) {
+                    column.blockAscent = std::max(column.blockAscent, run->placeholderStyle()->fWidth);
+                    column.blockThickness = column.blockAscent + column.blockDescent;
+                }
             }
         }
         if (placeholderWidth > column.blockThickness) {
@@ -2862,9 +2872,20 @@ bool ParagraphImpl::getVerticalClusterCell(ClusterIndex clusterIndex, SkRect* ce
             top + std::max(SkScalar(0), cluster.width() + shiftAfter - shift));
     if (cell != nullptr) {
         const SkScalar width = run->isPlaceholder() ? run->placeholderStyle()->fWidth : line.width();
-        const SkScalar left = run->isPlaceholder()
+        SkScalar left = run->isPlaceholder()
                 ? fLayoutMetrics.columns[columnIndex].physicalBounds.centerX() - width * 0.5f
                 : line.offset().x();
+        if (run->isPlaceholder()) {
+            const auto alignment = run->placeholderStyle()->fAlignment;
+            const auto bounds = fLayoutMetrics.columns[columnIndex].physicalBounds;
+            if (alignment == PlaceholderAlignment::kTop) {
+                left = bounds.right() - width;
+            } else if (alignment == PlaceholderAlignment::kBottom) {
+                left = bounds.left();
+            } else if (alignment == PlaceholderAlignment::kBaseline) {
+                left = line.offset().x() + column.blockDescent;
+            }
+        }
         *cell = SkRect::MakeLTRB(left, top, left + width, bottom);
     }
     return true;

@@ -30,8 +30,13 @@ namespace Milestro.Tests
             var observation = trace.BeginObservation("wait", 20, 1, 0.8, true);
             var state = new TextPipelineFreshness
             {
-                RequestedVersion = 7, PreparedVersion = 7, SubmittedVersion = 6, CompletedVersion = 6,
-                AcceptedSubmissions = 5, Completions = 5, WindowCompletedVersions = 4
+                RequestedVersion = 7,
+                PreparedVersion = 7,
+                SubmittedVersion = 6,
+                CompletedVersion = 6,
+                AcceptedSubmissions = 5,
+                Completions = 5,
+                WindowCompletedVersions = 4
             };
             trace.CaptureLabel(observation, 0, state, 100, 99, true);
             trace.EndObservation(observation);

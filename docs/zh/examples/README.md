@@ -7,8 +7,8 @@
 
 | 文件 | 书写模式 | 内容 |
 | --- | --- | --- |
-| [横排展示](../../examples/horizontal-example.xml) | HorizontalTb | 行内样式、双向段落、对齐、边距、OpenType、链接、Ruby、占位符 |
-| [日文竖排](../../examples/vertical-rl-ja-example.xml) | VerticalRl | 方向、纵中横、列对齐、缩进、Ruby、占位符 |
+| [横排展示](../../examples/horizontal-example.xml) | HorizontalTb | 行内样式、双向段落、对齐、边距、OpenType、链接、Ruby、内联图片与占位符 |
+| [日文竖排](../../examples/vertical-rl-ja-example.xml) | VerticalRl | 方向、纵中横、列对齐、缩进、Ruby、内联图片与占位符 |
 | [繁体中文竖排](../../examples/vertical-rl-zh-Hant-example.xml) | VerticalRl | 同类排版能力与读音注释 |
 
 ## 显示素材
@@ -47,7 +47,7 @@ producer.content = showcaseAsset.text;
 
 - 请求的 Google Sans、Source Han Sans VF、Noto Color Emoji 等不随包附带；字形、字重、地区替换取决于实际字体。
 - 链接只返回应用数据，不自动打开浏览器。
-- img 仅占位，应用需通过 TryGetPlaceholderGeometrySnapshot 放置视觉对象；未接入时留白正常。
+- placeholder 仅占位，应用需通过 TryGetPlaceholderGeometrySnapshot 放置视觉对象；未接入时留白正常。
 - 横排相邻段落上下边距折叠。竖排上下边距是物理垂直 inset，右左边距折叠后与 paragraphSpacing 一起控制段间水平距离。
 - 竖排示例标题的 margin-right/left 分别设置块前、块后间距。
 - 竖排正基线偏移向右、负偏移向左；首列缩进沿 Y。Ruby over 在右侧，under 降级到同侧。

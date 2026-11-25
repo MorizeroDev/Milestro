@@ -288,8 +288,10 @@ namespace Milestro.Tests
                 {
                     trace.requests[frame] = new TextPipelineDiagnosticTrace.Request
                     {
-                        deadline = deadline, beforeSetTimestamp = beforeSet,
-                        afterSetTimestamp = Stopwatch.GetTimestamp(), frame = Time.frameCount
+                        deadline = deadline,
+                        beforeSetTimestamp = beforeSet,
+                        afterSetTimestamp = Stopwatch.GetTimestamp(),
+                        frame = Time.frameCount
                     };
                 }
                 FrameTimingManager.CaptureFrameTimings();

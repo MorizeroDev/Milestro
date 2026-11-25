@@ -7,8 +7,8 @@ for **Milestro Markup** (`milestro_rich_text`).
 
 | File | Writing mode | Focus |
 | --- | --- | --- |
-| [Horizontal showcase](../../examples/horizontal-example.xml) | `WritingMode.HorizontalTb` | Inline styles, bidirectional paragraphs, alignment, margins, OpenType features, links, Ruby, and placeholders |
-| [Japanese vertical showcase](../../examples/vertical-rl-ja-example.xml) | `WritingMode.VerticalRl` | Japanese content, vertical orientation, tate-chu-yoko, column alignment, indent, Ruby, and placeholders |
+| [Horizontal showcase](../../examples/horizontal-example.xml) | `WritingMode.HorizontalTb` | Inline styles, bidirectional paragraphs, alignment, margins, OpenType features, links, Ruby, inline images, and placeholders |
+| [Japanese vertical showcase](../../examples/vertical-rl-ja-example.xml) | `WritingMode.VerticalRl` | Japanese content, vertical orientation, tate-chu-yoko, column alignment, indent, Ruby, inline images, and placeholders |
 | [Traditional Chinese vertical showcase](../../examples/vertical-rl-zh-Hant-example.xml) | `WritingMode.VerticalRl` | Traditional Chinese content with the same feature coverage and reading annotations |
 
 ## Display a showcase
@@ -73,7 +73,7 @@ with `paragraphSpacing`; top/bottom margins inset the column's inline extent.
   the available faces. See [Fonts](../guides/text.md#fonts).
 - Links supply application data through `TextBox` events. They do not open a
   browser automatically. See [Links](../guides/links-and-accessibility.md).
-- `<img/>` leaves an empty inline box. The application draws its own visual
+- `<placeholder/>` leaves an empty inline box. The application draws its own visual
   using `TryGetPlaceholderGeometrySnapshot`; an empty gap is the expected
   result without that integration. See [Inline placeholders](../guides/text.md#inline-placeholders).
 - Horizontal paragraph margins collapse between adjacent blocks. In

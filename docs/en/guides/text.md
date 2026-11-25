@@ -185,7 +185,8 @@ The following tags and XML-specific styles apply to **Milestro Rich Text**.
 | `<span>` | Lower-level inline overrides |
 | `<p>` | Paragraph block, alignment, direction, CSS block styles |
 | `<br>` | Explicit line break |
-| `<img width=".." height=".." key=".."/>` | Inline placeholder box |
+| `<placeholder width=".." height=".." key=".."/>` | Inline placeholder box |
+| `<img src=".." width=".." height=".."/>` | Inline image loaded through a resource provider |
 | `<a href="target" id="optional-id">` | Clickable range |
 | `<ruby>base<rt>annotation</rt></ruby>` | Ruby annotation |
 | `<rp>` | HTML fallback text inside Ruby; not rendered |
@@ -339,11 +340,11 @@ native layout rules and managed `ParagraphBuilder` API, see
 
 #### Inline placeholders
 
-`<img/>` reserves an inline box without painting anything, so the application
+`<placeholder/>` reserves an inline box without painting anything, so the application
 can position its own visuals there:
 
 ```xml
-Score: <img width="24" height="24" key="coin-icon"/> 1200
+Score: <placeholder width="24" height="24" key="coin-icon"/> 1200
 ```
 
 `width` and `height` are required positive numbers and `key` is an optional
@@ -369,16 +370,46 @@ if (textBox.TryGetPlaceholderGeometrySnapshot(out var snapshot))
 
 Re-read the snapshot when `ContentVersion` or `Generation` changes.
 
+<a id="inline-images"></a>
+#### Inline images
+
+```xml
+<img src="icons/coin" width="24" height="24"/>
+<img src="addressable://icons/coin" style="height: 1em; object-fit: contain"/>
+```
+
+`<img>` requires a non-empty `src` and draws through a child uGUI overlay on the
+TextBox. The overlay follows scrolling, scaling, horizontal or vertical layout,
+and parent masks, and does not intercept raycasts by default. Migrate legacy
+placeholder-only `<img>` tags without `src` to `<placeholder>`.
+
+Plain sources go to `ImageResources.Providers.DefaultProvider`; `scheme://`
+selects a registered provider. `file://` and `data:image/...` are built in.
+For Addressables and other sources, implement `IImageResourceProvider` and
+register it with `ImageResources.Providers.Register`. Providers own cross-TextBox
+caching and their underlying resources; each TextBox holds leases and releases
+them when content changes or the producer is disabled or destroyed. Call
+`textBox.RefreshInlineImages()` to retry existing content after changing providers.
+
+Image dimensions accept positive `px`/`em`, and margins accept one to four
+nonnegative values. CSS dimensions override tag attributes. If only one dimension
+is specified, the other follows the intrinsic aspect ratio; two `auto` dimensions
+use `1em` height, with a temporary 1:1 ratio before loading. `vertical-align:
+middle | top | bottom | baseline`, `object-fit`, `object-position`, `opacity`, and
+inheritable, overridable `visibility` are also supported. A loaded resource triggers
+remeasurement and layout. See the [inline image design](../development/inline-images-design.md)
+for provider contracts, Data URI/SVG rules, and lifecycle details.
+
 <a id="element-geometry"></a>
 #### Element IDs and geometry queries
 
 Rendered elements accept a non-empty, case-sensitive `id`. Use it for an
-`<img/>` placeholder, paragraph, text range, or empty anchor:
+a `<placeholder/>` placeholder, paragraph, text range, or empty anchor:
 
 ```xml
 <p id="chapter"></p>
 <p id="paragraph">A <span id="label">text range</span> and
-<img id="icon" width="24" height="24" key="coin-icon"/>.</p>
+<placeholder id="icon" width="24" height="24" key="coin-icon"/>.</p>
 ```
 
 After layout, query an element with `TextBox.TryGetElementGeometryById`:
@@ -400,7 +431,7 @@ Empty elements return zero-size rects at their text position. Repeated IDs
 resolve to the first element in document order. The query returns `false` if
 the ID is missing or layout geometry is unavailable.
 
-An `id` identifies geometry, while an `<img>`'s `key` identifies placeholder
+An `id` identifies geometry, while a `<placeholder>`'s `key` identifies placeholder
 content for the application; both can be used together. IDs do not trigger
 navigation automatically. See [Jump to an element id](scrolling.md#jump-to-an-element-id)
 for scrolling code.
@@ -531,7 +562,7 @@ natural width and widens the column instead.
 - `text-combine-upright: none | all` works on any inline element; consecutive
   `all` text forms one group.
 - A group needs one uniform text style and cannot contain a hard break, an
-  `<img/>` placeholder, or a Ruby base range.
+  `<placeholder/>` placeholder, or a Ruby base range.
 - There is no `digits` auto-detection: unmarked digits follow the normal
   mixed-orientation rules.
 - Horizontal paragraphs ignore combine marks entirely.

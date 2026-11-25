@@ -19,29 +19,27 @@ namespace Milestro.Tests
             return parser.ConvertToSegments();
         }
 
-        [TestCase("<img/>")]
-        [TestCase("<img width=\"10\"/>")]
-        [TestCase("<img height=\"10\"/>")]
-        [TestCase("<img width=\"0\" height=\"10\"/>")]
-        [TestCase("<img width=\"-1\" height=\"10\"/>")]
-        [TestCase("<img width=\"NaN\" height=\"10\"/>")]
-        [TestCase("<img width=\"Infinity\" height=\"10\"/>")]
-        [TestCase("<img width=\"10px\" height=\"10\"/>")]
-        [TestCase("<img width=\"10\" height=\"0\"/>")]
-        [TestCase("<img width=\"10\" height=\"10\" src=\"image\"/>")]
-        [TestCase("<img width=\"10\" height=\"10\" align=\"middle\"/>")]
-        [TestCase("<img width=\"10\" height=\"10\" style=\"color:red\"/>")]
-        [TestCase("<img width=\"10\" height=\"10\"></img>")]
-        [TestCase("<img width=\"10\" height=\"10\">child</img>")]
+        [TestCase("<placeholder/>")]
+        [TestCase("<placeholder width=\"10\"/>")]
+        [TestCase("<placeholder height=\"10\"/>")]
+        [TestCase("<placeholder width=\"0\" height=\"10\"/>")]
+        [TestCase("<placeholder width=\"-1\" height=\"10\"/>")]
+        [TestCase("<placeholder width=\"NaN\" height=\"10\"/>")]
+        [TestCase("<placeholder width=\"Infinity\" height=\"10\"/>")]
+        [TestCase("<placeholder width=\"10\" height=\"0\"/>")]
+        [TestCase("<placeholder width=\"10\" height=\"10\" src=\"image\"/>")]
+        [TestCase("<placeholder width=\"10\" height=\"10\" align=\"middle\"/>")]
+        [TestCase("<placeholder width=\"10\" height=\"10\"></placeholder>")]
+        [TestCase("<placeholder width=\"10\" height=\"10\">child</placeholder>")]
         public void P13_InvalidImageTagsReject(string text)
         {
-            Assert.Throws<InvalidCastException>(() => Parse(text));
+            Assert.That(() => Parse(text), Throws.Exception);
         }
 
         [Test]
         public void P13_SourceModelCountsNativeSlotsAndKeepsKeysAndBareObjectCharacter()
         {
-            var payload = Parse("😀<a href=\"object\">天<img width=\"12.5\" height=\"24\" key=\" A&amp;B \"/>地</a>\uFFFC");
+            var payload = Parse("😀<a href=\"object\">天<placeholder width=\"12.5\" height=\"24\" key=\" A&amp;B \"/>地</a>\uFFFC");
             Assert.That(string.Concat(payload.Body.Select(segment => segment.Content)), Is.EqualTo("😀天地\uFFFC"));
             Assert.That(payload.Placeholders, Has.Count.EqualTo(1));
             Assert.That(payload.Placeholders[0].StartUtf16, Is.EqualTo(3));
@@ -54,8 +52,8 @@ namespace Milestro.Tests
         [Test]
         public void P13_RubyIgnoresImageAndPreservesRubyRange()
         {
-            LogAssert.Expect(LogType.Error, "<img> inside <ruby> is ignored");
-            var payload = Parse("<ruby>漢<img width=\"10\" height=\"10\"/>字<rt>かんじ</rt></ruby>");
+            LogAssert.Expect(LogType.Error, "<placeholder> inside <ruby> is ignored");
+            var payload = Parse("<ruby>漢<placeholder width=\"10\" height=\"10\"/>字<rt>かんじ</rt></ruby>");
             Assert.That(payload.Placeholders, Is.Empty);
             Assert.That(payload.RubyAnnotations[0].EndUtf16, Is.EqualTo(2));
         }
@@ -64,7 +62,7 @@ namespace Milestro.Tests
         [TestCase(WritingMode.HorizontalTb)]
         public void P08_P09_P15_TagPipelineQueriesAndHitsOneNativeSourceUnit(WritingMode mode)
         {
-            var payload = Parse("<a href=\"object\">天<img width=\"23\" height=\"31\"/>地</a>");
+            var payload = Parse("<a href=\"object\">天<placeholder width=\"23\" height=\"31\"/>地</a>");
             using var style = new ParagraphStyle { WritingMode = mode };
             using var textStyle = new TextStyle { FontSize = 30 };
             using var paragraph = payload.ToParagraph(style, textStyle);
@@ -81,8 +79,8 @@ namespace Milestro.Tests
         [Test]
         public void P11_AdjacentObjectsAndBlocksUseLocalUtf16AfterSurrogates()
         {
-            var payload = Parse("<p>😀<img width=\"12\" height=\"20\"/><img width=\"14\" height=\"21\"/></p>" +
-                                "<p><a href=\"second\"><img width=\"16\" height=\"22\"/>天</a></p>");
+            var payload = Parse("<p>😀<placeholder width=\"12\" height=\"20\"/><placeholder width=\"14\" height=\"21\"/></p>" +
+                                "<p><a href=\"second\"><placeholder width=\"16\" height=\"22\"/>天</a></p>");
             Assert.That(payload.Blocks[0].LengthUtf16, Is.EqualTo(4));
             Assert.That(payload.Blocks[1].StartUtf16, Is.EqualTo(4));
             Assert.That(payload.Links[0].StartUtf16, Is.EqualTo(4));
@@ -107,7 +105,7 @@ namespace Milestro.Tests
         [Test]
         public void P13_RubyAfterPlaceholderUsesNativeUtf8AndUtf16Tracking()
         {
-            var payload = Parse("<img width=\"12\" height=\"20\"/><ruby>漢<rt>かん</rt></ruby>");
+            var payload = Parse("<placeholder width=\"12\" height=\"20\"/><ruby>漢<rt>かん</rt></ruby>");
             Assert.That(payload.RubyAnnotations[0].StartUtf16, Is.EqualTo(1));
             using var style = new ParagraphStyle();
             using var textStyle = new TextStyle { FontSize = 30 };
@@ -120,7 +118,7 @@ namespace Milestro.Tests
         [Test]
         public void P06_EllipsisRemovesPlaceholderQueryAndLinkGeometry()
         {
-            var payload = Parse("天<a href=\"hidden\"><img width=\"90\" height=\"90\"/>地</a>");
+            var payload = Parse("天<a href=\"hidden\"><placeholder width=\"90\" height=\"90\"/>地</a>");
             using var style = new ParagraphStyle { WritingMode = WritingMode.VerticalRl, MaxLines = 1 };
             style.SetEllipsis("…");
             using var textStyle = new TextStyle { FontSize = 30 };

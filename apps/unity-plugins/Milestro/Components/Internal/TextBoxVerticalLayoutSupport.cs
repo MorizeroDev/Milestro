@@ -98,7 +98,7 @@ namespace Milestro.Components.Internal
                 settings.MarginReferenceSize,
                 settings.VerticalHeightMode,
                 settings.VerticalMarginContext,
-                settings.SizingUsesVerticalLayout);
+                settings.SizingUsesVerticalLayout, settings.Images);
         }
 
         private static TextBoxRenderPreparation PrepareVerticalFallback(
@@ -172,7 +172,8 @@ namespace Milestro.Components.Internal
                 verticalHeightMode: requested.VerticalHeightMode,
                 verticalMarginContext: requested.VerticalMarginContext,
                 sizingUsesVerticalLayout: sizing.HasValue &&
-                                          requested.SizingUsesVerticalLayout);
+                                          requested.SizingUsesVerticalLayout,
+                images: requested.Images);
             return new TextBoxRenderPreparation(effective, payload,
                 CreateDiagnostic(issues), false);
         }
@@ -205,7 +206,7 @@ namespace Milestro.Components.Internal
                 requested.MarginReferenceSize,
                 requested.VerticalHeightMode,
                 requested.VerticalMarginContext,
-                false);
+                false, requested.Images);
             return new TextBoxRenderPreparation(effective, payload,
                 CreateDiagnostic(issues), true);
         }

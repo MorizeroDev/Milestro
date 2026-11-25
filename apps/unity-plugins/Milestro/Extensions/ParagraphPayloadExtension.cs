@@ -380,7 +380,13 @@ namespace Milestro.Extensions
                 var placeholder = placeholders[next++];
                 using var style = placeholder.TextStyle.ToTextStyle(baseTextStyle);
                 builder.PushStyle(style);
-                builder.AddPlaceholder(placeholder.Width, placeholder.Height);
+                if (placeholder.Presentation is { } presentation)
+                {
+                    presentation.Resolve(style.FontSize);
+                    builder.AddPlaceholder(presentation.OuterSize.x, presentation.OuterSize.y,
+                        presentation.Alignment);
+                }
+                else builder.AddPlaceholder(placeholder.Width, placeholder.Height);
                 builder.Pop();
                 ++cursor;
             }

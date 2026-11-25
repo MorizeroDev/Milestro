@@ -48,8 +48,12 @@ namespace Milestro.Tests
             var index = observationCount++;
             observationBuffer[index] = new Observation
             {
-                phase = phase, frame = frame, frameMs = frameMs, mainThreadMs = mainThreadMs,
-                applicationFocused = focused, timestamp = Stopwatch.GetTimestamp()
+                phase = phase,
+                frame = frame,
+                frameMs = frameMs,
+                mainThreadMs = mainThreadMs,
+                applicationFocused = focused,
+                timestamp = Stopwatch.GetTimestamp()
             };
             return index;
         }
@@ -59,13 +63,22 @@ namespace Milestro.Tests
         {
             labelBuffer[observation * labels + label] = new LabelSample
             {
-                requested = state.RequestedVersion, prepared = state.PreparedVersion,
-                submitted = state.SubmittedVersion, completed = state.CompletedVersion,
-                requestedFrame = state.RequestedFrame, completedRequestFrame = state.CompletedRequestFrame,
-                completedFrame = state.CompletedFrame, preparations = state.PreparationAttempts,
-                accepted = state.AcceptedSubmissions, completions = state.Completions,
-                unique = state.WindowCompletedVersions, carryover = state.WindowCarryoverCompletions,
-                output = output, presenter = presenter, hasOutput = hasOutput, unsupported = state.UnsupportedSubmission
+                requested = state.RequestedVersion,
+                prepared = state.PreparedVersion,
+                submitted = state.SubmittedVersion,
+                completed = state.CompletedVersion,
+                requestedFrame = state.RequestedFrame,
+                completedRequestFrame = state.CompletedRequestFrame,
+                completedFrame = state.CompletedFrame,
+                preparations = state.PreparationAttempts,
+                accepted = state.AcceptedSubmissions,
+                completions = state.Completions,
+                unique = state.WindowCompletedVersions,
+                carryover = state.WindowCarryoverCompletions,
+                output = output,
+                presenter = presenter,
+                hasOutput = hasOutput,
+                unsupported = state.UnsupportedSubmission
             };
         }
 

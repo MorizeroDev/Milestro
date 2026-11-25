@@ -61,7 +61,6 @@ namespace Milestro.Components.Internal
                 return false;
             }
 
-            InvalidatePublished();
             token = NextToken();
             pending = true;
             pendingToken = token;
@@ -102,10 +101,13 @@ namespace Milestro.Components.Internal
                 published = true;
             }
             else if (status == UnitySkiaRenderTextureSurface.RenderSubmissionStatus.Drawn &&
-                     !completedWithGeometry &&
-                     !needsRebuild)
+                     !completedWithGeometry)
             {
-                controlledSubmissionRequired = false;
+                InvalidatePublished();
+                if (!needsRebuild)
+                {
+                    controlledSubmissionRequired = false;
+                }
             }
 
             return true;
@@ -140,6 +142,18 @@ namespace Milestro.Components.Internal
         {
             snapshot = publishedSnapshot;
             publishedGeneration = generation;
+            return published;
+        }
+
+        internal bool TryGetPresentation(out TextBoxLinkGeometrySnapshot snapshot)
+        {
+            if (pending)
+            {
+                snapshot = pendingSnapshot;
+                return pendingHasGeometry;
+            }
+
+            snapshot = publishedSnapshot;
             return published;
         }
 

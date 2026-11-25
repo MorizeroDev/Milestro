@@ -70,5 +70,11 @@ namespace Milestro.Skia
         {
             ExitCodeUtil.ThrowIfFailed(BindingC.SkiaSvgRender(NativePtr, canvas.NativePtr));
         }
+
+        public MilestroImage Rasterize()
+        {
+            ExitCodeUtil.ThrowIfFailed(BindingC.SkiaSvgRasterize(NativePtr, out var image));
+            return new MilestroImage(image);
+        }
     }
 }

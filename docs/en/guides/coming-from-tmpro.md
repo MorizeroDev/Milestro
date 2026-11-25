@@ -166,7 +166,7 @@ Support refers to Milestro Markup capabilities:
 | Horizontal positioning | ❌ Unsupported | `<pos>` sets the line's caret position; `<space>` adds a horizontal offset | No equivalent tags; `cspace` adjusts spacing and `text-indent` adjusts paragraph indentation |
 | Arbitrary per-character rotation | ❌ Unsupported | `<rotate>` rotates each character around its center | No equivalent tag; vertical `text-orientation` controls upright or sideways text |
 | Links | ✅ Full | `<link>` marks a link ID | `<a href="…" id="…">`, with click, hover, and optional accessibility navigation |
-| Inline images | 🟡 Partial | `<sprite>` draws from sprite assets | `<img width="…" height="…" key="…"/>` reserves space; the application draws the image |
+| Inline images | 🟡 Partial | `<sprite>` draws from sprite assets | `<img src="…"/>` loads through providers and displays a uGUI overlay; `<placeholder>` only reserves space |
 | Alignment and indentation | 🟡 Partial | `<align>`, `<indent>`, `<line-indent>` | `<p align="…" style="text-indent: …">`; paragraph-block layout |
 | Literal markup text | ✅ Full | `<noparse>` disables tag parsing within its scope | Use XML escaping: `&lt;b&gt;` displays `<b>`, and `&amp;` displays `&` |
 | Inline no-wrap | ✅ Full | `<nobr>` | `<span style="white-space: nowrap">`; nested `normal` restores soft wrapping and hard breaks remain active |

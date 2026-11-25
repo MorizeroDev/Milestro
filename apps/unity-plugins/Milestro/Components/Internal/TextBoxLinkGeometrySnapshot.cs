@@ -123,7 +123,8 @@ namespace Milestro.Components.Internal
             float fitScale = 1f,
             IReadOnlyList<TextBoxPlaceholderGeometry>? placeholders = null,
             IReadOnlyList<ParagraphPayload.ElementAnnotation>? elements = null,
-            IReadOnlyList<TextBoxElementGeometry>? elementGeometry = null)
+            IReadOnlyList<TextBoxElementGeometry>? elementGeometry = null,
+            float flowStartY = float.NaN)
         {
             ContentVersion = contentVersion;
             Paragraphs = paragraphs;
@@ -136,6 +137,7 @@ namespace Milestro.Components.Internal
             Placeholders = placeholders ?? System.Array.Empty<TextBoxPlaceholderGeometry>();
             Elements = elements ?? System.Array.Empty<ParagraphPayload.ElementAnnotation>();
             ElementGeometry = elementGeometry ?? System.Array.Empty<TextBoxElementGeometry>();
+            FlowStartY = float.IsFinite(flowStartY) ? flowStartY : float.NaN;
         }
 
         internal long ContentVersion { get; }
@@ -149,6 +151,13 @@ namespace Milestro.Components.Internal
         internal IReadOnlyList<TextBoxPlaceholderGeometry> Placeholders { get; }
         internal IReadOnlyList<ParagraphPayload.ElementAnnotation> Elements { get; }
         internal IReadOnlyList<TextBoxElementGeometry> ElementGeometry { get; }
+
+        /// <summary>
+        /// Flow-mode visible range start used when this snapshot's paint offset was produced.
+        /// NaN outside flow mode. Geometry published by an older render must be mapped with
+        /// this value instead of the live range, otherwise it drifts by one scroll frame.
+        /// </summary>
+        internal float FlowStartY { get; }
 
         internal bool TryGetGeometry(int occurrence, out TextBoxLinkGeometry geometry)
         {

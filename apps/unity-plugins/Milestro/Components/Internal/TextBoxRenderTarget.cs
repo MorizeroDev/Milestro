@@ -146,7 +146,6 @@ namespace Milestro.Components.Internal
         public void MarkPaintChanged()
         {
             paintChanged = true;
-            linkGeometryPublication.InvalidatePublished();
             linkGeometryPublication.RequestRebuild();
         }
 
@@ -215,6 +214,11 @@ namespace Milestro.Components.Internal
         public bool TryGetLinkGeometrySnapshot(out TextBoxLinkGeometrySnapshot snapshot, out long generation)
         {
             return linkGeometryPublication.TryGetPublished(out snapshot, out generation);
+        }
+
+        public bool TryGetInlineImageGeometrySnapshot(out TextBoxLinkGeometrySnapshot snapshot)
+        {
+            return linkGeometryPublication.TryGetPresentation(out snapshot);
         }
 
         public bool Rebuild(TextBoxRenderViewport viewport,
@@ -590,6 +594,7 @@ namespace Milestro.Components.Internal
                 var resized = ResizeParagraphs(paragraphs, settings, layoutSizePixels, paragraphsRebuilt);
                 if (resized)
                 {
+                    linkGeometryPublication.InvalidatePublished();
                     InvalidateGlyphLayouts();
                 }
                 needsDraw |= resized;
@@ -674,7 +679,8 @@ namespace Milestro.Components.Internal
                     fitScale,
                     BuildPlaceholderGeometry(paintPosition, clipRect, viewport.VisualScrollOffset.x),
                     elementAnnotations,
-                    BuildElementGeometry(paragraphs, elementAnnotations, viewport.VisualScrollOffset.x))
+                    BuildElementGeometry(paragraphs, elementAnnotations, viewport.VisualScrollOffset.x),
+                    viewport.SliceOutput ? scrollOffset.y : float.NaN)
                 : default;
             bool submitted;
             using (profiling ? TextBoxPipelineProfiler.SubmitMarker.Auto() : default)
@@ -821,8 +827,13 @@ namespace Milestro.Components.Internal
                 linkGeometryPublication.RequireControlledSubmission();
             }
 
-            needsDraw |= ResolveVerticalParagraphs(paragraphs, settings, layoutSizePixels,
+            var verticalRelaid = ResolveVerticalParagraphs(paragraphs, settings, layoutSizePixels,
                 paragraphsRebuilt);
+            if (verticalRelaid)
+            {
+                linkGeometryPublication.InvalidatePublished();
+            }
+            needsDraw |= verticalRelaid;
             needsDraw |= UpdateScrollMetrics(settings,
                 layoutSizePixels,
                 visibleOutputSizePixels,
@@ -886,7 +897,8 @@ namespace Milestro.Components.Internal
                     fitScale,
                     BuildPlaceholderGeometry(paintPosition, clipRect, viewport.VisualScrollOffset.x),
                     elementAnnotations,
-                    BuildElementGeometry(paragraphs, elementAnnotations, 0f))
+                    BuildElementGeometry(paragraphs, elementAnnotations, 0f),
+                    viewport.SliceOutput ? scrollOffset.y : float.NaN)
                 : default;
             bool submitted;
             using (profiling ? TextBoxPipelineProfiler.SubmitMarker.Auto() : default)
@@ -2298,7 +2310,14 @@ namespace Milestro.Components.Internal
                     visible = outputRect.Overlaps(clipRect);
                     break;
                 }
-                result.Add(new TextBoxPlaceholderGeometry(annotation.Key, annotation.StartUtf16, rect, visible));
+                var outerRect = rect;
+                if (annotation.Presentation is { } presentation)
+                {
+                    rect = new Rect(rect.position + presentation.ContentRect.position, presentation.ContentRect.size);
+                    visible &= presentation.Visible;
+                }
+                result.Add(new TextBoxPlaceholderGeometry(annotation.Key, annotation.StartUtf16, rect, visible,
+                    annotation.Source, annotation.Presentation, outerRect));
             }
             return result.AsReadOnly();
         }
@@ -2444,6 +2463,7 @@ namespace Milestro.Components.Internal
 
         private void RetireParagraphs()
         {
+            linkGeometryPublication.InvalidatePublished();
             InvalidateGlyphLayouts();
             foreach (var oldParagraph in paragraphs)
             {

@@ -1787,7 +1787,7 @@ TEST_F(SkiaVerticalParagraph, P10_IndentJustifyLineHeightAndBaselineShiftLeavePl
 }
 
 TEST_F(SkiaVerticalParagraph, P12_UnsupportedAlignmentBaselineOffsetAndInvalidDimensionsReject) {
-    for (auto value : {0, 1, 2, 3, 4}) {
+    for (auto value : {0, 1, 2}) {
         auto paragraph = BuildCoreParagraph("", PrimaryStyle(40), {}, [value](auto* builder) {
             auto placeholder = MiddlePlaceholder(20, 30);
             placeholder.fAlignment = static_cast<skia_text::PlaceholderAlignment>(value);
@@ -1812,6 +1812,37 @@ TEST_F(SkiaVerticalParagraph, P12_UnsupportedAlignmentBaselineOffsetAndInvalidDi
         EXPECT_THROW(BuildCoreParagraph("", PrimaryStyle(40), {}, [value](auto* builder) {
             builder->addPlaceholder(MiddlePlaceholder(20, value));
         }), std::invalid_argument);
+    }
+}
+
+TEST_F(SkiaVerticalParagraph, InlineObjectAlignmentUsesColumnEdgesAndBaseline) {
+    for (auto alignment : {skia_text::PlaceholderAlignment::kTop,
+                           skia_text::PlaceholderAlignment::kBottom,
+                           skia_text::PlaceholderAlignment::kMiddle,
+                           skia_text::PlaceholderAlignment::kBaseline}) {
+        auto paragraph = BuildCoreParagraph("天", PrimaryStyle(40), {}, [alignment](auto* builder) {
+            auto placeholder = MiddlePlaceholder(60, 20);
+            placeholder.fAlignment = alignment;
+            placeholder.fBaselineOffset = alignment == skia_text::PlaceholderAlignment::kBaseline ? 20 : 0;
+            builder->addPlaceholder(placeholder);
+        });
+        paragraph->layoutWithInlineExtent(200);
+        const auto boxes = paragraph->getRectsForPlaceholders();
+        ASSERT_EQ(boxes.size(), 1u);
+        const auto bounds = paragraph->getLayoutMetrics().columns[0].physicalBounds;
+        EXPECT_GE(boxes[0].rect.left(), bounds.left() - 0.01f);
+        EXPECT_LE(boxes[0].rect.right(), bounds.right() + 0.01f);
+        if (alignment == skia_text::PlaceholderAlignment::kTop) {
+            EXPECT_NEAR(boxes[0].rect.right(), bounds.right(), 0.01f);
+        } else if (alignment == skia_text::PlaceholderAlignment::kBottom) {
+            EXPECT_NEAR(boxes[0].rect.left(), bounds.left(), 0.01f);
+        } else if (alignment == skia_text::PlaceholderAlignment::kMiddle) {
+            EXPECT_NEAR(boxes[0].rect.centerX(), bounds.centerX(), 0.01f);
+        } else if (alignment == skia_text::PlaceholderAlignment::kBaseline) {
+            const auto& column = paragraph->getLayoutMetrics().columns[0];
+            EXPECT_NEAR(boxes[0].rect.left(), column.physicalBaseline, 0.01f);
+            EXPECT_GE(column.physicalBounds.right() - column.physicalBaseline, 60);
+        }
     }
 }
 

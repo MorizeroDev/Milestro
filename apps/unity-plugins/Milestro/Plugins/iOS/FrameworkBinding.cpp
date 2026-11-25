@@ -490,6 +490,10 @@ int64_t FrameworkBindingMilestroSkiaSvgRender (milestro::skia::Svg* svg, milestr
     return MilestroSkiaSvgRender(svg, canvas);
 }
 
+int64_t FrameworkBindingMilestroSkiaSvgRasterize (milestro::skia::Svg* svg, milestro::skia::Image*& image) {
+    return MilestroSkiaSvgRasterize(svg, image);
+}
+
 int64_t FrameworkBindingMilestroSkiaVertexDataDestroy (milestro::skia::VertexData*& ret) {
     return MilestroSkiaVertexDataDestroy(ret);
 }
@@ -577,6 +581,10 @@ int64_t FrameworkBindingMilestroSkiaImageGetWidth (milestro::skia::Image* img, i
 
 int64_t FrameworkBindingMilestroSkiaImageGetHeight (milestro::skia::Image* img, int32_t& height) {
     return MilestroSkiaImageGetHeight(img, height);
+}
+
+int64_t FrameworkBindingMilestroSkiaImageReadRgba (milestro::skia::Image* img, uint8_t* pixels, uint64_t size) {
+    return MilestroSkiaImageReadRgba(img, pixels, size);
 }
 
 int64_t FrameworkBindingMilestroSkiaImageDestroy (milestro::skia::Image*& ret) {

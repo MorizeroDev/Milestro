@@ -52,7 +52,7 @@ namespace Milestro.Tests
         public void NoWrapRangeIncludesInheritedPlaceholders()
         {
             var payload = Parse("<span style=\"white-space: nowrap\">aa" +
-                                "<img width=\"12\" height=\"20\"/>bb</span>");
+                                "<placeholder width=\"12\" height=\"20\"/>bb</span>");
 
             Assert.That(payload.NoWrapAnnotations, Has.Count.EqualTo(1));
             AssertAnnotation(payload.NoWrapAnnotations[0], 0, 5);

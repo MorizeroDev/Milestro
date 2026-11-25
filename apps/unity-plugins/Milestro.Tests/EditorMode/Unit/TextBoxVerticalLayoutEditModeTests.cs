@@ -26,9 +26,9 @@ namespace Milestro.Tests
             var content = "<ruby style=\"ruby-position: " + position +
                 "; ruby-align: start; ruby-overhang: none; --milestro-ruby-size: 0.75; " +
                 "--milestro-ruby-gap: 4; --milestro-ruby-overflow: inline\">" +
-                "漢<img width=\"30\" height=\"20\"/><rp>(</rp><rt>かなABC</rt><rp>)</rp></ruby>";
-            LogAssert.Expect(LogType.Error, "<img> inside <ruby> is ignored");
-            LogAssert.Expect(LogType.Error, "<img> inside <ruby> is ignored");
+                "漢<placeholder width=\"30\" height=\"20\"/><rp>(</rp><rt>かなABC</rt><rp>)</rp></ruby>";
+            LogAssert.Expect(LogType.Error, "<placeholder> inside <ruby> is ignored");
+            LogAssert.Expect(LogType.Error, "<placeholder> inside <ruby> is ignored");
             var prepared = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(VerticalSettings(content));
             Assert.That(prepared.UsesHorizontalFallback, Is.False);
             Assert.That(prepared.Diagnostic != null, Is.EqualTo(diagnostic));
@@ -1960,7 +1960,7 @@ namespace Milestro.Tests
         public void TC12_ComputedCombineRangesSplitAtPlaceholderAndRuby()
         {
             var preparation = TextBoxVerticalLayoutSupport.PrepareRenderConfiguration(VerticalSettings(
-                "<span style=\"text-combine-upright: all\">1<img width=\"20\" height=\"20\"/>" +
+                "<span style=\"text-combine-upright: all\">1<placeholder width=\"20\" height=\"20\"/>" +
                 "2<ruby>漢<rt>か</rt></ruby>3</span>"));
             Assert.That(preparation.Diagnostic, Is.Null);
             var ranges = preparation.Payload.TateChuYokoAnnotations;

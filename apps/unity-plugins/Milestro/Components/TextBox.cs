@@ -107,6 +107,7 @@ namespace Milestro.Components
 
         protected override void OnDisable()
         {
+            HideInlineImages();
             ClearLinkPresses();
             parentPresses.Clear();
             parentClicks.Clear();
@@ -124,6 +125,7 @@ namespace Milestro.Components
 
         protected override void OnDestroy()
         {
+            DestroyInlineImages();
             DestroyLinkHoverFeedback();
             ClearLinkPresses();
             base.OnDestroy();
@@ -520,7 +522,7 @@ namespace Milestro.Components
                 var outputRect = OffsetRect(ScaleRect(elementGeometry.OutputRect, snapshot.FitScale),
                     snapshot.PaintPosition);
                 geometry = new TextBoxElementGeometry(contentRect,
-                    OutputRectToLocal(outputRect, snapshot.VisibleOutputSize));
+                    OutputRectToLocal(outputRect, snapshot.VisibleOutputSize, snapshot.FlowStartY));
                 return true;
             }
 
@@ -593,7 +595,7 @@ namespace Milestro.Components
                     continue;
                 }
 
-                results.Add(OutputRectToLocal(clippedRect, snapshot.VisibleOutputSize));
+                results.Add(OutputRectToLocal(clippedRect, snapshot.VisibleOutputSize, snapshot.FlowStartY));
             }
 
             return results.Count > 0;
@@ -624,7 +626,7 @@ namespace Milestro.Components
                     var outputRect = OffsetRect(ScaleRect(positioned, snapshot.FitScale), snapshot.PaintPosition);
                     if (TryClipRect(outputRect, snapshot.ClipRect, out var clippedRect))
                     {
-                        results.Add(OutputRectToLocal(clippedRect, snapshot.VisibleOutputSize));
+                        results.Add(OutputRectToLocal(clippedRect, snapshot.VisibleOutputSize, snapshot.FlowStartY));
                     }
                 }
             }
@@ -751,13 +753,25 @@ namespace Milestro.Components
 
         private Rect OutputRectToLocal(Rect outputRect, Vector2Int visibleOutputSize)
         {
+            return OutputRectToLocal(outputRect, visibleOutputSize, float.NaN);
+        }
+
+        private Rect OutputRectToLocal(Rect outputRect, Vector2Int visibleOutputSize, float flowStartY)
+        {
             var rect = GetPixelAdjustedRect();
             var top = rect.yMax;
             var bottom = rect.yMin;
             if (flowModeActive)
             {
-                top = Mathf.Clamp(rect.yMax - flowVisibleStartY, rect.yMin, rect.yMax);
-                bottom = Mathf.Clamp(rect.yMax - flowVisibleEndY, rect.yMin, rect.yMax);
+                // A published geometry snapshot carries the flow range it was rendered
+                // with. Re-anchoring it to the live range makes it drift by one frame
+                // while scrolling, so prefer the snapshot's own start when available.
+                var startY = float.IsFinite(flowStartY) ? flowStartY : flowVisibleStartY;
+                var rangeHeight = Mathf.Max(0.0001f, visibleOutputSize.y);
+                top = Mathf.Clamp(rect.yMax - startY, rect.yMin, rect.yMax);
+                bottom = float.IsFinite(flowStartY)
+                    ? Mathf.Clamp(top - rangeHeight, rect.yMin, rect.yMax)
+                    : Mathf.Clamp(rect.yMax - flowVisibleEndY, rect.yMin, rect.yMax);
             }
 
             var width = Mathf.Max(1f, visibleOutputSize.x);

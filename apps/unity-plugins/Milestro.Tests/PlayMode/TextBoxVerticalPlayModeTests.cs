@@ -2566,8 +2566,8 @@ namespace Milestro.Tests
         [UnityTest]
         public IEnumerator P09_P11_P14_PlaceholderSnapshotsPublishLinksAndInvalidateAcrossUpdates()
         {
-            var textBox = CreateTextBox("<a href=\"object\"><p>天<img width=\"70\" height=\"20\" key=\"first\"/>地</p>" +
-                "<p><img width=\"30\" height=\"150\" key=\"tall\"/></p></a>", out var producer, MarginAll(0));
+            var textBox = CreateTextBox("<a href=\"object\"><p>天<placeholder width=\"70\" height=\"20\" key=\"first\"/>地</p>" +
+                "<p><placeholder width=\"30\" height=\"150\" key=\"tall\"/></p></a>", out var producer, MarginAll(0));
             yield return WaitForProducer(producer, true);
             Assert.That(textBox.TryGetPlaceholderGeometrySnapshot(out var first), Is.True);
             Assert.That(first.Geometry, Has.Count.EqualTo(2));
@@ -2605,7 +2605,7 @@ namespace Milestro.Tests
             Assert.That(horizontal.Generation, Is.Not.EqualTo(scrolled.Generation));
             Assert.That(horizontal.Geometry[0].Rect.size, Is.EqualTo(new Vector2(70, 20)));
             version = producer.OutputVersion;
-            producer.content = "<img width=\"19\" height=\"27\" key=\"replacement\"/>天";
+            producer.content = "<placeholder width=\"19\" height=\"27\" key=\"replacement\"/>天";
             producer.paragraphStyle.writingMode = WritingMode.VerticalRl;
             yield return WaitForProducerAfter(producer, version, false);
             Assert.That(textBox.TryGetPlaceholderGeometrySnapshot(out var changed), Is.True);
@@ -2622,7 +2622,7 @@ namespace Milestro.Tests
         [UnityTest]
         public IEnumerator P06_P10_P14_PlaceholderVisibilityFollowsEllipsisAndAutoMargins()
         {
-            var textBox = CreateTextBox("天<img width=\"90\" height=\"90\" key=\"hidden\"/>地",
+            var textBox = CreateTextBox("天<placeholder width=\"90\" height=\"90\" key=\"hidden\"/>地",
                 out var producer, MarginAll(0));
             producer.paragraphStyle.singleLine = true;
             producer.textOverflow = TextOverflow.Ellipsis;
@@ -2632,7 +2632,7 @@ namespace Milestro.Tests
             Assert.That(hidden.Geometry[0].Visible, Is.False);
             Assert.That(hidden.Geometry[0].Rect, Is.EqualTo(default(Rect)));
             var version = producer.OutputVersion;
-            producer.content = "<img width=\"50\" height=\"20\" key=\"centered\"/>";
+            producer.content = "<placeholder width=\"50\" height=\"20\" key=\"centered\"/>";
             producer.paragraphStyle.singleLine = false;
             producer.margin = new Margin
             {
@@ -2652,7 +2652,7 @@ namespace Milestro.Tests
         public IEnumerator AF09_AF12_ScaledBlocksPlaceholdersPixelsAndHoverShareGeometry()
         {
             var textBox = CreateTextBox("<a href=\"scaled\"><p style=\"margin-top: 10px; text-indent: 10px\">" +
-                "<u>天</u><img width=\"70\" height=\"20\" key=\"scaled\"/>地</p>" +
+                "<u>天</u><placeholder width=\"70\" height=\"20\" key=\"scaled\"/>地</p>" +
                 "<p><sup>玄</sup>黃宇宙洪荒日月盈昃</p></a>", out var producer, MarginAll(0f));
             producer.enableAutoFontSize = true;
             producer.fontSizeMin = 6f;

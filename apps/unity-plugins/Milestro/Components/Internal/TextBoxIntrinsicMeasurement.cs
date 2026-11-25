@@ -40,7 +40,7 @@ namespace Milestro.Components.Internal
             paragraphStyle.ClearMaxLines();
             using var textStyle = settings.TextStyle.ToTextStyle();
             paragraphs = payload.ToParagraphs(paragraphStyle, textStyle);
-            empty = true;
+            empty = payload.Placeholders.Count == 0;
             foreach (var block in payload.Blocks)
             {
                 foreach (var segment in block.Segments)

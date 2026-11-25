@@ -44,6 +44,7 @@ namespace Milestro.RichTextParser
     /// </remarks>
     public class TextStyleState
     {
+        internal bool InlineVisible { get; set; } = true;
         /// <summary>
         /// Whether underline decoration should be added to the inherited decoration flags.
         /// </summary>
@@ -197,6 +198,7 @@ namespace Milestro.RichTextParser
         public TextStyleState Clone()
         {
             var ret = new TextStyleState();
+            ret.InlineVisible = InlineVisible;
 
             ret.Underline = Underline;
             ret.Strikethrough = Strikethrough;

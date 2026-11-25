@@ -610,6 +610,12 @@ IntPtr canvas);
 
 
 
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaSvgRasterize")]
+        internal static extern unsafe long SkiaSvgRasterize(IntPtr svg,
+out IntPtr image);
+
+
+
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaVertexDataDestroy")]
         internal static extern unsafe long SkiaVertexDataDestroy(out IntPtr ret);
 
@@ -720,6 +726,13 @@ out int width);
         [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaImageGetHeight")]
         internal static extern unsafe long SkiaImageGetHeight(IntPtr img,
 out int height);
+
+
+
+        [DllImport(dllName, EntryPoint = EntryPointPrefix + "MilestroSkiaImageReadRgba")]
+        internal static extern unsafe long SkiaImageReadRgba(IntPtr img,
+byte[] pixels,
+ulong size);
 
 
 

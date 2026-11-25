@@ -291,6 +291,11 @@ namespace Milestro.Tests
                 return false;
             }
 
+            public bool TryGetInlineImageGeometrySnapshot(out TextBoxLinkGeometrySnapshot snapshot)
+            {
+                return TryGetLinkGeometrySnapshot(out snapshot, out _);
+            }
+
             public bool Rebuild(TextBoxRenderViewport viewport, ColorSpace colorSpace,
                 TextBoxRenderTargetSettings settings, bool forceText, Object? logContext)
             {

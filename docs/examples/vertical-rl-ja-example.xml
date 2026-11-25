@@ -111,10 +111,12 @@
     <p style="margin-bottom: 12px">特殊文字：&lt;tag&gt;・A &amp; B・&quot;引用&quot;・&apos;引用&apos;。数値参照：&#9733; &#x2605;。改行しない空白：A&#160;B</p>
     <p style="text-indent: 32px; font-kerning: normal; margin-bottom: 16px"><font color="#38bdf8" weight="600">色と太さを継承し、<i>子を斜体に、<u>さらに下線を加えます</u></i>。親の装飾に戻ります。<font color="#f59e0b" size="40"><span cspace="2">新しい色・サイズ・字間</span></font>。サイズ３２に戻ります。</font>ここから通常の文字です。</p>
 
-    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">18 · 画像用の空き枠</font></p>
-    <p style="margin-bottom: 12px">得点：［<img width="24" height="24" key="coin-icon" />］１２００・状態：［<img width="32" height="32" key="status-icon" />］準備完了</p>
-    <p style="margin-bottom: 12px">横長：［<img width="64" height="24" />］・縦長：［<img width="24" height="64" key="tall-icon" />］・<a href="milestro://action/reward" id="reward-link"><font color="#34d399"><u>報酬［<img width="32" height="32" key="reward-icon" />］を受け取る</u></font></a></p>
-    <p style="margin-bottom: 12px">括弧の間の空白は意図した表示です。画像タグは領域だけを確保し、画像自体は描きません。幅と高さは正の数で指定し、キーは省略できます。配置情報は TextBox.TryGetPlaceholderGeometrySnapshot から取得し、アプリ側で描画してください。</p>
+    <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">18 · 行内画像とプレースホルダー</font></p>
+    <p style="margin-bottom: 12px">得点：［<placeholder width="24" height="24" key="coin-icon" />］１２００・状態：［<placeholder width="32" height="32" key="status-icon" />］準備完了</p>
+    <p style="margin-bottom: 12px">横長：［<placeholder width="64" height="24" />］・縦長：［<placeholder width="24" height="64" key="tall-icon" />］・<a href="milestro://action/reward" id="reward-link"><font color="#34d399"><u>報酬［<placeholder width="32" height="32" key="reward-icon" />］を受け取る</u></font></a></p>
+    <p style="margin-bottom: 12px">括弧の間の空白は意図した表示です。placeholder タグは領域だけを確保し、画像自体は描きません。幅と高さは正の数で指定し、キーは省略できます。配置情報は TextBox.TryGetPlaceholderGeometrySnapshot から取得し、アプリ側で描画してください。</p>
+    <p style="margin-bottom: 12px">SVG Data URI の剣アイコン：<img src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M22%202L22%206L10%2018L6%2014L18%202Z%22%20fill%3D%22%23e2e8f0%22%2F%3E%3Cpath%20d%3D%22M19%205L8%2016%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M4%2013L11%2020%22%20stroke%3D%22%23f59e0b%22%20stroke-width%3D%223%22%2F%3E%3Cpath%20d%3D%22M3%2020L7%2016%22%20stroke%3D%22%2378350f%22%20stroke-width%3D%224%22%2F%3E%3Ccircle%20cx%3D%222.5%22%20cy%3D%2221%22%20r%3D%222%22%20fill%3D%22%23fbbf24%22%2F%3E%3C%2Fsvg%3E" width="32" height="32"/>（32 × 32）</p>
+    <p align="center" style="margin-top: 16px; margin-bottom: 16px"><img src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20160%2096%22%3E%3Crect%20width%3D%22160%22%20height%3D%2296%22%20rx%3D%2212%22%20fill%3D%22%230f172a%22%2F%3E%3Ccircle%20cx%3D%22120%22%20cy%3D%2227%22%20r%3D%2215%22%20fill%3D%22%23fbbf24%22%2F%3E%3Cpath%20d%3D%22M8%2088L52%2034L88%2078L108%2054L152%2088Z%22%20fill%3D%22%2338bdf8%22%2F%3E%3Cpath%20d%3D%22M8%2088L52%2034L67%2056L45%2062L30%2088Z%22%20fill%3D%22%2314b8a6%22%2F%3E%3C%2Fsvg%3E" width="160" height="96"/></p>
 
     <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">19 · 範囲内の改段制御</font></p>
     <p>通常：春夏秋冬花鳥風月。改段なし：<span style="white-space: nowrap">春夏秋冬花鳥風月</span>。表示領域の高さを変えて比較します。</p>
@@ -136,5 +138,5 @@
     <p style="margin-right: 64px; margin-left: 6px"><font color="#94a3b8" weight="600">23 · 要素の位置と空の目印</font></p>
     <p id="chapter-anchor"></p>
     <p id="geometry-paragraph"><span id="geometry-span"><b>この文字範囲</b></span>、段落全体、直前の空の段落を識別子で検索できます。</p>
-    <p>画像の位置：［<img id="geometry-image" width="32" height="32" key="geometry-icon"/>］。直排では ContentRect.x が横方向の内容位置を表します。移動はアプリで実装します。</p>
+    <p>画像の位置：［<placeholder id="geometry-image" width="32" height="32" key="geometry-icon"/>］。直排では ContentRect.x が横方向の内容位置を表します。移動はアプリで実装します。</p>
 </span></font>

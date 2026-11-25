@@ -9,6 +9,7 @@ the plugin and using its components, see the [user manual](../README.md).
 - [Text pipeline](text-pipeline.md): preparation, layout reuse, font caches, and glyph meshes.
 - [Text pipeline validation](text-pipeline-validation.md): Player benchmark and image checks.
 - [Custom rich-text parsers](rich-text-parsers.md): registration and paragraph payloads.
+- [Inline images and placeholders](inline-images-design.md): resource providers, leases, SVG, and CSS.
 - [Hybrid Input](hybrid-input.md): provider selection and input ownership.
 - [TextInput accessibility design](accessibility-design.md): platform model and Unity integration.
 

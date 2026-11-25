@@ -105,7 +105,8 @@ producer.content = "<b>粗体</b>与普通文字";
 | `<span>` | 底层片段覆盖 |
 | `<p>` | 段落块、对齐、方向与块样式 |
 | `<br>` | 强制换行 |
-| `<img width=".." height=".." key=".."/>` | 不自行绘图的内联占位框 |
+| `<placeholder width=".." height=".." key=".."/>` | 不自行绘图的内联占位框 |
+| `<img src=".." width=".." height=".."/>` | 通过资源 Provider 加载的内联图片 |
 | `<a href="target" id="optional-id">` | 可点击范围 |
 | `<ruby>基文<rt>注音</rt></ruby>` | Ruby 注音 |
 | `<rp>` | Ruby 中供 HTML 回退使用的文本，不显示 |
@@ -186,7 +187,7 @@ producer.paragraphStyle.paragraphSpacing = 12f;
 #### 内联占位符
 
 ```xml
-得分：<img width="24" height="24" key="coin-icon"/> 1200
+得分：<placeholder width="24" height="24" key="coin-icon"/> 1200
 ```
 
 `width`、`height` 必须为正数，`key` 可选。空元素只占位置，不绘制图片，源码占一个 U+FFFC 字符；
@@ -205,16 +206,39 @@ if (textBox.TryGetPlaceholderGeometrySnapshot(out var snapshot))
 `item.Key`、`StartUtf16`、`Visible` 标识项目。`Rect` 处于段落布局单位，
 `PaintPosition` 与 `FitScale` 用于转为渲染纹理像素；`ContentVersion` 或 `Generation` 改变后重新读取。
 
+<a id="inline-images"></a>
+#### 内联图片
+
+```xml
+<img src="icons/coin" width="24" height="24"/>
+<img src="addressable://icons/coin" style="height: 1em; object-fit: contain"/>
+```
+
+`<img>` 必须提供非空 `src`，并由 TextBox 的子级 uGUI Overlay 绘制；Overlay 跟随滚动、缩放、
+横竖排和父级遮罩，默认不拦截射线。旧版不带 `src` 的占位 `<img>` 应迁移为 `<placeholder>`。
+
+普通 `src` 交给 `ImageResources.Providers.DefaultProvider`，`scheme://` 选择已注册 Provider。
+内置支持 `file://` 和 `data:image/...`；Addressables 等来源由应用实现
+`IImageResourceProvider` 并调用 `ImageResources.Providers.Register` 注册。Provider 负责跨 TextBox
+缓存及底层资源所有权，TextBox 只持有租约并在内容变化、producer 禁用或销毁时释放。更换 Provider 后调用
+`textBox.RefreshInlineImages()` 重试已有内容。
+
+图片尺寸支持正数 `px`/`em`，边距支持非负 `px`/`em`，`margin` 支持一到四个值。CSS 尺寸覆盖标签属性；
+只指定一边时按固有比例推导另一边，两边均为 `auto` 时高度为 `1em`，加载前暂用 1:1。
+另支持 `vertical-align: middle | top | bottom | baseline`、`object-fit`、
+`object-position`、`opacity` 和可继承覆盖的 `visibility`。资源就绪后自动重新测量和布局。
+完整 Provider 契约、Data URI/SVG 规则和生命周期见[内联图片设计](../development/inline-images-design.md)。
+
 <a id="element-geometry"></a>
 #### 元素 ID 与几何查询
 
-可渲染元素接受非空、区分大小写的 `id`。它既可标识 `<img/>` 占位符，也可标识段落、
+可渲染元素接受非空、区分大小写的 `id`。它既可标识 `<placeholder/>` 占位符，也可标识段落、
 文字范围或空锚点：
 
 ```xml
 <p id="chapter"></p>
 <p id="paragraph">这里有<span id="label">一段文字</span>和
-<img id="icon" width="24" height="24" key="coin-icon"/>。</p>
+<placeholder id="icon" width="24" height="24" key="coin-icon"/>。</p>
 ```
 
 布局完成后，通过 `TextBox.TryGetElementGeometryById` 查询指定元素：
@@ -233,7 +257,7 @@ if (textBox.TryGetElementGeometryById("icon", out var element))
 空元素返回文本位置处的零尺寸矩形；重复 ID 返回文档顺序中的第一个元素。
 ID 不存在或尚无可用布局几何时返回 `false`。
 
-`id` 用于位置查询，`<img>` 的 `key` 用于应用识别占位内容，两者可同时使用。
+`id` 用于位置查询，`<placeholder>` 的 `key` 用于应用识别占位内容，两者可同时使用。
 ID 不自动触发跳转；滚动示例见[按元素 ID 定位](scrolling.md#jump-to-an-element-id)。
 
 #### XML 解析注意事项

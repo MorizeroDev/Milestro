@@ -8,6 +8,9 @@ using UnityEngine.UI;
 
 namespace Milestro.Components
 {
+    // ScrollRect moves content in LateUpdate at the default execution order.
+    // Resolve the visible range after that so text and images use the same frame.
+    [DefaultExecutionOrder(1000)]
     [DisallowMultipleComponent]
     [RequireComponent(typeof(RectTransform), typeof(TextBox))]
     [AddComponentMenu("Milestro/Text Box Layout Element")]
@@ -384,10 +387,12 @@ namespace Milestro.Components
             {
                 DebugFlow("resolve failed: no RectTransform");
                 textBox.SetFlowVisibleRange(false, 0f, 0f, 0f);
+                textBox.RefreshInlineImagePresentation();
                 return;
             }
 
             textBox.SetFlowVisibleRange(visible, localStartY, localEndY, visibleCapacityHeight);
+            textBox.RefreshInlineImagePresentation();
         }
 
         private bool TryResolveVisibleRange(out bool visible,

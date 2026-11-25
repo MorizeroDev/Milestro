@@ -130,8 +130,8 @@ namespace Milestro.Tests
         public void BlockLocalTextIncludesTrailingNativePlaceholder()
         {
             var parser = new RichTextParser.RichTextParser();
-            parser.ParseText("<p>😀<img width=\"250\" height=\"24\"/></p>" +
-                             "<p>e\u0301<img width=\"180\" height=\"24\"/></p>");
+            parser.ParseText("<p>😀<placeholder width=\"250\" height=\"24\"/></p>" +
+                             "<p>e\u0301<placeholder width=\"180\" height=\"24\"/></p>");
             var payload = parser.ConvertToSegments();
             using var paragraphStyle = new ParagraphStyle();
             using var textStyle = new TextStyle { FontSize = 36f };

@@ -58,12 +58,14 @@ namespace Milestro.Skia.TextLayout
             return new Paragraph(paragraphPtr);
         }
 
-        public void AddPlaceholder(float width, float height)
+        public void AddPlaceholder(float width, float height,
+            Milestro.RichTextParser.InlineObjectAlignment alignment = Milestro.RichTextParser.InlineObjectAlignment.Middle)
         {
             if (!float.IsFinite(width) || width <= 0) throw new ArgumentOutOfRangeException(nameof(width));
             if (!float.IsFinite(height) || height <= 0) throw new ArgumentOutOfRangeException(nameof(height));
             ExitCodeUtil.ThrowIfFailed(BindingC.SkiaTextlayoutParagraphBuilderAddPlaceholder(
-                NativePtr, width, height, 5, 0, 0));
+                NativePtr, width, height, (int)alignment, 0,
+                alignment == Milestro.RichTextParser.InlineObjectAlignment.Baseline ? height : 0));
             _text.Append('\uFFFC');
             _utf8Length += 3;
         }

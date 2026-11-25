@@ -1110,6 +1110,11 @@ namespace Milestro.Tests
                 MaxScrollOffset = new Vector2(0f, value);
             }
 
+            public bool TryGetInlineImageGeometrySnapshot(out TextBoxLinkGeometrySnapshot snapshot)
+            {
+                return TryGetLinkGeometrySnapshot(out snapshot, out _);
+            }
+
             public bool Rebuild(TextBoxRenderViewport viewport,
                 ColorSpace colorSpace,
                 TextBoxRenderTargetSettings settings,

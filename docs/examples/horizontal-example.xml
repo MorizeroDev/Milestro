@@ -110,10 +110,12 @@
     <p style="margin-bottom: 12px">XML entities: &lt;tag&gt; / A &amp; B / &quot;quoted&quot; / &apos;apostrophe&apos; / Numeric references: &#9733; &#x2605; / Non-breaking space: A&#160;B</p>
     <p style="text-indent: 32px; font-kerning: normal; margin-bottom: 16px"><font color="#38bdf8" weight="600">Inherited color and weight, <i>italic child, <u>underlined child</u></i>, back to the parent. <font color="#f59e0b" size="40"><span cspace="2">New color + size + spacing</span></font>, back to size 32.</font> Normal text resumes here.</p>
 
-    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">18 · Inline Placeholders</font></p>
-    <p style="margin-bottom: 12px">Score: [<img width="24" height="24" key="coin-icon" />] 1200 / Status: [<img width="32" height="32" key="status-icon" />] Ready</p>
-    <p style="margin-bottom: 12px">Wide box: [<img width="64" height="24" />] / Tall box: [<img width="24" height="64" key="tall-icon" />] / <a href="milestro://action/reward" id="reward-link"><font color="#34d399"><u>Reward [<img width="32" height="32" key="reward-icon" />] claim</u></font></a></p>
-    <p style="margin-bottom: 16px">The gaps in brackets are intentional: img reserves geometry but paints no image. Width and height are required positive numbers; key is optional. Use TextBox.TryGetPlaceholderGeometrySnapshot to position application visuals.</p>
+    <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">18 · Inline Images and Placeholders</font></p>
+    <p style="margin-bottom: 12px">Score: [<placeholder width="24" height="24" key="coin-icon" />] 1200 / Status: [<placeholder width="32" height="32" key="status-icon" />] Ready</p>
+    <p style="margin-bottom: 12px">Wide box: [<placeholder width="64" height="24" />] / Tall box: [<placeholder width="24" height="64" key="tall-icon" />] / <a href="milestro://action/reward" id="reward-link"><font color="#34d399"><u>Reward [<placeholder width="32" height="32" key="reward-icon" />] claim</u></font></a></p>
+    <p style="margin-bottom: 16px">The gaps in brackets are intentional: placeholder reserves geometry but paints no image. Width and height are required positive numbers; key is optional. Use TextBox.TryGetPlaceholderGeometrySnapshot to position application visuals.</p>
+    <p style="margin-bottom: 12px">Inline SVG Data URI sword: <img src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M22%202L22%206L10%2018L6%2014L18%202Z%22%20fill%3D%22%23e2e8f0%22%2F%3E%3Cpath%20d%3D%22M19%205L8%2016%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M4%2013L11%2020%22%20stroke%3D%22%23f59e0b%22%20stroke-width%3D%223%22%2F%3E%3Cpath%20d%3D%22M3%2020L7%2016%22%20stroke%3D%22%2378350f%22%20stroke-width%3D%224%22%2F%3E%3Ccircle%20cx%3D%222.5%22%20cy%3D%2221%22%20r%3D%222%22%20fill%3D%22%23fbbf24%22%2F%3E%3C%2Fsvg%3E" width="32" height="32"/> (32 × 32)</p>
+    <p align="center" style="margin-top: 16px; margin-bottom: 16px"><img src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20160%2096%22%3E%3Crect%20width%3D%22160%22%20height%3D%2296%22%20rx%3D%2212%22%20fill%3D%22%230f172a%22%2F%3E%3Ccircle%20cx%3D%22120%22%20cy%3D%2227%22%20r%3D%2215%22%20fill%3D%22%23fbbf24%22%2F%3E%3Cpath%20d%3D%22M8%2088L52%2034L88%2078L108%2054L152%2088Z%22%20fill%3D%22%2338bdf8%22%2F%3E%3Cpath%20d%3D%22M8%2088L52%2034L67%2056L45%2062L30%2088Z%22%20fill%3D%22%2314b8a6%22%2F%3E%3C%2Fsvg%3E" width="160" height="96"/></p>
 
     <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">19 · Inline Wrapping</font></p>
     <p style="margin-bottom: 12px">Normal: Alpha Beta Gamma Delta / No wrap: <span style="white-space: nowrap">Alpha Beta Gamma Delta</span>. Narrow the viewport to compare.</p>
@@ -136,5 +138,5 @@
     <p style="margin-top: 64px; margin-bottom: 6px"><font color="#94a3b8" weight="600">23 · Element Geometry and Empty Anchors</font></p>
     <p id="chapter-anchor"></p>
     <p id="geometry-paragraph" style="margin-bottom: 12px">Query <span id="geometry-span"><b>this styled range</b></span>, the whole paragraph, or the empty anchor immediately above by id.</p>
-    <p style="margin-bottom: 12px">Image geometry: [<img id="geometry-image" width="32" height="32" key="geometry-icon"/>]. IDs do not navigate automatically; the application queries their content and Canvas rectangles.</p>
+    <p style="margin-bottom: 12px">Image geometry: [<placeholder id="geometry-image" width="32" height="32" key="geometry-icon"/>]. IDs do not navigate automatically; the application queries their content and Canvas rectangles.</p>
 </font>

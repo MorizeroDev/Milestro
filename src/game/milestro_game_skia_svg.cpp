@@ -32,4 +32,13 @@ int64_t MilestroSkiaSvgRender(milestro::skia::Svg *svg, milestro::skia::Canvas *
     return MILESTRO_API_RET_FAILED;
 }
 
+int64_t MilestroSkiaSvgRasterize(milestro::skia::Svg* svg, milestro::skia::Image*& image) try {
+    image = nullptr;
+    if (svg == nullptr) return MILESTRO_API_RET_FAILED;
+    image = new milestro::skia::Image(svg->rasterize());
+    return MILESTRO_API_RET_OK;
+} catch (...) {
+    return MILESTRO_API_RET_FAILED;
+}
+
 }

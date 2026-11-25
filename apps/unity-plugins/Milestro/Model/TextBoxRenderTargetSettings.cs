@@ -19,7 +19,8 @@ namespace Milestro.Model
             TextSizingResult? sizing = null, Vector2 marginReferenceSize = default,
             TextHeightMode? verticalHeightMode = null,
             MarginResolveContext? verticalMarginContext = null,
-            bool sizingUsesVerticalLayout = false)
+            bool sizingUsesVerticalLayout = false,
+            Milestro.ResourceManagement.InlineImageSession? images = null)
         {
             Content = content ?? "";
             ParserId = parserName;
@@ -37,6 +38,7 @@ namespace Milestro.Model
             VerticalHeightMode = verticalHeightMode;
             VerticalMarginContext = verticalMarginContext;
             SizingUsesVerticalLayout = sizingUsesVerticalLayout;
+            Images = images;
         }
 
         public TextSizingResult? Sizing { get; }
@@ -44,6 +46,7 @@ namespace Milestro.Model
         public TextHeightMode? VerticalHeightMode { get; }
         public MarginResolveContext? VerticalMarginContext { get; }
         public bool SizingUsesVerticalLayout { get; }
+        internal Milestro.ResourceManagement.InlineImageSession? Images { get; }
 
         public TextBoxRenderTargetSettings WithSizing(TextSizingResult sizing,
             Vector2 referenceSize,
@@ -53,7 +56,7 @@ namespace Milestro.Model
         {
             return new TextBoxRenderTargetSettings(Content, Margin, ParagraphStyle, TextStyle,
                 ParserId, WrapMode, TextOverflow, AutoFontSize, MinSize, MaxSize, sizing, referenceSize,
-                verticalHeightMode, verticalMarginContext, sizingUsesVerticalLayout);
+                verticalHeightMode, verticalMarginContext, sizingUsesVerticalLayout, Images);
         }
 
         public TextBoxRenderTargetSettings WithVerticalLayout(MarginResolveContext marginContext,
@@ -61,7 +64,7 @@ namespace Milestro.Model
         {
             return new TextBoxRenderTargetSettings(Content, Margin, ParagraphStyle, TextStyle,
                 ParserId, WrapMode, TextOverflow, AutoFontSize, MinSize, MaxSize, Sizing,
-                MarginReferenceSize, heightMode, marginContext, SizingUsesVerticalLayout);
+                MarginReferenceSize, heightMode, marginContext, SizingUsesVerticalLayout, Images);
         }
 
         public string Content { get; }
@@ -89,8 +92,10 @@ namespace Milestro.Model
                 return ParagraphPayload.MakeText(Content);
             }
 
-            return parser.Parse(Content,
+            var payload = parser.Parse(Content,
                 new RichTextParseContext(allowViewportBlockMargins, issues, TextStyle.locale));
+            Images?.Bind(payload, Content, ParserId);
+            return payload;
         }
     }
 }

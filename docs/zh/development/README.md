@@ -9,6 +9,7 @@
 - [文字管线](text-pipeline.md)：更新调度、布局复用、字体缓存和字形网格。
 - [文字管线验证](text-pipeline-validation.md)：Player 基准和图像检查。
 - [自定义富文本解析器](rich-text-parsers.md)：注册解析器和构造段落载荷。
+- [内联图片与占位符](inline-images-design.md)：资源 Provider、租约、SVG 与 CSS。
 - [HybridInput](hybrid-input.md)：提供者选择和输入所有权。
 - [TextInput 无障碍设计](accessibility-design.md)：平台模型与 Unity 集成。
 
