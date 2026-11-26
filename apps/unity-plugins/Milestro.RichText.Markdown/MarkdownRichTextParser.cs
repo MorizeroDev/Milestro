@@ -260,13 +260,10 @@ namespace Milestro.RichText.Markdown
                 builder.EndLink();
             }
 
-            /// <summary>
-            /// Markdown images have no intrinsic dimensions in the syntax, so v1 reserves a
-            /// 16x16 box and intentionally discards alt text.
-            /// </summary>
             private void AppendImage(LinkInline image, TextStyleState style)
             {
-                builder.AppendPlaceholder(16f, 16f, image.Url ?? "", style);
+                if (string.IsNullOrEmpty(image.Url)) RenderInlines(image, style);
+                else builder.AppendImage(image.Url!, style);
             }
 
             private void RenderEmphasis(EmphasisInline emphasis, TextStyleState style)

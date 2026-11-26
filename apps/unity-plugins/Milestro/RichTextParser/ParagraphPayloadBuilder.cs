@@ -57,6 +57,20 @@ namespace Milestro.RichTextParser
             return this;
         }
 
+        public ParagraphPayloadBuilder AppendImage(string source, TextStyleState? style = null)
+        {
+            if (string.IsNullOrEmpty(source)) throw new ArgumentException("Image source must not be empty.", nameof(source));
+            var presentation = new InlineObjectStyle { Visible = style?.InlineVisible ?? true };
+            var block = EnsureBlock();
+            var startUtf16 = textLengthUtf16;
+            payload.AddPlaceholder(new PlaceholderAnnotation(startUtf16, 1f, 1f,
+                "", style ?? new TextStyleState(), source, presentation));
+            ++block.LengthUtf16;
+            ++textLengthUtf16;
+            TrackNoWrap(style, startUtf16);
+            return this;
+        }
+
         public ParagraphPayloadBuilder EndBlock()
         {
             CloseNoWrap();

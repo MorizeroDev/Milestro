@@ -84,7 +84,7 @@ namespace Milestro.Tests
         }
 
         [Test]
-        public void ImagesBecomeDefaultPlaceholdersAndDiscardAltText()
+        public void ImagesUseResourceSourcesAndAutomaticDimensions()
         {
             var payload = Parse("before ![ignored](image.png) after");
 
@@ -92,10 +92,32 @@ namespace Milestro.Tests
             Assert.That(payload.Links, Is.Empty);
             Assert.That(payload.Placeholders.Count, Is.EqualTo(1));
             var placeholder = payload.Placeholders[0];
-            Assert.That(placeholder.Width, Is.EqualTo(16f));
-            Assert.That(placeholder.Height, Is.EqualTo(16f));
-            Assert.That(placeholder.Key, Is.EqualTo("image.png"));
+            Assert.That(placeholder.Source, Is.EqualTo("image.png"));
+            Assert.That(placeholder.Presentation, Is.Not.Null);
+            Assert.That(placeholder.Presentation.Width, Is.Null);
+            Assert.That(placeholder.Presentation.Height, Is.Null);
             Assert.That(placeholder.StartUtf16, Is.EqualTo("before ".Length));
+        }
+
+        [Test]
+        public void HtmlImagesRemainLiteralInlineAndStandalone()
+        {
+            foreach (var source in new[] { "<img src=\"coin\" width=\"24\"/>", "before <img src=\"coin\" width=\"24\"> after" })
+            {
+                var payload = Parse(source);
+                Assert.That(payload.Placeholders, Is.Empty);
+                Assert.That(payload.GetPlainText(payload.Blocks[0]), Is.EqualTo(source));
+            }
+        }
+
+        [Test]
+        public void LinkedImagesRetainLinkRangeAndCodeStaysLiteral()
+        {
+            var payload = Parse("[![coin](icons/coin)](shop) `![coin](icons/coin)`");
+            Assert.That(payload.Placeholders.Count, Is.EqualTo(1));
+            Assert.That(payload.GetPlainText(payload.Blocks[0]), Is.EqualTo("\uFFFC ![coin](icons/coin)"));
+            Assert.That(payload.Links[0].StartUtf16, Is.EqualTo(0));
+            Assert.That(payload.Links[0].EndUtf16, Is.EqualTo(1));
         }
 
         [Test]

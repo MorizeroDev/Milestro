@@ -96,6 +96,25 @@ namespace Milestro.Tests
         }
 
         [Test]
+        public void MarkdownAcquiresAndReleasesImages()
+        {
+            const string parserId = "markdown";
+            const string content = "![coin](coin)";
+            var provider = new Provider { Resource = new ImageResource(sprite) };
+            ImageResources.Providers.DefaultProvider = provider;
+            var parser = RichTextParserService.Create(parserId);
+            var payload = parser.Parse(content, new RichTextParseContext());
+            using (var session = new InlineImageSession())
+            {
+                session.Bind(payload, content, parserId);
+                Assert.That(provider.Acquired, Is.EqualTo(1));
+                Assert.That(provider.Source, Is.EqualTo("coin"));
+                Assert.That(payload.Placeholders[0].Presentation!.Binding, Is.Not.Null);
+            }
+            Assert.That(provider.Released, Is.EqualTo(1));
+        }
+
+        [Test]
         public void SessionReusesBindingsAcrossMeasurementsButSeparatesOccurrences()
         {
             var provider = new Provider { Resource = new ImageResource(sprite) };

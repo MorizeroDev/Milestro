@@ -467,11 +467,11 @@ into paragraph payloads. Headings use weight 700 and size scales from 1.6 to
 quotes add indentation. Soft and hard line breaks both become `\n`.
 
 Code spans and code blocks render as literal text with inherited styling;
-they do not select a monospace font or syntax highlighting. Raw HTML is shown
-literally, so XML tags such as `<ruby>` do not enable Milestro XML styling in
-Markdown. Thematic breaks are omitted. Images reserve a fixed 16 × 16 inline
-placeholder keyed by the image URL; alt text is discarded and the application
-must draw the image using [placeholder geometry](#inline-placeholders).
+they do not select a monospace font or syntax highlighting.
+`![description](icons/coin)` loads through the shared image providers, with a default
+height of `1em` and width derived from the image aspect ratio.
+Alt text and titles are not displayed; images with empty URLs render their alt text.
+Raw HTML, including `<img>`, stays literal, as does image syntax inside code. Thematic breaks are omitted.
 Links use the same [link events](links-and-accessibility.md) as XML anchors.
 Table and task-list extensions are not enabled; their syntax remains text.
 
