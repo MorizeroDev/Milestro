@@ -1,6 +1,7 @@
+using System;
+using System.Collections.Generic;
 using Milestro.RichTextParser;
 using UnityEngine;
-using UnityEngine.Sprites;
 using UnityEngine.UI;
 
 namespace Milestro.Components.Internal
@@ -10,6 +11,11 @@ namespace Milestro.Components.Internal
         private Sprite? sprite;
         private Rect imageRect;
         private Rect clippedRect;
+        private Vector2[] positions = Array.Empty<Vector2>();
+        private Vector2[] textureCoordinates = Array.Empty<Vector2>();
+        private ushort[] triangles = Array.Empty<ushort>();
+        private List<UIVertex> polygon = new List<UIVertex>(8);
+        private List<UIVertex> clippedPolygon = new List<UIVertex>(8);
         public override Texture mainTexture => sprite ? sprite.texture : Texture2D.whiteTexture;
 
         internal void Present(Sprite value, Rect box, Rect clip, InlineObjectStyle style, float pixelsToLocal)
@@ -35,6 +41,14 @@ namespace Milestro.Components.Internal
             if (sprite != value)
             {
                 sprite = value;
+                positions = value.vertices;
+                textureCoordinates = value.uv;
+                triangles = value.triangles;
+                for (var index = 0; index < positions.Length; ++index)
+                {
+                    var pixel = positions[index] * value.pixelsPerUnit + value.pivot;
+                    positions[index] = new Vector2(pixel.x / value.rect.width, pixel.y / value.rect.height);
+                }
                 SetMaterialDirty();
                 SetVerticesDirty();
             }
@@ -50,6 +64,9 @@ namespace Milestro.Components.Internal
         internal void Clear()
         {
             sprite = null;
+            positions = Array.Empty<Vector2>();
+            textureCoordinates = Array.Empty<Vector2>();
+            triangles = Array.Empty<ushort>();
             SetMaterialDirty();
             SetVerticesDirty();
         }
@@ -65,17 +82,52 @@ namespace Milestro.Components.Internal
         {
             helper.Clear();
             if (!sprite || clippedRect.width <= 0 || clippedRect.height <= 0 || imageRect.width <= 0 || imageRect.height <= 0) return;
-            var uv = DataUtility.GetOuterUV(sprite);
-            var left = Mathf.Lerp(uv.x, uv.z, (clippedRect.xMin - imageRect.xMin) / imageRect.width);
-            var right = Mathf.Lerp(uv.x, uv.z, (clippedRect.xMax - imageRect.xMin) / imageRect.width);
-            var bottom = Mathf.Lerp(uv.y, uv.w, (clippedRect.yMin - imageRect.yMin) / imageRect.height);
-            var top = Mathf.Lerp(uv.y, uv.w, (clippedRect.yMax - imageRect.yMin) / imageRect.height);
-            helper.AddVert(new Vector3(clippedRect.xMin, clippedRect.yMin), color, new Vector2(left, bottom));
-            helper.AddVert(new Vector3(clippedRect.xMin, clippedRect.yMax), color, new Vector2(left, top));
-            helper.AddVert(new Vector3(clippedRect.xMax, clippedRect.yMax), color, new Vector2(right, top));
-            helper.AddVert(new Vector3(clippedRect.xMax, clippedRect.yMin), color, new Vector2(right, bottom));
-            helper.AddTriangle(0, 1, 2);
-            helper.AddTriangle(2, 3, 0);
+            for (var triangle = 0; triangle < triangles.Length; triangle += 3)
+            {
+                polygon.Clear();
+                for (var corner = 0; corner < 3; ++corner)
+                {
+                    var index = triangles[triangle + corner];
+                    var vertex = UIVertex.simpleVert;
+                    vertex.position = imageRect.min + Vector2.Scale(positions[index], imageRect.size);
+                    vertex.uv0 = textureCoordinates[index];
+                    vertex.color = color;
+                    polygon.Add(vertex);
+                }
+                Clip(0, clippedRect.xMin, true);
+                Clip(0, clippedRect.xMax, false);
+                Clip(1, clippedRect.yMin, true);
+                Clip(1, clippedRect.yMax, false);
+                if (polygon.Count < 3) continue;
+                var start = helper.currentVertCount;
+                foreach (var vertex in polygon) helper.AddVert(vertex);
+                for (var corner = 1; corner + 1 < polygon.Count; ++corner)
+                    helper.AddTriangle(start, start + corner, start + corner + 1);
+            }
+        }
+
+        private void Clip(int axis, float edge, bool minimum)
+        {
+            clippedPolygon.Clear();
+            if (polygon.Count == 0) return;
+            var previous = polygon[polygon.Count - 1];
+            var previousInside = minimum ? previous.position[axis] >= edge : previous.position[axis] <= edge;
+            foreach (var current in polygon)
+            {
+                var currentInside = minimum ? current.position[axis] >= edge : current.position[axis] <= edge;
+                if (previousInside != currentInside)
+                {
+                    var fraction = (edge - previous.position[axis]) / (current.position[axis] - previous.position[axis]);
+                    var intersection = previous;
+                    intersection.position = Vector3.LerpUnclamped(previous.position, current.position, fraction);
+                    intersection.uv0 = Vector4.LerpUnclamped(previous.uv0, current.uv0, fraction);
+                    clippedPolygon.Add(intersection);
+                }
+                if (currentInside) clippedPolygon.Add(current);
+                previous = current;
+                previousInside = currentInside;
+            }
+            (polygon, clippedPolygon) = (clippedPolygon, polygon);
         }
     }
 }

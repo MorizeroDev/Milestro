@@ -21,27 +21,41 @@ namespace Milestro.Tests
 {
     public sealed class InlineImagePlayModeTests
     {
-        private sealed class Provider : IImageResourceProvider
+        private sealed class Provider : IImageResourceProvider, ISpriteResourceProvider
         {
             internal Sprite Sprite = null!;
             internal int Acquired;
             internal int Released;
-            public Task<ImageResource?> AcquireAsync(string source, CancellationToken cancellationToken)
+            public Task<InlineResourceBorrow?> BorrowAsync(ImageRequest request, CancellationToken cancellationToken)
             {
                 ++Acquired;
-                return Task.FromResult<ImageResource?>(new ImageResource(Sprite));
+                return Task.FromResult<InlineResourceBorrow?>(InlineResourceBorrow.Create(new ImageResource(Sprite), () => ++Released));
             }
-            public void Release(ImageResource resource) { ++Released; }
+            public Task<InlineResourceBorrow?> BorrowAsync(SpriteRequest request, CancellationToken cancellationToken) =>
+                BorrowAsync(new ImageRequest(""), cancellationToken);
         }
 
         [UnityTest]
         public IEnumerator OverlayTracksLayoutAndReleasesContentBindings()
         {
+            return TrackLayoutAndRelease(false);
+        }
+
+        [UnityTest]
+        public IEnumerator SpriteOverlayTracksLayoutAndReleasesContentBindings()
+        {
+            return TrackLayoutAndRelease(true);
+        }
+
+        private static IEnumerator TrackLayoutAndRelease(bool useSprite)
+        {
             var texture = new Texture2D(8, 4);
             var sprite = Sprite.Create(texture, new Rect(0, 0, 8, 4), Vector2.one * .5f);
             var provider = new Provider { Sprite = sprite };
             var previous = ImageResources.Providers.DefaultProvider;
+            var previousSprite = SpriteResources.Provider;
             ImageResources.Providers.DefaultProvider = provider;
+            SpriteResources.Provider = provider;
             var root = new GameObject("Inline image test", typeof(Canvas));
             root.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
             var child = new GameObject("Text", typeof(RectTransform));
@@ -51,14 +65,16 @@ namespace Milestro.Tests
             var producer = child.AddComponent<TextBoxRenderTextureProducer>();
             var textBox = child.AddComponent<TextBox>();
             producer.richTextParserId = XmlRichTextParser.Id;
-            producer.content = "<img src=\"coin\" width=\"40\" height=\"20\"/><placeholder width=\"10\" height=\"10\"/>";
+            producer.content = (useSprite
+                ? "<sprite pack=\"items\" width=\"40\" height=\"20\"><item id=\"coin\"/></sprite>"
+                : "<img src=\"coin\" width=\"40\" height=\"20\"/>") + "<placeholder width=\"10\" height=\"10\"/>";
             try
             {
                 child.SetActive(true);
                 for (var frame = 0; frame < 10; ++frame) yield return null;
                 Assert.That(textBox.TryGetPlaceholderGeometrySnapshot(out var snapshot), Is.True);
                 Assert.That(snapshot.Geometry.Count, Is.EqualTo(2));
-                Assert.That(snapshot.Geometry[0].Source, Is.EqualTo("coin"));
+                Assert.That(snapshot.Geometry[0].Source, Is.EqualTo(useSprite ? null : "coin"));
                 var views = child.GetComponentsInChildren<InlineImageGraphic>();
                 Assert.That(views.Length, Is.EqualTo(1));
                 Assert.That(views[0].mainTexture, Is.SameAs(texture));
@@ -85,6 +101,7 @@ namespace Milestro.Tests
             finally
             {
                 ImageResources.Providers.DefaultProvider = previous;
+                SpriteResources.Provider = previousSprite;
                 Object.Destroy(root);
                 Object.Destroy(sprite);
                 Object.Destroy(texture);

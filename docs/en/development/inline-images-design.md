@@ -4,7 +4,8 @@
 
 `<img>` loads through providers and displays through the TextBox uGUI overlay.
 `<placeholder>` only lays out geometry; the application owns its visual objects.
-`<sprite>` is not implemented. Migrate old img tags without src to placeholder.
+XML `<sprite>` borrows Unity Sprites from a provider and shares img layout and overlay rendering.
+GameObjects and prefabs are not accepted. Migrate old img tags without src to placeholder.
 
 ## Resource entry point
 
@@ -25,23 +26,76 @@ Applications supply Addressables providers; no Addressables dependency is added.
 ```csharp
 public interface IImageResourceProvider
 {
-    Task<ImageResource?> AcquireAsync(string source, CancellationToken cancellationToken);
-    void Release(ImageResource resource);
+    Task<InlineResourceBorrow?> BorrowAsync(ImageRequest request, CancellationToken cancellationToken);
 }
 ```
 
-Return `new ImageResource(sprite, releaseToken)` on success, null for no resource,
+Return `InlineResourceBorrow.Create(new ImageResource(sprite), returnResource)` on success, null for no resource,
 or throw on failure. Providers clean up partial allocations before throwing.
-ReleaseToken can hold a handle or texture. Register, acquire, and release on the
+The return callback captures the owner's handles; Milestro does not access them. Register, borrow, and dispose on the
 Unity main thread; asynchronous I/O does not change Unity object threading rules.
 Providers own cross-TextBox caching and resource destruction.
+`ImageRequest.Source` preserves the original source without trimming or decoding.
+`ImageResources.BorrowAsync(source)` remains a string convenience entry point and creates the request
+after routing. Image and sprite providers receive ImageRequest and SpriteRequest respectively,
+so one class can naturally overload both interface methods.
 
 ## Leases and lifecycle
 
-`ImageResources.AcquireAsync` returns reference-type `ImageResourceLease`.
-Provider identifies the original instance, Resource is a read-only description,
-and Dispose invokes Release once. Replacing or unregistering providers never
-redirects existing leases. File and Data URI providers destroy their sprites and
+### Sprite provider
+
+Set `SpriteResources.Provider` to an implementation of this interface. Milestro does not prescribe
+an asset format or name/index lookup protocol:
+
+```csharp
+public interface ISpriteResourceProvider
+{
+    Task<InlineResourceBorrow?> BorrowAsync(SpriteRequest request, CancellationToken cancellationToken);
+}
+```
+
+```xml
+<sprite name="coin"/>
+<sprite pack="items" style="height: 1.2em; vertical-align: middle">
+  <item id="sword_001" rarity="rare"/>
+</sprite>
+```
+
+`SpriteRequest.Attributes` is a read-only copy of all attributes with entities decoded,
+including layout attributes consumed by Milestro. Custom attributes pass through; even `src`
+does not invoke image-provider routing here. `Content` is an XML fragment without the outer tag,
+preserving nested elements, text, whitespace, comments, and CDATA. The XML reader may normalize
+quotes, entity spelling, and line endings; this is not a byte-for-byte source representation.
+Only the provider consumes the content: it does not enter text layout, acquire nested resources,
+or become fallback text. Both empty-element and paired tags occupy one inline object position.
+
+Both providers return `InlineResourceBorrow` while retaining distinct request interfaces.
+`InlineResourceBorrow` is an abstract base class. Use `Create(resource, onReturn)` for the default
+implementation, or derive a class, call `base(resource)`, and override `ReturnCore()` to encapsulate
+state. Dispose is implemented by the base class and marks IsDisposed before returning, guaranteeing
+one invocation even if return handling throws or reenters.
+One application class can implement both. Its read-only `Resource` is an `ImageResource`
+containing the Sprite, intrinsic dimensions, and suggested layout dimensions.
+The Sprite must be usable on successful return; Sprite assets do not need Awake.
+The provider remains the owner: Milestro never destroys the Sprite, Texture, or underlying handle.
+`SpriteResources.BorrowAsync` returns `InlineResourceBorrow`. Create a distinct borrow object for
+every successful request, even when sharing a Sprite/handle. Dispose invokes the captured return
+callback once, including when it throws or reenters. Already disposed borrows and invalid Sprites are rejected.
+Null means no resource; exceptions mean acquisition failure. Providers clean up partial resources
+on failure. Configure, acquire, and release on Unity's main thread.
+
+Sprites share the lifecycle below with img; `RefreshInlineImages()` refreshes both.
+The TMPro parser also supports `<sprite=0>`, `<sprite name="coin">`, and `<sprite="items" index=0>`.
+These are single inline objects without closing tags and have empty Content. A nonnegative integer
+primary value maps to index; otherwise it maps to asset. Attribute names are lowercased, values preserved.
+The same Sprite provider handles lookup. Exactly one name/index selector is required. Custom attributes,
+CSS dimensions, and color/tint/anim are unsupported in TMP mode; these tags warn and remain literal.
+TMP_SpriteAsset is not loaded automatically. Other parsers can use `ParagraphPayloadBuilder.AppendSprite(request, style)`.
+
+`ImageResources.BorrowAsync` also returns `InlineResourceBorrow`.
+Both entry points share cancellation, validity checks, and return handling.
+Replacing or unregistering providers never changes existing return callbacks.
+File and Data URI providers destroy their sprites and
 textures; Addressables providers release their own handles.
 
 Each producer binds resources by content occurrence. Repeated images acquire
@@ -57,6 +111,10 @@ Shared parsers do not perform I/O or retain resource state.
 - Failures log once rather than retrying each frame.
 
 Child MaskableGraphics follow scrolling, scaling, writing mode, and ancestor masks.
+Rendering uses Sprite vertices, triangles, and UVs, including off-center pivots, trimmed meshes,
+and atlas UVs. Clipping interpolates UVs instead of assuming an axis-aligned atlas rectangle.
+Tests cover imported Tight meshes and clipped sub-texture UVs; rotated atlas packing still needs
+verification with actual packed resources.
 They clip to the content box and text viewport and do not intercept raycasts.
 In flow mode the overlay is positioned after the visible range is applied for
 the frame, so it stays aligned with the text slice within the same frame.
@@ -97,9 +155,25 @@ inherits from ancestor styles and supports overrides; it affects inline objects,
 not ordinary text painting.
 
 CSS dimensions override attributes. Placeholders require two explicit dimensions.
-Images with one dimension derive the other from intrinsic aspect ratio.
-With both auto, height is 1em and width follows the ratio, initially 1:1 until loaded.
+Images and sprites with one explicit dimension derive the other from intrinsic aspect ratio,
+ignoring provider suggestions. With both auto, provider suggestions apply; if only one is suggested,
+the other follows the intrinsic ratio. Without suggestions, height is 1em and width follows the ratio,
+initially 1:1 until loaded.
 Completion invalidates measurement/layout. Em follows effective font size.
+
+`ImageResource.IntrinsicSize` comes from `Sprite.rect.size` and describes texture pixels.
+It supplies the aspect ratio, not a default layout height; `pixelsPerUnit` does not convert layout units.
+Both image and sprite providers can supply optional `suggestedWidth` / `suggestedHeight`:
+
+```csharp
+return InlineResourceBorrow.Create(
+    new ImageResource(sprite, suggestedHeight: InlineResourceLength.Em(1.2f)),
+    () => owner.Return(handle));
+```
+
+`InlineResourceLength.Pixels(24)` expresses fixed layout pixels; `Em(1.2f)` scales with effective
+font size. Values must be finite and positive; a default struct value is invalid.
+Two suggestions can define a box with a different aspect ratio; object-fit still controls presentation.
 
 Margins are part of native placeholder dimensions and do not collapse.
 Geometry Rect is the content box, OuterRect includes margins, Source identifies

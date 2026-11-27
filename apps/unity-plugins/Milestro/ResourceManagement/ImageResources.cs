@@ -9,14 +9,12 @@ namespace Milestro.ResourceManagement
     {
         private sealed class MissingProvider : IImageResourceProvider
         {
-            public Task<ImageResource?> AcquireAsync(string source, CancellationToken cancellationToken)
+            public Task<InlineResourceBorrow?> BorrowAsync(ImageRequest request, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                Debug.LogError($"No default image resource provider is configured for '{source}'.");
-                return Task.FromResult<ImageResource?>(null);
+                Debug.LogError($"No default image resource provider is configured for '{request.Source}'.");
+                return Task.FromResult<InlineResourceBorrow?>(null);
             }
-
-            public void Release(ImageResource resource) { }
         }
 
         public static ResourceProviderRouter<IImageResourceProvider> Providers { get; } = CreateRouter();
@@ -29,27 +27,14 @@ namespace Milestro.ResourceManagement
             return router;
         }
 
-        public static async Task<ImageResourceLease?> AcquireAsync(string source,
+        public static Task<InlineResourceBorrow?> BorrowAsync(string source,
             CancellationToken cancellationToken = default)
         {
             if (source == null) throw new ArgumentNullException(nameof(source));
             cancellationToken.ThrowIfCancellationRequested();
             var provider = Providers.Resolve(source.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
                 ? "data://" : source);
-            var resource = await provider.AcquireAsync(source, cancellationToken);
-            if (!resource.HasValue) return null;
-            var lease = new ImageResourceLease(provider, resource.Value);
-            if (cancellationToken.IsCancellationRequested)
-            {
-                lease.Dispose();
-                cancellationToken.ThrowIfCancellationRequested();
-            }
-            if (!resource.Value.Sprite)
-            {
-                lease.Dispose();
-                throw new InvalidOperationException("Image provider returned an invalid Sprite.");
-            }
-            return lease;
+            return InlineResourceBorrow.AcceptAsync(provider.BorrowAsync(new ImageRequest(source), cancellationToken), cancellationToken);
         }
     }
 }

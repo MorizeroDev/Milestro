@@ -46,8 +46,16 @@ namespace Milestro.RichTextParser
         {
             var natural = Binding?.IntrinsicSize ?? Vector2.zero;
             var ratio = natural.x > 0 && natural.y > 0 ? natural.x / natural.y : 1f;
-            var height = Height?.Resolve(fontSize) ?? (Width.HasValue ? Width.Value.Resolve(fontSize) / ratio : fontSize);
-            var width = Width?.Resolve(fontSize) ?? height * ratio;
+            var resource = Binding?.Resource;
+            var widthValue = Width?.Resolve(fontSize);
+            var heightValue = Height?.Resolve(fontSize);
+            if (!Width.HasValue && !Height.HasValue)
+            {
+                widthValue = resource?.SuggestedWidth?.Resolve(fontSize);
+                heightValue = resource?.SuggestedHeight?.Resolve(fontSize);
+            }
+            var height = heightValue ?? (widthValue.HasValue ? widthValue.Value / ratio : fontSize);
+            var width = widthValue ?? height * ratio;
             var left = Left.Resolve(fontSize);
             var top = Top.Resolve(fontSize);
             ContentRect = new Rect(left, top, width, height);

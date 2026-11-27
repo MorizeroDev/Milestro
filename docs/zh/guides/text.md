@@ -107,6 +107,7 @@ producer.content = "<b>粗体</b>与普通文字";
 | `<br>` | 强制换行 |
 | `<placeholder width=".." height=".." key=".."/>` | 不自行绘图的内联占位框 |
 | `<img src=".." width=".." height=".."/>` | 通过资源 Provider 加载的内联图片 |
+| `<sprite ...>...</sprite>` | 从 Sprite Provider 借用精灵，属性和内部 XML 交给 Provider |
 | `<a href="target" id="optional-id">` | 可点击范围 |
 | `<ruby>基文<rt>注音</rt></ruby>` | Ruby 注音 |
 | `<rp>` | Ruby 中供 HTML 回退使用的文本，不显示 |
@@ -224,10 +225,17 @@ if (textBox.TryGetPlaceholderGeometrySnapshot(out var snapshot))
 `textBox.RefreshInlineImages()` 重试已有内容。
 
 图片尺寸支持正数 `px`/`em`，边距支持非负 `px`/`em`，`margin` 支持一到四个值。CSS 尺寸覆盖标签属性；
-只指定一边时按固有比例推导另一边，两边均为 `auto` 时高度为 `1em`，加载前暂用 1:1。
+只指定一边时按固有比例推导另一边，两边均为 `auto` 时使用 Provider 建议尺寸；没有建议时高度为 `1em`，加载前暂用 1:1。
 另支持 `vertical-align: middle | top | bottom | baseline`、`object-fit`、
 `object-position`、`opacity` 和可继承覆盖的 `visibility`。资源就绪后自动重新测量和布局。
 完整 Provider 契约、Data URI/SVG 规则和生命周期见[内联图片设计](../development/inline-images-design.md)。
+
+XML 还支持 `<sprite name="coin"/>` 或 `<sprite pack="items"><item id="coin"/></sprite>`。
+设置 `SpriteResources.Provider` 为应用的 `ISpriteResourceProvider`；它接收全部属性和保留结构的
+内部 XML，返回 `InlineResourceBorrow`，其中 `Resource` 是 `ImageResource`。Milestro 只借用 Unity Sprite，结束使用时调用 owner 提供的归还回调，
+不销毁资源；内部内容不参与正文排版。尺寸、CSS 和刷新方法与 img 共用。
+两种 Provider 都可以用 `suggestedHeight: InlineResourceLength.Em(1.2f)` 或
+`InlineResourceLength.Pixels(24)` 提供默认排版尺寸，标签/CSS 明确尺寸优先。
 
 <a id="element-geometry"></a>
 #### 元素 ID 与几何查询

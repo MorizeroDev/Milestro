@@ -20,7 +20,7 @@ Milestro 将显示、内容样式和尺寸报告分开：TextBox 呈现纹理，
 | Auto Size | enableAutoFontSize、fontSizeMin、fontSizeMax |
 | ContentSizeFitter | TextBoxLayoutElement；SlimText 直接实现 ILayoutElement |
 | link | `<a href="..." id="...">` 与 onLinkClicked |
-| sprite | 尚无精灵资产标签；可用 img 通过资源 Provider 加载图片 |
+| sprite | XML 支持通过 Provider 借用 Unity Sprite；支持常用 TMP sprite 语法，资产查找由 Provider 实现 |
 | TMP_InputField | TextInput，进程级 HybridInput 分发 |
 | characterLimit | TextInput.characterLimit，按 Unicode 标量 |
 | 内容类型/键盘 | contentType、keyboardType |
@@ -90,7 +90,7 @@ producer.wrapMode = TextBoxWrapMode.Wrap;
 | 水平排版位置 | ❌ 不支持 | `<pos>` 设置行内光标位置，`<space>` 添加水平偏移 | 无对应标记；`cspace` 调整字距，`text-indent` 调整段首缩进 |
 | 逐字任意角度旋转 | ❌ 不支持 | `<rotate>` 绕各字符中心旋转 | 无对应标记；竖排的 `text-orientation` 控制直立或侧转 |
 | 链接 | ✅ 完全支持 | `<link>` 标记链接 ID | `<a href="…" id="…">`，提供点击、悬停及可选无障碍导航 |
-| 内联图片 | 🟡 部分支持 | `<sprite>` 从精灵资产绘制 | `<img src="…"/>` 通过 Provider 加载并叠加 uGUI 显示；`<placeholder>` 只占位 |
+| 内联图片 | 🟡 部分支持 | `<sprite>` 从精灵资产绘制 | XML `img`/`sprite` 通过 Provider 获取并叠加 uGUI 显示；支持常用 TMP sprite 语法，资产查找由 Provider 实现；`placeholder` 只占位 |
 | 对齐与缩进 | 🟡 部分支持 | `<align>`、`<indent>`、`<line-indent>` | `<p align="…" style="text-indent: …">`；按段落块排版 |
 | 按字面显示标记 | ✅ 完全支持 | `<noparse>` 禁止解析范围内的标记 | 使用 XML 转义，如 `&lt;b&gt;` 显示为 `<b>`，`&amp;` 显示为 `&` |
 | 局部禁止换行 | ✅ 完全支持 | `<nobr>` | `<span style="white-space: nowrap">`；嵌套 `normal` 恢复软换行，硬换行仍生效 |

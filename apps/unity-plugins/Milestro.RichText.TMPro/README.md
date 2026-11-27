@@ -30,6 +30,15 @@ input. An unsupported or mismatched tag logs a Unity warning and is emitted as
 literal text; its contents continue to parse normally. Tags inside `<noparse>`
 are always literal and do not produce warnings.
 
-Resource-dependent and layout-specific TMPro tags such as `<sprite>`,
+Sprite tags support `<sprite=0>`, `<sprite index=0>`, `<sprite name="coin">`, and
+`<sprite="items" index=0>`. Each produces one inline object with no closing tag.
+The primary value becomes `index` for a nonnegative integer, otherwise `asset`.
+Attributes (names normalized to lowercase, values preserved) go to
+`SpriteResources.Provider` in a `SpriteRequest` with empty Content. Exactly one name
+or index selector is required. Providers define asset lookup; no TMP asset dependency
+is added. Custom attributes, CSS dimensions, tint, color, and anim are not supported;
+such tags warn and remain literal. Default size and borrowing match XML sprites.
+
+Resource-dependent and layout-specific TMPro tags such as
 `<gradient>`, `<style>`, `<page>`, `<pos>`, `<rotate>`, and `<flush>` are
 currently unsupported.

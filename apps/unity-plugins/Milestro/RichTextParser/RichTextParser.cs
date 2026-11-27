@@ -5,6 +5,7 @@ using System.IO;
 using System.Text;
 using System.Xml;
 using Milestro.Model;
+using Milestro.ResourceManagement;
 using Milestro.RichTextParser.AST;
 using Milestro.RichTextParser.Css;
 using Milestro.Skia;
@@ -167,7 +168,20 @@ namespace Milestro.RichTextParser
                             attributess[reader.Name] = reader.Value;
                         }
 
-                        PushElement(tagName, isEmptyElement, attributess);
+                        reader.MoveToElement();
+                        if (tagName == "sprite")
+                        {
+                            var spriteNode = new XmlElementNode(tagName, attributess, isEmptyElement);
+                            if (!isEmptyElement)
+                            {
+                                using var subtree = reader.ReadSubtree();
+                                subtree.Read();
+                                spriteNode.SpriteContent = subtree.ReadInnerXml();
+                            }
+                            PushNode(spriteNode);
+                            PopNode();
+                        }
+                        else PushElement(tagName, isEmptyElement, attributess);
                         break;
                     case XmlNodeType.Text:
                         PushTextElement(reader.Value);
@@ -232,18 +246,18 @@ namespace Milestro.RichTextParser
             var anchorHref = "";
             var anchorId = "";
             var anchorStartUtf16 = 0;
-            if (node.Tag == "img" || node.Tag == "placeholder")
+            if (node.Tag == "img" || node.Tag == "sprite" || node.Tag == "placeholder")
             {
                 if (ctx.HasActiveRuby)
                 {
                     Debug.LogError($"<{node.Tag}> inside <ruby> is ignored");
                     return;
                 }
-                if (!node.IsEmptyElement || node.Children.Count != 0)
+                if (node.Tag != "sprite" && (!node.IsEmptyElement || node.Children.Count != 0))
                     throw new InvalidCastException($"<{node.Tag}> must be an empty element");
                 foreach (var attribute in node.Attributes)
                 {
-                    if (attribute.Key != "width" && attribute.Key != "height" && attribute.Key != "key" &&
+                    if (node.Tag != "sprite" && attribute.Key != "width" && attribute.Key != "height" && attribute.Key != "key" &&
                         attribute.Key != "id" && attribute.Key != "style" && !(node.Tag == "img" && attribute.Key == "src"))
                         throw new InvalidCastException($"<{node.Tag}> does not accept the '{attribute.Key}' attribute");
                 }
@@ -257,14 +271,15 @@ namespace Milestro.RichTextParser
                     if (!node.Attributes.TryGetValue("src", out source) || string.IsNullOrEmpty(source))
                         throw new InvalidCastException("<img> requires src; use <placeholder> for application-owned content.");
                 }
-                else if (!presentation.Width.HasValue || !presentation.Height.HasValue)
+                else if (node.Tag == "placeholder" && (!presentation.Width.HasValue || !presentation.Height.HasValue))
                     throw new InvalidCastException("<placeholder> requires explicit positive width and height.");
                 var width = presentation.Width?.Value ?? 1f;
                 var height = presentation.Height?.Value ?? 1f;
                 var block = ctx.CurrentBlock ?? ctx.Result.AddBlock(false, ctx.TextLengthUtf16);
                 ctx.CurrentBlock = block;
                 ctx.Result.AddPlaceholder(new PlaceholderAnnotation(ctx.TextLengthUtf16, width, height,
-                    node.Attributes.TryGetValue("key", out var key) ? key : "", state, source, presentation));
+                    node.Attributes.TryGetValue("key", out var key) ? key : "", state, source, presentation,
+                    node.Tag == "sprite" ? new SpriteRequest(node.Attributes, node.SpriteContent) : null));
                 ++block.LengthUtf16;
                 ++ctx.TextLengthUtf16;
                 return;

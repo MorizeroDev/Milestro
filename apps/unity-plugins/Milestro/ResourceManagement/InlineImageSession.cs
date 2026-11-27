@@ -10,21 +10,21 @@ namespace Milestro.ResourceManagement
     {
         private readonly CancellationTokenSource cancellation = new CancellationTokenSource();
         private bool disposed;
-        internal ImageResourceLease? Lease { get; private set; }
-        internal Vector2 IntrinsicSize => Lease?.Resource.IntrinsicSize ?? Vector2.zero;
-        internal Sprite? Sprite => Lease?.Resource.Sprite;
+        internal InlineResourceBorrow? Borrow { get; private set; }
+        internal ImageResource? Resource => Borrow?.Resource;
+        internal Vector2 IntrinsicSize => Resource?.IntrinsicSize ?? Vector2.zero;
+        internal Sprite? Sprite => Resource?.Sprite;
 
-        internal async void Load(string source, Action changed)
+        internal async void Load(string? source, SpriteRequest? request, Action changed)
         {
             try
             {
-                var lease = await ImageResources.AcquireAsync(source, cancellation.Token);
-                if (disposed) lease?.Dispose();
-                else
-                {
-                    Lease = lease;
-                    changed();
-                }
+                var acquired = request != null
+                    ? await SpriteResources.BorrowAsync(request, cancellation.Token)
+                    : await ImageResources.BorrowAsync(source!, cancellation.Token);
+                if (disposed) acquired?.Dispose();
+                else Borrow = acquired;
+                if (!disposed) changed();
             }
             catch (OperationCanceledException) { }
             catch (Exception error)
@@ -38,8 +38,8 @@ namespace Milestro.ResourceManagement
             if (disposed) return;
             disposed = true;
             cancellation.Cancel();
-            Lease?.Dispose();
-            Lease = null;
+            Borrow?.Dispose();
+            Borrow = null;
             cancellation.Dispose();
         }
     }
@@ -61,13 +61,14 @@ namespace Milestro.ResourceManagement
             }
             foreach (var annotation in payload.Placeholders)
             {
-                if (annotation.Source == null) continue;
-                var key = annotation.StartUtf16.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + annotation.Source;
+                if (annotation.Source == null && annotation.SpriteRequest == null) continue;
+                var key = annotation.StartUtf16.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+                    (annotation.SpriteRequest != null ? ":sprite" : ":img:" + annotation.Source);
                 if (!bindings.TryGetValue(key, out var binding))
                 {
                     binding = new InlineImageBinding();
                     bindings.Add(key, binding);
-                    binding.Load(annotation.Source, () => Changed = true);
+                    binding.Load(annotation.Source, annotation.SpriteRequest, () => Changed = true);
                 }
                 annotation.Presentation!.Binding = binding;
             }

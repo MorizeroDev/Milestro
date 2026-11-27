@@ -10,6 +10,7 @@ namespace Milestro.RichTextParser.AST
         public IList<XmlNode> Children { get; private set; } = new List<XmlNode>();
 
         public bool IsEmptyElement { get; private set; }
+        internal string SpriteContent { get; set; } = "";
 
         public XmlElementNode(string tag, Dictionary<string, string> attributes, bool isEmptyElement) : base(tag)
         {

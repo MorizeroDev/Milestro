@@ -1,5 +1,6 @@
 using System;
 using Milestro.Model;
+using Milestro.ResourceManagement;
 using Milestro.Unicode;
 
 namespace Milestro.RichTextParser
@@ -75,6 +76,24 @@ namespace Milestro.RichTextParser
         {
             CloseNoWrap();
             currentBlock = null;
+            return this;
+        }
+
+        public ParagraphPayloadBuilder AppendSprite(SpriteRequest request, TextStyleState? style = null)
+        {
+            if (request == null) throw new ArgumentNullException(nameof(request));
+            var presentation = new InlineObjectStyle { Visible = style?.InlineVisible ?? true };
+            if (request.Attributes.TryGetValue("width", out var width)) presentation.Width = InlineLength.Parse(width, true);
+            if (request.Attributes.TryGetValue("height", out var height)) presentation.Height = InlineLength.Parse(height, true);
+            if (request.Attributes.TryGetValue("style", out var declarations)) presentation.Apply(declarations);
+            var block = EnsureBlock();
+            var startUtf16 = textLengthUtf16;
+            payload.AddPlaceholder(new PlaceholderAnnotation(startUtf16, 1f, 1f,
+                request.Attributes.TryGetValue("key", out var key) ? key : "",
+                style?.Clone() ?? new TextStyleState(), presentation: presentation, spriteRequest: request));
+            ++block.LengthUtf16;
+            ++textLengthUtf16;
+            TrackNoWrap(style, startUtf16);
             return this;
         }
 

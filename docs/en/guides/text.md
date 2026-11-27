@@ -187,6 +187,7 @@ The following tags and XML-specific styles apply to **Milestro Rich Text**.
 | `<br>` | Explicit line break |
 | `<placeholder width=".." height=".." key=".."/>` | Inline placeholder box |
 | `<img src=".." width=".." height=".."/>` | Inline image loaded through a resource provider |
+| `<sprite ...>...</sprite>` | Borrowed Sprite; attributes and inner XML go to its provider |
 | `<a href="target" id="optional-id">` | Clickable range |
 | `<ruby>base<rt>annotation</rt></ruby>` | Ruby annotation |
 | `<rp>` | HTML fallback text inside Ruby; not rendered |
@@ -394,11 +395,20 @@ them when content changes or the producer is disabled or destroyed. Call
 Image dimensions accept positive `px`/`em`, and margins accept one to four
 nonnegative values. CSS dimensions override tag attributes. If only one dimension
 is specified, the other follows the intrinsic aspect ratio; two `auto` dimensions
-use `1em` height, with a temporary 1:1 ratio before loading. `vertical-align:
+use provider suggestions, or `1em` height without suggestions, with a temporary 1:1 ratio before loading. `vertical-align:
 middle | top | bottom | baseline`, `object-fit`, `object-position`, `opacity`, and
 inheritable, overridable `visibility` are also supported. A loaded resource triggers
 remeasurement and layout. See the [inline image design](../development/inline-images-design.md)
 for provider contracts, Data URI/SVG rules, and lifecycle details.
+
+XML also supports `<sprite name="coin"/>` and `<sprite pack="items"><item id="coin"/></sprite>`.
+Set `SpriteResources.Provider` to your `ISpriteResourceProvider`. It receives all attributes and
+structured inner XML and returns `InlineResourceBorrow` whose `Resource` is an `ImageResource`.
+Milestro borrows the Unity Sprite and invokes its owner's return callback without destroying resources.
+Inner content does not enter text layout.
+Sprites share img dimensions, CSS, and refresh behavior. Both providers may supply default dimensions
+using `suggestedHeight: InlineResourceLength.Em(1.2f)` or `InlineResourceLength.Pixels(24)`;
+explicit tag/CSS dimensions take precedence.
 
 <a id="element-geometry"></a>
 #### Element IDs and geometry queries

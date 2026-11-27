@@ -5,7 +5,6 @@ namespace Milestro.ResourceManagement
 {
     public interface IImageResourceProvider
     {
-        Task<ImageResource?> AcquireAsync(string source, CancellationToken cancellationToken);
-        void Release(ImageResource resource);
+        Task<InlineResourceBorrow?> BorrowAsync(ImageRequest request, CancellationToken cancellationToken);
     }
 }

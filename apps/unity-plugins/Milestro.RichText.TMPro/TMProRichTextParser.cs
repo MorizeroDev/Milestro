@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Milestro.Model;
+using Milestro.ResourceManagement;
 using Milestro.RichTextParser;
 using Milestro.Skia;
 using Milestro.Skia.TextLayout;
@@ -127,6 +128,10 @@ namespace Milestro.RichText.TMPro
                     {
                         CloseTag(tag);
                     }
+                    else if (NameEquals(tag.Name, "sprite"))
+                    {
+                        if (!TryAppendSprite(tag)) WarnAndAppendLiteral(tag);
+                    }
                     else if (NameEquals(tag.Name, "br"))
                     {
                         if (tag.Value.Length == 0) AppendText("\n");
@@ -228,6 +233,57 @@ namespace Milestro.RichText.TMPro
                     default:
                         return name[0] == '#' && TryOpenColor(tag, name, out openTag);
                 }
+            }
+
+            private bool TryAppendSprite(Tag tag)
+            {
+                var attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var text = tag.Value;
+                var cursor = 0;
+                if (tag.HasExplicitValue)
+                {
+                    if (!TryReadSpriteValue(text, ref cursor, out var primary)) return false;
+                    var selector = int.TryParse(primary, NumberStyles.None, CultureInfo.InvariantCulture, out _) ? "index" : "asset";
+                    attributes.Add(selector, primary);
+                }
+                while (cursor < text.Length)
+                {
+                    SkipWhiteSpace(text, ref cursor, text.Length);
+                    if (cursor == text.Length) break;
+                    var start = cursor;
+                    while (cursor < text.Length && (char.IsLetterOrDigit(text[cursor]) || text[cursor] == '-' || text[cursor] == '_')) ++cursor;
+                    if (start == cursor) return false;
+                    var name = text.Substring(start, cursor - start).ToLowerInvariant();
+                    if (name != "name" && name != "index") return false;
+                    SkipWhiteSpace(text, ref cursor, text.Length);
+                    if (cursor == text.Length || text[cursor++] != '=') return false;
+                    if (!TryReadSpriteValue(text, ref cursor, out var value) || attributes.ContainsKey(name)) return false;
+                    attributes.Add(name, value);
+                }
+                if (attributes.TryGetValue("index", out var index) &&
+                    !int.TryParse(index, NumberStyles.None, CultureInfo.InvariantCulture, out _)) return false;
+                if (!attributes.ContainsKey("name") && !attributes.ContainsKey("index")) return false;
+                if (attributes.ContainsKey("name") && attributes.ContainsKey("index")) return false;
+                builder.AppendSprite(new SpriteRequest(attributes, ""), style);
+                return true;
+            }
+
+            private static bool TryReadSpriteValue(string text, ref int cursor, out string value)
+            {
+                value = "";
+                SkipWhiteSpace(text, ref cursor, text.Length);
+                if (cursor == text.Length) return false;
+                var quote = text[cursor] == '"' || text[cursor] == '\'' ? text[cursor++] : '\0';
+                var start = cursor;
+                while (cursor < text.Length && (quote == '\0' ? !char.IsWhiteSpace(text[cursor]) : text[cursor] != quote)) ++cursor;
+                value = text.Substring(start, cursor - start);
+                if (quote != '\0')
+                {
+                    if (cursor == text.Length) return false;
+                    ++cursor;
+                    if (cursor < text.Length && !char.IsWhiteSpace(text[cursor])) return false;
+                }
+                return value.Length > 0;
             }
 
             private bool TryOpenSimple(Tag tag, string name, Action<TextStyleState> apply,
@@ -585,7 +641,7 @@ namespace Milestro.RichText.TMPro
                     }
 
                     value = content.Substring(cursor, contentEnd - cursor).Trim();
-                    if (hasExplicitValue && value.Length > 0 && (value[0] == '"' || value[0] == '\''))
+                    if (!NameEquals(name, "sprite") && hasExplicitValue && value.Length > 0 && (value[0] == '"' || value[0] == '\''))
                     {
                         var quote = value[0];
                         if (value.Length < 2 || value[value.Length - 1] != quote) return false;

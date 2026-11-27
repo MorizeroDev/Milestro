@@ -10,8 +10,10 @@ namespace Milestro.ResourceManagement
 {
     public sealed class DataUriImageResourceProvider : IImageResourceProvider
     {
-        public Task<ImageResource?> AcquireAsync(string source, CancellationToken cancellationToken)
+        public Task<InlineResourceBorrow?> BorrowAsync(ImageRequest request, CancellationToken cancellationToken)
         {
+            if (request == null) throw new ArgumentNullException(nameof(request));
+            var source = request.Source;
             cancellationToken.ThrowIfCancellationRequested();
             var encoded = DecodeDataUri(source);
             using var image = DecodeImage(source, encoded);
@@ -33,7 +35,11 @@ namespace Milestro.ResourceManagement
                 texture.Apply(false, true);
                 sprite = Sprite.Create(texture, new Rect(0, 0, image.Width, image.Height),
                     new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
-                return Task.FromResult<ImageResource?>(new ImageResource(sprite, texture));
+                return Task.FromResult<InlineResourceBorrow?>(InlineResourceBorrow.Create(new ImageResource(sprite), () =>
+                {
+                    DestroyResource(sprite);
+                    DestroyResource(texture);
+                }));
             }
             catch
             {
@@ -83,12 +89,6 @@ namespace Milestro.ResourceManagement
             return metadata.EndsWith(";base64", StringComparison.OrdinalIgnoreCase)
                 ? Convert.FromBase64String(Encoding.ASCII.GetString(bytes.ToArray()))
                 : bytes.ToArray();
-        }
-
-        public void Release(ImageResource resource)
-        {
-            DestroyResource(resource.Sprite);
-            if (resource.ReleaseToken is Texture texture) DestroyResource(texture);
         }
 
         private static void DestroyResource(UnityEngine.Object? resource)

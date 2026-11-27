@@ -35,6 +35,50 @@ namespace Milestro.Tests
             Assert.That(PlainText(plain), Is.EqualTo("a & b < 3 > 2"));
         }
 
+        [TestCase("<sprite=0>", "index", "0")]
+        [TestCase("<SPRITE INDEX=12/>", "index", "12")]
+        [TestCase("<sprite name='Coin Icon'>", "name", "Coin Icon")]
+        [TestCase("<sprite=\"UI Icons\" index=2>", "asset", "UI Icons")]
+        public void SpriteSelectorsProduceOneInlineObject(string tag, string key, string value)
+        {
+            var payload = Parse("a" + tag + "b");
+            Assert.That(payload.Placeholders, Has.Count.EqualTo(1));
+            var annotation = payload.Placeholders[0];
+            Assert.That(annotation.StartUtf16, Is.EqualTo(1));
+            Assert.That(payload.Blocks[0].LengthUtf16, Is.EqualTo(3));
+            Assert.That(annotation.SpriteRequest.Attributes[key], Is.EqualTo(value));
+            Assert.That(annotation.SpriteRequest.Content, Is.Empty);
+            Assert.That(PlainText(payload), Is.EqualTo("a\uFFFCb"));
+        }
+
+        [Test]
+        public void SpritePreservesSurroundingStyleAndLink()
+        {
+            var payload = Parse("<link=shop><size=24><sprite=\"items\" name=coin></size>x</link>");
+            var annotation = payload.Placeholders[0];
+            Assert.That(annotation.TextStyle.FontSize, Is.EqualTo(24));
+            Assert.That(payload.Links[0].EndUtf16, Is.EqualTo(2));
+            Assert.That(Segment(payload, "x").TextStyle.FontSize, Is.Null);
+        }
+
+        [TestCase("<sprite index=-1>")]
+        [TestCase("<sprite name=>")]
+        [TestCase("<sprite index=1 index=2>")]
+        [TestCase("<sprite name='coin'bad=1>")]
+        [TestCase("<sprite name=coin rarity=rare>")]
+        [TestCase("<sprite index=0 tint=1>")]
+        [TestCase("<sprite index=0 color=#ff0000>")]
+        [TestCase("<sprite anim=0,2,10>")]
+        [TestCase("<sprite index=0 height=2em>")]
+        [TestCase("<sprite name=coin index=0>")]
+        public void InvalidSpriteIsLiteralAndDoesNotConsumeFollowingText(string tag)
+        {
+            ExpectWarning("sprite");
+            var payload = Parse(tag + "tail");
+            Assert.That(PlainText(payload), Is.EqualTo(tag + "tail"));
+            Assert.That(payload.Placeholders, Is.Empty);
+        }
+
         [Test]
         public void BasicAndNestedStylesAreCaseInsensitive()
         {
@@ -187,8 +231,8 @@ namespace Milestro.Tests
         [Test]
         public void UnsupportedMultiAttributeAndTmproTagsWarn()
         {
-            const string sprite = "<sprite name=\"Icon\"/>";
-            ExpectWarning("sprite");
+            const string sprite = "<gradient name=\"Icon\"/>";
+            ExpectWarning("gradient");
             ExpectWarning("rotate");
             ExpectWarning("rotate");
             var payload = Parse(sprite + "<rotate=30>x</rotate>");

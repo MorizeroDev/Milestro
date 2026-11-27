@@ -1,9 +1,12 @@
+using Milestro.ResourceManagement;
+
 namespace Milestro.RichTextParser
 {
     public readonly struct PlaceholderAnnotation
     {
         internal PlaceholderAnnotation(int startUtf16, float width, float height, string key,
-            TextStyleState textStyle, string? source = null, InlineObjectStyle? presentation = null)
+            TextStyleState textStyle, string? source = null, InlineObjectStyle? presentation = null,
+            SpriteRequest? spriteRequest = null)
         {
             StartUtf16 = startUtf16;
             Width = width;
@@ -12,6 +15,7 @@ namespace Milestro.RichTextParser
             TextStyle = textStyle;
             Source = source;
             Presentation = presentation;
+            SpriteRequest = spriteRequest;
         }
 
         public int StartUtf16 { get; }
@@ -20,6 +24,7 @@ namespace Milestro.RichTextParser
         public float Height { get; }
         public string Key { get; }
         public string? Source { get; }
+        public SpriteRequest? SpriteRequest { get; }
         internal InlineObjectStyle? Presentation { get; }
         internal TextStyleState TextStyle { get; }
     }
